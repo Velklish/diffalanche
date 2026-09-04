@@ -1,0 +1,1799 @@
+<!DOCTYPE html>
+<html>
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<script src="./support.js"></script>
+</head>
+<body>
+<x-dc>
+<helmet data-dc-atomics><meta name="design_doc_mode" content="canvas"><link rel="preconnect" href="https://fonts.googleapis.com"><link rel="preconnect" href="https://fonts.gstatic.com" crossorigin><link href="https://fonts.googleapis.com/css2?family=Instrument+Sans:ital,wght@0,400..700;1,400&family=JetBrains+Mono:wght@400;500;700&display=swap" rel="stylesheet"><style>body{margin:0;background:#f0eee9;font-family:'Instrument Sans',system-ui,sans-serif}a{color:#2a78d6}a:hover{color:#1a5fae}.dv-turn{padding:40px 44px 32px;border-bottom:1px solid rgba(0,0,0,.08);scroll-margin-top:16px}.dv-thd{display:flex;align-items:baseline;gap:10px;margin:0 0 20px}.dv-tid{font:600 10px 'JetBrains Mono',monospace;padding:3px 7px;background:#1a1a1a;color:#fff;border-radius:4px;text-decoration:none}.dv-tname{font:600 13px/1.2 'Instrument Sans',system-ui,sans-serif;color:#1a1a1a}.dv-opts{display:flex;flex-wrap:wrap;gap:32px;align-items:flex-start}.dv-opt{flex:none;display:flex;flex-direction:column;gap:9px;scroll-margin-top:16px}.dv-oid{font:600 10.5px 'JetBrains Mono',monospace;padding:3px 7px;background:rgba(0,0,0,.08);color:#1a1a1a;border-radius:5px;text-decoration:none}.dv-olabel{display:flex;align-items:baseline;gap:8px;font:400 11.5px/1.3 'Instrument Sans',system-ui,sans-serif;color:rgba(0,0,0,.55)}.dv-card{max-width:100%;background:#fff;border:1px solid rgba(0,0,0,.08);border-radius:8px;box-shadow:0 1px 3px rgba(0,0,0,.06);overflow:hidden}.dv-opt:target .dv-oid{background:#2a78d6;color:#fff}.dv-next{margin:22px 0 0;font:12px/1.5 'Instrument Sans',system-ui,sans-serif;color:rgba(0,0,0,.5)}</style></helmet>
+
+<section class="dv-turn" id="t5">
+<div class="dv-thd"><a class="dv-tid" href="#t5">5</a><span class="dv-tname">Phase 4 · insights — отчёт по повторяющимся замечаниям · принято <a class="dv-oid" href="#5a">5a</a></span></div>
+<div class="dv-opts">
+
+<div class="dv-opt" id="5a">
+<div class="dv-olabel"><a class="dv-oid" href="#5a">5a</a><span style="font:600 9.5px 'JetBrains Mono',monospace;letter-spacing:.06em;padding:3px 7px;border-radius:4px;background:#1a1a1a;color:#fff">ПРИНЯТО</span>Кластеры как список с разбором справа: примеры из прошлых сессий, распределение по репозиториям, действие «сохранить как правило».</div>
+<div class="dv-card" style="width:1440px;border-radius:10px">
+<div style="background:#1d2025;color:#dde1e7;font-family:'Instrument Sans',system-ui,sans-serif;font-size:13px;height:760px;display:flex;flex-direction:column">
+
+<div style="height:52px;flex:none;border-bottom:1px solid #333941;background:#22262c;display:flex;align-items:center;gap:14px;padding:0 16px">
+<div style="display:flex;align-items:center;gap:9px">
+<div style="position:relative;width:19px;height:19px">
+<div style="position:absolute;left:0;top:0;width:9px;height:9px;border-radius:2.5px;background:#8b9ae0"></div>
+<div style="position:absolute;left:5px;top:5px;width:9px;height:9px;border-radius:2.5px;background:#dfa85c"></div>
+<div style="position:absolute;left:10px;top:10px;width:9px;height:9px;border-radius:2.5px;background:#7ec49c"></div>
+</div>
+<span style="font:600 13.5px 'JetBrains Mono',monospace;letter-spacing:-.02em">diffalanche</span>
+</div>
+<span style="font:500 12px 'JetBrains Mono',monospace;color:#a8b3e6">insights</span>
+<div style="display:flex;border:1px solid #333941;border-radius:8px;overflow:hidden;background:#282d34">
+<span style="padding:6px 12px;font:500 11px 'JetBrains Mono',monospace;color:#eef0f7;background:#3f4a80">30 дней</span>
+<span style="padding:6px 12px;font:500 11px 'JetBrains Mono',monospace;color:#8c939d">90 дней</span>
+<span style="padding:6px 12px;font:500 11px 'JetBrains Mono',monospace;color:#8c939d">все сессии</span>
+</div>
+<span style="flex:1"></span>
+<span style="font:11px 'JetBrains Mono',monospace;color:#9ba3ae">9 сессий · 412 комментариев · 7 репозиториев</span>
+<span style="padding:6px 13px;border:1px solid #333941;border-radius:8px;background:#282d34;font-size:12px;color:#9ba3ae">Export .md</span>
+</div>
+
+<div style="flex:1;display:flex;min-height:0">
+
+<div style="width:440px;flex:none;border-right:1px solid #333941;background:#212429;display:flex;flex-direction:column">
+<div style="padding:13px 16px;border-bottom:1px solid #2c313a;display:flex;align-items:center;gap:9px">
+<span style="font:500 10.5px 'JetBrains Mono',monospace;letter-spacing:.07em;color:#9ba3ae">RECURRING FINDINGS</span>
+<span style="flex:1"></span>
+<span style="font:9.5px 'JetBrains Mono',monospace;color:#828a95">по частоте</span>
+</div>
+<div style="flex:1;padding:10px;display:flex;flex-direction:column;gap:8px">
+
+<div style="border:1px solid #3f4a80;background:#26293a;border-radius:9px;padding:12px 13px">
+<div style="display:flex;align-items:baseline;gap:9px">
+<span style="font:600 13px 'Instrument Sans',system-ui,sans-serif">Стейт формы живёт в компоненте</span>
+<span style="flex:1"></span>
+<span style="font:600 13px 'JetBrains Mono',monospace;color:#eef0f7">24</span>
+</div>
+<div style="margin-top:9px;display:flex;align-items:flex-end;gap:3px;height:26px">
+<div style="width:11px;height:8px;background:#3f4a80;border-radius:2px"></div>
+<div style="width:11px;height:12px;background:#3f4a80;border-radius:2px"></div>
+<div style="width:11px;height:10px;background:#3f4a80;border-radius:2px"></div>
+<div style="width:11px;height:17px;background:#5b68a8;border-radius:2px"></div>
+<div style="width:11px;height:21px;background:#8b9ae0;border-radius:2px"></div>
+<div style="width:11px;height:26px;background:#8b9ae0;border-radius:2px"></div>
+<span style="margin-left:8px;font:10px 'JetBrains Mono',monospace;color:#7ec49c;align-self:center">растёт</span>
+<span style="flex:1"></span>
+<span style="display:flex;gap:4px;align-self:center">
+<span style="width:7px;height:7px;border-radius:50%;background:#e0837a"></span>
+<span style="width:7px;height:7px;border-radius:50%;background:#dfa85c"></span>
+<span style="width:7px;height:7px;border-radius:50%;background:#dfa85c"></span>
+</span>
+</div>
+</div>
+
+<div style="border:1px solid #333941;background:#25282e;border-radius:9px;padding:12px 13px">
+<div style="display:flex;align-items:baseline;gap:9px">
+<span style="font:600 13px 'Instrument Sans',system-ui,sans-serif;color:#c8ced7">Недостижимая проверка на null</span>
+<span style="flex:1"></span>
+<span style="font:600 13px 'JetBrains Mono',monospace;color:#c8ced7">18</span>
+</div>
+<div style="margin-top:9px;display:flex;align-items:flex-end;gap:3px;height:26px">
+<div style="width:11px;height:20px;background:#333941;border-radius:2px"></div>
+<div style="width:11px;height:22px;background:#333941;border-radius:2px"></div>
+<div style="width:11px;height:14px;background:#333941;border-radius:2px"></div>
+<div style="width:11px;height:12px;background:#333941;border-radius:2px"></div>
+<div style="width:11px;height:9px;background:#333941;border-radius:2px"></div>
+<div style="width:11px;height:7px;background:#333941;border-radius:2px"></div>
+<span style="margin-left:8px;font:10px 'JetBrains Mono',monospace;color:#828a95;align-self:center">реже</span>
+</div>
+</div>
+
+<div style="border:1px solid #333941;background:#25282e;border-radius:9px;padding:12px 13px">
+<div style="display:flex;align-items:baseline;gap:9px">
+<span style="font:600 13px 'Instrument Sans',system-ui,sans-serif;color:#c8ced7">Запрос без фильтра по флагам</span>
+<span style="flex:1"></span>
+<span style="font:600 13px 'JetBrains Mono',monospace;color:#c8ced7">11</span>
+</div>
+<div style="margin-top:9px;display:flex;align-items:flex-end;gap:3px;height:26px">
+<div style="width:11px;height:6px;background:#333941;border-radius:2px"></div>
+<div style="width:11px;height:14px;background:#333941;border-radius:2px"></div>
+<div style="width:11px;height:11px;background:#333941;border-radius:2px"></div>
+<div style="width:11px;height:16px;background:#333941;border-radius:2px"></div>
+<div style="width:11px;height:12px;background:#333941;border-radius:2px"></div>
+<div style="width:11px;height:15px;background:#333941;border-radius:2px"></div>
+<span style="margin-left:8px;font:10px 'JetBrains Mono',monospace;color:#828a95;align-self:center">ровно</span>
+</div>
+</div>
+
+<div style="border:1px solid #333941;background:#25282e;border-radius:9px;padding:12px 13px">
+<div style="display:flex;align-items:baseline;gap:9px">
+<span style="font:600 13px 'Instrument Sans',system-ui,sans-serif;color:#c8ced7">Порядок using и неймспейсы</span>
+<span style="flex:1"></span>
+<span style="font:600 13px 'JetBrains Mono',monospace;color:#c8ced7">9</span>
+</div>
+<div style="margin-top:7px;font:10.5px 'JetBrains Mono',monospace;color:#828a95">nit · 9 из 9 · линтер закрыл бы сам</div>
+</div>
+
+<div style="border:1px solid #333941;background:#25282e;border-radius:9px;padding:12px 13px">
+<div style="display:flex;align-items:baseline;gap:9px">
+<span style="font:600 13px 'Instrument Sans',system-ui,sans-serif;color:#c8ced7">Лог вместо метрики</span>
+<span style="flex:1"></span>
+<span style="font:600 13px 'JetBrains Mono',monospace;color:#c8ced7">7</span>
+</div>
+<div style="margin-top:7px;font:10.5px 'JetBrains Mono',monospace;color:#828a95">warning · 6 · question · 1</div>
+</div>
+
+<div style="margin-top:2px;padding:11px 13px;border:1px dashed #333941;border-radius:9px;font:11px/1.6 'JetBrains Mono',monospace;color:#828a95">
+ещё 23 кластера с 2–5 вхождениями <span style="color:#a8b3e6">· показать</span>
+</div>
+</div>
+</div>
+
+<div style="flex:1;min-width:0;display:flex;flex-direction:column">
+<div style="padding:18px 22px;border-bottom:1px solid #2c313a">
+<div style="display:flex;align-items:baseline;gap:11px">
+<span style="font:600 19px 'Instrument Sans',system-ui,sans-serif;letter-spacing:-.01em">Стейт формы живёт в компоненте</span>
+<span style="font:10px 'JetBrains Mono',monospace;color:#a8b3e6;border:1px solid #3f4a80;border-radius:4px;padding:1px 6px">MODEL LABEL</span>
+</div>
+<div style="margin-top:8px;font-size:13px;line-height:1.6;color:#9ba3ae;max-width:640px">24 замечания в 6 сессиях: локальный <span style="font-family:'JetBrains Mono',monospace;font-size:12px;background:#282d34;padding:1px 5px;border-radius:4px">useState</span> переживает не больше одного рендера родителя, выбор пользователя теряется без предупреждения.</div>
+</div>
+
+<div style="flex:1;min-height:0;padding:16px 22px;display:flex;flex-direction:column;gap:16px">
+<div>
+<div style="font:500 10.5px 'JetBrains Mono',monospace;letter-spacing:.07em;color:#9ba3ae;margin-bottom:9px">ПО РЕПОЗИТОРИЯМ</div>
+<div style="display:flex;flex-direction:column;gap:7px">
+<div style="display:flex;align-items:center;gap:11px">
+<span style="width:170px;flex:none;font:11.5px 'JetBrains Mono',monospace;color:#c8ced7">group/service-web</span>
+<div style="flex:1;height:9px;border-radius:5px;background:#282d34;overflow:hidden"><div style="width:66%;height:9px;background:#8b9ae0"></div></div>
+<span style="width:26px;flex:none;text-align:right;font:11px 'JetBrains Mono',monospace;color:#9ba3ae">16</span>
+</div>
+<div style="display:flex;align-items:center;gap:11px">
+<span style="width:170px;flex:none;font:11.5px 'JetBrains Mono',monospace;color:#c8ced7">group/service-admin</span>
+<div style="flex:1;height:9px;border-radius:5px;background:#282d34;overflow:hidden"><div style="width:21%;height:9px;background:#5b68a8"></div></div>
+<span style="width:26px;flex:none;text-align:right;font:11px 'JetBrains Mono',monospace;color:#9ba3ae">5</span>
+</div>
+<div style="display:flex;align-items:center;gap:11px">
+<span style="width:170px;flex:none;font:11.5px 'JetBrains Mono',monospace;color:#c8ced7">tools/codegen</span>
+<div style="flex:1;height:9px;border-radius:5px;background:#282d34;overflow:hidden"><div style="width:12%;height:9px;background:#3f4a80"></div></div>
+<span style="width:26px;flex:none;text-align:right;font:11px 'JetBrains Mono',monospace;color:#9ba3ae">3</span>
+</div>
+</div>
+</div>
+
+<div style="flex:1;min-height:0">
+<div style="font:500 10.5px 'JetBrains Mono',monospace;letter-spacing:.07em;color:#9ba3ae;margin-bottom:9px">ПРИМЕРЫ</div>
+<div style="display:flex;flex-direction:column;gap:9px">
+<div style="border:1px solid #333941;border-radius:9px;background:#212429;padding:11px 13px">
+<div style="display:flex;align-items:center;gap:9px;margin-bottom:6px">
+<span style="font:9.5px 'JetBrains Mono',monospace;color:#1c1f2b;background:#e0837a;border-radius:4px;padding:1px 6px">CRITICAL</span>
+<span style="font:10.5px 'JetBrains Mono',monospace;color:#828a95">ls-240372 · FlagPicker.tsx L113</span>
+<span style="flex:1"></span>
+<span style="font:10.5px 'JetBrains Mono',monospace;color:#a8b3e6">открыть</span>
+</div>
+<div style="font-size:12.5px;line-height:1.55;color:#c8ced7">Стейт флагов держится в компоненте — при переключении таба выбор теряется без предупреждения.</div>
+</div>
+<div style="border:1px solid #333941;border-radius:9px;background:#212429;padding:11px 13px">
+<div style="display:flex;align-items:center;gap:9px;margin-bottom:6px">
+<span style="font:9.5px 'JetBrains Mono',monospace;color:#1c1f2b;background:#dfa85c;border-radius:4px;padding:1px 6px">WARNING</span>
+<span style="font:10.5px 'JetBrains Mono',monospace;color:#828a95">ls-239118 · TariffForm.tsx L64</span>
+<span style="flex:1"></span>
+<span style="font:10.5px 'JetBrains Mono',monospace;color:#a8b3e6">открыть</span>
+</div>
+<div style="font-size:12.5px;line-height:1.55;color:#c8ced7">Локальный стейт переживёт только один рендер таба — подними его в стор.</div>
+</div>
+<div style="border:1px solid #333941;border-radius:9px;background:#212429;padding:11px 13px">
+<div style="display:flex;align-items:center;gap:9px;margin-bottom:6px">
+<span style="font:9.5px 'JetBrains Mono',monospace;color:#1c1f2b;background:#dfa85c;border-radius:4px;padding:1px 6px">WARNING</span>
+<span style="font:10.5px 'JetBrains Mono',monospace;color:#828a95">ls-238004 · DriverFilters.tsx L28</span>
+<span style="flex:1"></span>
+<span style="font:10.5px 'JetBrains Mono',monospace;color:#a8b3e6">открыть</span>
+</div>
+<div style="font-size:12.5px;line-height:1.55;color:#c8ced7">Состояние формы в useState теряется при размонтировании, нужен внешний источник.</div>
+</div>
+</div>
+</div>
+</div>
+
+<div style="flex:none;border-top:1px solid #2c313a;padding:13px 22px;display:flex;align-items:center;gap:10px;background:#22262c">
+<span style="padding:7px 15px;border-radius:8px;background:#8b9ae0;color:#1c1f2b;font-weight:600;font-size:12.5px">Открыть 24 комментария</span>
+<span style="padding:7px 14px;border-radius:8px;border:1px solid #3f4a80;background:#26293a;color:#a8b3e6;font-size:12.5px">Сохранить как правило для агента</span>
+<span style="flex:1"></span>
+<span style="font:10.5px 'JetBrains Mono',monospace;color:#828a95">кластеры и названия — модель, счётчики — точные</span>
+</div>
+</div>
+</div>
+</div>
+</div>
+</div>
+
+<div class="dv-opt" id="5b">
+<div class="dv-olabel"><a class="dv-oid" href="#5b">5b</a>Рассмотрен и отклонён. Тот же отчёт как дайджест: без разбора и графиков, только что повторяется и что с этим делать.</div>
+<div class="dv-card" style="width:620px;border-radius:10px">
+<div style="background:#1d2025;color:#dde1e7;font-family:'Instrument Sans',system-ui,sans-serif;font-size:13px;height:560px;display:flex;flex-direction:column">
+<div style="padding:16px 18px;border-bottom:1px solid #333941;background:#22262c">
+<div style="font:600 15px 'Instrument Sans',system-ui,sans-serif">Что повторялось за 30 дней</div>
+<div style="margin-top:5px;font:11px 'JetBrains Mono',monospace;color:#828a95">9 сессий · 412 комментариев</div>
+</div>
+<div style="flex:1;padding:14px 18px;display:flex;flex-direction:column;gap:12px">
+<div>
+<div style="display:flex;align-items:baseline;gap:9px">
+<span style="font:600 13.5px 'Instrument Sans',system-ui,sans-serif">Стейт формы живёт в компоненте</span>
+<span style="flex:1"></span>
+<span style="font:600 13px 'JetBrains Mono',monospace;color:#8b9ae0">24</span>
+</div>
+<div style="margin-top:5px;font-size:12.5px;line-height:1.55;color:#9ba3ae">Чаще всего в <span style="font-family:'JetBrains Mono',monospace;font-size:11.5px;color:#c8ced7">group/service-web</span>. Стоит правила в скилле агента, а не 24 замечаний.</div>
+</div>
+<div style="height:1px;background:#2c313a"></div>
+<div>
+<div style="display:flex;align-items:baseline;gap:9px">
+<span style="font:600 13.5px 'Instrument Sans',system-ui,sans-serif">Недостижимая проверка на null</span>
+<span style="flex:1"></span>
+<span style="font:600 13px 'JetBrains Mono',monospace;color:#9ba3ae">18</span>
+</div>
+<div style="margin-top:5px;font-size:12.5px;line-height:1.55;color:#9ba3ae">Идёт на спад с тех пор, как контракты стали non-nullable.</div>
+</div>
+<div style="height:1px;background:#2c313a"></div>
+<div>
+<div style="display:flex;align-items:baseline;gap:9px">
+<span style="font:600 13.5px 'Instrument Sans',system-ui,sans-serif">Запрос без фильтра по флагам</span>
+<span style="flex:1"></span>
+<span style="font:600 13px 'JetBrains Mono',monospace;color:#9ba3ae">11</span>
+</div>
+<div style="margin-top:5px;font-size:12.5px;line-height:1.55;color:#9ba3ae">Ровный фон в трёх репозиториях — похоже на пробел в шаблоне запроса.</div>
+</div>
+<div style="height:1px;background:#2c313a"></div>
+<div>
+<div style="display:flex;align-items:baseline;gap:9px">
+<span style="font:600 13.5px 'Instrument Sans',system-ui,sans-serif">Порядок using и неймспейсы</span>
+<span style="flex:1"></span>
+<span style="font:600 13px 'JetBrains Mono',monospace;color:#9ba3ae">9</span>
+</div>
+<div style="margin-top:5px;font-size:12.5px;line-height:1.55;color:#9ba3ae">Всё nit. Это работа линтера, не ревью.</div>
+</div>
+</div>
+<div style="flex:none;border-top:1px solid #2c313a;padding:13px 18px;display:flex;align-items:center;gap:10px;background:#22262c">
+<span style="padding:7px 14px;border-radius:8px;background:#8b9ae0;color:#1c1f2b;font-weight:600;font-size:12.5px">Export .md</span>
+<span style="flex:1"></span>
+<span style="font:10.5px 'JetBrains Mono',monospace;color:#828a95">diffalanche insights --since 30d</span>
+</div>
+</div>
+</div>
+</div>
+
+</div>
+<p class="dv-next">Try next: "добавь срез по агентам — кто чаще ловит эти замечания" · "покажи, как правило уезжает в скилл агента" · "собери insights в прототип"</p>
+</section>
+
+<section class="dv-turn" id="t4">
+<div class="dv-thd"><a class="dv-tid" href="#t4">4</a><span class="dv-tname"><a class="dv-oid" href="#1d">1d</a> rebuilt in the <a class="dv-oid" href="#3a">3a</a> style — sessions, new session, composer, suggestions</span></div>
+<div class="dv-opts">
+
+<div class="dv-opt" id="4a">
+<div class="dv-olabel"><a class="dv-oid" href="#4a">4a</a>Sessions and the comment composer — same surfaces, saturation and radii as <a class="dv-oid" href="#3a">3a</a>.</div>
+<div class="dv-card" style="width:1520px;border-radius:10px">
+<div style="background:#1d2025;color:#dde1e7;font-family:'Instrument Sans',system-ui,sans-serif;font-size:13px;height:640px;display:flex">
+
+<div style="width:540px;flex:none;border-right:1px solid #333941;background:#212429;display:flex;flex-direction:column">
+<div style="padding:15px 18px;border-bottom:1px solid #333941;display:flex;align-items:center;gap:10px">
+<span style="font:500 11px 'JetBrains Mono',monospace;letter-spacing:.07em;color:#9ba3ae">REVIEW SESSIONS</span>
+<span style="flex:1"></span>
+<span style="font:10.5px 'JetBrains Mono',monospace;color:#828a95">.diffalanche/reviews/</span>
+</div>
+<div style="flex:1;min-height:0;overflow:hidden;padding:12px 14px;display:flex;flex-direction:column;gap:10px">
+
+<div style="border:1px solid #3f4a80;background:#26293a;border-radius:10px;padding:13px 14px">
+<div style="display:flex;align-items:center;gap:9px">
+<span style="font:600 13px 'JetBrains Mono',monospace;color:#eef0f7">ls-240372</span>
+<span style="font:9.5px 'JetBrains Mono',monospace;color:#1f2229;background:#8b9ae0;border-radius:4px;padding:1px 6px;letter-spacing:.04em">CURRENT</span>
+<span style="flex:1"></span>
+<span style="font:10.5px 'JetBrains Mono',monospace;color:#a8b3e6;border:1px solid #3f4a80;border-radius:5px;padding:1px 7px">branch</span>
+</div>
+<div style="margin-top:7px;font-size:13px;color:#c8ced7">Cargo flags across services</div>
+<div style="margin-top:10px;display:flex;gap:16px;font:10.5px 'JetBrains Mono',monospace;color:#9ba3ae">
+<span>7 repos</span>
+<span style="color:#e0837a">12 open</span>
+<span style="color:#7ec49c">31 resolved</span>
+<span style="color:#828a95">updated 18:30</span>
+</div>
+</div>
+
+<div style="border:1px solid #333941;border-radius:10px;padding:13px 14px;background:#25282e">
+<div style="display:flex;align-items:center;gap:9px">
+<span style="font:600 13px 'JetBrains Mono',monospace;color:#c8ced7">ls-239118</span>
+<span style="flex:1"></span>
+<span style="font:10.5px 'JetBrains Mono',monospace;color:#9ba3ae;border:1px solid #333941;border-radius:5px;padding:1px 7px">head</span>
+</div>
+<div style="margin-top:7px;font-size:13px;color:#9ba3ae">Tariff import rewrite</div>
+<div style="margin-top:10px;display:flex;gap:16px;font:10.5px 'JetBrains Mono',monospace;color:#828a95">
+<span>3 repos</span><span style="color:#7ec49c">44 resolved</span><span>28 Aug</span>
+</div>
+</div>
+
+<div style="border:1px solid #333941;border-radius:10px;padding:13px 14px;background:#25282e">
+<div style="display:flex;align-items:center;gap:9px">
+<span style="font:600 13px 'JetBrains Mono',monospace;color:#c8ced7">spike-bun-perf</span>
+<span style="flex:1"></span>
+<span style="font:10.5px 'JetBrains Mono',monospace;color:#9ba3ae;border:1px solid #333941;border-radius:5px;padding:1px 7px">ref · v0.3.1</span>
+</div>
+<div style="margin-top:7px;font-size:13px;color:#9ba3ae">Phase 0 budgets check</div>
+<div style="margin-top:10px;display:flex;gap:16px;font:10.5px 'JetBrains Mono',monospace;color:#828a95">
+<span>21 repos</span><span style="color:#7ec49c">9 resolved</span><span>12 Aug</span>
+</div>
+</div>
+
+<div style="padding:11px 13px;border:1px dashed #333941;border-radius:10px;font:11px 'JetBrains Mono',monospace;color:#828a95">
+sessions are never deleted automatically <span style="color:#a8b3e6">· review list</span>
+</div>
+</div>
+
+<div style="flex:none;border-top:1px solid #333941;padding:14px 16px;background:#1f2227">
+<div style="font:500 10.5px 'JetBrains Mono',monospace;letter-spacing:.07em;color:#9ba3ae;margin-bottom:11px">NEW SESSION</div>
+<div style="display:flex;gap:9px;align-items:center">
+<div style="flex:1;padding:8px 11px;border:1px solid #333941;border-radius:8px;background:#1d2025;font:12px 'JetBrains Mono',monospace;color:#7a828d">name · ls-240588</div>
+<div style="display:flex;border:1px solid #333941;border-radius:8px;overflow:hidden;background:#282d34">
+<span style="padding:8px 11px;font:11px 'JetBrains Mono',monospace;color:#8c939d">head</span>
+<span style="padding:8px 11px;font:11px 'JetBrains Mono',monospace;background:#3f4a80;color:#eef0f7">branch</span>
+<span style="padding:8px 11px;font:11px 'JetBrains Mono',monospace;color:#8c939d">ref</span>
+</div>
+<div style="padding:8px 16px;border-radius:8px;background:#8b9ae0;color:#1c1f2b;font-weight:600;font-size:12.5px">Create</div>
+</div>
+</div>
+</div>
+
+<div style="flex:1;min-width:0;display:flex;flex-direction:column">
+<div style="padding:15px 18px;border-bottom:1px solid #333941;display:flex;align-items:center;gap:11px">
+<span style="font:500 11px 'JetBrains Mono',monospace;letter-spacing:.07em;color:#9ba3ae">NEW COMMENT</span>
+<span style="font:10.5px 'JetBrains Mono',monospace;color:#828a95">group/service-web · FlagPicker.tsx · new L118–124</span>
+</div>
+<div style="flex:1;min-height:0;display:flex">
+
+<div style="flex:1;min-width:0;padding:16px 18px;display:flex;flex-direction:column">
+<div style="display:flex;gap:7px;margin-bottom:13px;align-items:center">
+<span style="font:10px 'JetBrains Mono',monospace;padding:5px 10px;border-radius:6px;background:#e0837a;color:#251512;font-weight:700;letter-spacing:.04em">CRITICAL</span>
+<span style="font:10px 'JetBrains Mono',monospace;padding:5px 10px;border-radius:6px;border:1px solid #6a5a3c;color:#dfa85c;background:rgba(223,168,92,.12);letter-spacing:.04em">WARNING</span>
+<span style="font:10px 'JetBrains Mono',monospace;padding:5px 10px;border-radius:6px;border:1px solid #333941;color:#7a828d;letter-spacing:.04em">NIT</span>
+<span style="font:10px 'JetBrains Mono',monospace;padding:5px 10px;border-radius:6px;border:1px solid #333941;color:#7a828d;letter-spacing:.04em">QUESTION</span>
+<span style="flex:1"></span>
+<span style="font:10px 'JetBrains Mono',monospace;color:#828a95">severity suggested by history</span>
+</div>
+<div style="flex:1;border:1px solid #3f4a80;border-radius:10px;background:#212429;padding:13px 14px;font-size:13px;line-height:1.6;color:#c8ced7">
+Стейт флагов держится в компоненте, при переключении таба он теряется<span style="display:inline-block;width:2px;height:15px;background:#8b9ae0;vertical-align:-3px;margin-left:2px"></span>
+<div style="margin-top:10px;font:11px 'JetBrains Mono',monospace;color:#6f7681">markdown · code fences ok</div>
+</div>
+<div style="margin-top:13px;display:flex;align-items:center;gap:10px">
+<div style="padding:7px 16px;border-radius:8px;background:#8b9ae0;color:#1c1f2b;font-weight:600;font-size:12.5px">Comment</div>
+<div style="padding:7px 14px;border-radius:8px;border:1px solid #333941;color:#9ba3ae;font-size:12.5px;background:#282d34">Cancel</div>
+<span style="flex:1"></span>
+<span style="font:10.5px 'JetBrains Mono',monospace;color:#828a95">⌘⏎ submit · anchor saved with 3 lines of context</span>
+</div>
+</div>
+
+<sc-if value="{{ showSuggestions }}" hint-placeholder-val="{{ true }}">
+<div style="width:392px;flex:none;border-left:1px solid #333941;background:#212429;display:flex;flex-direction:column">
+<div style="padding:13px 14px;border-bottom:1px solid #2c313a;display:flex;align-items:center;gap:9px">
+<span style="font:500 10.5px 'JetBrains Mono',monospace;letter-spacing:.07em;color:#9ba3ae">FROM YOUR HISTORY</span>
+<span style="flex:1"></span>
+<span style="font:9.5px 'JetBrains Mono',monospace;color:#828a95">offline · 118M</span>
+</div>
+<div style="flex:1;min-height:0;padding:13px 14px;display:flex;flex-direction:column;gap:10px">
+
+<div style="border:1px solid #3f4a80;background:#26293a;border-radius:9px;padding:11px 12px">
+<div style="display:flex;align-items:center;gap:8px;margin-bottom:7px">
+<span style="font:9.5px 'JetBrains Mono',monospace;color:#dfa85c">WARNING</span>
+<span style="font:9.5px 'JetBrains Mono',monospace;color:#828a95">ls-239118 · 0.91</span>
+<span style="flex:1"></span>
+<span style="font:9.5px 'JetBrains Mono',monospace;color:#1f2229;background:#8b9ae0;border-radius:4px;padding:1px 6px">TAB</span>
+</div>
+<div style="font-size:12.5px;line-height:1.55;color:#c8ced7">Локальный стейт переживёт только один рендер таба — подними его в стор, иначе выбор пользователя молча теряется.</div>
+</div>
+
+<div style="border:1px solid #333941;border-radius:9px;padding:11px 12px;background:#25282e">
+<div style="display:flex;align-items:center;gap:8px;margin-bottom:7px">
+<span style="font:9.5px 'JetBrains Mono',monospace;color:#dfa85c">WARNING</span>
+<span style="font:9.5px 'JetBrains Mono',monospace;color:#828a95">ls-238004 · 0.84</span>
+</div>
+<div style="font-size:12.5px;line-height:1.55;color:#9ba3ae">Состояние формы в useState теряется при размонтировании, нужен внешний источник.</div>
+</div>
+
+<div style="border:1px solid #333941;border-radius:9px;padding:11px 12px;background:#25282e">
+<div style="display:flex;align-items:center;gap:8px;margin-bottom:7px">
+<span style="font:9.5px 'JetBrains Mono',monospace;color:#7ec49c">NIT</span>
+<span style="font:9.5px 'JetBrains Mono',monospace;color:#828a95">ls-236921 · 0.72</span>
+</div>
+<div style="font-size:12.5px;line-height:1.55;color:#9ba3ae">Вынеси в отдельный хук, компонент уже держит четыре стейта.</div>
+</div>
+</div>
+<div style="flex:none;border-top:1px solid #2c313a;padding:11px 14px;font:10px/1.7 'JetBrains Mono',monospace;color:#828a95">
+same index serves <span style="color:#a8b3e6">diffalanche suggest</span> in the CLI
+</div>
+</div>
+</sc-if>
+</div>
+</div>
+</div>
+</div>
+</div>
+
+</div>
+<p class="dv-next">Try next: "переходим к следующим экранам" · "покажи пустое состояние и экспорт в этом же стиле" · "собери <a class="dv-oid" href="#3a">3a</a> и <a class="dv-oid" href="#4a">4a</a> в кликабельный прототип"</p>
+</section>
+
+<section class="dv-turn" id="t3">
+<div class="dv-thd"><a class="dv-tid" href="#t3">3</a><span class="dv-tname">Answers on <a class="dv-oid" href="#2a">2a</a> — more saturation, thread rail from <a class="dv-oid" href="#1b">1b</a> plus the agent feed under it, and repo-wide browsing</span></div>
+<div class="dv-opts">
+
+<div class="dv-opt" id="3a">
+<div class="dv-olabel"><a class="dv-oid" href="#3a">3a</a>Workspace — calm surfaces of <a class="dv-oid" href="#2a">2a</a>, colour dialled back up. Right rail: threads on top, live agent feed below, one collapse control for both.</div>
+<div class="dv-card" style="width:1600px;border-radius:10px">
+<div style="background:#1d2025;color:#dde1e7;font-family:'Instrument Sans',system-ui,sans-serif;font-size:13px;height:940px;display:flex;flex-direction:column">
+
+<div style="height:52px;flex:none;border-bottom:1px solid #333941;display:flex;align-items:center;gap:14px;padding:0 16px;background:#22262c">
+<div style="font:600 13px 'JetBrains Mono',monospace">diffalanche</div>
+<div style="display:flex;align-items:center;gap:9px;padding:5px 11px;border:1px solid #333941;border-radius:8px;background:#282d34">
+<span style="font:500 12px 'JetBrains Mono',monospace">ls-240372</span>
+<span style="font-size:11.5px;color:#8c939d">Cargo flags across services</span>
+<span style="font:11px 'JetBrains Mono',monospace;color:#8b9ae0">▾</span>
+</div>
+<div style="display:flex;align-items:center;border:1px solid #333941;border-radius:8px;overflow:hidden;background:#282d34">
+<span style="padding:6px 12px;font:500 11px 'JetBrains Mono',monospace;color:#8c939d">head</span>
+<span style="padding:6px 12px;font:500 11px 'JetBrains Mono',monospace;color:#eef0f7;background:#3f4a80">branch</span>
+<span style="padding:6px 12px;font:500 11px 'JetBrains Mono',monospace;color:#8c939d">ref</span>
+</div>
+<div style="flex:1"></div>
+<div style="display:flex;align-items:center;gap:16px;font-size:11.5px;color:#9ba3ae">
+<span><span style="font:600 12px 'JetBrains Mono',monospace;color:#e0837a">12</span> open</span>
+<span><span style="font:600 12px 'JetBrains Mono',monospace;color:#8b9ae0">5</span> awaiting you</span>
+</div>
+<div style="display:flex;align-items:center;border:1px solid #333941;border-radius:8px;overflow:hidden;background:#282d34">
+<span style="padding:6px 10px;font-size:12px;background:#333941;color:#dde1e7">☾</span>
+<span style="padding:6px 10px;font-size:12px;color:#7a828d">☀</span>
+</div>
+<div style="padding:6px 13px;border:1px solid #333941;border-radius:8px;font-size:12px;color:#9ba3ae;background:#282d34">Export .md</div>
+</div>
+
+<div style="flex:1;display:flex;min-height:0">
+
+<div style="width:308px;flex:none;border-right:1px solid #333941;background:#212429;display:flex;flex-direction:column">
+<div style="flex:none;display:flex;gap:6px;padding:10px 10px 0">
+<span style="flex:1;text-align:center;padding:6px 0;font:500 11.5px 'JetBrains Mono',monospace;color:#eef0f7;border-radius:7px;background:#2b3039">changes</span>
+<span style="flex:1;text-align:center;padding:6px 0;font:500 11.5px 'JetBrains Mono',monospace;color:#7a828d;border-radius:7px">all files</span>
+</div>
+<div style="padding:10px">
+<div style="display:flex;align-items:center;gap:8px;padding:7px 10px;border:1px solid #333941;border-radius:8px;background:#1d2025">
+<span style="font-size:11px;color:#7a828d">⌕</span><span style="font-size:12px;color:#7a828d">Filter files</span><span style="flex:1"></span><span style="font:10px 'JetBrains Mono',monospace;color:#7a828d;border:1px solid #333941;border-radius:4px;padding:1px 5px">⌘K</span>
+</div>
+</div>
+<div style="flex:1;overflow:hidden;padding:0 8px">
+<div style="display:flex;align-items:center;gap:8px;padding:8px 10px;border-radius:7px;background:#2b3039">
+<span style="font:10px 'JetBrains Mono',monospace;color:#8b9ae0">▾</span>
+<span style="font:500 12px 'JetBrains Mono',monospace">group/service-api</span><span style="flex:1"></span>
+<span style="font:11px 'JetBrains Mono',monospace;color:#dfa85c">4</span>
+</div>
+<div style="display:flex;align-items:center;gap:8px;padding:7px 10px 7px 28px;border-radius:7px;background:#333c66">
+<span style="font:11.5px 'JetBrains Mono',monospace;min-width:0;overflow:hidden;text-overflow:ellipsis;white-space:nowrap;color:#eef0f7">CargoService.cs</span><span style="flex:1"></span>
+<span style="font:10px 'JetBrains Mono',monospace;flex:none;color:#a9dcc0">+42</span><span style="font:10px 'JetBrains Mono',monospace;flex:none;color:#eeb4ad">−8</span>
+<span style="font:10px 'JetBrains Mono',monospace;flex:none;color:#1f2229;background:#dfa85c;border-radius:9px;padding:0 6px">3</span>
+</div>
+<div style="display:flex;align-items:center;gap:8px;padding:7px 10px 7px 28px">
+<span style="font:11.5px 'JetBrains Mono',monospace;min-width:0;overflow:hidden;text-overflow:ellipsis;white-space:nowrap;color:#9ba3ae">CargoValidator.cs</span><span style="flex:1"></span>
+<span style="font:10px 'JetBrains Mono',monospace;flex:none;color:#7fb195">+17</span><span style="font:10px 'JetBrains Mono',monospace;flex:none;color:#c58f89">−2</span>
+<span style="font:10px 'JetBrains Mono',monospace;flex:none;color:#9ba3ae;border:1px solid #333941;border-radius:9px;padding:0 6px">1</span>
+</div>
+<div style="display:flex;align-items:center;gap:8px;padding:7px 10px 7px 28px">
+<span style="font:11.5px 'JetBrains Mono',monospace;min-width:0;overflow:hidden;text-overflow:ellipsis;white-space:nowrap;color:#9ba3ae">Contracts/CargoDto.cs</span><span style="flex:1"></span>
+<span style="font:10px 'JetBrains Mono',monospace;flex:none;color:#7fb195">+6</span>
+</div>
+<div style="display:flex;align-items:center;gap:8px;padding:7px 10px 7px 28px">
+<span style="font:11.5px 'JetBrains Mono',monospace;min-width:0;overflow:hidden;text-overflow:ellipsis;white-space:nowrap;color:#7a828d">migrations/0021_flags.sql</span><span style="flex:1"></span>
+<span style="font:10px 'JetBrains Mono',monospace;color:#7a828d">new</span>
+</div>
+<div style="display:flex;align-items:center;gap:8px;padding:8px 10px;margin-top:4px">
+<span style="font:10px 'JetBrains Mono',monospace;color:#7a828d">▾</span>
+<span style="font:500 12px 'JetBrains Mono',monospace">group/service-web</span><span style="flex:1"></span>
+<span style="font:11px 'JetBrains Mono',monospace;color:#e0837a">2</span>
+</div>
+<div style="display:flex;align-items:center;gap:8px;padding:7px 10px 7px 28px">
+<span style="font:11.5px 'JetBrains Mono',monospace;min-width:0;overflow:hidden;text-overflow:ellipsis;white-space:nowrap;color:#9ba3ae">src/cargo/FlagPicker.tsx</span><span style="flex:1"></span>
+<span style="font:10px 'JetBrains Mono',monospace;flex:none;color:#7fb195">+88</span><span style="font:10px 'JetBrains Mono',monospace;flex:none;color:#c58f89">−12</span>
+<span style="font:10px 'JetBrains Mono',monospace;flex:none;color:#1f2229;background:#e0837a;border-radius:9px;padding:0 6px">2</span>
+</div>
+<div style="display:flex;align-items:center;gap:8px;padding:7px 10px 7px 28px">
+<span style="font:11.5px 'JetBrains Mono',monospace;min-width:0;overflow:hidden;text-overflow:ellipsis;white-space:nowrap;color:#9ba3ae">src/api/client.ts</span><span style="flex:1"></span>
+<span style="font:10px 'JetBrains Mono',monospace;flex:none;color:#7fb195">+9</span><span style="font:10px 'JetBrains Mono',monospace;flex:none;color:#c58f89">−3</span>
+</div>
+<div style="display:flex;align-items:center;gap:8px;padding:8px 10px;margin-top:4px">
+<span style="font:10px 'JetBrains Mono',monospace;color:#7a828d">▸</span>
+<span style="font:500 12px 'JetBrains Mono',monospace;color:#9ba3ae">group/service-billing</span><span style="flex:1"></span>
+<span style="font:11px 'JetBrains Mono',monospace;color:#e0837a">1</span>
+<span style="font:11px 'JetBrains Mono',monospace;color:#7a828d">7</span>
+</div>
+<div style="display:flex;align-items:center;gap:8px;padding:8px 10px">
+<span style="font:10px 'JetBrains Mono',monospace;color:#7a828d">▸</span>
+<span style="font:500 12px 'JetBrains Mono',monospace;color:#9ba3ae">infra/terraform</span><span style="flex:1"></span>
+<span style="font:11px 'JetBrains Mono',monospace;color:#7ec49c">1</span>
+<span style="font:11px 'JetBrains Mono',monospace;color:#7a828d">3</span>
+</div>
+<div style="display:flex;align-items:center;gap:8px;padding:8px 10px">
+<span style="font:10px 'JetBrains Mono',monospace;color:#7a828d">▸</span>
+<span style="font:500 12px 'JetBrains Mono',monospace;color:#9ba3ae">tools/codegen</span><span style="flex:1"></span>
+<span style="font:11px 'JetBrains Mono',monospace;color:#7a828d">1</span>
+</div>
+<div style="display:flex;align-items:center;gap:8px;padding:8px 10px">
+<span style="font:10px 'JetBrains Mono',monospace;color:#7a828d">▸</span>
+<span style="font:500 12px 'JetBrains Mono',monospace;color:#9ba3ae">service-api-wt-flags</span><span style="flex:1"></span>
+<span style="font:10px 'JetBrains Mono',monospace;color:#7a828d;border:1px solid #333941;border-radius:4px;padding:0 5px">worktree</span>
+</div>
+<div style="margin:16px 10px 0;padding-top:14px;border-top:1px solid #2b3038;font:10.5px/1.8 'JetBrains Mono',monospace;color:#828a95">
+16 repos scanned · depth 2<br>9 without changes, hidden
+</div>
+</div>
+<div style="flex:none;border-top:1px solid #333941;padding:11px 14px;display:flex;align-items:center;gap:9px">
+<span style="width:6px;height:6px;border-radius:50%;background:#7ec49c"></span>
+<span style="font:10.5px 'JetBrains Mono',monospace;color:#9ba3ae">watching · 127.0.0.1:4880</span>
+</div>
+</div>
+
+<div style="flex:1;min-width:0;display:flex;flex-direction:column;background:#1d2025">
+<div style="flex:none;padding:15px 22px;border-bottom:1px solid #333941;display:flex;align-items:center;gap:14px">
+<div>
+<div style="font:600 14.5px 'JetBrains Mono',monospace;color:#e9ecf2">group/service-api</div>
+<div style="margin-top:4px;font:11px 'JetBrains Mono',monospace;color:#8c939d">feat/cargo-flags <span style="color:#7a828d">←</span> origin/main <span style="color:#7a828d">·</span> merge-base 4f21ac9</div>
+</div>
+<span style="flex:1"></span>
+<span style="font:11px 'JetBrains Mono',monospace;color:#9ba3ae">4 files</span>
+<span style="font:11px 'JetBrains Mono',monospace;color:#a9dcc0">+65</span>
+<span style="font:11px 'JetBrains Mono',monospace;color:#eeb4ad">−10</span>
+<div style="padding:5px 12px;border:1px solid #333941;border-radius:8px;font-size:11.5px;color:#9ba3ae;background:#22262c">Comment on repo</div>
+</div>
+
+<div style="flex:1;overflow:hidden;padding:18px 22px">
+<div style="border:1px solid #333941;border-radius:10px;overflow:hidden;background:#212429">
+<div style="display:flex;align-items:center;gap:11px;padding:11px 14px;background:#282d34;border-bottom:1px solid #333941">
+<span style="font:10px 'JetBrains Mono',monospace;color:#7a828d">▾</span>
+<span style="font:500 12.5px 'JetBrains Mono',monospace;color:#e9ecf2">src/Cargos/CargoService.cs</span>
+<span style="font:10px 'JetBrains Mono',monospace;color:#1f2229;background:#dfa85c;border-radius:9px;padding:1px 7px">3</span>
+<span style="flex:1"></span>
+<span style="padding:3px 10px;border:1px solid #3f4a80;border-radius:6px;font:10.5px 'JetBrains Mono',monospace;color:#a8b3e6;background:rgba(63,74,128,.25)">Browse file ⇧B</span>
+<div style="display:flex;border:1px solid #333941;border-radius:6px;overflow:hidden">
+<span style="padding:3px 10px;font:10.5px 'JetBrains Mono',monospace;background:#333941;color:#e9ecf2">split</span>
+<span style="padding:3px 10px;font:10.5px 'JetBrains Mono',monospace;color:#7a828d">unified</span>
+</div>
+</div>
+
+<div style="display:flex;align-items:center;gap:10px;padding:6px 14px;background:#22262c;border-bottom:1px solid #2c313a;font:11px 'JetBrains Mono',monospace;color:#828a95">
+<span>@@ -30,8 +38,12 @@ public sealed class CargoService</span>
+<span style="flex:1"></span>
+<span style="padding:1px 8px;border:1px solid #333941;border-radius:5px;color:#9ba3ae">↑ 20 lines</span>
+<span style="padding:1px 8px;border:1px solid #333941;border-radius:5px;color:#9ba3ae">expand all</span>
+</div>
+
+<div style="display:flex;font:12px/22px 'JetBrains Mono',monospace">
+<div style="flex:1;min-width:0;border-right:1px solid #2c313a">
+<div style="display:flex"><span style="width:42px;flex:none;text-align:right;padding-right:11px;color:#767e89">30</span><span style="color:#bcc2cb;white-space:pre">    public async Task&lt;CargoDto&gt; Create(</span></div>
+<div style="display:flex"><span style="width:42px;flex:none;text-align:right;padding-right:11px;color:#767e89">31</span><span style="color:#bcc2cb;white-space:pre">        CreateCargoRequest request)</span></div>
+<div style="display:flex"><span style="width:42px;flex:none;text-align:right;padding-right:11px;color:#767e89">32</span><span style="color:#bcc2cb;white-space:pre">    {</span></div>
+<div style="display:flex;background:rgba(214,110,100,.15)"><span style="width:42px;flex:none;text-align:right;padding-right:11px;color:#a1817c">33</span><span style="color:#eeb4ad;white-space:pre">        var flags = request.Flags ?? [];</span></div>
+<div style="display:flex;background:rgba(214,110,100,.15)"><span style="width:42px;flex:none;text-align:right;padding-right:11px;color:#a1817c">34</span><span style="color:#eeb4ad;white-space:pre">        if (flags is null) return null;</span></div>
+<div style="display:flex"><span style="width:42px;flex:none;text-align:right;padding-right:11px;color:#767e89">35</span><span style="color:#bcc2cb;white-space:pre">        var cargo = new Cargo(request.Title);</span></div>
+<div style="display:flex;background:#22262c"><span style="width:42px;flex:none"></span><span style="white-space:pre"> </span></div>
+<div style="display:flex;background:#22262c"><span style="width:42px;flex:none"></span><span style="white-space:pre"> </span></div>
+<div style="display:flex"><span style="width:42px;flex:none;text-align:right;padding-right:11px;color:#767e89">36</span><span style="color:#bcc2cb;white-space:pre">        await _repo.AddAsync(cargo);</span></div>
+<div style="display:flex"><span style="width:42px;flex:none;text-align:right;padding-right:11px;color:#767e89">37</span><span style="color:#bcc2cb;white-space:pre">        return cargo.ToDto();</span></div>
+<div style="display:flex"><span style="width:42px;flex:none;text-align:right;padding-right:11px;color:#767e89">38</span><span style="color:#bcc2cb;white-space:pre">    }</span></div>
+</div>
+<div style="flex:1;min-width:0">
+<div style="display:flex"><span style="width:42px;flex:none;text-align:right;padding-right:11px;color:#767e89">38</span><span style="color:#bcc2cb;white-space:pre">    public async Task&lt;CargoDto&gt; Create(</span></div>
+<div style="display:flex"><span style="width:42px;flex:none;text-align:right;padding-right:11px;color:#767e89">39</span><span style="color:#bcc2cb;white-space:pre">        CreateCargoRequest request)</span></div>
+<div style="display:flex"><span style="width:42px;flex:none;text-align:right;padding-right:11px;color:#767e89">40</span><span style="color:#bcc2cb;white-space:pre">    {</span></div>
+<div style="display:flex;background:rgba(110,190,145,.15)"><span style="width:42px;flex:none;text-align:right;padding-right:11px;color:#7d9a8b">41</span><span style="color:#a9dcc0;white-space:pre">        var flags = request.Flags;</span></div>
+<div style="display:flex;background:rgba(110,190,145,.15);box-shadow:inset 3px 0 0 #dfa85c"><span style="width:42px;flex:none;text-align:right;padding-right:11px;color:#7d9a8b">42</span><span style="color:#a9dcc0;white-space:pre">        if (flags.Count == 0)</span><span style="flex:1"></span><span style="align-self:center;margin-right:8px;width:19px;height:19px;border-radius:5px;background:#3f4a80;color:#dfe3f2;font:600 12px/19px 'JetBrains Mono',monospace;text-align:center">+</span></div>
+<div style="display:flex;background:rgba(110,190,145,.15)"><span style="width:42px;flex:none;text-align:right;padding-right:11px;color:#7d9a8b">43</span><span style="color:#a9dcc0;white-space:pre">            _log.Debug("cargo without flags");</span></div>
+<div style="display:flex;background:rgba(110,190,145,.15)"><span style="width:42px;flex:none;text-align:right;padding-right:11px;color:#7d9a8b">44</span><span style="color:#a9dcc0;white-space:pre">        var cargo = new Cargo(</span></div>
+<div style="display:flex;background:rgba(110,190,145,.15)"><span style="width:42px;flex:none;text-align:right;padding-right:11px;color:#7d9a8b">45</span><span style="color:#a9dcc0;white-space:pre">            request.Title, flags);</span></div>
+<div style="display:flex"><span style="width:42px;flex:none;text-align:right;padding-right:11px;color:#767e89">46</span><span style="color:#bcc2cb;white-space:pre">        await _repo.AddAsync(cargo);</span></div>
+<div style="display:flex"><span style="width:42px;flex:none;text-align:right;padding-right:11px;color:#767e89">47</span><span style="color:#bcc2cb;white-space:pre">        return cargo.ToDto();</span></div>
+<div style="display:flex"><span style="width:42px;flex:none;text-align:right;padding-right:11px;color:#767e89">48</span><span style="color:#bcc2cb;white-space:pre">    }</span></div>
+</div>
+</div>
+
+<div style="display:flex;align-items:center;gap:10px;padding:6px 14px;background:#22262c;border-top:1px solid #2c313a;border-bottom:1px solid #2c313a;font:11px 'JetBrains Mono',monospace;color:#828a95">
+<span>@@ -58,6 +70,9 @@</span>
+<span style="flex:1"></span>
+<span style="padding:1px 8px;border:1px solid #333941;border-radius:5px;color:#9ba3ae">↕ 21 lines hidden</span>
+</div>
+<div style="display:flex;font:12px/22px 'JetBrains Mono',monospace">
+<div style="flex:1;min-width:0;border-right:1px solid #2c313a">
+<div style="display:flex"><span style="width:42px;flex:none;text-align:right;padding-right:11px;color:#767e89">58</span><span style="color:#bcc2cb;white-space:pre">    private static bool HasActive(</span></div>
+<div style="display:flex"><span style="width:42px;flex:none;text-align:right;padding-right:11px;color:#767e89">59</span><span style="color:#bcc2cb;white-space:pre">        IReadOnlyList&lt;Flag&gt; flags)</span></div>
+<div style="display:flex;background:#22262c"><span style="width:42px;flex:none"></span><span style="white-space:pre"> </span></div>
+<div style="display:flex"><span style="width:42px;flex:none;text-align:right;padding-right:11px;color:#767e89">60</span><span style="color:#bcc2cb;white-space:pre">        =&gt; flags.Any(f =&gt; f.IsActive);</span></div>
+</div>
+<div style="flex:1;min-width:0">
+<div style="display:flex"><span style="width:42px;flex:none;text-align:right;padding-right:11px;color:#767e89">70</span><span style="color:#bcc2cb;white-space:pre">    private static bool HasActive(</span></div>
+<div style="display:flex"><span style="width:42px;flex:none;text-align:right;padding-right:11px;color:#767e89">71</span><span style="color:#bcc2cb;white-space:pre">        IReadOnlyList&lt;Flag&gt; flags)</span></div>
+<div style="display:flex;background:rgba(110,190,145,.15);box-shadow:inset 3px 0 0 #8b9ae0"><span style="width:42px;flex:none;text-align:right;padding-right:11px;color:#7d9a8b">72</span><span style="color:#a9dcc0;white-space:pre">        =&gt; flags.Count &gt; 0 &amp;&amp;</span></div>
+<div style="display:flex;background:rgba(110,190,145,.15)"><span style="width:42px;flex:none;text-align:right;padding-right:11px;color:#7d9a8b">73</span><span style="color:#a9dcc0;white-space:pre">           flags.Any(f =&gt; f.IsActive);</span></div>
+</div>
+</div>
+</div>
+
+<div style="margin-top:14px;border:1px solid #333941;border-radius:10px;background:#212429;display:flex;align-items:center;gap:11px;padding:11px 14px">
+<span style="font:10px 'JetBrains Mono',monospace;color:#7a828d">▸</span>
+<span style="font:500 12.5px 'JetBrains Mono',monospace;color:#9ba3ae">src/Cargos/CargoValidator.cs</span>
+<span style="font:10px 'JetBrains Mono',monospace;color:#9ba3ae;border:1px solid #333941;border-radius:9px;padding:1px 7px">1</span>
+<span style="flex:1"></span>
+<span style="font:11px 'JetBrains Mono',monospace;flex:none;color:#7fb195">+17</span>
+<span style="font:11px 'JetBrains Mono',monospace;flex:none;color:#c58f89">−2</span>
+</div>
+</div>
+</div>
+
+<div style="width:392px;flex:none;border-left:1px solid #333941;background:#212429;display:flex;flex-direction:column">
+<div style="flex:none;display:flex;align-items:center;border-bottom:1px solid #333941">
+<span style="padding:12px 14px;font:500 11.5px 'JetBrains Mono',monospace;color:#eef0f7;box-shadow:inset 0 -2px 0 #8b9ae0">Threads 3</span>
+<span style="padding:12px 14px;font:500 11.5px 'JetBrains Mono',monospace;color:#7a828d">Review 12</span>
+<span style="flex:1"></span>
+<span style="padding-right:14px;font:11px 'JetBrains Mono',monospace;color:#7a828d">⇥</span>
+</div>
+<div style="flex:1;min-height:0;overflow:hidden;padding:12px;display:flex;flex-direction:column;gap:10px">
+
+<div style="border:1px solid #6a5a3c;border-radius:9px;background:#26262a;padding:11px;position:relative">
+<div style="position:absolute;left:-13px;top:16px;width:12px;height:2px;background:#dfa85c"></div>
+<div style="display:flex;align-items:center;gap:8px;margin-bottom:8px">
+<span style="font:9.5px 'JetBrains Mono',monospace;color:#1f2229;background:#dfa85c;border-radius:4px;padding:1px 6px;letter-spacing:.04em">WARNING</span>
+<span style="font:10px 'JetBrains Mono',monospace;color:#8c939d">L42–45</span><span style="flex:1"></span>
+<span style="font:9.5px 'JetBrains Mono',monospace;color:#a8b3e6;border:1px solid #3f4a80;border-radius:4px;padding:1px 6px;background:rgba(63,74,128,.3)">awaiting</span>
+</div>
+<div style="font-size:12.5px;line-height:1.55;color:#c8ced7">Проверка на пустоту недостижима: Flags в контракте non-nullable.</div>
+<div style="margin-top:9px;padding:9px 11px;border-radius:7px;background:#2a2f42;border:1px solid #3a4260">
+<div style="display:flex;align-items:baseline;gap:7px;margin-bottom:3px"><span style="font:600 11.5px 'JetBrains Mono',monospace;color:#b3bdea">claude</span><span style="font:9.5px 'JetBrains Mono',monospace;color:#8b9ae0">agent · 18:20</span></div>
+<div style="font-size:12px;line-height:1.5;color:#b9bfc9">Убрал ветку с логом, контракт гарантирует непустую коллекцию.</div>
+</div>
+<div style="display:flex;gap:7px;margin-top:10px">
+<span style="padding:4px 11px;border-radius:7px;background:#5ba37c;color:#12241a;font-weight:600;font-size:11.5px">Resolve</span>
+<span style="padding:4px 11px;border-radius:7px;border:1px solid #333941;color:#9ba3ae;font-size:11.5px;background:#282d34">Reply</span>
+</div>
+</div>
+
+<div style="border:1px solid #333941;border-radius:9px;background:#25282e;padding:11px">
+<div style="display:flex;align-items:center;gap:8px;margin-bottom:8px">
+<span style="font:9.5px 'JetBrains Mono',monospace;color:#1f2229;background:#8b9ae0;border-radius:4px;padding:1px 6px;letter-spacing:.04em">QUESTION</span>
+<span style="font:10px 'JetBrains Mono',monospace;color:#8c939d">L72</span>
+</div>
+<div style="font-size:12.5px;line-height:1.55;color:#c8ced7">Зачем два условия, если Any по пустой коллекции уже false?</div>
+</div>
+
+<div style="border:1px solid #2c313a;border-radius:9px;background:#22252a;padding:11px;opacity:.6">
+<div style="display:flex;align-items:center;gap:8px;margin-bottom:8px">
+<span style="font:9.5px 'JetBrains Mono',monospace;color:#7ec49c;border:1px solid #3d5d4c;border-radius:4px;padding:1px 6px">RESOLVED</span>
+<span style="font:10px 'JetBrains Mono',monospace;color:#8c939d">file · nit</span>
+</div>
+<div style="font-size:12.5px;line-height:1.55;color:#9ba3ae">Порядок using-ов не по конвенции.</div>
+</div>
+
+<div style="margin-top:2px;padding:10px 11px;border:1px dashed #333941;border-radius:9px;font:11px 'JetBrains Mono',monospace;color:#828a95">
+9 more threads in other repos <span style="color:#a8b3e6">→ Review tab</span>
+</div>
+</div>
+
+<div style="flex:none;border-top:1px solid #333941;background:#1d2025">
+<div style="padding:11px 14px;display:flex;align-items:center;gap:8px;border-bottom:1px solid #2c313a">
+<span style="width:7px;height:7px;border-radius:50%;background:#5ba37c"></span>
+<span style="font:500 10.5px 'JetBrains Mono',monospace;letter-spacing:.07em;color:#9ba3ae">AGENT ACTIVITY</span>
+<span style="flex:1"></span>
+<span style="font:10px 'JetBrains Mono',monospace;color:#7ec49c">2 live</span>
+<span style="font:11px 'JetBrains Mono',monospace;color:#7a828d">▾</span>
+</div>
+<div style="padding:12px 14px;display:flex;flex-direction:column;gap:11px;font:11px 'JetBrains Mono',monospace">
+<div style="display:flex;gap:9px;align-items:flex-start">
+<span style="width:6px;height:6px;border-radius:50%;background:#5ba37c;margin-top:5px;flex:none"></span>
+<div style="min-width:0"><span style="color:#b3bdea">claude</span> <span style="color:#8c939d">is editing</span> <span style="color:#e9ecf2">group/service-api</span>
+<div style="color:#828a95;margin-top:3px">CargoValidator.cs · 12s ago</div></div>
+</div>
+<div style="display:flex;gap:9px;align-items:flex-start">
+<span style="width:6px;height:6px;border-radius:50%;background:#5ba37c;margin-top:5px;flex:none"></span>
+<div style="min-width:0"><span style="color:#b3bdea">codex</span> <span style="color:#8c939d">is editing</span> <span style="color:#e9ecf2">group/service-web</span>
+<div style="color:#828a95;margin-top:3px">FlagPicker.tsx · 40s ago</div></div>
+</div>
+<div style="display:flex;gap:9px;align-items:flex-start">
+<span style="width:6px;height:6px;border-radius:50%;background:#8b9ae0;margin-top:5px;flex:none"></span>
+<div style="min-width:0"><span style="color:#b3bdea">codex</span> <span style="color:#8c939d">replied to</span> <span style="color:#e9ecf2">c_9a1m4x</span>
+<div style="color:#828a95;margin-top:3px">1m ago</div></div>
+</div>
+<div style="display:flex;gap:9px;align-items:flex-start">
+<span style="width:6px;height:6px;border-radius:50%;background:#3f4650;margin-top:5px;flex:none"></span>
+<div style="min-width:0"><span style="color:#9ba3ae">diff changed</span> <span style="color:#8c939d">in</span> <span style="color:#e9ecf2">infra/terraform</span>
+<div style="color:#828a95;margin-top:3px">+2 −1 · 3m ago</div></div>
+</div>
+</div>
+</div>
+</div>
+</div>
+</div>
+</div>
+
+</div>
+
+<div class="dv-opt" id="3b">
+<div class="dv-olabel"><a class="dv-oid" href="#3b">3b</a>Browsing the whole repository — the sidebar's <span style="font-family:'JetBrains Mono',monospace">all files</span> tab, or ⌘K / Browse file from any diff. Base revision or working tree, comments stay visible.</div>
+<div class="dv-card" style="width:1180px;border-radius:10px">
+<div style="background:#1d2025;color:#dde1e7;font-family:'Instrument Sans',system-ui,sans-serif;font-size:13px;height:640px;display:flex;flex-direction:column">
+
+<div style="flex:none;height:44px;border-bottom:1px solid #333941;display:flex;align-items:center;gap:12px;padding:0 14px;background:#22262c">
+<span style="font:600 12px 'JetBrains Mono',monospace">diffalanche</span>
+<span style="font:11px 'JetBrains Mono',monospace;color:#8c939d">group/service-api</span>
+<span style="color:#5b626d">/</span>
+<span style="font:11px 'JetBrains Mono',monospace;color:#a8b3e6">browse</span>
+<span style="flex:1"></span>
+<span style="padding:4px 10px;border:1px solid #333941;border-radius:7px;font:10.5px 'JetBrains Mono',monospace;color:#9ba3ae;background:#282d34">← back to review</span>
+</div>
+
+<div style="flex:1;display:flex;min-height:0">
+<div style="width:272px;flex:none;border-right:1px solid #333941;background:#212429;display:flex;flex-direction:column">
+<div style="flex:none;display:flex;gap:6px;padding:10px 10px 0">
+<span style="flex:1;text-align:center;padding:6px 0;font:500 11.5px 'JetBrains Mono',monospace;color:#7a828d;border-radius:7px">changes</span>
+<span style="flex:1;text-align:center;padding:6px 0;font:500 11.5px 'JetBrains Mono',monospace;color:#eef0f7;border-radius:7px;background:#2b3039">all files</span>
+</div>
+<div style="padding:10px">
+<div style="display:flex;align-items:center;gap:8px;padding:7px 10px;border:1px solid #333941;border-radius:8px;background:#1d2025">
+<span style="font-size:11px;color:#7a828d">⌕</span><span style="font:11.5px 'JetBrains Mono',monospace;color:#9ba3ae">Cargo</span><span style="flex:1"></span><span style="font:10px 'JetBrains Mono',monospace;color:#7a828d">14</span>
+</div>
+</div>
+<div style="flex:1;overflow:hidden;padding:0 8px;font:11.5px/1 'JetBrains Mono',monospace">
+<div style="padding:6px 10px;color:#828a95;font-size:9.5px;letter-spacing:.08em">GROUP/SERVICE-API · WORKING TREE</div>
+<div style="display:flex;gap:8px;padding:6px 10px;color:#9ba3ae"><span style="color:#7a828d">▾</span><span>src</span></div>
+<div style="display:flex;gap:8px;padding:6px 10px 6px 26px;color:#9ba3ae"><span style="color:#7a828d">▾</span><span>Cargos</span></div>
+<div style="display:flex;gap:8px;padding:6px 10px 6px 42px;color:#9ba3ae"><span>CargoService.cs</span><span style="flex:1"></span><span style="font-size:10px;color:#dfa85c">3</span></div>
+<div style="display:flex;gap:8px;padding:6px 10px 6px 42px;color:#9ba3ae"><span>CargoValidator.cs</span><span style="flex:1"></span><span style="font-size:10px;color:#9ba3ae">1</span></div>
+<div style="display:flex;gap:8px;padding:6px 10px 6px 42px;border-radius:6px;background:#333c66"><span style="color:#eef0f7">CargoMapper.cs</span><span style="flex:1"></span><span style="font-size:10px;color:#8f96b8">unchanged</span></div>
+<div style="display:flex;gap:8px;padding:6px 10px 6px 42px;color:#8c939d"><span>ICargoRepository.cs</span><span style="flex:1"></span><span style="font-size:10px;color:#5b626d">unchanged</span></div>
+<div style="display:flex;gap:8px;padding:6px 10px 6px 26px;color:#9ba3ae"><span style="color:#7a828d">▸</span><span>Contracts</span></div>
+<div style="display:flex;gap:8px;padding:6px 10px 6px 26px;color:#9ba3ae"><span style="color:#7a828d">▸</span><span>Infrastructure</span></div>
+<div style="display:flex;gap:8px;padding:6px 10px 6px 26px;color:#9ba3ae"><span style="color:#7a828d">▸</span><span>Endpoints</span></div>
+<div style="display:flex;gap:8px;padding:6px 10px;color:#9ba3ae"><span style="color:#7a828d">▸</span><span>tests</span></div>
+<div style="display:flex;gap:8px;padding:6px 10px;color:#9ba3ae"><span style="color:#7a828d">▸</span><span>migrations</span></div>
+<div style="display:flex;gap:8px;padding:6px 10px;color:#8c939d"><span style="width:8px"></span><span>Directory.Build.props</span></div>
+<div style="margin:12px 10px 0;padding-top:12px;border-top:1px solid #2b3038;font:10.5px/1.8 'JetBrains Mono',monospace;color:#828a95">
+switch repo with <span style="color:#a8b3e6">⌘P</span><br>symbol search with <span style="color:#a8b3e6">⌘⇧O</span>
+</div>
+</div>
+</div>
+
+<div style="flex:1;min-width:0;display:flex;flex-direction:column">
+<div style="flex:none;padding:12px 18px;border-bottom:1px solid #333941;display:flex;align-items:center;gap:12px">
+<span style="font:600 13px 'JetBrains Mono',monospace;color:#e9ecf2">src/Cargos/CargoMapper.cs</span>
+<span style="font:10.5px 'JetBrains Mono',monospace;color:#5b626d;border:1px solid #333941;border-radius:5px;padding:1px 6px">not in this review</span>
+<span style="flex:1"></span>
+<div style="display:flex;border:1px solid #333941;border-radius:7px;overflow:hidden">
+<span style="padding:4px 11px;font:10.5px 'JetBrains Mono',monospace;color:#eef0f7;background:#3f4a80">working tree</span>
+<span style="padding:4px 11px;font:10.5px 'JetBrains Mono',monospace;color:#8c939d">base 4f21ac9</span>
+</div>
+</div>
+<div style="flex:1;min-height:0;overflow:hidden;font:12px/22px 'JetBrains Mono',monospace;padding:8px 0">
+<div style="display:flex"><span style="width:46px;flex:none;text-align:right;padding-right:12px;color:#767e89">14</span><span style="color:#bcc2cb;white-space:pre">public static CargoDto ToDto(this Cargo c)</span></div>
+<div style="display:flex"><span style="width:46px;flex:none;text-align:right;padding-right:12px;color:#767e89">15</span><span style="color:#bcc2cb;white-space:pre">    =&gt; new(</span></div>
+<div style="display:flex"><span style="width:46px;flex:none;text-align:right;padding-right:12px;color:#767e89">16</span><span style="color:#bcc2cb;white-space:pre">        c.Id,</span></div>
+<div style="display:flex"><span style="width:46px;flex:none;text-align:right;padding-right:12px;color:#767e89">17</span><span style="color:#bcc2cb;white-space:pre">        c.Title,</span></div>
+<div style="display:flex;background:rgba(63,74,128,.22);box-shadow:inset 3px 0 0 #8b9ae0"><span style="width:46px;flex:none;text-align:right;padding-right:12px;color:#8f96b8">18</span><span style="color:#d6dbf2;white-space:pre">        c.Flags.Select(f =&gt; f.Code).ToArray(),</span></div>
+<div style="display:flex"><span style="width:46px;flex:none;text-align:right;padding-right:12px;color:#767e89">19</span><span style="color:#bcc2cb;white-space:pre">        c.CreatedAt);</span></div>
+<div style="display:flex"><span style="width:46px;flex:none;text-align:right;padding-right:12px;color:#767e89">20</span><span style="white-space:pre"> </span></div>
+<div style="display:flex"><span style="width:46px;flex:none;text-align:right;padding-right:12px;color:#767e89">21</span><span style="color:#bcc2cb;white-space:pre">public static Cargo FromRequest(</span></div>
+<div style="display:flex"><span style="width:46px;flex:none;text-align:right;padding-right:12px;color:#767e89">22</span><span style="color:#bcc2cb;white-space:pre">    CreateCargoRequest r)</span></div>
+<div style="display:flex"><span style="width:46px;flex:none;text-align:right;padding-right:12px;color:#767e89">23</span><span style="color:#bcc2cb;white-space:pre">    =&gt; new(r.Title, r.Flags);</span></div>
+<div style="margin:12px 18px 0;padding:11px 13px;border:1px solid #3a4260;border-radius:9px;background:#26293a;font-family:'Instrument Sans',system-ui,sans-serif">
+<div style="display:flex;align-items:center;gap:9px;margin-bottom:7px">
+<span style="font:9.5px 'JetBrains Mono',monospace;color:#a8b3e6;border:1px solid #3f4a80;border-radius:4px;padding:1px 6px">CONTEXT</span>
+<span style="font:10.5px 'JetBrains Mono',monospace;color:#8c939d">L18 · not part of the diff</span>
+<span style="flex:1"></span>
+<span style="font:10.5px 'JetBrains Mono',monospace;color:#a8b3e6">Comment on this line</span>
+</div>
+<div style="font-size:12.5px;line-height:1.55;color:#b9bfc9">Открыто из ревью, чтобы проверить, что <span style="font-family:'JetBrains Mono',monospace;font-size:11.5px;background:#2f334a;padding:1px 5px;border-radius:4px">Flags</span> действительно non-nullable в маппере. Комментарий здесь тоже можно оставить — он попадёт в ту же сессию.</div>
+</div>
+</div>
+<div style="flex:none;border-top:1px solid #333941;background:#22262c;padding:9px 18px;display:flex;align-items:center;gap:18px;font:10.5px 'JetBrains Mono',monospace;color:#8c939d">
+<span><span style="border:1px solid #3f4650;border-radius:4px;padding:1px 6px;color:#dde1e7">⌘K</span> file or symbol in any repo</span>
+<span><span style="border:1px solid #3f4650;border-radius:4px;padding:1px 6px;color:#dde1e7">⌘P</span> switch repository</span>
+<span><span style="border:1px solid #3f4650;border-radius:4px;padding:1px 6px;color:#dde1e7">esc</span> back to the diff</span>
+<span style="flex:1"></span>
+<span>read-only · git is never modified</span>
+</div>
+</div>
+</div>
+</div>
+</div>
+</div>
+
+</div>
+<p class="dv-next">Try next: "ещё насыщеннее <a class="dv-oid" href="#3a">3a</a>" · "лента активности как выдвижная панель, а не снизу" · "покажи <a class="dv-oid" href="#3b">3b</a> в светлой теме"</p>
+</section>
+
+<section class="dv-turn" id="t2">
+<div class="dv-thd"><a class="dv-tid" href="#t2">2</a><span class="dv-tname">Calmer palette — same layout as <a class="dv-oid" href="#1a">1a</a>, quieter surfaces and muted severity colours</span></div>
+<div class="dv-opts">
+
+<div class="dv-opt" id="2a">
+<div class="dv-olabel"><a class="dv-oid" href="#2a">2a</a>Dusk — warm slate surfaces instead of near-black, desaturated severity, looser line-height, badges as tinted outlines.</div>
+<div class="dv-card" style="width:1440px;border-radius:10px">
+<div style="background:#1e2126;color:#d7dae0;font-family:'Instrument Sans',system-ui,sans-serif;font-size:13px;height:920px;display:flex;flex-direction:column">
+
+<div style="height:52px;flex:none;border-bottom:1px solid #2c3037;display:flex;align-items:center;gap:14px;padding:0 16px;background:#23262c">
+<div style="font:600 13px 'JetBrains Mono',monospace;letter-spacing:-.01em;color:#c9ccd3">diffalanche</div>
+<div style="display:flex;align-items:center;gap:9px;padding:5px 11px;border:1px solid #32363e;border-radius:8px;background:#282c33">
+<span style="font:500 12px 'JetBrains Mono',monospace;color:#d7dae0">ls-240372</span>
+<span style="font-size:11.5px;color:#868d97">Cargo flags across services</span>
+<span style="font:11px 'JetBrains Mono',monospace;color:#a3adcd">▾</span>
+</div>
+<div style="display:flex;align-items:center;border:1px solid #32363e;border-radius:8px;overflow:hidden;background:#282c33">
+<span style="padding:6px 12px;font:500 11px 'JetBrains Mono',monospace;color:#868d97">head</span>
+<span style="padding:6px 12px;font:500 11px 'JetBrains Mono',monospace;color:#dfe3ea;background:#3b4152">branch</span>
+<span style="padding:6px 12px;font:500 11px 'JetBrains Mono',monospace;color:#868d97">ref</span>
+</div>
+<div style="flex:1"></div>
+<div style="display:flex;align-items:center;gap:16px;font-size:11.5px;color:#9aa0a9">
+<span><span style="font:500 12px 'JetBrains Mono',monospace;color:#cf9b8f">12</span> open</span>
+<span><span style="font:500 12px 'JetBrains Mono',monospace;color:#a3adcd">5</span> awaiting you</span>
+</div>
+<div style="display:flex;align-items:center;border:1px solid #32363e;border-radius:8px;overflow:hidden;background:#282c33">
+<span style="padding:6px 10px;font-size:12px;background:#32363e;color:#d7dae0">☾</span>
+<span style="padding:6px 10px;font-size:12px;color:#767c86">☀</span>
+</div>
+<div style="padding:6px 13px;border:1px solid #32363e;border-radius:8px;font-size:12px;color:#9aa0a9;background:#282c33">Export .md</div>
+</div>
+
+<div style="flex:1;display:flex;min-height:0">
+
+<div style="width:296px;flex:none;border-right:1px solid #2c3037;background:#21242a;display:flex;flex-direction:column">
+<div style="padding:12px">
+<div style="display:flex;align-items:center;gap:8px;padding:7px 10px;border:1px solid #32363e;border-radius:8px;background:#1e2126">
+<span style="font-size:11px;color:#767c86">⌕</span><span style="font-size:12px;color:#767c86">Filter files</span><span style="flex:1"></span><span style="font:10px 'JetBrains Mono',monospace;color:#767c86;border:1px solid #32363e;border-radius:4px;padding:1px 5px">⌘K</span>
+</div>
+</div>
+<div style="flex:1;overflow:hidden;padding:0 8px">
+
+<div style="display:flex;align-items:center;gap:8px;padding:8px 10px;border-radius:7px;background:#2a2e36">
+<span style="font:10px 'JetBrains Mono',monospace;color:#a3adcd">▾</span>
+<span style="font:500 12px 'JetBrains Mono',monospace;color:#d7dae0">group/service-api</span>
+<span style="flex:1"></span>
+<span style="font:11px 'JetBrains Mono',monospace;color:#cfa77a">4</span>
+</div>
+<div style="display:flex;align-items:center;gap:8px;padding:7px 10px 7px 28px;border-radius:7px;background:#31374a">
+<span style="font:11.5px 'JetBrains Mono',monospace;color:#e2e5ea">CargoService.cs</span><span style="flex:1"></span>
+<span style="font:10px 'JetBrains Mono',monospace;color:#9fbfab">+42</span><span style="font:10px 'JetBrains Mono',monospace;color:#c9a09b">−8</span>
+<span style="font:10px 'JetBrains Mono',monospace;color:#cfa77a;border:1px solid rgba(207,167,122,.4);border-radius:9px;padding:0 6px">3</span>
+</div>
+<div style="display:flex;align-items:center;gap:8px;padding:7px 10px 7px 28px">
+<span style="font:11.5px 'JetBrains Mono',monospace;color:#9aa0a9">CargoValidator.cs</span><span style="flex:1"></span>
+<span style="font:10px 'JetBrains Mono',monospace;color:#9fbfab">+17</span><span style="font:10px 'JetBrains Mono',monospace;color:#c9a09b">−2</span>
+<span style="font:10px 'JetBrains Mono',monospace;color:#9aa0a9;border:1px solid #32363e;border-radius:9px;padding:0 6px">1</span>
+</div>
+<div style="display:flex;align-items:center;gap:8px;padding:7px 10px 7px 28px">
+<span style="font:11.5px 'JetBrains Mono',monospace;color:#9aa0a9">Contracts/CargoDto.cs</span><span style="flex:1"></span>
+<span style="font:10px 'JetBrains Mono',monospace;color:#9fbfab">+6</span>
+</div>
+<div style="display:flex;align-items:center;gap:8px;padding:7px 10px 7px 28px">
+<span style="font:11.5px 'JetBrains Mono',monospace;color:#767c86">migrations/0021_flags.sql</span><span style="flex:1"></span>
+<span style="font:10px 'JetBrains Mono',monospace;color:#767c86">new</span>
+</div>
+
+<div style="display:flex;align-items:center;gap:8px;padding:8px 10px;margin-top:4px">
+<span style="font:10px 'JetBrains Mono',monospace;color:#767c86">▾</span>
+<span style="font:500 12px 'JetBrains Mono',monospace;color:#d7dae0">group/service-web</span><span style="flex:1"></span>
+<span style="font:11px 'JetBrains Mono',monospace;color:#cf9b8f">2</span>
+</div>
+<div style="display:flex;align-items:center;gap:8px;padding:7px 10px 7px 28px">
+<span style="font:11.5px 'JetBrains Mono',monospace;color:#9aa0a9">src/cargo/FlagPicker.tsx</span><span style="flex:1"></span>
+<span style="font:10px 'JetBrains Mono',monospace;color:#9fbfab">+88</span><span style="font:10px 'JetBrains Mono',monospace;color:#c9a09b">−12</span>
+<span style="font:10px 'JetBrains Mono',monospace;color:#cf9b8f;border:1px solid rgba(207,155,143,.4);border-radius:9px;padding:0 6px">2</span>
+</div>
+<div style="display:flex;align-items:center;gap:8px;padding:7px 10px 7px 28px">
+<span style="font:11.5px 'JetBrains Mono',monospace;color:#9aa0a9">src/api/client.ts</span><span style="flex:1"></span>
+<span style="font:10px 'JetBrains Mono',monospace;color:#9fbfab">+9</span><span style="font:10px 'JetBrains Mono',monospace;color:#c9a09b">−3</span>
+</div>
+
+<div style="display:flex;align-items:center;gap:8px;padding:8px 10px;margin-top:4px">
+<span style="font:10px 'JetBrains Mono',monospace;color:#767c86">▸</span>
+<span style="font:500 12px 'JetBrains Mono',monospace;color:#9aa0a9">group/service-billing</span><span style="flex:1"></span>
+<span style="font:11px 'JetBrains Mono',monospace;color:#767c86">7 files</span>
+</div>
+<div style="display:flex;align-items:center;gap:8px;padding:8px 10px">
+<span style="font:10px 'JetBrains Mono',monospace;color:#767c86">▸</span>
+<span style="font:500 12px 'JetBrains Mono',monospace;color:#9aa0a9">infra/terraform</span><span style="flex:1"></span>
+<span style="font:11px 'JetBrains Mono',monospace;color:#8fb59c">1</span>
+<span style="font:11px 'JetBrains Mono',monospace;color:#767c86">3 files</span>
+</div>
+<div style="display:flex;align-items:center;gap:8px;padding:8px 10px">
+<span style="font:10px 'JetBrains Mono',monospace;color:#767c86">▸</span>
+<span style="font:500 12px 'JetBrains Mono',monospace;color:#9aa0a9">tools/codegen</span><span style="flex:1"></span>
+<span style="font:11px 'JetBrains Mono',monospace;color:#767c86">1 file</span>
+</div>
+<div style="display:flex;align-items:center;gap:8px;padding:8px 10px">
+<span style="font:10px 'JetBrains Mono',monospace;color:#767c86">▸</span>
+<span style="font:500 12px 'JetBrains Mono',monospace;color:#9aa0a9">group/service-api-wt-flags</span><span style="flex:1"></span>
+<span style="font:10px 'JetBrains Mono',monospace;color:#767c86;border:1px solid #32363e;border-radius:4px;padding:0 5px">worktree</span>
+</div>
+
+<div style="margin:16px 10px 0;padding-top:14px;border-top:1px solid #2c3037;font:10.5px/1.8 'JetBrains Mono',monospace;color:#7f858f">
+16 repos scanned · depth 2<br>9 without changes, hidden
+</div>
+</div>
+<div style="flex:none;border-top:1px solid #2c3037;padding:11px 14px;display:flex;align-items:center;gap:9px">
+<span style="width:6px;height:6px;border-radius:50%;background:#8fb59c"></span>
+<span style="font:10.5px 'JetBrains Mono',monospace;color:#9aa0a9">watching · 127.0.0.1:4880</span>
+</div>
+</div>
+
+<div style="flex:1;min-width:0;display:flex;flex-direction:column;background:#1e2126">
+
+<div style="flex:none;padding:15px 22px;border-bottom:1px solid #2c3037;display:flex;align-items:center;gap:14px">
+<div>
+<div style="font:600 14.5px 'JetBrains Mono',monospace;color:#dfe3ea">group/service-api</div>
+<div style="margin-top:4px;font:11px 'JetBrains Mono',monospace;color:#868d97">feat/cargo-flags <span style="color:#6d737c">←</span> origin/main <span style="color:#6d737c">·</span> merge-base 4f21ac9</div>
+</div>
+<span style="flex:1"></span>
+<span style="font:11px 'JetBrains Mono',monospace;color:#9aa0a9">4 files</span>
+<span style="font:11px 'JetBrains Mono',monospace;color:#9fbfab">+65</span>
+<span style="font:11px 'JetBrains Mono',monospace;color:#c9a09b">−10</span>
+<div style="padding:5px 12px;border:1px solid #32363e;border-radius:8px;font-size:11.5px;color:#9aa0a9;background:#23262c">Comment on repo</div>
+</div>
+
+<div style="flex:1;overflow:hidden;padding:18px 22px">
+
+<div style="border:1px solid #2c3037;border-radius:10px;overflow:hidden;background:#21242a">
+<div style="display:flex;align-items:center;gap:11px;padding:11px 14px;background:#282c33;border-bottom:1px solid #2c3037">
+<span style="font:10px 'JetBrains Mono',monospace;color:#767c86">▾</span>
+<span style="font:500 12.5px 'JetBrains Mono',monospace;color:#dfe3ea">src/Cargos/CargoService.cs</span>
+<span style="font:10px 'JetBrains Mono',monospace;color:#cfa77a;border:1px solid rgba(207,167,122,.4);border-radius:9px;padding:1px 7px">3</span>
+<span style="flex:1"></span>
+<div style="display:flex;border:1px solid #32363e;border-radius:6px;overflow:hidden">
+<span style="padding:3px 10px;font:10.5px 'JetBrains Mono',monospace;background:#32363e;color:#dfe3ea">split</span>
+<span style="padding:3px 10px;font:10.5px 'JetBrains Mono',monospace;color:#767c86">unified</span>
+</div>
+<span style="font:10.5px 'JetBrains Mono',monospace;color:#767c86">C#</span>
+</div>
+
+<div style="padding:6px 14px;background:#23262c;border-bottom:1px solid #2a2e35;font:11px 'JetBrains Mono',monospace;color:#7f858f">@@ -30,8 +38,12 @@ public sealed class CargoService</div>
+
+<div style="display:flex;font:12px/22px 'JetBrains Mono',monospace">
+<div style="flex:1;min-width:0;border-right:1px solid #2a2e35">
+<div style="display:flex"><span style="width:42px;flex:none;text-align:right;padding-right:11px;color:#6d737c">30</span><span style="color:#b6bcc5;white-space:pre">    public async Task&lt;CargoDto&gt; Create(</span></div>
+<div style="display:flex"><span style="width:42px;flex:none;text-align:right;padding-right:11px;color:#6d737c">31</span><span style="color:#b6bcc5;white-space:pre">        CreateCargoRequest request)</span></div>
+<div style="display:flex"><span style="width:42px;flex:none;text-align:right;padding-right:11px;color:#6d737c">32</span><span style="color:#b6bcc5;white-space:pre">    {</span></div>
+<div style="display:flex;background:rgba(207,139,133,.10)"><span style="width:42px;flex:none;text-align:right;padding-right:11px;color:#8d7a78">33</span><span style="color:#dcb2ae;white-space:pre">        var flags = request.Flags ?? [];</span></div>
+<div style="display:flex;background:rgba(207,139,133,.10)"><span style="width:42px;flex:none;text-align:right;padding-right:11px;color:#8d7a78">34</span><span style="color:#dcb2ae;white-space:pre">        if (flags is null) return null;</span></div>
+<div style="display:flex"><span style="width:42px;flex:none;text-align:right;padding-right:11px;color:#6d737c">35</span><span style="color:#b6bcc5;white-space:pre">        var cargo = new Cargo(request.Title);</span></div>
+<div style="display:flex;background:#23262c"><span style="width:42px;flex:none"></span><span style="white-space:pre"> </span></div>
+<div style="display:flex;background:#23262c"><span style="width:42px;flex:none"></span><span style="white-space:pre"> </span></div>
+<div style="display:flex"><span style="width:42px;flex:none;text-align:right;padding-right:11px;color:#6d737c">36</span><span style="color:#b6bcc5;white-space:pre">        await _repo.AddAsync(cargo);</span></div>
+<div style="display:flex"><span style="width:42px;flex:none;text-align:right;padding-right:11px;color:#6d737c">37</span><span style="color:#b6bcc5;white-space:pre">        return cargo.ToDto();</span></div>
+<div style="display:flex"><span style="width:42px;flex:none;text-align:right;padding-right:11px;color:#6d737c">38</span><span style="color:#b6bcc5;white-space:pre">    }</span></div>
+</div>
+<div style="flex:1;min-width:0">
+<div style="display:flex"><span style="width:42px;flex:none;text-align:right;padding-right:11px;color:#6d737c">38</span><span style="color:#b6bcc5;white-space:pre">    public async Task&lt;CargoDto&gt; Create(</span></div>
+<div style="display:flex"><span style="width:42px;flex:none;text-align:right;padding-right:11px;color:#6d737c">39</span><span style="color:#b6bcc5;white-space:pre">        CreateCargoRequest request)</span></div>
+<div style="display:flex"><span style="width:42px;flex:none;text-align:right;padding-right:11px;color:#6d737c">40</span><span style="color:#b6bcc5;white-space:pre">    {</span></div>
+<div style="display:flex;background:rgba(143,181,156,.11)"><span style="width:42px;flex:none;text-align:right;padding-right:11px;color:#7c8d84">41</span><span style="color:#b6d0c0;white-space:pre">        var flags = request.Flags;</span></div>
+<div style="display:flex;background:rgba(143,181,156,.11);box-shadow:inset 2px 0 0 rgba(207,167,122,.7)"><span style="width:42px;flex:none;text-align:right;padding-right:11px;color:#7c8d84">42</span><span style="color:#b6d0c0;white-space:pre">        if (flags.Count == 0)</span><span style="flex:1"></span><span style="align-self:center;margin-right:8px;width:19px;height:19px;border-radius:5px;background:#3b4152;color:#c9d0e4;font:600 12px/19px 'JetBrains Mono',monospace;text-align:center">+</span></div>
+<div style="display:flex;background:rgba(143,181,156,.11)"><span style="width:42px;flex:none;text-align:right;padding-right:11px;color:#7c8d84">43</span><span style="color:#b6d0c0;white-space:pre">            _log.Debug("cargo without flags");</span></div>
+<div style="display:flex;background:rgba(143,181,156,.11)"><span style="width:42px;flex:none;text-align:right;padding-right:11px;color:#7c8d84">44</span><span style="color:#b6d0c0;white-space:pre">        var cargo = new Cargo(</span></div>
+<div style="display:flex;background:rgba(143,181,156,.11)"><span style="width:42px;flex:none;text-align:right;padding-right:11px;color:#7c8d84">45</span><span style="color:#b6d0c0;white-space:pre">            request.Title, flags);</span></div>
+<div style="display:flex"><span style="width:42px;flex:none;text-align:right;padding-right:11px;color:#6d737c">46</span><span style="color:#b6bcc5;white-space:pre">        await _repo.AddAsync(cargo);</span></div>
+<div style="display:flex"><span style="width:42px;flex:none;text-align:right;padding-right:11px;color:#6d737c">47</span><span style="color:#b6bcc5;white-space:pre">        return cargo.ToDto();</span></div>
+<div style="display:flex"><span style="width:42px;flex:none;text-align:right;padding-right:11px;color:#6d737c">48</span><span style="color:#b6bcc5;white-space:pre">    }</span></div>
+</div>
+</div>
+
+<div style="border-top:1px solid #2c3037;background:#23262c;padding:16px 18px 16px 56px">
+<div style="display:flex;align-items:center;gap:10px;margin-bottom:12px">
+<span style="font:10px 'JetBrains Mono',monospace;color:#cfa77a;border:1px solid rgba(207,167,122,.45);border-radius:4px;padding:2px 7px;letter-spacing:.05em">warning</span>
+<span style="font:11px 'JetBrains Mono',monospace;color:#868d97">new · L42–45</span>
+<span style="flex:1"></span>
+<span style="font:10.5px 'JetBrains Mono',monospace;color:#7f858f">c_7f3k2q</span>
+</div>
+<div style="display:flex;gap:12px;margin-bottom:14px">
+<span style="width:24px;height:24px;flex:none;border-radius:6px;background:#32363e;color:#d7dae0;font:600 10px/24px 'JetBrains Mono',monospace;text-align:center">KP</span>
+<div style="min-width:0">
+<div style="display:flex;align-items:baseline;gap:9px;margin-bottom:4px"><span style="font-weight:600;font-size:12.5px;color:#dfe3ea">kim.p</span><span style="font:10px 'JetBrains Mono',monospace;color:#7f858f">human · 18:05</span></div>
+<div style="font-size:13px;line-height:1.65;color:#c2c7cf;max-width:760px">Проверка на пустоту недостижима: <span style="font-family:'JetBrains Mono',monospace;font-size:12px;background:#2a2e35;padding:1px 5px;border-radius:4px">Flags</span> в контракте non-nullable, коллекция всегда приходит. Лог в этой ветке только шумит.</div>
+</div>
+</div>
+<div style="display:flex;gap:12px;padding:12px 14px;border-radius:9px;background:#272b34;border:1px solid #333846">
+<span style="width:24px;height:24px;flex:none;border-radius:6px;background:#3b4152;color:#c9d0e4;font:600 10px/24px 'JetBrains Mono',monospace;text-align:center">CL</span>
+<div style="min-width:0">
+<div style="display:flex;align-items:baseline;gap:9px;margin-bottom:4px"><span style="font-weight:600;font-size:12.5px;color:#c1c9df">claude</span><span style="font:10px 'JetBrains Mono',monospace;color:#a3adcd;border:1px solid rgba(163,173,205,.35);border-radius:4px;padding:0 5px">agent</span><span style="font:10px 'JetBrains Mono',monospace;color:#7f858f">18:20</span></div>
+<div style="font-size:13px;line-height:1.65;color:#c2c7cf;max-width:760px">Убрал ветку с логом, контракт гарантирует непустую коллекцию. Валидатор теперь единственное место проверки.</div>
+</div>
+</div>
+<div style="display:flex;align-items:center;gap:9px;margin-top:14px">
+<div style="padding:6px 14px;border-radius:8px;background:#8fb59c;color:#1f2a24;font-weight:600;font-size:12px">Resolve</div>
+<div style="padding:6px 14px;border-radius:8px;border:1px solid #32363e;color:#9aa0a9;font-size:12px;background:#282c33">Reply</div>
+<span style="flex:1"></span>
+<span style="font:10.5px 'JetBrains Mono',monospace;color:#7f858f">last message from agent · awaiting your verification</span>
+</div>
+</div>
+
+<div style="display:flex;font:12px/22px 'JetBrains Mono',monospace;border-top:1px solid #2c3037">
+<div style="flex:1;border-right:1px solid #2a2e35"><div style="display:flex"><span style="width:42px;flex:none;text-align:right;padding-right:11px;color:#6d737c">39</span><span style="color:#b6bcc5;white-space:pre">}</span></div></div>
+<div style="flex:1"><div style="display:flex"><span style="width:42px;flex:none;text-align:right;padding-right:11px;color:#6d737c">49</span><span style="color:#b6bcc5;white-space:pre">}</span></div></div>
+</div>
+</div>
+
+<div style="margin-top:14px;border:1px solid #2c3037;border-radius:10px;background:#21242a;display:flex;align-items:center;gap:11px;padding:11px 14px">
+<span style="font:10px 'JetBrains Mono',monospace;color:#767c86">▸</span>
+<span style="font:500 12.5px 'JetBrains Mono',monospace;color:#9aa0a9">src/Cargos/CargoValidator.cs</span>
+<span style="font:10px 'JetBrains Mono',monospace;color:#9aa0a9;border:1px solid #32363e;border-radius:9px;padding:1px 7px">1</span>
+<span style="flex:1"></span>
+<span style="font:11px 'JetBrains Mono',monospace;color:#9fbfab">+17</span>
+<span style="font:11px 'JetBrains Mono',monospace;color:#c9a09b">−2</span>
+</div>
+<div style="margin-top:10px;border:1px solid #2c3037;border-radius:10px;background:#21242a;display:flex;align-items:center;gap:11px;padding:11px 14px">
+<span style="font:10px 'JetBrains Mono',monospace;color:#767c86">▸</span>
+<span style="font:500 12.5px 'JetBrains Mono',monospace;color:#9aa0a9">src/Contracts/CargoDto.cs</span>
+<span style="flex:1"></span>
+<span style="font:11px 'JetBrains Mono',monospace;color:#9fbfab">+6</span>
+</div>
+</div>
+</div>
+</div>
+</div>
+</div>
+</div>
+
+<div class="dv-opt" id="2b">
+<div class="dv-olabel"><a class="dv-oid" href="#2b">2b</a>Daylight — the same calm palette in the light theme, so the switch does not change the mood.</div>
+<div class="dv-card" style="width:900px;border-radius:10px">
+<div style="background:#f4f2ee;color:#33322e;font-family:'Instrument Sans',system-ui,sans-serif;font-size:13px;height:600px;display:flex;flex-direction:column">
+<div style="flex:none;padding:13px 18px;border-bottom:1px solid #e2ded6;display:flex;align-items:center;gap:12px;background:#faf8f4">
+<span style="font:600 13px 'JetBrains Mono',monospace;color:#33322e">diffalanche</span>
+<span style="font:500 12px 'JetBrains Mono',monospace;color:#5f5c55">ls-240372</span>
+<span style="font-size:11.5px;color:#87837a">Cargo flags across services</span>
+<span style="flex:1"></span>
+<span style="font-size:11.5px;color:#5f5c55"><span style="font:500 12px 'JetBrains Mono',monospace;color:#a3675d">12</span> open</span>
+<span style="font-size:11.5px;color:#5f5c55"><span style="font:500 12px 'JetBrains Mono',monospace;color:#5c6484">5</span> awaiting</span>
+<span style="display:flex;border:1px solid #ded9d0;border-radius:8px;overflow:hidden;background:#fff"><span style="padding:5px 10px;font-size:12px;color:#87837a">☾</span><span style="padding:5px 10px;font-size:12px;background:#ece8e0;color:#33322e">☀</span></span>
+</div>
+<div style="flex:1;min-height:0;padding:16px 18px">
+<div style="border:1px solid #e2ded6;border-radius:10px;overflow:hidden;background:#faf8f4">
+<div style="display:flex;align-items:center;gap:11px;padding:11px 14px;background:#f0ece5;border-bottom:1px solid #e2ded6">
+<span style="font:500 12.5px 'JetBrains Mono',monospace">src/Cargos/CargoService.cs</span>
+<span style="font:10px 'JetBrains Mono',monospace;color:#8a6a3c;border:1px solid #d9c8ab;border-radius:9px;padding:1px 7px">3</span>
+<span style="flex:1"></span>
+<span style="font:11px 'JetBrains Mono',monospace;color:#4d7359">+42</span>
+<span style="font:11px 'JetBrains Mono',monospace;color:#a3675d">−8</span>
+</div>
+<div style="padding:6px 14px;background:#f0ece5;border-bottom:1px solid #e7e2da;font:11px 'JetBrains Mono',monospace;color:#87837a">@@ -30,8 +38,12 @@</div>
+<div style="display:flex;font:12px/22px 'JetBrains Mono',monospace">
+<div style="flex:1;min-width:0;border-right:1px solid #e7e2da">
+<div style="display:flex"><span style="width:38px;flex:none;text-align:right;padding-right:10px;color:#9d988e">32</span><span style="white-space:pre;color:#4a4741">    {</span></div>
+<div style="display:flex;background:rgba(163,103,93,.10)"><span style="width:38px;flex:none;text-align:right;padding-right:10px;color:#a89490">33</span><span style="white-space:pre;color:#8a5049">        var flags = request.Flags ?? [];</span></div>
+<div style="display:flex;background:rgba(163,103,93,.10)"><span style="width:38px;flex:none;text-align:right;padding-right:10px;color:#a89490">34</span><span style="white-space:pre;color:#8a5049">        if (flags is null) return null;</span></div>
+<div style="display:flex"><span style="width:38px;flex:none;text-align:right;padding-right:10px;color:#9d988e">35</span><span style="white-space:pre;color:#4a4741">        var cargo = new Cargo(...);</span></div>
+<div style="display:flex;background:#f0ece5"><span style="width:38px;flex:none"></span><span style="white-space:pre"> </span></div>
+<div style="display:flex;background:#f0ece5"><span style="width:38px;flex:none"></span><span style="white-space:pre"> </span></div>
+<div style="display:flex"><span style="width:38px;flex:none;text-align:right;padding-right:10px;color:#9d988e">36</span><span style="white-space:pre;color:#4a4741">        await _repo.AddAsync(cargo);</span></div>
+</div>
+<div style="flex:1;min-width:0">
+<div style="display:flex"><span style="width:38px;flex:none;text-align:right;padding-right:10px;color:#9d988e">40</span><span style="white-space:pre;color:#4a4741">    {</span></div>
+<div style="display:flex;background:rgba(77,115,89,.11)"><span style="width:38px;flex:none;text-align:right;padding-right:10px;color:#8fa396">41</span><span style="white-space:pre;color:#3f6b4f">        var flags = request.Flags;</span></div>
+<div style="display:flex;background:rgba(77,115,89,.11);box-shadow:inset 2px 0 0 #c9a97a"><span style="width:38px;flex:none;text-align:right;padding-right:10px;color:#8fa396">42</span><span style="white-space:pre;color:#3f6b4f">        if (flags.Count == 0)</span></div>
+<div style="display:flex;background:rgba(77,115,89,.11)"><span style="width:38px;flex:none;text-align:right;padding-right:10px;color:#8fa396">43</span><span style="white-space:pre;color:#3f6b4f">            _log.Debug("no flags");</span></div>
+<div style="display:flex;background:rgba(77,115,89,.11)"><span style="width:38px;flex:none;text-align:right;padding-right:10px;color:#8fa396">44</span><span style="white-space:pre;color:#3f6b4f">        var cargo = new Cargo(</span></div>
+<div style="display:flex;background:rgba(77,115,89,.11)"><span style="width:38px;flex:none;text-align:right;padding-right:10px;color:#8fa396">45</span><span style="white-space:pre;color:#3f6b4f">            request.Title, flags);</span></div>
+<div style="display:flex"><span style="width:38px;flex:none;text-align:right;padding-right:10px;color:#9d988e">46</span><span style="white-space:pre;color:#4a4741">        await _repo.AddAsync(cargo);</span></div>
+</div>
+</div>
+<div style="border-top:1px solid #e2ded6;background:#f7f4ef;padding:15px 18px 15px 50px">
+<div style="display:flex;align-items:center;gap:10px;margin-bottom:11px">
+<span style="font:10px 'JetBrains Mono',monospace;color:#8a6a3c;border:1px solid #d9c8ab;border-radius:4px;padding:2px 7px;letter-spacing:.05em">warning</span>
+<span style="font:11px 'JetBrains Mono',monospace;color:#87837a">new · L42–45</span>
+<span style="flex:1"></span>
+<span style="font:10.5px 'JetBrains Mono',monospace;color:#9d988e">c_7f3k2q</span>
+</div>
+<div style="display:flex;gap:12px;margin-bottom:13px">
+<span style="width:24px;height:24px;flex:none;border-radius:6px;background:#ece8e0;color:#5f5c55;font:600 10px/24px 'JetBrains Mono',monospace;text-align:center">KP</span>
+<div><div style="display:flex;align-items:baseline;gap:9px;margin-bottom:4px"><span style="font-weight:600;font-size:12.5px">kim.p</span><span style="font:10px 'JetBrains Mono',monospace;color:#9d988e">human · 18:05</span></div>
+<div style="font-size:13px;line-height:1.65;color:#4a4741;max-width:640px">Проверка на пустоту недостижима: <span style="font-family:'JetBrains Mono',monospace;font-size:12px;background:#ece8e0;padding:1px 5px;border-radius:4px">Flags</span> в контракте non-nullable.</div></div>
+</div>
+<div style="display:flex;gap:12px;padding:12px 14px;border-radius:9px;background:#eeeff4;border:1px solid #dcdfe9">
+<span style="width:24px;height:24px;flex:none;border-radius:6px;background:#dcdfe9;color:#4a5170;font:600 10px/24px 'JetBrains Mono',monospace;text-align:center">CL</span>
+<div><div style="display:flex;align-items:baseline;gap:9px;margin-bottom:4px"><span style="font-weight:600;font-size:12.5px;color:#4a5170">claude</span><span style="font:10px 'JetBrains Mono',monospace;color:#5c6484;border:1px solid #c9cee0;border-radius:4px;padding:0 5px">agent</span><span style="font:10px 'JetBrains Mono',monospace;color:#9d988e">18:20</span></div>
+<div style="font-size:13px;line-height:1.65;color:#4a4741;max-width:640px">Убрал ветку с логом, контракт гарантирует непустую коллекцию.</div></div>
+</div>
+<div style="display:flex;align-items:center;gap:9px;margin-top:13px">
+<div style="padding:6px 14px;border-radius:8px;background:#4d7359;color:#f4f2ee;font-weight:600;font-size:12px">Resolve</div>
+<div style="padding:6px 14px;border-radius:8px;border:1px solid #ded9d0;color:#5f5c55;font-size:12px;background:#fff">Reply</div>
+<span style="flex:1"></span>
+<span style="font:10.5px 'JetBrains Mono',monospace;color:#9d988e">awaiting your verification</span>
+</div>
+</div>
+</div>
+</div>
+</div>
+</div>
+</div>
+
+</div>
+<p class="dv-next">Try next: "ещё спокойнее — убери подсветку дифа совсем" · "перенеси палитру <a class="dv-oid" href="#2a">2a</a> в раскладку <a class="dv-oid" href="#1b">1b</a>" · "сделай тумблер темы живым"</p>
+</section>
+
+<section class="dv-turn" id="t1">
+<div class="dv-thd"><a class="dv-tid" href="#t1">1</a><span class="dv-tname">diffalanche — review workspace, four directions</span></div>
+<div class="dv-opts">
+
+<div class="dv-opt" id="1a">
+<div class="dv-olabel"><a class="dv-oid" href="#1a">1a</a>Editor calm — repo tree, inline threads, comfortable density. Dark default with theme switch.</div>
+<div class="dv-card" style="width:1440px">
+<div style="background:#0e0f12;color:#e7e9ee;font-family:'Instrument Sans',system-ui,sans-serif;font-size:13px;height:920px;display:flex;flex-direction:column">
+
+<div style="height:46px;flex:none;border-bottom:1px solid #272b34;display:flex;align-items:center;gap:14px;padding:0 14px;background:#15171c">
+<div style="font:700 13px 'JetBrains Mono',monospace;letter-spacing:-.02em;color:#e7e9ee">diffalanche</div>
+<div style="width:1px;height:18px;background:#272b34"></div>
+<div style="display:flex;align-items:center;gap:8px;padding:4px 10px;border:1px solid #272b34;border-radius:6px;background:#1b1e25">
+<span style="font:500 12px 'JetBrains Mono',monospace;color:#e7e9ee">ls-240372</span>
+<span style="font-size:11px;color:#656d7b">Cargo flags across services</span>
+<span style="font:11px 'JetBrains Mono',monospace;color:#7d8cff">▾</span>
+</div>
+<div style="display:flex;align-items:center;border:1px solid #272b34;border-radius:6px;overflow:hidden">
+<span style="padding:5px 11px;font:500 11px 'JetBrains Mono',monospace;color:#656d7b">head</span>
+<span style="padding:5px 11px;font:500 11px 'JetBrains Mono',monospace;color:#0e0f12;background:#7d8cff">branch</span>
+<span style="padding:5px 11px;font:500 11px 'JetBrains Mono',monospace;color:#656d7b">ref</span>
+</div>
+<div style="flex:1"></div>
+<div style="display:flex;align-items:center;gap:6px;padding:4px 10px;border-radius:6px;background:#1b1e25;border:1px solid #272b34">
+<span style="width:7px;height:7px;border-radius:50%;background:#ff6b6b"></span><span style="font:500 12px 'JetBrains Mono',monospace">12</span><span style="font-size:11px;color:#656d7b">open</span>
+</div>
+<div style="display:flex;align-items:center;gap:6px;padding:4px 10px;border-radius:6px;background:rgba(125,140,255,.12);border:1px solid rgba(125,140,255,.3)">
+<span style="width:7px;height:7px;border-radius:50%;background:#7d8cff"></span><span style="font:500 12px 'JetBrains Mono',monospace;color:#b3bbff">5</span><span style="font-size:11px;color:#98a0ae">awaiting you</span>
+</div>
+<div style="display:flex;align-items:center;border:1px solid #272b34;border-radius:6px;overflow:hidden;background:#1b1e25">
+<span style="padding:5px 9px;font-size:12px;background:#272b34;color:#e7e9ee">☾</span>
+<span style="padding:5px 9px;font-size:12px;color:#656d7b">☀</span>
+</div>
+<div style="padding:5px 12px;border:1px solid #272b34;border-radius:6px;font-size:12px;color:#98a0ae">Export .md</div>
+</div>
+
+<div style="flex:1;display:flex;min-height:0">
+
+<div style="width:288px;flex:none;border-right:1px solid #272b34;background:#121419;display:flex;flex-direction:column">
+<div style="padding:10px;border-bottom:1px solid #1f2229">
+<div style="display:flex;align-items:center;gap:7px;padding:6px 9px;border:1px solid #272b34;border-radius:6px;background:#0e0f12">
+<span style="font-size:11px;color:#656d7b">⌕</span><span style="font-size:12px;color:#656d7b">Filter files</span><span style="flex:1"></span><span style="font:10px 'JetBrains Mono',monospace;color:#6b7280;border:1px solid #272b34;border-radius:3px;padding:1px 4px">⌘K</span>
+</div>
+</div>
+<div style="flex:1;overflow:hidden;padding:6px 0">
+
+<div style="display:flex;align-items:center;gap:7px;padding:7px 10px;background:#1b1e25;border-left:2px solid #7d8cff">
+<span style="font:10px 'JetBrains Mono',monospace;color:#7d8cff">▾</span>
+<span style="font:500 12px 'JetBrains Mono',monospace;color:#e7e9ee">group/service-api</span>
+<span style="flex:1"></span>
+<span style="width:6px;height:6px;border-radius:50%;background:#f0b357"></span>
+<span style="font:11px 'JetBrains Mono',monospace;color:#98a0ae">4</span>
+</div>
+<div style="display:flex;align-items:center;gap:7px;padding:6px 10px 6px 27px;background:rgba(125,140,255,.08);border-left:2px solid #7d8cff">
+<span style="font:11.5px 'JetBrains Mono',monospace;color:#e7e9ee">CargoService.cs</span><span style="flex:1"></span>
+<span style="font:10px 'JetBrains Mono',monospace;color:#a7e3c4">+42</span><span style="font:10px 'JetBrains Mono',monospace;color:#ffb3b3">−8</span>
+<span style="font:10px 'JetBrains Mono',monospace;color:#0e0f12;background:#f0b357;border-radius:8px;padding:0 5px">3</span>
+</div>
+<div style="display:flex;align-items:center;gap:7px;padding:6px 10px 6px 27px;border-left:2px solid transparent">
+<span style="font:11.5px 'JetBrains Mono',monospace;color:#98a0ae">CargoValidator.cs</span><span style="flex:1"></span>
+<span style="font:10px 'JetBrains Mono',monospace;color:#a7e3c4">+17</span><span style="font:10px 'JetBrains Mono',monospace;color:#ffb3b3">−2</span>
+<span style="font:10px 'JetBrains Mono',monospace;color:#98a0ae;background:#272b34;border-radius:8px;padding:0 5px">1</span>
+</div>
+<div style="display:flex;align-items:center;gap:7px;padding:6px 10px 6px 27px;border-left:2px solid transparent">
+<span style="font:11.5px 'JetBrains Mono',monospace;color:#98a0ae">Contracts/CargoDto.cs</span><span style="flex:1"></span>
+<span style="font:10px 'JetBrains Mono',monospace;color:#a7e3c4">+6</span>
+</div>
+<div style="display:flex;align-items:center;gap:7px;padding:6px 10px 6px 27px;border-left:2px solid transparent">
+<span style="font:11.5px 'JetBrains Mono',monospace;color:#656d7b">migrations/0021_flags.sql</span><span style="flex:1"></span>
+<span style="font:10px 'JetBrains Mono',monospace;color:#6b7280">new</span>
+</div>
+
+<div style="display:flex;align-items:center;gap:7px;padding:7px 10px;margin-top:2px">
+<span style="font:10px 'JetBrains Mono',monospace;color:#656d7b">▾</span>
+<span style="font:500 12px 'JetBrains Mono',monospace;color:#e7e9ee">group/service-web</span><span style="flex:1"></span>
+<span style="width:6px;height:6px;border-radius:50%;background:#ff6b6b"></span>
+<span style="font:11px 'JetBrains Mono',monospace;color:#98a0ae">2</span>
+</div>
+<div style="display:flex;align-items:center;gap:7px;padding:6px 10px 6px 27px">
+<span style="font:11.5px 'JetBrains Mono',monospace;color:#98a0ae">src/cargo/FlagPicker.tsx</span><span style="flex:1"></span>
+<span style="font:10px 'JetBrains Mono',monospace;color:#a7e3c4">+88</span><span style="font:10px 'JetBrains Mono',monospace;color:#ffb3b3">−12</span>
+<span style="font:10px 'JetBrains Mono',monospace;color:#0e0f12;background:#ff6b6b;border-radius:8px;padding:0 5px">2</span>
+</div>
+<div style="display:flex;align-items:center;gap:7px;padding:6px 10px 6px 27px">
+<span style="font:11.5px 'JetBrains Mono',monospace;color:#98a0ae">src/api/client.ts</span><span style="flex:1"></span>
+<span style="font:10px 'JetBrains Mono',monospace;color:#a7e3c4">+9</span><span style="font:10px 'JetBrains Mono',monospace;color:#ffb3b3">−3</span>
+</div>
+
+<div style="display:flex;align-items:center;gap:7px;padding:7px 10px;margin-top:2px">
+<span style="font:10px 'JetBrains Mono',monospace;color:#656d7b">▸</span>
+<span style="font:500 12px 'JetBrains Mono',monospace;color:#98a0ae">group/service-billing</span><span style="flex:1"></span>
+<span style="font:11px 'JetBrains Mono',monospace;color:#656d7b">7 files</span>
+</div>
+<div style="display:flex;align-items:center;gap:7px;padding:7px 10px">
+<span style="font:10px 'JetBrains Mono',monospace;color:#656d7b">▸</span>
+<span style="font:500 12px 'JetBrains Mono',monospace;color:#98a0ae">infra/terraform</span><span style="flex:1"></span>
+<span style="width:6px;height:6px;border-radius:50%;background:#7dd3a8"></span>
+<span style="font:11px 'JetBrains Mono',monospace;color:#656d7b">3 files</span>
+</div>
+<div style="display:flex;align-items:center;gap:7px;padding:7px 10px">
+<span style="font:10px 'JetBrains Mono',monospace;color:#656d7b">▸</span>
+<span style="font:500 12px 'JetBrains Mono',monospace;color:#98a0ae">tools/codegen</span><span style="flex:1"></span>
+<span style="font:11px 'JetBrains Mono',monospace;color:#656d7b">1 file</span>
+</div>
+<div style="display:flex;align-items:center;gap:7px;padding:7px 10px">
+<span style="font:10px 'JetBrains Mono',monospace;color:#656d7b">▸</span>
+<span style="font:500 12px 'JetBrains Mono',monospace;color:#98a0ae">group/service-api-wt-flags</span><span style="flex:1"></span>
+<span style="font:10px 'JetBrains Mono',monospace;color:#6b7280;border:1px solid #272b34;border-radius:3px;padding:0 4px">worktree</span>
+</div>
+
+<div style="margin:14px 10px 0;padding-top:12px;border-top:1px solid #1f2229;font:10.5px 'JetBrains Mono',monospace;color:#6b7280;line-height:1.7">
+16 repos scanned · depth 2<br>9 without changes, hidden
+</div>
+</div>
+<div style="flex:none;border-top:1px solid #1f2229;padding:9px 10px;display:flex;align-items:center;gap:8px">
+<span style="width:6px;height:6px;border-radius:50%;background:#7dd3a8"></span>
+<span style="font:10.5px 'JetBrains Mono',monospace;color:#98a0ae">watching · 127.0.0.1:4880</span>
+</div>
+</div>
+
+<div style="flex:1;min-width:0;display:flex;flex-direction:column;background:#0e0f12">
+
+<div style="flex:none;padding:12px 18px;border-bottom:1px solid #272b34;display:flex;align-items:center;gap:12px">
+<div>
+<div style="font:600 14px 'JetBrains Mono',monospace;color:#e7e9ee">group/service-api</div>
+<div style="margin-top:3px;font:11px 'JetBrains Mono',monospace;color:#656d7b">feat/cargo-flags <span style="color:#6b7280">←</span> origin/main <span style="color:#6b7280">·</span> merge-base 4f21ac9</div>
+</div>
+<span style="flex:1"></span>
+<span style="font:11px 'JetBrains Mono',monospace;color:#98a0ae">4 files</span>
+<span style="font:11px 'JetBrains Mono',monospace;color:#a7e3c4">+65</span>
+<span style="font:11px 'JetBrains Mono',monospace;color:#ffb3b3">−10</span>
+<div style="padding:4px 10px;border:1px solid #272b34;border-radius:6px;font-size:11.5px;color:#98a0ae">Comment on repo</div>
+</div>
+
+<div style="flex:1;overflow:hidden;padding:14px 18px">
+
+<div style="border:1px solid #272b34;border-radius:7px;overflow:hidden;background:#121419">
+<div style="display:flex;align-items:center;gap:10px;padding:9px 12px;background:#1b1e25;border-bottom:1px solid #272b34">
+<span style="font:10px 'JetBrains Mono',monospace;color:#656d7b">▾</span>
+<span style="font:500 12.5px 'JetBrains Mono',monospace;color:#e7e9ee">src/Cargos/CargoService.cs</span>
+<span style="font:10px 'JetBrains Mono',monospace;color:#0e0f12;background:#f0b357;border-radius:8px;padding:1px 6px">3</span>
+<span style="flex:1"></span>
+<div style="display:flex;border:1px solid #272b34;border-radius:5px;overflow:hidden">
+<span style="padding:3px 9px;font:10.5px 'JetBrains Mono',monospace;background:#272b34;color:#e7e9ee">split</span>
+<span style="padding:3px 9px;font:10.5px 'JetBrains Mono',monospace;color:#656d7b">unified</span>
+</div>
+<span style="font:10.5px 'JetBrains Mono',monospace;color:#656d7b">C#</span>
+</div>
+
+<div style="padding:5px 12px;background:#15171c;border-bottom:1px solid #1f2229;font:11px 'JetBrains Mono',monospace;color:#656d7b">@@ -30,8 +38,12 @@ public sealed class CargoService</div>
+
+<div style="display:flex;font:12px/20px 'JetBrains Mono',monospace">
+<div style="flex:1;min-width:0;border-right:1px solid #1f2229">
+<div style="display:flex"><span style="width:40px;flex:none;text-align:right;padding-right:10px;color:#6b7280">30</span><span style="color:#98a0ae;white-space:pre">    public async Task&lt;CargoDto&gt; Create(</span></div>
+<div style="display:flex"><span style="width:40px;flex:none;text-align:right;padding-right:10px;color:#6b7280">31</span><span style="color:#98a0ae;white-space:pre">        CreateCargoRequest request)</span></div>
+<div style="display:flex"><span style="width:40px;flex:none;text-align:right;padding-right:10px;color:#6b7280">32</span><span style="color:#98a0ae;white-space:pre">    {</span></div>
+<div style="display:flex;background:rgba(255,107,107,.09)"><span style="width:40px;flex:none;text-align:right;padding-right:10px;color:#7a4a4a">33</span><span style="color:#ffb3b3;white-space:pre">        var flags = request.Flags ?? [];</span></div>
+<div style="display:flex;background:rgba(255,107,107,.09)"><span style="width:40px;flex:none;text-align:right;padding-right:10px;color:#7a4a4a">34</span><span style="color:#ffb3b3;white-space:pre">        if (flags is null) return null;</span></div>
+<div style="display:flex"><span style="width:40px;flex:none;text-align:right;padding-right:10px;color:#6b7280">35</span><span style="color:#98a0ae;white-space:pre">        var cargo = new Cargo(request.Title);</span></div>
+<div style="display:flex;background:#15171c"><span style="width:40px;flex:none;text-align:right;padding-right:10px;color:#2b3038"></span><span style="white-space:pre"> </span></div>
+<div style="display:flex;background:#15171c"><span style="width:40px;flex:none;text-align:right;padding-right:10px;color:#2b3038"></span><span style="white-space:pre"> </span></div>
+<div style="display:flex"><span style="width:40px;flex:none;text-align:right;padding-right:10px;color:#6b7280">36</span><span style="color:#98a0ae;white-space:pre">        await _repo.AddAsync(cargo);</span></div>
+<div style="display:flex"><span style="width:40px;flex:none;text-align:right;padding-right:10px;color:#6b7280">37</span><span style="color:#98a0ae;white-space:pre">        return cargo.ToDto();</span></div>
+<div style="display:flex"><span style="width:40px;flex:none;text-align:right;padding-right:10px;color:#6b7280">38</span><span style="color:#98a0ae;white-space:pre">    }</span></div>
+</div>
+<div style="flex:1;min-width:0">
+<div style="display:flex"><span style="width:40px;flex:none;text-align:right;padding-right:10px;color:#6b7280">38</span><span style="color:#98a0ae;white-space:pre">    public async Task&lt;CargoDto&gt; Create(</span></div>
+<div style="display:flex"><span style="width:40px;flex:none;text-align:right;padding-right:10px;color:#6b7280">39</span><span style="color:#98a0ae;white-space:pre">        CreateCargoRequest request)</span></div>
+<div style="display:flex"><span style="width:40px;flex:none;text-align:right;padding-right:10px;color:#6b7280">40</span><span style="color:#98a0ae;white-space:pre">    {</span></div>
+<div style="display:flex;background:rgba(125,211,168,.11);position:relative"><span style="width:40px;flex:none;text-align:right;padding-right:10px;color:#4a7a63">41</span><span style="color:#a7e3c4;white-space:pre">        var flags = request.Flags;</span></div>
+<div style="display:flex;background:rgba(125,211,168,.11);box-shadow:inset 2px 0 0 #f0b357"><span style="width:40px;flex:none;text-align:right;padding-right:10px;color:#4a7a63">42</span><span style="color:#a7e3c4;white-space:pre">        if (flags.Count == 0)</span><span style="flex:1"></span><span style="align-self:center;margin-right:6px;width:18px;height:18px;border-radius:4px;background:#7d8cff;color:#0e0f12;font:700 12px/18px 'JetBrains Mono',monospace;text-align:center">+</span></div>
+<div style="display:flex;background:rgba(125,211,168,.11)"><span style="width:40px;flex:none;text-align:right;padding-right:10px;color:#4a7a63">43</span><span style="color:#a7e3c4;white-space:pre">            _log.Debug("cargo without flags");</span></div>
+<div style="display:flex;background:rgba(125,211,168,.11)"><span style="width:40px;flex:none;text-align:right;padding-right:10px;color:#4a7a63">44</span><span style="color:#a7e3c4;white-space:pre">        var cargo = new Cargo(</span></div>
+<div style="display:flex;background:rgba(125,211,168,.11)"><span style="width:40px;flex:none;text-align:right;padding-right:10px;color:#4a7a63">45</span><span style="color:#a7e3c4;white-space:pre">            request.Title, flags);</span></div>
+<div style="display:flex"><span style="width:40px;flex:none;text-align:right;padding-right:10px;color:#6b7280">46</span><span style="color:#98a0ae;white-space:pre">        await _repo.AddAsync(cargo);</span></div>
+<div style="display:flex"><span style="width:40px;flex:none;text-align:right;padding-right:10px;color:#6b7280">47</span><span style="color:#98a0ae;white-space:pre">        return cargo.ToDto();</span></div>
+<div style="display:flex"><span style="width:40px;flex:none;text-align:right;padding-right:10px;color:#6b7280">48</span><span style="color:#98a0ae;white-space:pre">    }</span></div>
+</div>
+</div>
+
+<div style="border-top:1px solid #272b34;background:#15171c;padding:12px 14px 12px 52px">
+<div style="display:flex;align-items:center;gap:9px;margin-bottom:9px">
+<span style="font:10px 'JetBrains Mono',monospace;color:#0e0f12;background:#f0b357;border-radius:3px;padding:1px 6px;letter-spacing:.04em">WARNING</span>
+<span style="font:11px 'JetBrains Mono',monospace;color:#656d7b">new · L42–45</span>
+<span style="flex:1"></span>
+<span style="font:10.5px 'JetBrains Mono',monospace;color:#6b7280">c_7f3k2q</span>
+</div>
+<div style="display:flex;gap:10px;margin-bottom:12px">
+<span style="width:22px;height:22px;flex:none;border-radius:4px;background:#272b34;color:#e7e9ee;font:600 10px/22px 'JetBrains Mono',monospace;text-align:center">KP</span>
+<div style="min-width:0">
+<div style="display:flex;align-items:baseline;gap:8px;margin-bottom:3px"><span style="font-weight:600;font-size:12.5px">kim.p</span><span style="font:10px 'JetBrains Mono',monospace;color:#656d7b">human · 18:05</span></div>
+<div style="font-size:13px;line-height:1.5;color:#cfd4dd;max-width:760px">Проверка на пустоту недостижима: <span style="font-family:'JetBrains Mono',monospace;font-size:12px;background:#1b1e25;padding:1px 4px;border-radius:3px">Flags</span> в контракте non-nullable, коллекция всегда приходит. Лог в этой ветке только шумит.</div>
+</div>
+</div>
+<div style="display:flex;gap:10px;padding:10px 12px;border-radius:6px;background:rgba(125,140,255,.07);border:1px solid rgba(125,140,255,.22)">
+<span style="width:22px;height:22px;flex:none;border-radius:4px;background:#7d8cff;color:#0e0f12;font:600 10px/22px 'JetBrains Mono',monospace;text-align:center">CL</span>
+<div style="min-width:0">
+<div style="display:flex;align-items:baseline;gap:8px;margin-bottom:3px"><span style="font-weight:600;font-size:12.5px;color:#b3bbff">claude</span><span style="font:10px 'JetBrains Mono',monospace;color:#7d8cff;border:1px solid rgba(125,140,255,.35);border-radius:3px;padding:0 4px">agent</span><span style="font:10px 'JetBrains Mono',monospace;color:#656d7b">18:20</span></div>
+<div style="font-size:13px;line-height:1.5;color:#cfd4dd;max-width:760px">Убрал ветку с логом, контракт гарантирует непустую коллекцию. Валидатор теперь единственное место проверки.</div>
+</div>
+</div>
+<div style="display:flex;align-items:center;gap:8px;margin-top:11px">
+<div style="padding:5px 12px;border-radius:6px;background:#7dd3a8;color:#0e2018;font-weight:600;font-size:12px">Resolve</div>
+<div style="padding:5px 12px;border-radius:6px;border:1px solid #272b34;color:#98a0ae;font-size:12px">Reply</div>
+<span style="flex:1"></span>
+<span style="font:10.5px 'JetBrains Mono',monospace;color:#6b7280">last message from agent · awaiting your verification</span>
+</div>
+</div>
+
+<div style="display:flex;font:12px/20px 'JetBrains Mono',monospace;border-top:1px solid #272b34">
+<div style="flex:1;border-right:1px solid #1f2229"><div style="display:flex"><span style="width:40px;flex:none;text-align:right;padding-right:10px;color:#6b7280">39</span><span style="color:#98a0ae;white-space:pre">}</span></div></div>
+<div style="flex:1"><div style="display:flex"><span style="width:40px;flex:none;text-align:right;padding-right:10px;color:#6b7280">49</span><span style="color:#98a0ae;white-space:pre">}</span></div></div>
+</div>
+</div>
+
+<div style="margin-top:12px;border:1px solid #272b34;border-radius:7px;background:#121419;display:flex;align-items:center;gap:10px;padding:9px 12px">
+<span style="font:10px 'JetBrains Mono',monospace;color:#656d7b">▸</span>
+<span style="font:500 12.5px 'JetBrains Mono',monospace;color:#98a0ae">src/Cargos/CargoValidator.cs</span>
+<span style="font:10px 'JetBrains Mono',monospace;color:#98a0ae;background:#272b34;border-radius:8px;padding:1px 6px">1</span>
+<span style="flex:1"></span>
+<span style="font:11px 'JetBrains Mono',monospace;color:#a7e3c4">+17</span>
+<span style="font:11px 'JetBrains Mono',monospace;color:#ffb3b3">−2</span>
+</div>
+<div style="margin-top:8px;border:1px solid #272b34;border-radius:7px;background:#121419;display:flex;align-items:center;gap:10px;padding:9px 12px">
+<span style="font:10px 'JetBrains Mono',monospace;color:#656d7b">▸</span>
+<span style="font:500 12.5px 'JetBrains Mono',monospace;color:#98a0ae">src/Contracts/CargoDto.cs</span>
+<span style="flex:1"></span>
+<span style="font:11px 'JetBrains Mono',monospace;color:#a7e3c4">+6</span>
+</div>
+</div>
+</div>
+</div>
+</div>
+</div>
+</div>
+
+<div class="dv-opt" id="1b">
+<div class="dv-olabel"><a class="dv-oid" href="#1b">1b</a>Review rail — max density, comments in a side column, live agent activity feed docked right.</div>
+<div class="dv-card" style="width:1440px">
+<div style="background:#0e0f12;color:#e7e9ee;font-family:'Instrument Sans',system-ui,sans-serif;font-size:12px;height:920px;display:flex;flex-direction:column">
+
+<div style="height:38px;flex:none;border-bottom:1px solid #272b34;display:flex;align-items:stretch;background:#121419">
+<div style="display:flex;align-items:center;padding:0 12px;font:700 12px 'JetBrains Mono',monospace;border-right:1px solid #272b34">diffalanche</div>
+<div style="display:flex;align-items:center;gap:7px;padding:0 12px;border-right:1px solid #272b34;background:#0e0f12;box-shadow:inset 0 -2px 0 #7d8cff">
+<span style="font:500 11.5px 'JetBrains Mono',monospace">ls-240372</span><span style="font:10px 'JetBrains Mono',monospace;color:#7d8cff;border:1px solid rgba(125,140,255,.3);border-radius:3px;padding:0 4px">branch</span>
+</div>
+<div style="display:flex;align-items:center;gap:7px;padding:0 12px;border-right:1px solid #272b34;color:#656d7b"><span style="font:500 11.5px 'JetBrains Mono',monospace">ls-239118</span></div>
+<div style="display:flex;align-items:center;padding:0 10px;border-right:1px solid #272b34;color:#6b7280;font-size:14px">+</div>
+<div style="flex:1"></div>
+<div style="display:flex;align-items:center;gap:10px;padding:0 12px;font:11px 'JetBrains Mono',monospace;border-left:1px solid #272b34">
+<span style="color:#ff6b6b">3 critical</span><span style="color:#f0b357">6 warning</span><span style="color:#7dd3a8">3 nit</span>
+</div>
+<div style="display:flex;align-items:center;padding:0 12px;border-left:1px solid #272b34;font-size:12px;color:#98a0ae">☾ / ☀</div>
+</div>
+
+<div style="flex:1;display:flex;min-height:0">
+
+<div style="width:236px;flex:none;border-right:1px solid #272b34;background:#121419;display:flex;flex-direction:column">
+<div style="padding:8px;display:flex;gap:5px;flex-wrap:wrap;border-bottom:1px solid #1f2229">
+<span style="font:10px 'JetBrains Mono',monospace;padding:3px 7px;border-radius:10px;background:rgba(125,140,255,.16);color:#b3bbff;border:1px solid rgba(125,140,255,.3)">unanswered 5</span>
+<span style="font:10px 'JetBrains Mono',monospace;padding:3px 7px;border-radius:10px;border:1px solid #272b34;color:#656d7b">critical</span>
+<span style="font:10px 'JetBrains Mono',monospace;padding:3px 7px;border-radius:10px;border:1px solid #272b34;color:#656d7b">open</span>
+</div>
+<div style="flex:1;overflow:hidden;font:11px/1 'JetBrains Mono',monospace">
+<div style="padding:6px 9px;color:#656d7b;letter-spacing:.06em;font-size:9.5px;background:#0e0f12;border-bottom:1px solid #1f2229">GROUP/SERVICE-API</div>
+<div style="display:flex;align-items:center;gap:6px;padding:5px 9px;background:rgba(125,140,255,.1);box-shadow:inset 2px 0 0 #7d8cff"><span style="color:#e7e9ee">CargoService.cs</span><span style="flex:1"></span><span style="color:#f0b357">3</span></div>
+<div style="display:flex;align-items:center;gap:6px;padding:5px 9px"><span style="color:#98a0ae">CargoValidator.cs</span><span style="flex:1"></span><span style="color:#656d7b">1</span></div>
+<div style="display:flex;align-items:center;gap:6px;padding:5px 9px"><span style="color:#98a0ae">CargoDto.cs</span></div>
+<div style="display:flex;align-items:center;gap:6px;padding:5px 9px"><span style="color:#656d7b">0021_flags.sql</span><span style="flex:1"></span><span style="color:#6b7280">new</span></div>
+<div style="padding:6px 9px;color:#656d7b;letter-spacing:.06em;font-size:9.5px;background:#0e0f12;border-top:1px solid #1f2229;border-bottom:1px solid #1f2229">GROUP/SERVICE-WEB</div>
+<div style="display:flex;align-items:center;gap:6px;padding:5px 9px"><span style="color:#98a0ae">FlagPicker.tsx</span><span style="flex:1"></span><span style="color:#ff6b6b">2</span></div>
+<div style="display:flex;align-items:center;gap:6px;padding:5px 9px"><span style="color:#98a0ae">client.ts</span></div>
+<div style="padding:6px 9px;color:#656d7b;letter-spacing:.06em;font-size:9.5px;background:#0e0f12;border-top:1px solid #1f2229;border-bottom:1px solid #1f2229">GROUP/SERVICE-BILLING</div>
+<div style="display:flex;align-items:center;gap:6px;padding:5px 9px"><span style="color:#98a0ae">InvoiceJob.cs</span><span style="flex:1"></span><span style="color:#ff6b6b">1</span></div>
+<div style="display:flex;align-items:center;gap:6px;padding:5px 9px"><span style="color:#98a0ae">TariffTable.cs</span></div>
+<div style="display:flex;align-items:center;gap:6px;padding:5px 9px"><span style="color:#98a0ae">Startup.cs</span></div>
+<div style="padding:6px 9px;color:#656d7b;letter-spacing:.06em;font-size:9.5px;background:#0e0f12;border-top:1px solid #1f2229;border-bottom:1px solid #1f2229">INFRA/TERRAFORM</div>
+<div style="display:flex;align-items:center;gap:6px;padding:5px 9px"><span style="color:#98a0ae">cargo-api.tf</span><span style="flex:1"></span><span style="color:#7dd3a8">1</span></div>
+<div style="display:flex;align-items:center;gap:6px;padding:5px 9px"><span style="color:#98a0ae">variables.tf</span></div>
+</div>
+</div>
+
+<div style="flex:1;min-width:0;display:flex;flex-direction:column">
+<div style="flex:none;padding:8px 12px;border-bottom:1px solid #272b34;display:flex;align-items:center;gap:9px;background:#121419">
+<span style="font:500 12px 'JetBrains Mono',monospace">group/service-api / src/Cargos/CargoService.cs</span>
+<span style="flex:1"></span>
+<span style="font:10.5px 'JetBrains Mono',monospace;color:#a7e3c4">+42</span><span style="font:10.5px 'JetBrains Mono',monospace;color:#ffb3b3">−8</span>
+<div style="display:flex;border:1px solid #272b34;border-radius:4px;overflow:hidden"><span style="padding:2px 8px;font:10px 'JetBrains Mono',monospace;background:#272b34">split</span><span style="padding:2px 8px;font:10px 'JetBrains Mono',monospace;color:#656d7b">unified</span></div>
+</div>
+<div style="flex:1;overflow:hidden;font:11px/17px 'JetBrains Mono',monospace">
+<div style="padding:3px 10px;background:#15171c;color:#656d7b;border-bottom:1px solid #1f2229">@@ -30,8 +38,12 @@</div>
+<div style="display:flex">
+<div style="flex:1;min-width:0;border-right:1px solid #1f2229">
+<div style="display:flex"><span style="width:32px;flex:none;text-align:right;padding-right:8px;color:#6b7280">30</span><span style="color:#98a0ae;white-space:pre">  public async Task Create(</span></div>
+<div style="display:flex"><span style="width:32px;flex:none;text-align:right;padding-right:8px;color:#6b7280">31</span><span style="color:#98a0ae;white-space:pre">    CreateCargoRequest req)</span></div>
+<div style="display:flex"><span style="width:32px;flex:none;text-align:right;padding-right:8px;color:#6b7280">32</span><span style="color:#98a0ae;white-space:pre">  {</span></div>
+<div style="display:flex;background:rgba(255,107,107,.09)"><span style="width:32px;flex:none;text-align:right;padding-right:8px;color:#7a4a4a">33</span><span style="color:#ffb3b3;white-space:pre">    var f = req.Flags ?? [];</span></div>
+<div style="display:flex;background:rgba(255,107,107,.09)"><span style="width:32px;flex:none;text-align:right;padding-right:8px;color:#7a4a4a">34</span><span style="color:#ffb3b3;white-space:pre">    if (f is null) return;</span></div>
+<div style="display:flex"><span style="width:32px;flex:none;text-align:right;padding-right:8px;color:#6b7280">35</span><span style="color:#98a0ae;white-space:pre">    var c = new Cargo(req.Title);</span></div>
+<div style="display:flex;background:#15171c"><span style="width:32px;flex:none"></span><span style="white-space:pre"> </span></div>
+<div style="display:flex;background:#15171c"><span style="width:32px;flex:none"></span><span style="white-space:pre"> </span></div>
+<div style="display:flex"><span style="width:32px;flex:none;text-align:right;padding-right:8px;color:#6b7280">36</span><span style="color:#98a0ae;white-space:pre">    await _repo.AddAsync(c);</span></div>
+<div style="display:flex"><span style="width:32px;flex:none;text-align:right;padding-right:8px;color:#6b7280">37</span><span style="color:#98a0ae;white-space:pre">  }</span></div>
+</div>
+<div style="flex:1;min-width:0">
+<div style="display:flex"><span style="width:32px;flex:none;text-align:right;padding-right:8px;color:#6b7280">38</span><span style="color:#98a0ae;white-space:pre">  public async Task Create(</span></div>
+<div style="display:flex"><span style="width:32px;flex:none;text-align:right;padding-right:8px;color:#6b7280">39</span><span style="color:#98a0ae;white-space:pre">    CreateCargoRequest req)</span></div>
+<div style="display:flex"><span style="width:32px;flex:none;text-align:right;padding-right:8px;color:#6b7280">40</span><span style="color:#98a0ae;white-space:pre">  {</span></div>
+<div style="display:flex;background:rgba(125,211,168,.11)"><span style="width:32px;flex:none;text-align:right;padding-right:8px;color:#4a7a63">41</span><span style="color:#a7e3c4;white-space:pre">    var f = req.Flags;</span></div>
+<div style="display:flex;background:rgba(125,211,168,.11);box-shadow:inset 2px 0 0 #f0b357"><span style="width:32px;flex:none;text-align:right;padding-right:8px;color:#4a7a63">42</span><span style="color:#a7e3c4;white-space:pre">    if (f.Count == 0)</span><span style="flex:1"></span><span style="color:#f0b357;padding-right:6px">◆</span></div>
+<div style="display:flex;background:rgba(125,211,168,.11)"><span style="width:32px;flex:none;text-align:right;padding-right:8px;color:#4a7a63">43</span><span style="color:#a7e3c4;white-space:pre">      _log.Debug("no flags");</span></div>
+<div style="display:flex;background:rgba(125,211,168,.11)"><span style="width:32px;flex:none;text-align:right;padding-right:8px;color:#4a7a63">44</span><span style="color:#a7e3c4;white-space:pre">    var c = new Cargo(</span></div>
+<div style="display:flex;background:rgba(125,211,168,.11)"><span style="width:32px;flex:none;text-align:right;padding-right:8px;color:#4a7a63">45</span><span style="color:#a7e3c4;white-space:pre">      req.Title, f);</span></div>
+<div style="display:flex"><span style="width:32px;flex:none;text-align:right;padding-right:8px;color:#6b7280">46</span><span style="color:#98a0ae;white-space:pre">    await _repo.AddAsync(c);</span></div>
+<div style="display:flex"><span style="width:32px;flex:none;text-align:right;padding-right:8px;color:#6b7280">47</span><span style="color:#98a0ae;white-space:pre">  }</span></div>
+</div>
+</div>
+<div style="padding:3px 10px;background:#15171c;color:#656d7b;border-top:1px solid #1f2229;border-bottom:1px solid #1f2229">@@ -58,6 +70,9 @@</div>
+<div style="display:flex">
+<div style="flex:1;min-width:0;border-right:1px solid #1f2229">
+<div style="display:flex"><span style="width:32px;flex:none;text-align:right;padding-right:8px;color:#6b7280">58</span><span style="color:#98a0ae;white-space:pre">  private static bool Has(</span></div>
+<div style="display:flex"><span style="width:32px;flex:none;text-align:right;padding-right:8px;color:#6b7280">59</span><span style="color:#98a0ae;white-space:pre">    IReadOnlyList&lt;Flag&gt; f)</span></div>
+<div style="display:flex;background:#15171c"><span style="width:32px;flex:none"></span><span style="white-space:pre"> </span></div>
+<div style="display:flex"><span style="width:32px;flex:none;text-align:right;padding-right:8px;color:#6b7280">60</span><span style="color:#98a0ae;white-space:pre">    =&gt; f.Any(x =&gt; x.IsActive);</span></div>
+</div>
+<div style="flex:1;min-width:0">
+<div style="display:flex"><span style="width:32px;flex:none;text-align:right;padding-right:8px;color:#6b7280">70</span><span style="color:#98a0ae;white-space:pre">  private static bool Has(</span></div>
+<div style="display:flex"><span style="width:32px;flex:none;text-align:right;padding-right:8px;color:#6b7280">71</span><span style="color:#98a0ae;white-space:pre">    IReadOnlyList&lt;Flag&gt; f)</span></div>
+<div style="display:flex;background:rgba(125,211,168,.11)"><span style="width:32px;flex:none;text-align:right;padding-right:8px;color:#4a7a63">72</span><span style="color:#a7e3c4;white-space:pre">    =&gt; f.Count &gt; 0 &amp;&amp;</span></div>
+<div style="display:flex;background:rgba(125,211,168,.11)"><span style="width:32px;flex:none;text-align:right;padding-right:8px;color:#4a7a63">73</span><span style="color:#a7e3c4;white-space:pre">       f.Any(x =&gt; x.IsActive);</span></div>
+</div>
+</div>
+</div>
+</div>
+
+<div style="width:376px;flex:none;border-left:1px solid #272b34;background:#121419;display:flex;flex-direction:column">
+<div style="flex:none;display:flex;border-bottom:1px solid #272b34">
+<div style="padding:9px 12px;font:500 11.5px 'JetBrains Mono',monospace;box-shadow:inset 0 -2px 0 #7d8cff">Comments 3</div>
+<div style="padding:9px 12px;font:500 11.5px 'JetBrains Mono',monospace;color:#656d7b">Threads 12</div>
+</div>
+<div style="flex:1;overflow:hidden;padding:10px;display:flex;flex-direction:column;gap:9px">
+
+<div style="border:1px solid rgba(240,179,87,.35);border-radius:6px;background:#15171c;padding:10px;position:relative">
+<div style="position:absolute;left:-11px;top:14px;width:10px;height:1px;background:#f0b357"></div>
+<div style="display:flex;align-items:center;gap:7px;margin-bottom:7px">
+<span style="font:9.5px 'JetBrains Mono',monospace;color:#0e0f12;background:#f0b357;border-radius:3px;padding:1px 5px">WARNING</span>
+<span style="font:10px 'JetBrains Mono',monospace;color:#656d7b">L42–45</span><span style="flex:1"></span>
+<span style="font:9.5px 'JetBrains Mono',monospace;color:#b3bbff;border:1px solid rgba(125,140,255,.35);border-radius:3px;padding:1px 5px">awaiting</span>
+</div>
+<div style="font-size:12px;line-height:1.45;color:#cfd4dd">Проверка на пустоту недостижима: Flags в контракте non-nullable.</div>
+<div style="margin-top:8px;padding-left:9px;border-left:2px solid rgba(125,140,255,.4)">
+<div style="font:10px 'JetBrains Mono',monospace;color:#b3bbff;margin-bottom:2px">claude · agent</div>
+<div style="font-size:11.5px;line-height:1.45;color:#98a0ae">Убрал ветку с логом, контракт гарантирует непустую коллекцию.</div>
+</div>
+<div style="display:flex;gap:6px;margin-top:9px">
+<span style="padding:3px 9px;border-radius:4px;background:#7dd3a8;color:#0e2018;font-weight:600;font-size:11px">Resolve</span>
+<span style="padding:3px 9px;border-radius:4px;border:1px solid #272b34;color:#98a0ae;font-size:11px">Reply</span>
+</div>
+</div>
+
+<div style="border:1px solid #272b34;border-radius:6px;background:#15171c;padding:10px">
+<div style="display:flex;align-items:center;gap:7px;margin-bottom:7px">
+<span style="font:9.5px 'JetBrains Mono',monospace;color:#0e0f12;background:#7d8cff;border-radius:3px;padding:1px 5px">QUESTION</span>
+<span style="font:10px 'JetBrains Mono',monospace;color:#656d7b">L72</span>
+</div>
+<div style="font-size:12px;line-height:1.45;color:#cfd4dd">Зачем два условия, если Any по пустой коллекции уже false?</div>
+</div>
+
+<div style="border:1px solid #272b34;border-radius:6px;background:#15171c;padding:10px;opacity:.55">
+<div style="display:flex;align-items:center;gap:7px;margin-bottom:7px">
+<span style="font:9.5px 'JetBrains Mono',monospace;color:#7dd3a8;border:1px solid rgba(125,211,168,.4);border-radius:3px;padding:1px 5px">RESOLVED</span>
+<span style="font:10px 'JetBrains Mono',monospace;color:#656d7b">file · nit</span>
+</div>
+<div style="font-size:12px;line-height:1.45;color:#98a0ae">Порядок using-ов не по конвенции.</div>
+</div>
+</div>
+
+<sc-if value="{{ showActivity }}" hint-placeholder-val="{{ true }}">
+<div style="flex:none;border-top:1px solid #272b34;background:#0e0f12">
+<div style="padding:8px 12px;display:flex;align-items:center;gap:7px;border-bottom:1px solid #1f2229">
+<span style="width:6px;height:6px;border-radius:50%;background:#7dd3a8"></span>
+<span style="font:500 10.5px 'JetBrains Mono',monospace;letter-spacing:.06em;color:#98a0ae">ACTIVITY</span>
+<span style="flex:1"></span><span style="font:10px 'JetBrains Mono',monospace;color:#6b7280">live</span>
+</div>
+<div style="padding:10px 12px;display:flex;flex-direction:column;gap:9px;font:11px 'JetBrains Mono',monospace">
+<div style="display:flex;gap:8px;align-items:flex-start">
+<span style="width:5px;height:5px;border-radius:50%;background:#7dd3a8;margin-top:5px;flex:none"></span>
+<div><span style="color:#b3bbff">claude</span> <span style="color:#656d7b">is editing</span> <span style="color:#e7e9ee">group/service-api</span><div style="color:#6b7280;margin-top:2px">CargoValidator.cs · 12s ago</div></div>
+</div>
+<div style="display:flex;gap:8px;align-items:flex-start">
+<span style="width:5px;height:5px;border-radius:50%;background:#7d8cff;margin-top:5px;flex:none"></span>
+<div><span style="color:#b3bbff">codex</span> <span style="color:#656d7b">replied to</span> <span style="color:#e7e9ee">c_9a1m4x</span><div style="color:#6b7280;margin-top:2px">service-web · 1m ago</div></div>
+</div>
+<div style="display:flex;gap:8px;align-items:flex-start">
+<span style="width:5px;height:5px;border-radius:50%;background:#272b34;margin-top:5px;flex:none"></span>
+<div><span style="color:#98a0ae">diff changed</span> <span style="color:#656d7b">in</span> <span style="color:#e7e9ee">infra/terraform</span><div style="color:#6b7280;margin-top:2px">+2 −1 · 3m ago</div></div>
+</div>
+</div>
+</div>
+</sc-if>
+</div>
+</div>
+</div>
+</div>
+</div>
+
+<div class="dv-opt" id="1c">
+<div class="dv-olabel"><a class="dv-oid" href="#1c">1c</a>Paper technical — the light theme behind the switch. Hairlines, small-caps labels, comment as an anchored overlay, keyboard-first.</div>
+<div class="dv-card" style="width:1440px">
+<div style="background:#f7f6f3;color:#1a1a18;font-family:'Instrument Sans',system-ui,sans-serif;font-size:12px;height:880px;display:flex;flex-direction:column">
+
+<div style="flex:none;padding:11px 16px;border-bottom:1px solid #1a1a18;display:flex;align-items:baseline;gap:14px">
+<span style="font:700 13px 'JetBrains Mono',monospace;letter-spacing:-.02em">diffalanche</span>
+<span style="font:10px 'JetBrains Mono',monospace;letter-spacing:.1em;color:#8b867c">REVIEW</span>
+<span style="font:500 12px 'JetBrains Mono',monospace">ls-240372</span>
+<span style="color:#c9c4ba">/</span>
+<span style="font:12px 'JetBrains Mono',monospace;color:#6e6a62">base branch · origin/main</span>
+<span style="flex:1"></span>
+<span style="font:10px 'JetBrains Mono',monospace;letter-spacing:.1em;color:#8b867c">12 OPEN · 5 AWAITING</span>
+<span style="display:flex;border:1px solid #1a1a18;font:11px 'JetBrains Mono',monospace"><span style="padding:2px 8px;color:#8b867c">☾</span><span style="padding:2px 8px;background:#1a1a18;color:#f7f6f3">☀</span></span>
+</div>
+
+<div style="flex:1;display:flex;min-height:0">
+
+<div style="width:260px;flex:none;border-right:1px solid #d6d1c7;padding:14px 0 0">
+<div style="padding:0 16px 10px;font:10px 'JetBrains Mono',monospace;letter-spacing:.1em;color:#8b867c">REPOSITORIES · 7 WITH CHANGES</div>
+<div style="font:11.5px/1 'JetBrains Mono',monospace">
+<div style="display:flex;gap:10px;padding:7px 16px;background:#1a1a18;color:#f7f6f3"><span style="color:#7d786e;width:14px">01</span><span>group/service-api</span><span style="flex:1"></span><span>4</span></div>
+<div style="padding:5px 16px 5px 40px;display:flex;gap:8px;border-left:0"><span style="text-decoration:underline;text-decoration-thickness:1px;text-underline-offset:3px">CargoService.cs</span><span style="flex:1"></span><span style="color:#a8720c">3</span></div>
+<div style="padding:5px 16px 5px 40px;display:flex;gap:8px;color:#6e6a62"><span>CargoValidator.cs</span><span style="flex:1"></span><span>1</span></div>
+<div style="padding:5px 16px 5px 40px;display:flex;gap:8px;color:#6e6a62"><span>Contracts/CargoDto.cs</span></div>
+<div style="padding:5px 16px 5px 40px;display:flex;gap:8px;color:#8b867c"><span>migrations/0021_flags.sql</span></div>
+<div style="display:flex;gap:10px;padding:7px 16px;border-top:1px solid #e6e2d9"><span style="color:#7d786e;width:14px">02</span><span>group/service-web</span><span style="flex:1"></span><span style="color:#c2352f">2</span></div>
+<div style="display:flex;gap:10px;padding:7px 16px;border-top:1px solid #e6e2d9"><span style="color:#7d786e;width:14px">03</span><span>group/service-billing</span><span style="flex:1"></span><span style="color:#c2352f">1</span></div>
+<div style="display:flex;gap:10px;padding:7px 16px;border-top:1px solid #e6e2d9"><span style="color:#7d786e;width:14px">04</span><span>infra/terraform</span><span style="flex:1"></span><span style="color:#2f7d55">1</span></div>
+<div style="display:flex;gap:10px;padding:7px 16px;border-top:1px solid #e6e2d9"><span style="color:#7d786e;width:14px">05</span><span>tools/codegen</span></div>
+<div style="display:flex;gap:10px;padding:7px 16px;border-top:1px solid #e6e2d9"><span style="color:#7d786e;width:14px">06</span><span>libs/contracts</span></div>
+<div style="display:flex;gap:10px;padding:7px 16px;border-top:1px solid #e6e2d9;border-bottom:1px solid #e6e2d9"><span style="color:#7d786e;width:14px">07</span><span style="color:#6e6a62">service-api-wt-flags</span></div>
+</div>
+<div style="padding:14px 16px;font:10.5px/1.7 'JetBrains Mono',monospace;color:#7d786e">root ~/work/ati<br>16 scanned · depth 2</div>
+</div>
+
+<div style="flex:1;min-width:0;display:flex;flex-direction:column;position:relative">
+<div style="flex:none;padding:12px 20px;border-bottom:1px solid #d6d1c7">
+<div style="display:flex;align-items:baseline;gap:12px">
+<span style="font:600 14px 'JetBrains Mono',monospace">src/Cargos/CargoService.cs</span>
+<span style="font:11px 'JetBrains Mono',monospace;color:#2f7d55">+42</span>
+<span style="font:11px 'JetBrains Mono',monospace;color:#c2352f">−8</span>
+<span style="flex:1"></span>
+<span style="display:flex;border:1px solid #1a1a18;font:10px 'JetBrains Mono',monospace"><span style="padding:2px 8px;background:#1a1a18;color:#f7f6f3">SPLIT</span><span style="padding:2px 8px">UNIFIED</span></span>
+</div>
+<div style="margin-top:5px;font:11px 'JetBrains Mono',monospace;color:#8b867c">group/service-api · feat/cargo-flags · merge-base 4f21ac9</div>
+</div>
+
+<div style="flex:1;overflow:hidden;font:11.5px/17px 'JetBrains Mono',monospace">
+<div style="padding:3px 20px;color:#8b867c;background:#efece5;border-bottom:1px solid #e6e2d9">@@ -30,8 +38,12 @@ public sealed class CargoService</div>
+<div style="display:flex">
+<div style="flex:1;min-width:0;border-right:1px solid #e6e2d9">
+<div style="display:flex"><span style="width:34px;flex:none;text-align:right;padding-right:9px;color:#8b867c">30</span><span style="white-space:pre;color:#3d3a34">    public async Task&lt;CargoDto&gt; Create(</span></div>
+<div style="display:flex"><span style="width:34px;flex:none;text-align:right;padding-right:9px;color:#8b867c">31</span><span style="white-space:pre;color:#3d3a34">        CreateCargoRequest request)</span></div>
+<div style="display:flex"><span style="width:34px;flex:none;text-align:right;padding-right:9px;color:#8b867c">32</span><span style="white-space:pre;color:#3d3a34">    {</span></div>
+<div style="display:flex;background:rgba(194,53,47,.09)"><span style="width:34px;flex:none;text-align:right;padding-right:9px;color:#c08a86">33</span><span style="white-space:pre;color:#8f2b26">        var flags = request.Flags ?? [];</span></div>
+<div style="display:flex;background:rgba(194,53,47,.09)"><span style="width:34px;flex:none;text-align:right;padding-right:9px;color:#c08a86">34</span><span style="white-space:pre;color:#8f2b26">        if (flags is null) return null;</span></div>
+<div style="display:flex"><span style="width:34px;flex:none;text-align:right;padding-right:9px;color:#8b867c">35</span><span style="white-space:pre;color:#3d3a34">        var cargo = new Cargo(request.Title);</span></div>
+<div style="display:flex;background:#efece5"><span style="width:34px;flex:none"></span><span style="white-space:pre"> </span></div>
+<div style="display:flex;background:#efece5"><span style="width:34px;flex:none"></span><span style="white-space:pre"> </span></div>
+<div style="display:flex"><span style="width:34px;flex:none;text-align:right;padding-right:9px;color:#8b867c">36</span><span style="white-space:pre;color:#3d3a34">        await _repo.AddAsync(cargo);</span></div>
+<div style="display:flex"><span style="width:34px;flex:none;text-align:right;padding-right:9px;color:#8b867c">37</span><span style="white-space:pre;color:#3d3a34">        return cargo.ToDto();</span></div>
+<div style="display:flex"><span style="width:34px;flex:none;text-align:right;padding-right:9px;color:#8b867c">38</span><span style="white-space:pre;color:#3d3a34">    }</span></div>
+</div>
+<div style="flex:1;min-width:0">
+<div style="display:flex"><span style="width:34px;flex:none;text-align:right;padding-right:9px;color:#8b867c">38</span><span style="white-space:pre;color:#3d3a34">    public async Task&lt;CargoDto&gt; Create(</span></div>
+<div style="display:flex"><span style="width:34px;flex:none;text-align:right;padding-right:9px;color:#8b867c">39</span><span style="white-space:pre;color:#3d3a34">        CreateCargoRequest request)</span></div>
+<div style="display:flex"><span style="width:34px;flex:none;text-align:right;padding-right:9px;color:#8b867c">40</span><span style="white-space:pre;color:#3d3a34">    {</span></div>
+<div style="display:flex;background:rgba(47,125,85,.1)"><span style="width:34px;flex:none;text-align:right;padding-right:9px;color:#84a892">41</span><span style="white-space:pre;color:#1f5c3d">        var flags = request.Flags;</span></div>
+<div style="display:flex;background:rgba(47,125,85,.1);box-shadow:inset 2px 0 0 #a8720c"><span style="width:34px;flex:none;text-align:right;padding-right:9px;color:#84a892">42</span><span style="white-space:pre;color:#1f5c3d">        if (flags.Count == 0)</span></div>
+<div style="display:flex;background:rgba(47,125,85,.1)"><span style="width:34px;flex:none;text-align:right;padding-right:9px;color:#84a892">43</span><span style="white-space:pre;color:#1f5c3d">            _log.Debug("cargo without flags");</span></div>
+<div style="display:flex;background:rgba(47,125,85,.1)"><span style="width:34px;flex:none;text-align:right;padding-right:9px;color:#84a892">44</span><span style="white-space:pre;color:#1f5c3d">        var cargo = new Cargo(</span></div>
+<div style="display:flex;background:rgba(47,125,85,.1)"><span style="width:34px;flex:none;text-align:right;padding-right:9px;color:#84a892">45</span><span style="white-space:pre;color:#1f5c3d">            request.Title, flags);</span></div>
+<div style="display:flex"><span style="width:34px;flex:none;text-align:right;padding-right:9px;color:#8b867c">46</span><span style="white-space:pre;color:#3d3a34">        await _repo.AddAsync(cargo);</span></div>
+<div style="display:flex"><span style="width:34px;flex:none;text-align:right;padding-right:9px;color:#8b867c">47</span><span style="white-space:pre;color:#3d3a34">        return cargo.ToDto();</span></div>
+<div style="display:flex"><span style="width:34px;flex:none;text-align:right;padding-right:9px;color:#8b867c">48</span><span style="white-space:pre;color:#3d3a34">    }</span></div>
+</div>
+</div>
+<div style="padding:3px 20px;color:#8b867c;background:#efece5;border-top:1px solid #e6e2d9;border-bottom:1px solid #e6e2d9">@@ -58,6 +70,9 @@</div>
+<div style="display:flex">
+<div style="flex:1;min-width:0;border-right:1px solid #e6e2d9">
+<div style="display:flex"><span style="width:34px;flex:none;text-align:right;padding-right:9px;color:#8b867c">58</span><span style="white-space:pre;color:#3d3a34">    private static bool HasActive(</span></div>
+<div style="display:flex"><span style="width:34px;flex:none;text-align:right;padding-right:9px;color:#8b867c">59</span><span style="white-space:pre;color:#3d3a34">        IReadOnlyList&lt;Flag&gt; flags)</span></div>
+<div style="display:flex;background:#efece5"><span style="width:34px;flex:none"></span><span style="white-space:pre"> </span></div>
+<div style="display:flex"><span style="width:34px;flex:none;text-align:right;padding-right:9px;color:#8b867c">60</span><span style="white-space:pre;color:#3d3a34">        =&gt; flags.Any(f =&gt; f.IsActive);</span></div>
+</div>
+<div style="flex:1;min-width:0">
+<div style="display:flex"><span style="width:34px;flex:none;text-align:right;padding-right:9px;color:#8b867c">70</span><span style="white-space:pre;color:#3d3a34">    private static bool HasActive(</span></div>
+<div style="display:flex"><span style="width:34px;flex:none;text-align:right;padding-right:9px;color:#8b867c">71</span><span style="white-space:pre;color:#3d3a34">        IReadOnlyList&lt;Flag&gt; flags)</span></div>
+<div style="display:flex;background:rgba(47,125,85,.1)"><span style="width:34px;flex:none;text-align:right;padding-right:9px;color:#84a892">72</span><span style="white-space:pre;color:#1f5c3d">        =&gt; flags.Count &gt; 0 &amp;&amp;</span></div>
+<div style="display:flex;background:rgba(47,125,85,.1)"><span style="width:34px;flex:none;text-align:right;padding-right:9px;color:#84a892">73</span><span style="white-space:pre;color:#1f5c3d">           flags.Any(f =&gt; f.IsActive);</span></div>
+</div>
+</div>
+</div>
+
+<div style="position:absolute;right:28px;top:214px;width:430px;background:#fffefb;border:1px solid #1a1a18;box-shadow:6px 6px 0 rgba(26,26,24,.1)">
+<div style="display:flex;align-items:center;gap:9px;padding:8px 12px;border-bottom:1px solid #d6d1c7">
+<span style="font:9.5px 'JetBrains Mono',monospace;letter-spacing:.1em;background:#a8720c;color:#fffefb;padding:1px 6px">WARNING</span>
+<span style="font:10.5px 'JetBrains Mono',monospace;color:#6e6a62">new · L42–45</span>
+<span style="flex:1"></span>
+<span style="font:10.5px 'JetBrains Mono',monospace;color:#7d786e">c_7f3k2q</span>
+</div>
+<div style="padding:12px">
+<div style="display:flex;align-items:baseline;gap:8px;margin-bottom:4px"><span style="font-weight:600;font-size:12.5px">kim.p</span><span style="font:10px 'JetBrains Mono',monospace;color:#8b867c">HUMAN · 18:05</span></div>
+<div style="font-size:12.5px;line-height:1.5;color:#3d3a34">Проверка на пустоту недостижима: <span style="font-family:'JetBrains Mono',monospace;font-size:11.5px;background:#efece5;padding:1px 4px">Flags</span> в контракте non-nullable, коллекция всегда приходит.</div>
+<div style="margin-top:11px;padding-top:11px;border-top:1px solid #e6e2d9">
+<div style="display:flex;align-items:baseline;gap:8px;margin-bottom:4px"><span style="font-weight:600;font-size:12.5px">claude</span><span style="font:10px 'JetBrains Mono',monospace;background:#1a1a18;color:#f7f6f3;padding:1px 5px">AGENT</span><span style="font:10px 'JetBrains Mono',monospace;color:#8b867c">18:20</span></div>
+<div style="font-size:12.5px;line-height:1.5;color:#3d3a34">Убрал ветку с логом, контракт гарантирует непустую коллекцию.</div>
+</div>
+</div>
+<div style="display:flex;align-items:center;gap:8px;padding:9px 12px;border-top:1px solid #d6d1c7;background:#f7f6f3">
+<span style="padding:3px 10px;background:#1a1a18;color:#f7f6f3;font:600 11px 'JetBrains Mono',monospace">RESOLVE <span style="opacity:.55">R</span></span>
+<span style="padding:3px 10px;border:1px solid #1a1a18;font:600 11px 'JetBrains Mono',monospace">REPLY <span style="opacity:.55">⏎</span></span>
+<span style="flex:1"></span>
+<span style="font:10px 'JetBrains Mono',monospace;color:#8b867c">2 / 3 in file</span>
+</div>
+</div>
+</div>
+</div>
+
+<sc-if value="{{ showKeymap }}" hint-placeholder-val="{{ true }}">
+<div style="flex:none;border-top:1px solid #1a1a18;background:#efece5;padding:8px 16px;display:flex;align-items:center;gap:18px;font:10.5px 'JetBrains Mono',monospace;color:#6e6a62">
+<span><span style="border:1px solid #8b867c;padding:1px 5px;color:#1a1a18">⌘K</span> jump to file or symbol</span>
+<span><span style="border:1px solid #8b867c;padding:1px 5px;color:#1a1a18">J</span> <span style="border:1px solid #8b867c;padding:1px 5px;color:#1a1a18">K</span> next / prev comment</span>
+<span><span style="border:1px solid #8b867c;padding:1px 5px;color:#1a1a18">C</span> comment on line</span>
+<span><span style="border:1px solid #8b867c;padding:1px 5px;color:#1a1a18">U</span> unanswered only</span>
+<span style="flex:1"></span>
+<span>watching 16 repos · 127.0.0.1:4880</span>
+</div>
+</sc-if>
+</div>
+</div>
+</div>
+
+<div class="dv-opt" id="1d">
+<div class="dv-olabel"><a class="dv-oid" href="#1d">1d</a>Sessions and the comment composer — history, new session, severity, and Phase 2 suggestions from your own past comments.</div>
+<div class="dv-card" style="width:1440px">
+<div style="background:#0e0f12;color:#e7e9ee;font-family:'Instrument Sans',system-ui,sans-serif;font-size:13px;height:600px;display:flex">
+
+<div style="width:520px;flex:none;border-right:1px solid #272b34;background:#121419;display:flex;flex-direction:column">
+<div style="padding:13px 16px;border-bottom:1px solid #272b34;display:flex;align-items:center;gap:9px">
+<span style="font:500 11px 'JetBrains Mono',monospace;letter-spacing:.08em;color:#98a0ae">REVIEW SESSIONS</span>
+<span style="flex:1"></span>
+<span style="font:10.5px 'JetBrains Mono',monospace;color:#6b7280">.diffalanche/reviews/</span>
+</div>
+<div style="flex:1;overflow:hidden;padding:10px 12px;display:flex;flex-direction:column;gap:8px">
+<div style="border:1px solid rgba(125,140,255,.35);background:rgba(125,140,255,.07);border-radius:6px;padding:11px 12px">
+<div style="display:flex;align-items:center;gap:8px">
+<span style="font:600 12.5px 'JetBrains Mono',monospace">ls-240372</span>
+<span style="font:9.5px 'JetBrains Mono',monospace;color:#0e0f12;background:#7d8cff;border-radius:3px;padding:1px 5px">CURRENT</span>
+<span style="flex:1"></span>
+<span style="font:10.5px 'JetBrains Mono',monospace;color:#98a0ae">branch</span>
+</div>
+<div style="margin-top:5px;font-size:12.5px;color:#cfd4dd">Cargo flags across services</div>
+<div style="margin-top:7px;display:flex;gap:14px;font:10.5px 'JetBrains Mono',monospace;color:#656d7b">
+<span>7 repos</span><span style="color:#ff6b6b">12 open</span><span style="color:#7dd3a8">31 resolved</span><span>updated 18:30</span>
+</div>
+</div>
+<div style="border:1px solid #272b34;border-radius:6px;padding:11px 12px">
+<div style="display:flex;align-items:center;gap:8px">
+<span style="font:600 12.5px 'JetBrains Mono',monospace;color:#98a0ae">ls-239118</span><span style="flex:1"></span>
+<span style="font:10.5px 'JetBrains Mono',monospace;color:#656d7b">head</span>
+</div>
+<div style="margin-top:5px;font-size:12.5px;color:#98a0ae">Tariff import rewrite</div>
+<div style="margin-top:7px;display:flex;gap:14px;font:10.5px 'JetBrains Mono',monospace;color:#656d7b"><span>3 repos</span><span style="color:#7dd3a8">44 resolved</span><span>28 Aug</span></div>
+</div>
+<div style="border:1px solid #272b34;border-radius:6px;padding:11px 12px">
+<div style="display:flex;align-items:center;gap:8px">
+<span style="font:600 12.5px 'JetBrains Mono',monospace;color:#98a0ae">spike-bun-perf</span><span style="flex:1"></span>
+<span style="font:10.5px 'JetBrains Mono',monospace;color:#656d7b">ref · v0.3.1</span>
+</div>
+<div style="margin-top:5px;font-size:12.5px;color:#98a0ae">Phase 0 budgets check</div>
+<div style="margin-top:7px;display:flex;gap:14px;font:10.5px 'JetBrains Mono',monospace;color:#656d7b"><span>21 repos</span><span style="color:#7dd3a8">9 resolved</span><span>12 Aug</span></div>
+</div>
+</div>
+<div style="flex:none;border-top:1px solid #272b34;padding:12px 14px">
+<div style="font:500 10.5px 'JetBrains Mono',monospace;letter-spacing:.08em;color:#656d7b;margin-bottom:9px">NEW SESSION</div>
+<div style="display:flex;gap:8px;align-items:center">
+<div style="flex:1;padding:7px 10px;border:1px solid #272b34;border-radius:5px;background:#0e0f12;font:12px 'JetBrains Mono',monospace;color:#6b7280">name · ls-240588</div>
+<div style="display:flex;border:1px solid #272b34;border-radius:5px;overflow:hidden">
+<span style="padding:7px 10px;font:11px 'JetBrains Mono',monospace;color:#656d7b">head</span>
+<span style="padding:7px 10px;font:11px 'JetBrains Mono',monospace;background:#7d8cff;color:#0e0f12">branch</span>
+<span style="padding:7px 10px;font:11px 'JetBrains Mono',monospace;color:#656d7b">ref</span>
+</div>
+<div style="padding:7px 14px;border-radius:5px;background:#e7e9ee;color:#0e0f12;font-weight:600;font-size:12px">Create</div>
+</div>
+</div>
+</div>
+
+<div style="flex:1;min-width:0;display:flex;flex-direction:column">
+<div style="padding:13px 16px;border-bottom:1px solid #272b34;display:flex;align-items:center;gap:9px">
+<span style="font:500 11px 'JetBrains Mono',monospace;letter-spacing:.08em;color:#98a0ae">NEW COMMENT</span>
+<span style="font:10.5px 'JetBrains Mono',monospace;color:#6b7280">group/service-web · FlagPicker.tsx · new L118–124</span>
+</div>
+<div style="flex:1;min-height:0;display:flex">
+<div style="flex:1;min-width:0;padding:14px 16px;display:flex;flex-direction:column">
+<div style="display:flex;gap:6px;margin-bottom:11px">
+<span style="font:10px 'JetBrains Mono',monospace;padding:4px 9px;border-radius:4px;background:#ff6b6b;color:#2a0e0e;font-weight:700">CRITICAL</span>
+<span style="font:10px 'JetBrains Mono',monospace;padding:4px 9px;border-radius:4px;border:1px solid rgba(240,179,87,.4);color:#f0b357">WARNING</span>
+<span style="font:10px 'JetBrains Mono',monospace;padding:4px 9px;border-radius:4px;border:1px solid #272b34;color:#656d7b">NIT</span>
+<span style="font:10px 'JetBrains Mono',monospace;padding:4px 9px;border-radius:4px;border:1px solid #272b34;color:#656d7b">QUESTION</span>
+<span style="flex:1"></span>
+<span style="font:10px 'JetBrains Mono',monospace;color:#6b7280;align-self:center">suggested by history</span>
+</div>
+<div style="flex:1;border:1px solid rgba(125,140,255,.4);border-radius:6px;background:#121419;padding:11px 12px;font-size:13px;line-height:1.55;color:#cfd4dd">
+Стейт флагов держится в компоненте, при переключении таба он теряется<span style="display:inline-block;width:1px;height:15px;background:#7d8cff;vertical-align:-3px;margin-left:1px"></span>
+<div style="margin-top:8px;font:11px 'JetBrains Mono',monospace;color:#6b7280">markdown · code fences ok</div>
+</div>
+<div style="margin-top:11px;display:flex;align-items:center;gap:9px">
+<div style="padding:6px 14px;border-radius:5px;background:#7d8cff;color:#0e0f12;font-weight:600;font-size:12.5px">Comment</div>
+<div style="padding:6px 12px;border-radius:5px;border:1px solid #272b34;color:#98a0ae;font-size:12.5px">Cancel</div>
+<span style="flex:1"></span>
+<span style="font:10.5px 'JetBrains Mono',monospace;color:#6b7280">⌘⏎ submit · anchor saved with 3 lines of context</span>
+</div>
+</div>
+
+<sc-if value="{{ showSuggestions }}" hint-placeholder-val="{{ true }}">
+<div style="width:360px;flex:none;border-left:1px solid #272b34;background:#121419;display:flex;flex-direction:column">
+<div style="padding:11px 13px;border-bottom:1px solid #1f2229;display:flex;align-items:center;gap:8px">
+<span style="font:500 10.5px 'JetBrains Mono',monospace;letter-spacing:.08em;color:#98a0ae">FROM YOUR HISTORY</span>
+<span style="flex:1"></span>
+<span style="font:9.5px 'JetBrains Mono',monospace;color:#6b7280">offline · 118M</span>
+</div>
+<div style="flex:1;padding:11px 13px;display:flex;flex-direction:column;gap:9px">
+<div style="border:1px solid rgba(125,140,255,.3);background:rgba(125,140,255,.06);border-radius:6px;padding:10px">
+<div style="display:flex;align-items:center;gap:7px;margin-bottom:6px">
+<span style="font:9.5px 'JetBrains Mono',monospace;color:#f0b357">WARNING</span>
+<span style="font:9.5px 'JetBrains Mono',monospace;color:#656d7b">ls-239118 · 0.91</span>
+<span style="flex:1"></span>
+<span style="font:9.5px 'JetBrains Mono',monospace;color:#b3bbff;border:1px solid rgba(125,140,255,.35);border-radius:3px;padding:0 4px">TAB</span>
+</div>
+<div style="font-size:12px;line-height:1.45;color:#cfd4dd">Локальный стейт переживёт только один рендер таба — подними его в стор, иначе выбор пользователя молча теряется.</div>
+</div>
+<div style="border:1px solid #272b34;border-radius:6px;padding:10px">
+<div style="display:flex;align-items:center;gap:7px;margin-bottom:6px">
+<span style="font:9.5px 'JetBrains Mono',monospace;color:#f0b357">WARNING</span>
+<span style="font:9.5px 'JetBrains Mono',monospace;color:#656d7b">ls-238004 · 0.84</span>
+</div>
+<div style="font-size:12px;line-height:1.45;color:#98a0ae">Состояние формы в useState теряется при размонтировании, нужен внешний источник.</div>
+</div>
+<div style="border:1px solid #272b34;border-radius:6px;padding:10px">
+<div style="display:flex;align-items:center;gap:7px;margin-bottom:6px">
+<span style="font:9.5px 'JetBrains Mono',monospace;color:#7dd3a8">NIT</span>
+<span style="font:9.5px 'JetBrains Mono',monospace;color:#656d7b">ls-236921 · 0.72</span>
+</div>
+<div style="font-size:12px;line-height:1.45;color:#98a0ae">Вынеси в отдельный хук, компонент уже держит четыре стейта.</div>
+</div>
+</div>
+<div style="flex:none;border-top:1px solid #1f2229;padding:10px 13px;font:10px/1.6 'JetBrains Mono',monospace;color:#6b7280">
+same index serves <span style="color:#98a0ae">diffalanche suggest</span> in the CLI
+</div>
+</div>
+</sc-if>
+</div>
+</div>
+</div>
+</div>
+</div>
+
+</div>
+<p class="dv-next">Try next: "разверни <a class="dv-oid" href="#1a">1a</a> в кликабельный прототип" · "хочу светлую тему как в <a class="dv-oid" href="#1c">1c</a>, но раскладку <a class="dv-oid" href="#1a">1a</a>" · "новые направления"</p>
+</section>
+</x-dc>
+<script type="text/x-dc" data-dc-script data-props="{&quot;showActivity&quot;:{&quot;editor&quot;:&quot;boolean&quot;,&quot;default&quot;:true,&quot;tsType&quot;:&quot;boolean&quot;,&quot;section&quot;:&quot;Panels&quot;},&quot;showSuggestions&quot;:{&quot;editor&quot;:&quot;boolean&quot;,&quot;default&quot;:true,&quot;tsType&quot;:&quot;boolean&quot;,&quot;section&quot;:&quot;Panels&quot;},&quot;showKeymap&quot;:{&quot;editor&quot;:&quot;boolean&quot;,&quot;default&quot;:true,&quot;tsType&quot;:&quot;boolean&quot;,&quot;section&quot;:&quot;Panels&quot;}}">
+class Component extends DCLogic {
+  renderVals() {
+    return {
+      showActivity: this.props.showActivity ?? true,
+      showSuggestions: this.props.showSuggestions ?? true,
+      showKeymap: this.props.showKeymap ?? true,
+    };
+  }
+}
+</script>
+</body>
+</html>

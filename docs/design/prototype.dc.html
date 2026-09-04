@@ -1,0 +1,1481 @@
+<!DOCTYPE html>
+<html>
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<script src="./support.js"></script>
+</head>
+<body>
+<x-dc>
+<helmet data-dc-atomics><link rel="icon" href="data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 32 32'%3E%3Crect width='32' height='32' rx='7' fill='%231d2025'/%3E%3Crect x='5' y='5' width='9' height='9' rx='2.5' fill='%238b9ae0'/%3E%3Crect x='11.5' y='11.5' width='9' height='9' rx='2.5' fill='%23dfa85c'/%3E%3Crect x='18' y='18' width='9' height='9' rx='2.5' fill='%237ec49c'/%3E%3C/svg%3E"><link rel="preconnect" href="https://fonts.googleapis.com"><link rel="preconnect" href="https://fonts.gstatic.com" crossorigin><link href="https://fonts.googleapis.com/css2?family=Instrument+Sans:wght@400..700&family=JetBrains+Mono:wght@400;500;600;700&display=swap" rel="stylesheet"><style>html,body{margin:0;height:100%;overflow:auto;background:#1d2025;font-family:'Instrument Sans',system-ui,sans-serif;-webkit-font-smoothing:antialiased}*{box-sizing:border-box}a{color:#8b9ae0;text-decoration:none}a:hover{color:#a8b3e6}input,textarea,button{font:inherit;color:inherit}::selection{background:rgba(139,154,224,.32)}@keyframes dcpulse{0%,100%{opacity:1}50%{opacity:.35}}@keyframes dcin{from{opacity:0;transform:translateY(4px)}to{opacity:1;transform:none}}</style></helmet>
+
+<div style="{{ shell }}">
+
+<div style="height:52px;flex:none;border-bottom:1px solid var(--bd,#333941);display:flex;align-items:center;gap:13px;padding:0 15px;background:var(--panel2,#22262c);position:relative;z-index:30">
+<div style="display:flex;align-items:center;gap:9px;flex:none">
+<div style="position:relative;width:19px;height:19px;flex:none">
+<div style="position:absolute;left:0;top:0;width:9px;height:9px;border-radius:2.5px;background:var(--acc,#8b9ae0)"></div>
+<div style="position:absolute;left:5px;top:5px;width:9px;height:9px;border-radius:2.5px;background:var(--warn,#dfa85c)"></div>
+<div style="position:absolute;left:10px;top:10px;width:9px;height:9px;border-radius:2.5px;background:var(--nit,#7ec49c)"></div>
+</div>
+<div style="font:600 13.5px 'JetBrains Mono',monospace;letter-spacing:-.02em">diffalanche</div>
+</div>
+<div onClick="{{ toggleSessionMenu }}" style="display:flex;align-items:center;gap:9px;padding:5px 11px;border:1px solid var(--bd,#333941);border-radius:8px;background:var(--panel3,#282d34);cursor:pointer;min-width:0;flex-shrink:1" style-hover="border-color:var(--accBd,#3f4a80)">
+<span style="font:500 12px 'JetBrains Mono',monospace">{{ sessionName }}</span>
+<span style="font-size:11.5px;color:var(--tx3,#828a95);max-width:220px;overflow:hidden;text-overflow:ellipsis;white-space:nowrap">{{ sessionTitle }}</span>
+<span style="font:11px 'JetBrains Mono',monospace;color:var(--acc,#8b9ae0)">▾</span>
+</div>
+<div onClick="{{ openBase }}" style="{{ baseButtonStyle }}">
+<span style="font:10px 'JetBrains Mono',monospace;letter-spacing:.07em;color:var(--tx3,#828a95)">BASE</span>
+<span style="font:500 12px 'JetBrains Mono',monospace">{{ baseLabel }}</span>
+<span style="font:11px 'JetBrains Mono',monospace;color:var(--acc,#8b9ae0)">▾</span>
+</div>
+<div style="flex:1"></div>
+<div onClick="{{ filterOpen }}" style="display:flex;align-items:center;gap:7px;font-size:11.5px;color:var(--tx2,#9ba3ae);cursor:pointer;padding:4px 9px;border-radius:7px;flex:none;white-space:nowrap" style-hover="background:var(--panel3,#282d34)">
+<span style="width:7px;height:7px;border-radius:50%;background:var(--crit,#e0837a)"></span>
+<span style="font:600 12px 'JetBrains Mono',monospace;color:var(--crit,#e0837a)">{{ openCount }}</span> open
+</div>
+<div onClick="{{ filterUnanswered }}" style="display:flex;align-items:center;gap:7px;font-size:11.5px;color:var(--tx2,#9ba3ae);cursor:pointer;padding:4px 9px;border-radius:7px;flex:none;white-space:nowrap" style-hover="background:var(--panel3,#282d34)">
+<span style="width:7px;height:7px;border-radius:50%;background:var(--acc,#8b9ae0)"></span>
+<span style="font:600 12px 'JetBrains Mono',monospace;color:var(--acc,#8b9ae0)">{{ awaitingCount }}</span> awaiting you
+</div>
+<div onClick="{{ openPalette }}" style="display:flex;align-items:center;gap:8px;padding:5px 10px;border:1px solid var(--bd,#333941);border-radius:8px;background:var(--panel3,#282d34);cursor:pointer;color:var(--tx2,#9ba3ae);font-size:12px;flex:none" style-hover="border-color:var(--accBd,#3f4a80)">⌕ <span style="font:10px 'JetBrains Mono',monospace;border:1px solid var(--bd,#333941);border-radius:4px;padding:1px 5px">⌘K</span></div>
+<div onClick="{{ toggleTheme }}" style="display:flex;align-items:center;border:1px solid var(--bd,#333941);border-radius:8px;overflow:hidden;background:var(--panel3,#282d34);cursor:pointer;flex:none">
+<span style="{{ moonStyle }}">☾</span>
+<span style="{{ sunStyle }}">☀</span>
+</div>
+<div onClick="{{ openExport }}" style="padding:6px 13px;border:1px solid var(--bd,#333941);border-radius:8px;font-size:12px;color:var(--tx2,#9ba3ae);background:var(--panel3,#282d34);cursor:pointer;flex:none;white-space:nowrap" style-hover="color:var(--tx,#dde1e7);border-color:var(--accBd,#3f4a80)">Export .md</div>
+</div>
+
+<sc-if value="{{ hasWarnings }}" hint-placeholder-val="{{ false }}">
+<div style="flex:none;border-bottom:1px solid var(--bd,#333941);background:var(--panel2,#22262c);padding:9px 15px;display:flex;align-items:flex-start;gap:12px">
+<span style="font:10px 'JetBrains Mono',monospace;letter-spacing:.06em;color:var(--warn,#dfa85c);border:1px solid var(--warn,#dfa85c);border-radius:4px;padding:1px 6px;flex:none;margin-top:2px">SCAN</span>
+<div style="min-width:0;display:flex;flex-direction:column;gap:4px">
+<sc-for list="{{ warnings }}" as="w" hint-placeholder-count="2">
+<div style="font:11px 'JetBrains Mono',monospace;color:var(--tx2,#9ba3ae)"><span style="color:var(--tx,#dde1e7)">{{ w.repo }}</span> · {{ w.text }}</div>
+</sc-for>
+</div>
+<span style="flex:1"></span>
+<span onClick="{{ dismissWarnings }}" style="font:10.5px 'JetBrains Mono',monospace;color:var(--tx3,#828a95);cursor:pointer;flex:none">dismiss</span>
+</div>
+</sc-if>
+
+<sc-if value="{{ isFirstRun }}" hint-placeholder-val="{{ false }}">
+<div style="flex:1;display:flex;align-items:center;justify-content:center;padding:40px">
+<div style="width:560px">
+<div style="position:relative;width:34px;height:34px;margin-bottom:18px">
+<div style="position:absolute;left:0;top:0;width:16px;height:16px;border-radius:4px;background:var(--acc,#8b9ae0)"></div>
+<div style="position:absolute;left:9px;top:9px;width:16px;height:16px;border-radius:4px;background:var(--warn,#dfa85c)"></div>
+<div style="position:absolute;left:18px;top:18px;width:16px;height:16px;border-radius:4px;background:var(--nit,#7ec49c)"></div>
+</div>
+<div style="font:600 20px 'Instrument Sans',system-ui,sans-serif;letter-spacing:-.01em">Ни одной сессии review</div>
+<div style="margin-top:9px;font-size:13.5px;line-height:1.6;color:var(--tx2,#9ba3ae)">diffalanche просканировал корень и нашёл, что ревьюить. Создайте первую сессию — она станет текущей и для UI, и для CLI.</div>
+<div style="margin-top:18px;display:flex;gap:10px">
+<div style="flex:1;padding:13px 14px;border:1px solid var(--bd,#333941);border-radius:10px;background:var(--panel,#212429)">
+<div style="font:600 17px 'JetBrains Mono',monospace">16</div>
+<div style="margin-top:3px;font:10.5px 'JetBrains Mono',monospace;color:var(--tx3,#828a95)">репозиториев найдено</div>
+</div>
+<div style="flex:1;padding:13px 14px;border:1px solid var(--bd,#333941);border-radius:10px;background:var(--panel,#212429)">
+<div style="font:600 17px 'JetBrains Mono',monospace">4</div>
+<div style="margin-top:3px;font:10.5px 'JetBrains Mono',monospace;color:var(--tx3,#828a95)">с изменениями</div>
+</div>
+<div style="flex:1;padding:13px 14px;border:1px solid var(--bd,#333941);border-radius:10px;background:var(--panel,#212429)">
+<div style="font:600 17px 'JetBrains Mono',monospace">1</div>
+<div style="margin-top:3px;font:10.5px 'JetBrains Mono',monospace;color:var(--tx3,#828a95)">worktree</div>
+</div>
+</div>
+<div style="margin-top:18px;display:flex;gap:9px;align-items:center">
+<input value="{{ newName }}" onChange="{{ onNewName }}" placeholder="ls-240588" style="flex:1;min-width:0;padding:9px 12px;border:1px solid var(--bd,#333941);border-radius:9px;background:var(--panel,#212429);outline:none;font:12.5px 'JetBrains Mono',monospace;color:var(--tx,#dde1e7)">
+<div onClick="{{ openBase }}" style="{{ baseButtonStyle }}"><span style="font:10px 'JetBrains Mono',monospace;letter-spacing:.07em;color:var(--tx3,#828a95)">BASE</span><span style="font:500 12px 'JetBrains Mono',monospace">{{ baseLabel }}</span><span style="font:11px 'JetBrains Mono',monospace;color:var(--acc,#8b9ae0)">▾</span></div>
+<span onClick="{{ createSession }}" style="padding:9px 18px;border-radius:9px;background:var(--acc,#8b9ae0);color:var(--onAcc,#1c1f2b);font-weight:600;font-size:13px;cursor:pointer">Create</span>
+</div>
+<div style="margin-top:14px;padding:11px 13px;border:1px dashed var(--bd,#333941);border-radius:9px;font:11px/1.7 'JetBrains Mono',monospace;color:var(--tx3,#828a95)">то же из терминала: <span style="color:var(--accTx,#a8b3e6)">diffalanche review new ls-240588 --base branch</span></div>
+</div>
+</div>
+</sc-if>
+
+<sc-if value="{{ isReview }}" hint-placeholder-val="{{ true }}">
+<div style="flex:1;display:flex;min-height:0">
+
+<div style="width:308px;flex:none;border-right:1px solid var(--bd,#333941);background:var(--panel,#212429);display:flex;flex-direction:column;min-height:0">
+<div style="flex:none;display:flex;gap:6px;padding:10px 10px 0">
+<span onClick="{{ tabChanges }}" style="{{ tabChangesStyle }}">changes</span>
+<span onClick="{{ tabAll }}" style="{{ tabAllStyle }}">all files</span>
+</div>
+<div style="padding:10px">
+<div style="display:flex;align-items:center;gap:8px;padding:7px 10px;border:1px solid var(--bd,#333941);border-radius:8px;background:var(--bg,#1d2025)">
+<span style="font-size:11px;color:var(--tx3,#828a95)">⌕</span>
+<input value="{{ query }}" onChange="{{ onQuery }}" placeholder="Filter files" style="flex:1;min-width:0;background:transparent;border:0;outline:none;font:11.5px 'JetBrains Mono',monospace;color:var(--tx,#dde1e7)">
+<span style="font:10px 'JetBrains Mono',monospace;color:var(--tx3,#828a95)">{{ shownCount }}</span>
+</div>
+</div>
+<div style="flex:1;overflow-y:auto;padding:0 8px 10px">
+<sc-for list="{{ navRepos }}" as="r" hint-placeholder-count="4">
+<div>
+<div onClick="{{ r.onToggle }}" style="{{ r.rowStyle }}">
+<span style="font:10px 'JetBrains Mono',monospace;color:var(--tx3,#828a95);width:9px;flex:none">{{ r.caret }}</span>
+<span style="font:500 12px 'JetBrains Mono',monospace;min-width:0;overflow:hidden;text-overflow:ellipsis;white-space:nowrap">{{ r.path }}</span>
+<span style="flex:1"></span>
+<span style="{{ r.countStyle }}">{{ r.countLabel }}</span>
+<span style="font:11px 'JetBrains Mono',monospace;color:var(--tx3,#828a95);flex:none">{{ r.filesLabel }}</span>
+</div>
+<sc-if value="{{ r.expanded }}" hint-placeholder-val="{{ true }}">
+<div>
+<sc-for list="{{ r.files }}" as="f" hint-placeholder-count="3">
+<div onClick="{{ f.onOpen }}" style="{{ f.rowStyle }}">
+<span style="{{ f.nameStyle }}">{{ f.name }}</span>
+<span style="flex:1"></span>
+<span style="{{ f.addStyle }}">{{ f.addLabel }}</span>
+<span style="{{ f.delStyle }}">{{ f.delLabel }}</span>
+<span style="{{ f.badgeStyle }}">{{ f.badgeLabel }}</span>
+</div>
+</sc-for>
+</div>
+</sc-if>
+</div>
+</sc-for>
+</div>
+<div style="flex:none;border-top:1px solid var(--bd,#333941);padding:11px 14px;display:flex;align-items:center;gap:9px">
+<span style="width:6px;height:6px;border-radius:50%;background:var(--ok,#5ba37c);animation:dcpulse 2.4s ease-in-out infinite"></span>
+<span style="font:10.5px 'JetBrains Mono',monospace;color:var(--tx2,#9ba3ae)">watching · 127.0.0.1:4880</span>
+</div>
+</div>
+
+<div style="flex:1;min-width:0;display:flex;flex-direction:column;background:var(--bg,#1d2025)">
+<div style="flex:none;padding:14px 22px;border-bottom:1px solid var(--bd,#333941);display:flex;align-items:center;gap:14px">
+<div style="min-width:0">
+<div style="font:600 14.5px 'JetBrains Mono',monospace">{{ repoPath }}</div>
+<div style="margin-top:4px;font:11px 'JetBrains Mono',monospace;color:var(--tx3,#828a95)">{{ repoBaseLine }}</div>
+</div>
+<span style="flex:1"></span>
+<span style="font:11px 'JetBrains Mono',monospace;color:var(--tx2,#9ba3ae)">{{ repoFilesLabel }}</span>
+<span style="font:11px 'JetBrains Mono',monospace;color:var(--addTx,#a9dcc0)">{{ repoAdd }}</span>
+<span style="font:11px 'JetBrains Mono',monospace;color:var(--delTx,#eeb4ad)">{{ repoDel }}</span>
+<div onClick="{{ commentOnRepo }}" style="padding:5px 12px;border:1px solid var(--bd,#333941);border-radius:8px;font-size:11.5px;color:var(--tx2,#9ba3ae);background:var(--panel2,#22262c);cursor:pointer" style-hover="color:var(--tx,#dde1e7)">Comment on repo</div>
+</div>
+
+<div style="flex:1;min-height:0;overflow-y:auto;padding:18px 22px">
+<sc-if value="{{ isEmpty }}" hint-placeholder-val="{{ false }}">
+<div style="padding:56px 0;display:flex;justify-content:center">
+<div style="width:520px;text-align:center">
+<div style="font:600 17px 'Instrument Sans',system-ui,sans-serif">Изменений нет</div>
+<div style="margin-top:8px;font-size:13px;line-height:1.6;color:var(--tx2,#9ba3ae)">Ни в одном из 16 репозиториев нет отличий от выбранной базы. Репозитории без изменений не показываются.</div>
+<div style="margin-top:16px;display:inline-flex;gap:9px">
+<span onClick="{{ openBase }}" style="padding:7px 14px;border-radius:8px;border:1px solid var(--accBd,#3f4a80);background:var(--accBg,#26293a);color:var(--accTx,#a8b3e6);font-size:12.5px;cursor:pointer">Сменить базу</span>
+<span onClick="{{ toggleSessionMenu }}" style="padding:7px 14px;border-radius:8px;border:1px solid var(--bd,#333941);color:var(--tx2,#9ba3ae);font-size:12.5px;cursor:pointer;background:var(--panel,#212429)">Другая сессия</span>
+</div>
+</div>
+</div>
+</sc-if>
+<sc-if value="{{ hasChanges }}" hint-placeholder-val="{{ true }}">
+<div style="border:1px solid var(--bd,#333941);border-radius:10px;overflow:hidden;background:var(--panel,#212429)">
+<div style="display:flex;align-items:center;gap:11px;padding:11px 14px;background:var(--panel3,#282d34);border-bottom:1px solid var(--bd,#333941)">
+<span style="font:500 12.5px 'JetBrains Mono',monospace;min-width:0;overflow:hidden;text-overflow:ellipsis;white-space:nowrap">{{ filePath }}</span>
+<span style="{{ fileBadgeStyle }}">{{ fileBadge }}</span>
+<span style="{{ fileChipStyle }}">{{ fileChip }}</span>
+<span style="flex:1"></span>
+<span onClick="{{ toggleBrowse }}" style="{{ browseStyle }}">{{ browseLabel }}</span>
+<div style="display:flex;border:1px solid var(--bd,#333941);border-radius:6px;overflow:hidden;flex:none">
+<span onClick="{{ setSplit }}" style="{{ splitStyle }}">split</span>
+<span onClick="{{ setUnified }}" style="{{ unifiedStyle }}">unified</span>
+</div>
+</div>
+<div style="overflow-x:auto">
+<div style="{{ diffBody }}">
+<sc-for list="{{ blocks }}" as="b" hint-placeholder-count="10">
+<div>
+<sc-if value="{{ b.isH }}" hint-placeholder-val="{{ false }}">
+<div style="display:flex;align-items:center;gap:10px;padding:6px 14px;background:var(--panel2,#22262c);border-bottom:1px solid var(--bd2,#2c313a);border-top:1px solid var(--bd2,#2c313a);font:11px 'JetBrains Mono',monospace;color:var(--tx3,#828a95)">
+<span>{{ b.text }}</span>
+<span style="flex:1"></span>
+<span onClick="{{ b.onExpand }}" style="{{ b.expandStyle }}">{{ b.expandLabel }}</span>
+</div>
+</sc-if>
+<sc-if value="{{ b.isP }}" hint-placeholder-val="{{ true }}">
+<div style="display:flex;font:12px/22px 'JetBrains Mono',monospace">
+<div style="{{ b.leftWrap }}">
+<div style="{{ b.lStyle }}"><span style="{{ b.lnStyle }}">{{ b.ln }}</span><span style="{{ b.ltStyle }}">{{ b.lt }}</span></div>
+</div>
+<div style="{{ b.rightWrap }}">
+<div onMouseDown="{{ b.onDown }}" onMouseEnter="{{ b.onEnter }}" style="{{ b.rStyle }}"><span style="{{ b.rnStyle }}">{{ b.rn }}</span><span style="{{ b.rtStyle }}">{{ b.rt }}</span><span style="flex:1"></span><span style="{{ b.plusStyle }}">+</span></div>
+</div>
+</div>
+</sc-if>
+<sc-if value="{{ b.isU }}" hint-placeholder-val="{{ false }}">
+<div onClick="{{ b.onComment }}" style="{{ b.uStyle }}"><span style="{{ b.lnStyle }}">{{ b.ln }}</span><span style="{{ b.rnStyle }}">{{ b.rn }}</span><span style="{{ b.rtStyle }}">{{ b.rt }}</span><span style="flex:1"></span><span style="{{ b.plusStyle }}">+</span></div>
+</sc-if>
+<sc-if value="{{ b.isC }}" hint-placeholder-val="{{ false }}">
+<div style="border-top:1px solid var(--bd,#333941);border-bottom:1px solid var(--bd,#333941);background:var(--panel2,#22262c);padding:12px 16px 12px 44px;animation:dcin .16s ease-out;position:sticky;left:0">
+<div style="max-width:560px;border-left:2px solid var(--acc,#8b9ae0);padding-left:14px">
+<div style="display:flex;align-items:center;gap:8px;margin-bottom:11px">
+<span style="font:10.5px 'JetBrains Mono',monospace;color:var(--tx3,#828a95)">{{ composerAnchor }}</span>
+<span style="flex:1"></span>
+<span onClick="{{ closeComposer }}" style="font:10.5px 'JetBrains Mono',monospace;color:var(--tx3,#828a95);cursor:pointer">esc</span>
+</div>
+<div style="display:flex;gap:7px;margin-bottom:11px;flex-wrap:wrap">
+<span onClick="{{ sevAuto }}" style="{{ sevAutoStyle }}">{{ sevAutoLabel }}</span>
+<span onClick="{{ sevCritical }}" style="{{ sevCriticalStyle }}">CRITICAL</span>
+<span onClick="{{ sevWarning }}" style="{{ sevWarningStyle }}">WARNING</span>
+<span onClick="{{ sevNit }}" style="{{ sevNitStyle }}">NIT</span>
+<span onClick="{{ sevQuestion }}" style="{{ sevQuestionStyle }}">QUESTION</span>
+<span style="flex:1"></span>
+<span style="font:10px 'JetBrains Mono',monospace;color:var(--tx3,#828a95);align-self:center">{{ sevSuggest }}</span>
+</div>
+<textarea value="{{ body }}" onChange="{{ onBody }}" onKeyDown="{{ onBodyKey }}" placeholder="Что не так с этими строками?" style="width:100%;height:72px;resize:none;padding:11px 12px;border:1px solid var(--accBd,#3f4a80);border-radius:9px;background:var(--panel,#212429);outline:none;font-family:'Instrument Sans',system-ui,sans-serif;font-size:13px;line-height:1.6;color:var(--tx,#dde1e7)"></textarea>
+<div style="display:flex;align-items:center;gap:10px;margin-top:10px">
+<span onClick="{{ submitComment }}" style="{{ submitStyle }}">Comment</span>
+<span onClick="{{ closeComposer }}" style="padding:7px 14px;border-radius:8px;border:1px solid var(--bd,#333941);color:var(--tx2,#9ba3ae);font-size:12.5px;background:var(--panel3,#282d34);cursor:pointer">Cancel</span>
+<span style="flex:1"></span>
+<span style="font:10.5px 'JetBrains Mono',monospace;color:var(--tx3,#828a95)">{{ composerHint }}</span>
+</div>
+<sc-if value="{{ hasSuggestions }}" hint-placeholder-val="{{ false }}">
+<div style="margin-top:12px;padding-top:11px;border-top:1px solid var(--bd,#333941)">
+<div style="display:flex;align-items:center;gap:8px;margin-bottom:8px">
+<span style="font:500 10px 'JetBrains Mono',monospace;letter-spacing:.07em;color:var(--tx2,#9ba3ae)">FROM YOUR HISTORY</span>
+<span style="font:9.5px 'JetBrains Mono',monospace;color:var(--tx3,#828a95)">{{ sugCount }}</span>
+<span style="flex:1"></span>
+<span style="font:9.5px 'JetBrains Mono',monospace;color:var(--tx3,#828a95)">↑↓ выбрать · TAB принять</span>
+</div>
+<div style="display:flex;flex-direction:column;gap:6px">
+<sc-for list="{{ suggestions }}" as="s" hint-placeholder-count="3">
+<div onClick="{{ s.onAccept }}" style="{{ s.style }}">
+<span style="{{ s.sevStyle }}">{{ s.sev }}</span>
+<span style="font-size:12px;line-height:1.45;color:var(--tx2,#9ba3ae);min-width:0;flex:1">{{ s.body }}</span>
+<span style="font:9.5px 'JetBrains Mono',monospace;color:var(--tx3,#828a95);flex:none">{{ s.meta }}</span>
+<span style="{{ s.keyStyle }}">↵</span>
+</div>
+</sc-for>
+</div>
+</div>
+</sc-if>
+</div>
+</div>
+</sc-if>
+</div>
+</sc-for>
+</div>
+</div>
+</div>
+<div style="height:24px"></div>
+</sc-if>
+</div>
+</div>
+
+<div style="width:392px;flex:none;border-left:1px solid var(--bd,#333941);background:var(--panel,#212429);display:flex;flex-direction:column;min-height:0">
+<div style="flex:none;display:flex;align-items:center;border-bottom:1px solid var(--bd,#333941)">
+<span onClick="{{ railFile }}" style="{{ railFileStyle }}">{{ railFileLabel }}</span>
+<span onClick="{{ railAll }}" style="{{ railAllStyle }}">{{ railAllLabel }}</span>
+<span style="flex:1"></span>
+<span onClick="{{ toggleUnansweredOnly }}" style="{{ unansweredStyle }}">unanswered</span>
+</div>
+
+
+<div style="flex:1;min-height:0;overflow-y:auto;padding:12px;display:flex;flex-direction:column;gap:10px">
+<sc-for list="{{ threadCards }}" as="t" hint-placeholder-count="3">
+<div style="{{ t.cardStyle }}">
+<div style="display:flex;align-items:center;gap:8px;margin-bottom:8px">
+<span style="{{ t.sevStyle }}">{{ t.sevLabel }}</span>
+<span style="{{ t.autoStyle }}">{{ t.autoLabel }}</span>
+<span style="font:10px 'JetBrains Mono',monospace;color:var(--tx3,#828a95);min-width:0;overflow:hidden;text-overflow:ellipsis;white-space:nowrap">{{ t.anchor }}</span>
+<span style="flex:1"></span>
+<span style="{{ t.stateStyle }}">{{ t.stateLabel }}</span>
+</div>
+<div onClick="{{ t.onFocus }}" style="font-size:12.5px;line-height:1.55;color:var(--tx,#dde1e7);cursor:pointer">{{ t.body }}</div>
+<div style="{{ t.lostStyle }}">{{ t.lostText }}</div>
+<div style="{{ t.lostActionsStyle }}"><span onClick="{{ t.onAskModel }}" style="{{ t.askStyle }}">{{ t.askLabel }}</span><span onClick="{{ t.onReanchor }}" style="{{ t.reanchorStyle }}">{{ t.reanchorLabel }}</span><span onClick="{{ t.onAttachFile }}" style="padding:4px 10px;border-radius:7px;border:1px solid var(--bd,#333941);color:var(--tx2,#9ba3ae);font-size:11px;cursor:pointer;background:var(--panel2,#22262c)">К файлу</span></div>
+<div style="{{ t.propStyle }}">
+<div style="display:flex;align-items:center;gap:8px;margin-bottom:6px">
+<span style="font:9.5px 'JetBrains Mono',monospace;color:var(--onAcc,#1c1f2b);background:var(--acc,#8b9ae0);border-radius:4px;padding:1px 6px;flex:none">MODEL</span>
+<span style="font:10.5px 'JetBrains Mono',monospace;color:var(--accTx,#a8b3e6)">{{ t.propHead }}</span>
+</div>
+<div style="font:11px 'JetBrains Mono',monospace;color:var(--addTx,#a9dcc0);background:var(--add,rgba(110,190,145,.15));border-radius:6px;padding:6px 9px;overflow:hidden;text-overflow:ellipsis;white-space:nowrap">{{ t.propText }}</div>
+<div style="margin-top:7px;font-size:12px;line-height:1.5;color:var(--tx2,#9ba3ae)">{{ t.propWhy }}</div>
+<div style="display:flex;gap:7px;margin-top:9px">
+<span onClick="{{ t.onAcceptProp }}" style="padding:4px 11px;border-radius:7px;background:var(--acc,#8b9ae0);color:var(--onAcc,#1c1f2b);font-weight:600;font-size:11px;cursor:pointer">Привязать</span>
+<span onClick="{{ t.onRejectProp }}" style="padding:4px 11px;border-radius:7px;border:1px solid var(--bd,#333941);color:var(--tx2,#9ba3ae);font-size:11px;cursor:pointer">Не то</span>
+</div>
+</div>
+<sc-for list="{{ t.replies }}" as="rp" hint-placeholder-count="1">
+<div style="{{ rp.style }}">
+<div style="display:flex;align-items:baseline;gap:7px;margin-bottom:3px">
+<span style="{{ rp.authorStyle }}">{{ rp.author }}</span>
+<span style="font:9.5px 'JetBrains Mono',monospace;color:var(--tx3,#828a95)">{{ rp.meta }}</span>
+</div>
+<div style="font-size:12px;line-height:1.5;color:var(--tx2,#9ba3ae)">{{ rp.body }}</div>
+</div>
+</sc-for>
+<sc-if value="{{ t.replyOpen }}" hint-placeholder-val="{{ false }}">
+<div style="margin-top:9px">
+<textarea value="{{ replyText }}" onChange="{{ onReply }}" placeholder="Ответить в треде" style="width:100%;height:56px;resize:none;padding:9px 10px;border:1px solid var(--accBd,#3f4a80);border-radius:8px;background:var(--bg,#1d2025);outline:none;font-family:'Instrument Sans',system-ui,sans-serif;font-size:12.5px;line-height:1.5;color:var(--tx,#dde1e7)"></textarea>
+<div style="display:flex;gap:7px;margin-top:8px">
+<span onClick="{{ t.onSendReply }}" style="padding:4px 11px;border-radius:7px;background:var(--acc,#8b9ae0);color:var(--onAcc,#1c1f2b);font-weight:600;font-size:11.5px;cursor:pointer">Send</span>
+<span onClick="{{ closeReply }}" style="padding:4px 11px;border-radius:7px;border:1px solid var(--bd,#333941);color:var(--tx2,#9ba3ae);font-size:11.5px;cursor:pointer">Cancel</span>
+</div>
+</div>
+</sc-if>
+<div style="display:flex;gap:7px;margin-top:10px;align-items:center">
+<span onClick="{{ t.onResolve }}" style="{{ t.resolveStyle }}">{{ t.resolveLabel }}</span>
+<span onClick="{{ t.onReply }}" style="padding:4px 11px;border-radius:7px;border:1px solid var(--bd,#333941);color:var(--tx2,#9ba3ae);font-size:11.5px;background:var(--panel3,#282d34);cursor:pointer">Reply</span>
+<span style="flex:1"></span>
+<span style="font:9.5px 'JetBrains Mono',monospace;color:var(--tx3,#828a95)">{{ t.id }}</span>
+</div>
+</div>
+</sc-for>
+<sc-if value="{{ railEmpty }}" hint-placeholder-val="{{ false }}">
+<div style="padding:14px;border:1px dashed var(--bd,#333941);border-radius:10px;font:11px/1.7 'JetBrains Mono',monospace;color:var(--tx3,#828a95)">{{ railEmptyText }}</div>
+</sc-if>
+</div>
+
+<div style="flex:none;border-top:1px solid var(--bd,#333941);background:var(--bg,#1d2025)">
+<div onClick="{{ toggleFeed }}" style="padding:11px 14px;display:flex;align-items:center;gap:9px;border-bottom:1px solid var(--bd2,#2c313a);cursor:pointer">
+<span style="width:7px;height:7px;border-radius:50%;background:var(--ok,#5ba37c);animation:dcpulse 2.4s ease-in-out infinite"></span>
+<span style="font:500 10.5px 'JetBrains Mono',monospace;letter-spacing:.07em;color:var(--tx2,#9ba3ae)">AGENT ACTIVITY</span>
+<span style="flex:1"></span>
+<span style="font:10px 'JetBrains Mono',monospace;color:var(--nit,#7ec49c)">2 live</span>
+<span style="font:11px 'JetBrains Mono',monospace;color:var(--tx3,#828a95)">{{ feedCaret }}</span>
+</div>
+<sc-if value="{{ feedOpen }}" hint-placeholder-val="{{ true }}">
+<div>
+<div style="padding:12px 14px;display:flex;flex-direction:column;gap:11px;font:11px 'JetBrains Mono',monospace;max-height:210px;overflow-y:auto">
+<sc-for list="{{ events }}" as="e" hint-placeholder-count="4">
+<div style="display:flex;gap:9px;align-items:flex-start">
+<span style="{{ e.dotStyle }}"></span>
+<div style="min-width:0"><span style="{{ e.whoStyle }}">{{ e.who }}</span> <span style="color:var(--tx3,#828a95)">{{ e.verb }}</span> <span style="color:var(--tx,#dde1e7)">{{ e.target }}</span>
+<div style="color:var(--tx3,#828a95);margin-top:3px">{{ e.sub }}</div></div>
+</div>
+</sc-for>
+</div>
+<div style="padding:10px 14px;border-top:1px solid var(--bd2,#2c313a);display:flex;align-items:center;gap:9px">
+<span onClick="{{ simulateAgent }}" style="padding:5px 11px;border-radius:7px;border:1px solid var(--accBd,#3f4a80);background:var(--accBg,#26293a);color:var(--accTx,#a8b3e6);font:10.5px 'JetBrains Mono',monospace;cursor:pointer">simulate agent reply</span>
+</div>
+</div>
+</sc-if>
+</div>
+</div>
+</div>
+
+</sc-if>
+
+<div style="flex:none;height:30px;border-top:1px solid var(--bd,#333941);background:var(--panel2,#22262c);display:flex;align-items:center;gap:18px;padding:0 15px;font:10.5px 'JetBrains Mono',monospace;color:var(--tx3,#828a95)">
+<span><span style="border:1px solid var(--bd,#333941);border-radius:4px;padding:1px 5px;color:var(--tx2,#9ba3ae)">⌘K</span> / <span style="border:1px solid var(--bd,#333941);border-radius:4px;padding:1px 5px;color:var(--tx2,#9ba3ae)">⇧⇧</span> поиск по всему</span>
+<span><span style="border:1px solid var(--bd,#333941);border-radius:4px;padding:1px 5px;color:var(--tx2,#9ba3ae)">J</span><span style="border:1px solid var(--bd,#333941);border-radius:4px;padding:1px 5px;color:var(--tx2,#9ba3ae);margin-left:3px">K</span> next / prev thread</span>
+<span><span style="border:1px solid var(--bd,#333941);border-radius:4px;padding:1px 5px;color:var(--tx2,#9ba3ae)">C</span> comment</span>
+<span><span style="border:1px solid var(--bd,#333941);border-radius:4px;padding:1px 5px;color:var(--tx2,#9ba3ae)">R</span> resolve</span>
+<span><span style="border:1px solid var(--bd,#333941);border-radius:4px;padding:1px 5px;color:var(--tx2,#9ba3ae)">B</span> browse</span>
+<span style="flex:1"></span>
+<span style="font:9.5px 'JetBrains Mono',monospace;color:var(--tx3,#828a95)">demo:</span>
+<span onClick="{{ viewReview }}" style="{{ viewReviewStyle }}">review</span>
+<span onClick="{{ viewEmpty }}" style="{{ viewEmptyStyle }}">no changes</span>
+<span onClick="{{ viewFirstRun }}" style="{{ viewFirstRunStyle }}">first run</span>
+<span>{{ statusRight }}</span>
+</div>
+
+<sc-if value="{{ baseOpen }}" hint-placeholder-val="{{ false }}">
+<div onClick="{{ closeOverlays }}" style="position:fixed;inset:0;z-index:60;background:var(--scrim,rgba(10,11,13,.42))">
+<div onClick="{{ stopClick }}" style="position:absolute;left:300px;top:56px;width:460px;border:1px solid var(--bd,#333941);border-radius:12px;background:var(--panel,#212429);box-shadow:var(--shadow,0 22px 60px rgba(0,0,0,.45));overflow:hidden;animation:dcin .14s ease-out">
+<div style="padding:12px 14px;border-bottom:1px solid var(--bd2,#2c313a);display:flex;align-items:center;gap:9px">
+<span style="font:500 10.5px 'JetBrains Mono',monospace;letter-spacing:.07em;color:var(--tx2,#9ba3ae)">DIFF BASE</span>
+</div>
+<div style="padding:10px 12px;display:flex;flex-direction:column;gap:7px">
+<div onClick="{{ setHead }}" style="{{ baseHeadStyle }}">
+<div style="display:flex;align-items:center;gap:9px"><span style="font:600 12px 'JetBrains Mono',monospace">head</span><span style="flex:1"></span><span style="{{ baseHeadMark }}">✓</span></div>
+<div style="margin-top:4px;font-size:12px;color:var(--tx2,#9ba3ae)">рабочее дерево против HEAD</div>
+</div>
+<div onClick="{{ setBranch }}" style="{{ baseBranchStyle }}">
+<div style="display:flex;align-items:center;gap:9px"><span style="font:600 12px 'JetBrains Mono',monospace">branch</span><span style="flex:1"></span><span style="{{ baseBranchMark }}">✓</span></div>
+<div style="margin-top:4px;font-size:12px;color:var(--tx2,#9ba3ae)">merge-base с выбранной веткой</div>
+<sc-if value="{{ branchPickerOpen }}" hint-placeholder-val="{{ false }}">
+<div style="margin-top:9px;display:flex;flex-direction:column;gap:5px">
+<sc-for list="{{ baseCandidates }}" as="c" hint-placeholder-count="4">
+<div onClick="{{ c.onPick }}" style="{{ c.style }}">
+<span style="{{ c.srcStyle }}">{{ c.src }}</span>
+<span style="font:11.5px 'JetBrains Mono',monospace;color:var(--tx,#dde1e7);min-width:0;flex:1">{{ c.name }}</span>
+<span style="font:9.5px 'JetBrains Mono',monospace;color:var(--tx3,#828a95);flex:none">{{ c.note }}</span>
+</div>
+</sc-for>
+</div>
+</sc-if>
+</div>
+<div onClick="{{ setRef }}" style="{{ baseRefStyle }}">
+<div style="display:flex;align-items:center;gap:9px"><span style="font:600 12px 'JetBrains Mono',monospace">ref</span><span style="flex:1"></span><span style="{{ baseRefMark }}">✓</span></div>
+<div style="margin-top:4px;font-size:12px;color:var(--tx2,#9ba3ae)">тег, коммит или ветка целиком</div>
+<sc-if value="{{ refPickerOpen }}" hint-placeholder-val="{{ false }}">
+<div style="margin-top:9px">
+<input value="{{ refText }}" onChange="{{ onRefText }}" placeholder="v0.3.1 · 4f21ac9 · origin/release/2026.9" style="width:100%;padding:7px 10px;border:1px solid var(--accBd,#3f4a80);border-radius:7px;background:var(--bg,#1d2025);outline:none;font:11.5px 'JetBrains Mono',monospace;color:var(--tx,#dde1e7)">
+</div>
+</sc-if>
+</div>
+</div>
+<div style="padding:11px 14px;border-top:1px solid var(--bd2,#2c313a);background:var(--panel2,#22262c);display:flex;align-items:center;gap:9px">
+<span style="font:10.5px 'JetBrains Mono',monospace;color:var(--tx3,#828a95)">{{ baseSummary }}</span>
+<span style="flex:1"></span>
+<span style="font:9.5px 'JetBrains Mono',monospace;color:var(--tx3,#828a95)">⏎ применить</span>
+<span onClick="{{ applyBase }}" style="padding:6px 14px;border-radius:8px;background:var(--acc,#8b9ae0);color:var(--onAcc,#1c1f2b);font-weight:600;font-size:12px;cursor:pointer">Apply</span>
+</div>
+</div>
+</div>
+</sc-if>
+
+<sc-if value="{{ sessionMenuOpen }}" hint-placeholder-val="{{ false }}">
+<div onClick="{{ closeOverlays }}" style="position:fixed;inset:0;z-index:60;background:var(--scrim,rgba(10,11,13,.42))">
+<div onClick="{{ stopClick }}" style="position:absolute;left:130px;top:56px;width:420px;border:1px solid var(--bd,#333941);border-radius:12px;background:var(--panel,#212429);box-shadow:var(--shadow,0 22px 60px rgba(0,0,0,.45));overflow:hidden;animation:dcin .14s ease-out">
+<div style="padding:12px 14px;border-bottom:1px solid var(--bd2,#2c313a);font:500 10.5px 'JetBrains Mono',monospace;letter-spacing:.07em;color:var(--tx2,#9ba3ae)">REVIEW SESSIONS</div>
+<sc-for list="{{ sessionRows }}" as="s" hint-placeholder-count="3">
+<div onClick="{{ s.onUse }}" style="{{ s.style }}">
+<div style="display:flex;align-items:center;gap:9px">
+<span style="font:600 12.5px 'JetBrains Mono',monospace">{{ s.name }}</span>
+<span style="{{ s.tagStyle }}">{{ s.tag }}</span>
+<span style="flex:1"></span>
+<span style="font:10.5px 'JetBrains Mono',monospace;color:var(--tx2,#9ba3ae);border:1px solid var(--bd,#333941);border-radius:5px;padding:1px 7px">{{ s.mode }}</span>
+</div>
+<div style="margin-top:6px;font-size:12.5px;color:var(--tx2,#9ba3ae)">{{ s.title }}</div>
+<div style="margin-top:8px;display:flex;gap:14px;font:10.5px 'JetBrains Mono',monospace;color:var(--tx3,#828a95)">
+<span>{{ s.repos }}</span><span style="color:var(--crit,#e0837a)">{{ s.open }}</span><span style="color:var(--nit,#7ec49c)">{{ s.resolved }}</span><span>{{ s.when }}</span>
+</div>
+</div>
+</sc-for>
+<div style="padding:12px 14px;border-top:1px solid var(--bd2,#2c313a);display:flex;gap:9px;align-items:center;background:var(--panel2,#22262c)">
+<input value="{{ newName }}" onChange="{{ onNewName }}" placeholder="ls-240588" style="flex:1;min-width:0;padding:8px 11px;border:1px solid var(--bd,#333941);border-radius:8px;background:var(--bg,#1d2025);outline:none;font:12px 'JetBrains Mono',monospace;color:var(--tx,#dde1e7)">
+<span onClick="{{ createSession }}" style="padding:8px 15px;border-radius:8px;background:var(--acc,#8b9ae0);color:var(--onAcc,#1c1f2b);font-weight:600;font-size:12.5px;cursor:pointer">Create</span>
+</div>
+</div>
+</div>
+</sc-if>
+
+<sc-if value="{{ paletteOpen }}" hint-placeholder-val="{{ false }}">
+<div onClick="{{ closeOverlays }}" style="position:fixed;inset:0;z-index:60;background:var(--scrim,rgba(10,11,13,.5));display:flex;justify-content:center;padding-top:96px">
+<div onClick="{{ stopClick }}" style="width:880px;height:60vh;border:1px solid var(--accBd,#3f4a80);border-radius:12px;background:var(--panel,#212429);box-shadow:var(--shadow,0 26px 70px rgba(0,0,0,.5));overflow:hidden;display:flex;flex-direction:column;animation:dcin .14s ease-out">
+<div style="padding:12px 14px;border-bottom:1px solid var(--bd2,#2c313a);display:flex;align-items:center;gap:10px">
+<span style="color:var(--tx3,#828a95)">⌕</span>
+<input autoFocus="{{ true }}" ref="{{ paletteRef }}" value="{{ paletteQuery }}" onChange="{{ onPaletteQuery }}" placeholder="файлы, символы, комментарии — во всех репозиториях" style="flex:1;min-width:0;background:transparent;border:0;outline:none;font:13px 'JetBrains Mono',monospace;color:var(--tx,#dde1e7)">
+<span style="font:10px 'JetBrains Mono',monospace;color:var(--tx3,#828a95)">↑↓ ⏎</span>
+<span style="font:10px 'JetBrains Mono',monospace;color:var(--tx3,#828a95);border:1px solid var(--bd,#333941);border-radius:4px;padding:1px 5px">esc</span>
+</div>
+<div style="flex:1;min-height:0;display:flex">
+<div style="width:380px;flex:none;overflow-y:auto;padding:8px;border-right:1px solid var(--bd2,#2c313a)">
+<sc-for list="{{ paletteResults }}" as="p" hint-placeholder-count="5">
+<div onClick="{{ p.onOpen }}" onMouseEnter="{{ p.onHover }}" style="{{ p.style }}">
+<span style="font:12px 'JetBrains Mono',monospace;color:var(--tx,#dde1e7);min-width:0;overflow:hidden;text-overflow:ellipsis;white-space:nowrap;flex:1">{{ p.name }}</span>
+<span style="{{ p.tagStyle }}">{{ p.tag }}</span>
+</div>
+</sc-for>
+</div>
+<div style="flex:1;min-width:0;display:flex;flex-direction:column">
+<div style="padding:9px 14px;border-bottom:1px solid var(--bd2,#2c313a);display:flex;align-items:center;gap:9px">
+<span style="font:11px 'JetBrains Mono',monospace;color:var(--tx2,#9ba3ae);min-width:0;overflow:hidden;text-overflow:ellipsis;white-space:nowrap">{{ previewTitle }}</span>
+<span style="flex:1"></span>
+<span style="font:9.5px 'JetBrains Mono',monospace;color:var(--tx3,#828a95)">{{ previewMeta }}</span>
+</div>
+<div style="flex:1;min-height:0;overflow:auto;padding:8px 0;font:11.5px/20px 'JetBrains Mono',monospace">
+<sc-for list="{{ previewLines }}" as="l" hint-placeholder-count="8">
+<div style="{{ l.style }}"><span style="width:40px;flex:none;text-align:right;padding-right:11px;color:var(--ln,#767e89)">{{ l.n }}</span><span style="color:var(--code,#bcc2cb);white-space:pre">{{ l.x }}</span></div>
+</sc-for>
+</div>
+<div style="{{ previewNoteStyle }}">{{ previewNote }}</div>
+</div>
+</div>
+</div>
+</div>
+</sc-if>
+
+<sc-if value="{{ exportOpen }}" hint-placeholder-val="{{ false }}">
+<div onClick="{{ closeOverlays }}" style="position:fixed;inset:0;z-index:60;background:var(--scrim,rgba(10,11,13,.5));display:flex;justify-content:center;padding-top:70px">
+<div onClick="{{ stopClick }}" style="width:760px;max-height:74vh;border:1px solid var(--bd,#333941);border-radius:12px;background:var(--panel,#212429);box-shadow:var(--shadow,0 26px 70px rgba(0,0,0,.5));overflow:hidden;display:flex;flex-direction:column;animation:dcin .14s ease-out">
+<div style="padding:13px 16px;border-bottom:1px solid var(--bd2,#2c313a);display:flex;align-items:center;gap:11px">
+<span style="font:500 11px 'JetBrains Mono',monospace;letter-spacing:.07em;color:var(--tx2,#9ba3ae)">EXPORT · OPEN COMMENTS</span>
+<span style="flex:1"></span>
+<div style="display:flex;border:1px solid var(--bd,#333941);border-radius:6px;overflow:hidden;flex:none">
+<span onClick="{{ showRendered }}" style="{{ renderedStyle }}">rendered</span>
+<span onClick="{{ showRaw }}" style="{{ rawStyle }}">raw</span>
+</div>
+<span onClick="{{ copyExport }}" style="padding:5px 12px;border-radius:7px;background:var(--acc,#8b9ae0);color:var(--onAcc,#1c1f2b);font-weight:600;font-size:12px;cursor:pointer">Copy .md</span>
+<span onClick="{{ closeOverlays }}" style="font:10.5px 'JetBrains Mono',monospace;color:var(--tx3,#828a95);cursor:pointer">esc</span>
+</div>
+<sc-if value="{{ exportRendered }}" hint-placeholder-val="{{ true }}">
+<div style="flex:1;overflow-y:auto;padding:20px 22px">
+<sc-for list="{{ exportBlocks }}" as="x" hint-placeholder-count="6">
+<div style="{{ x.wrap }}">
+<sc-if value="{{ x.isH1 }}" hint-placeholder-val="{{ false }}">
+<div style="font:600 19px/1.3 'Instrument Sans',system-ui,sans-serif;letter-spacing:-.01em;color:var(--tx,#dde1e7)">{{ x.text }}</div>
+</sc-if>
+<sc-if value="{{ x.isMeta }}" hint-placeholder-val="{{ false }}">
+<div style="font:11.5px 'JetBrains Mono',monospace;color:var(--tx3,#828a95)">{{ x.text }}</div>
+</sc-if>
+<sc-if value="{{ x.isH2 }}" hint-placeholder-val="{{ false }}">
+<div style="display:flex;align-items:baseline;gap:10px;padding-bottom:7px;border-bottom:1px solid var(--bd,#333941)">
+<span style="font:600 14px 'JetBrains Mono',monospace;color:var(--tx,#dde1e7)">{{ x.text }}</span>
+<span style="font:10.5px 'JetBrains Mono',monospace;color:var(--tx3,#828a95)">{{ x.note }}</span>
+</div>
+</sc-if>
+<sc-if value="{{ x.isItem }}" hint-placeholder-val="{{ false }}">
+<div style="display:flex;gap:11px">
+<span style="{{ x.sevStyle }}">{{ x.sev }}</span>
+<div style="min-width:0">
+<div style="font:11px 'JetBrains Mono',monospace;color:var(--accTx,#a8b3e6)">{{ x.loc }}</div>
+<div style="margin-top:4px;font-size:13px;line-height:1.6;color:var(--tx,#dde1e7)">{{ x.text }}</div>
+</div>
+</div>
+</sc-if>
+<sc-if value="{{ x.isReply }}" hint-placeholder-val="{{ false }}">
+<div style="margin-left:73px;padding:8px 11px;border-left:2px solid var(--accBd,#3f4a80);background:var(--panel2,#22262c);border-radius:0 7px 7px 0">
+<span style="font:600 11px 'JetBrains Mono',monospace;color:var(--accTx,#a8b3e6)">{{ x.who }}</span>
+<span style="font-size:12.5px;line-height:1.55;color:var(--tx2,#9ba3ae)"> {{ x.text }}</span>
+</div>
+</sc-if>
+</div>
+</sc-for>
+</div>
+</sc-if>
+<sc-if value="{{ exportRaw }}" hint-placeholder-val="{{ false }}">
+<div style="flex:1;overflow-y:auto;padding:16px;font:12px/1.75 'JetBrains Mono',monospace;color:var(--tx2,#9ba3ae);white-space:pre-wrap">{{ exportText }}</div>
+</sc-if>
+</div>
+</div>
+</sc-if>
+
+<sc-if value="{{ toast }}" hint-placeholder-val="{{ false }}">
+<div style="position:fixed;left:50%;bottom:52px;transform:translateX(-50%);z-index:70;padding:9px 16px;border:1px solid var(--accBd,#3f4a80);border-radius:9px;background:var(--accBg,#26293a);color:var(--accTx,#a8b3e6);font:11.5px 'JetBrains Mono',monospace;box-shadow:var(--shadowSm,0 12px 32px rgba(0,0,0,.4));animation:dcin .16s ease-out">{{ toast }}</div>
+</sc-if>
+
+</div>
+</x-dc>
+<script type="text/x-dc" data-dc-script data-props="{&quot;$preview&quot;:{&quot;width&quot;:1600,&quot;height&quot;:940}}">
+const DARK = {
+  '--bg':'#1d2025','--panel':'#212429','--panel2':'#22262c','--panel3':'#282d34','--bd':'#333941','--bd2':'#2c313a',
+  '--tx':'#dde1e7','--tx2':'#9ba3ae','--tx3':'#828a95','--acc':'#8b9ae0','--accBg':'#26293a','--accBd':'#3f4a80','--accTx':'#a8b3e6',
+  '--add':'rgba(110,190,145,.15)','--addTx':'#a9dcc0','--del':'rgba(214,110,100,.15)','--delTx':'#eeb4ad',
+  '--crit':'#e0837a','--warn':'#dfa85c','--nit':'#7ec49c','--q':'#8b9ae0','--ok':'#5ba37c','--onAcc':'#1c1f2b',
+  '--sel':'#333c66','--code':'#bcc2cb','--ln':'#767e89','--gap':'#22262c',
+  '--scrim':'rgba(10,11,13,.5)','--shadow':'0 24px 64px rgba(0,0,0,.5)','--shadowSm':'0 12px 32px rgba(0,0,0,.4)'
+};
+const LIGHT = {
+  '--bg':'#f2f0eb','--panel':'#fbfaf7','--panel2':'#efece5','--panel3':'#e7e3da','--bd':'#d8d2c7','--bd2':'#e6e1d8',
+  '--tx':'#2e2d29','--tx2':'#57544d','--tx3':'#736f66','--acc':'#4d5793','--accBg':'#e6e9f5','--accBd':'#aab2d8','--accTx':'#3a4478',
+  '--add':'rgba(58,122,84,.17)','--addTx':'#26603c','--del':'rgba(174,70,60,.15)','--delTx':'#8a352d',
+  '--crit':'#a94a41','--warn':'#8a5f18','--nit':'#376f4e','--q':'#4d5793','--ok':'#3f6b4f','--onAcc':'#fbfaf7',
+  '--sel':'#dbe0f2','--code':'#403d38','--ln':'#8a857a','--gap':'#efece5',
+  '--scrim':'rgba(70,64,54,.26)','--shadow':'0 20px 48px rgba(70,64,54,.20)','--shadowSm':'0 10px 26px rgba(70,64,54,.16)'
+};
+
+const SEV = { critical:'--crit', warning:'--warn', nit:'--nit', question:'--q' };
+
+function d(o,n,t,x){ return {o:o,n:n,t:t,x:x}; }
+
+const FILES = {
+  'group/service-api|src/Cargos/CargoService.cs': [
+    { h:'@@ -30,8 +38,12 @@ public sealed class CargoService', hidden:20, before:[
+        d(26,34,'ctx','    private readonly ICargoRepository _repo;'),
+        d(27,35,'ctx','    private readonly ILogger<CargoService> _log;'),
+        d(28,36,'ctx',''),
+        d(29,37,'ctx','    /// <summary>Creates a cargo with its flags.</summary>')],
+      rows:[
+        d(30,38,'ctx','    public async Task<CargoDto> Create('),
+        d(31,39,'ctx','        CreateCargoRequest request)'),
+        d(32,40,'ctx','    {'),
+        d(33,null,'del','        var flags = request.Flags ?? [];'),
+        d(34,null,'del','        if (flags is null) return null;'),
+        d(null,41,'add','        var flags = request.Flags;'),
+        d(null,42,'add','        if (flags.Count == 0)'),
+        d(null,43,'add','            _log.Debug("cargo without flags");'),
+        d(35,44,'ctx','        var cargo = new Cargo(request.Title, flags);'),
+        d(36,45,'ctx','        await _repo.AddAsync(cargo);'),
+        d(37,46,'ctx','        return cargo.ToDto();'),
+        d(38,47,'ctx','    }')] },
+    { h:'@@ -58,6 +70,9 @@', hidden:21, before:[
+        d(55,67,'ctx','    // flag helpers'),
+        d(56,68,'ctx',''),
+        d(57,69,'ctx','    [Pure]')],
+      rows:[
+        d(58,70,'ctx','    private static bool HasActive('),
+        d(59,71,'ctx','        IReadOnlyList<Flag> flags)'),
+        d(60,null,'del','        => flags.Any(f => f.IsActive);'),
+        d(null,72,'add','        => flags.Count > 0 &&'),
+        d(null,73,'add','           flags.Any(f => f.IsActive);')] }
+  ],
+  'group/service-api|src/Cargos/CargoValidator.cs': [
+    { h:'@@ -12,7 +12,11 @@ public sealed class CargoValidator', hidden:11, before:[
+        d(9,9,'ctx','using FluentValidation;'),
+        d(10,10,'ctx',''),
+        d(11,11,'ctx','public sealed class CargoValidator : AbstractValidator<CreateCargoRequest>')],
+      rows:[
+        d(12,12,'ctx','    public CargoValidator()'),
+        d(13,13,'ctx','    {'),
+        d(14,null,'del','        RuleFor(x => x.Flags).NotNull();'),
+        d(null,14,'add','        RuleFor(x => x.Flags)'),
+        d(null,15,'add','            .NotNull()'),
+        d(null,16,'add','            .Must(f => f.Count <= 32)'),
+        d(null,17,'add','            .WithMessage("too many flags");'),
+        d(15,18,'ctx','        RuleFor(x => x.Title).NotEmpty();'),
+        d(16,19,'ctx','    }')] }
+  ],
+  'group/service-api|src/Contracts/CargoDto.cs': [
+    { h:'@@ -4,3 +4,6 @@', hidden:3, before:[ d(1,1,'ctx','namespace Ati.Cargo.Contracts;'), d(2,2,'ctx','') ],
+      rows:[
+        d(4,4,'ctx','public sealed record CargoDto('),
+        d(5,5,'ctx','    Guid Id,'),
+        d(null,6,'add','    string Title,'),
+        d(null,7,'add','    string[] Flags,'),
+        d(null,8,'add','    DateTimeOffset CreatedAt);'),
+        d(6,null,'del','    string Title);')] }
+  ],
+  'group/service-api|migrations/0021_flags.sql': [
+    { h:'@@ -0,0 +1,7 @@ new file', hidden:0, before:[],
+      rows:[
+        d(null,1,'add','alter table cargo'),
+        d(null,2,'add','    add column flags text[] not null default \'{}\';'),
+        d(null,3,'add',''),
+        d(null,4,'add','create index cargo_flags_gin'),
+        d(null,5,'add','    on cargo using gin (flags);'),
+        d(null,6,'add',''),
+        d(null,7,'add','comment on column cargo.flags is \'active cargo flags\';')] }
+  ],
+  'group/service-web|src/cargo/FlagPicker.tsx': [
+    { h:'@@ -112,9 +112,16 @@ export function FlagPicker', hidden:111, before:[
+        d(109,109,'ctx','type Props = { value: Flag[]; onChange(v: Flag[]): void };'),
+        d(110,110,'ctx',''),
+        d(111,111,'ctx','export function FlagPicker({ value, onChange }: Props) {')],
+      rows:[
+        d(112,112,'ctx','  const [tab, setTab] = useState<Tab>("active");'),
+        d(113,null,'del','  const [picked, setPicked] = useState<Flag[]>([]);'),
+        d(null,113,'add','  const picked = useCargoStore(s => s.pickedFlags);'),
+        d(null,114,'add','  const setPicked = useCargoStore(s => s.setPickedFlags);'),
+        d(114,115,'ctx',''),
+        d(115,116,'ctx','  const toggle = (f: Flag) =>'),
+        d(116,117,'ctx','    setPicked(prev =>'),
+        d(117,118,'ctx','      prev.includes(f) ? prev.filter(x => x !== f) : [...prev, f]);'),
+        d(118,119,'ctx',''),
+        d(null,120,'add','  useEffect(() => onChange(picked), [picked, onChange]);'),
+        d(119,121,'ctx','  return ('),
+        d(120,122,'ctx','    <div className="flag-picker">')] }
+  ],
+  'group/service-web|src/api/client.ts': [
+    { h:'@@ -44,4 +44,7 @@', hidden:43, before:[ d(41,41,'ctx','export const api = {'), d(42,42,'ctx','  cargo: {'), d(43,43,'ctx','') ],
+      rows:[
+        d(44,44,'ctx','    create: (body: CreateCargo) =>'),
+        d(45,null,'del','      post<CargoDto>("/cargo", body),'),
+        d(null,45,'add','      post<CargoDto>("/cargo", {'),
+        d(null,46,'add','        ...body,'),
+        d(null,47,'add','        flags: body.flags ?? [],'),
+        d(null,48,'add','      }),'),
+        d(46,49,'ctx','  },')] }
+  ],
+  'group/service-billing|src/Jobs/InvoiceJob.cs': [
+    { h:'@@ -77,5 +77,9 @@ public sealed class InvoiceJob', hidden:76, before:[ d(74,74,'ctx','    // tariff lookup'), d(75,75,'ctx',''), d(76,76,'ctx','    [Cron("0 4 * * *")]') ],
+      rows:[
+        d(77,77,'ctx','    public async Task Run(CancellationToken ct)'),
+        d(78,78,'ctx','    {'),
+        d(79,null,'del','        var rows = await _db.Query<Row>(Sql.All);'),
+        d(null,79,'add','        var rows = await _db.Query<Row>('),
+        d(null,80,'add','            Sql.WithFlags, new { flags = _opts.Flags });'),
+        d(null,81,'add','        _metrics.Observe("invoice.rows", rows.Count);'),
+        d(80,82,'ctx','        foreach (var r in rows) await Emit(r, ct);'),
+        d(81,83,'ctx','    }')] }
+  ],
+  'infra/terraform|cargo-api.tf': [
+    { h:'@@ -21,3 +21,6 @@ resource "kubernetes_deployment"', hidden:20, before:[ d(18,18,'ctx','  spec {'), d(19,19,'ctx','    container {'), d(20,20,'ctx','      name  = "cargo-api"') ],
+      rows:[
+        d(21,21,'ctx','      image = var.cargo_api_image'),
+        d(null,22,'add','      env {'),
+        d(null,23,'add','        name  = "CARGO_FLAGS_ENABLED"'),
+        d(null,24,'add','        value = "true"'),
+        d(22,25,'ctx','      }'),
+        d(23,null,'del','      resources { limits = { cpu = "1" } }')] }
+  ]
+};
+
+const PLAIN = {
+  'group/service-api|src/Cargos/CargoMapper.cs':[
+    'public static class CargoMapper','{','    public static CargoDto ToDto(this Cargo c)','        => new(','            c.Id,','            c.Title,','            c.Flags.Select(f => f.Code).ToArray(),','            c.CreatedAt);','','    public static Cargo FromRequest(','        CreateCargoRequest r)','        => new(r.Title, r.Flags);','}'],
+  'group/service-api|src/Cargos/ICargoRepository.cs':[
+    'public interface ICargoRepository','{','    Task AddAsync(Cargo cargo);','    Task<Cargo?> FindAsync(Guid id);','    Task<IReadOnlyList<Cargo>> ByFlagAsync(string flag);','}'],
+  'group/service-web|src/cargo/flags.ts':[
+    'export type Flag = "fragile" | "adr" | "oversize" | "insured";','','export const ALL_FLAGS: Flag[] = [','  "fragile",','  "adr",','  "oversize",','  "insured",','];']
+};
+
+const REPOS = [
+  { path:'group/service-api', branch:'feat/cargo-flags', mb:'4f21ac9',
+    files:[
+      {p:'src/Cargos/CargoService.cs', add:42, del:8},
+      {p:'src/Cargos/CargoValidator.cs', add:17, del:2},
+      {p:'src/Contracts/CargoDto.cs', add:6, del:1},
+      {p:'migrations/0021_flags.sql', add:7, del:0, isNew:true}],
+    extra:['src/Cargos/CargoMapper.cs','src/Cargos/ICargoRepository.cs'] },
+  { path:'group/service-web', branch:'feat/cargo-flags', mb:'9c02b71',
+    files:[
+      {p:'src/cargo/FlagPicker.tsx', add:88, del:12},
+      {p:'src/api/client.ts', add:9, del:3}],
+    extra:['src/cargo/flags.ts'] },
+  { path:'group/service-billing', branch:'main', mb:'—',
+    files:[{p:'src/Jobs/InvoiceJob.cs', add:11, del:4}], extra:[] },
+  { path:'infra/terraform', branch:'feat/cargo-flags', mb:'b3f8e10',
+    files:[{p:'cargo-api.tf', add:6, del:2}], extra:[] }
+];
+
+const BASES = [
+  { src:'origin', name:'main', note:'default branch' },
+  { src:'origin', name:'develop', note:'' },
+  { src:'origin', name:'release/2026.9', note:'' },
+  { src:'upstream', name:'main', note:'второй remote' },
+  { src:'local', name:'main', note:'без сети' }
+];
+
+const SYMBOLS = [
+  { name:'CargoService.Create', repo:'group/service-api', path:'src/Cargos/CargoService.cs' },
+  { name:'CargoService.HasActive', repo:'group/service-api', path:'src/Cargos/CargoService.cs' },
+  { name:'CargoValidator', repo:'group/service-api', path:'src/Cargos/CargoValidator.cs' },
+  { name:'CargoMapper.ToDto', repo:'group/service-api', path:'src/Cargos/CargoMapper.cs', plain:true },
+  { name:'FlagPicker', repo:'group/service-web', path:'src/cargo/FlagPicker.tsx' },
+  { name:'InvoiceJob.Run', repo:'group/service-billing', path:'src/Jobs/InvoiceJob.cs' }
+];
+
+const SUGGESTIONS = [
+  { sev:'warning', meta:'ls-239118 · 0.91', body:'Локальный стейт переживёт только один рендер таба — подними его в стор, иначе выбор пользователя молча теряется.' },
+  { sev:'warning', meta:'ls-238004 · 0.84', body:'Состояние формы в useState теряется при размонтировании, нужен внешний источник.' },
+  { sev:'nit', meta:'ls-236921 · 0.72', body:'Вынеси в отдельный хук, компонент уже держит четыре стейта.' }
+];
+
+const AGENT_LINES = [
+  'Поправил: убрал недостижимую ветку, контракт гарантирует непустую коллекцию.',
+  'Готово — состояние перенесено в стор,选 выбор сохраняется между табами.',
+  'Не согласен: ограничение в 32 флага задано в контракте, валидатор его дублирует намеренно — так ошибка приходит до обращения к базе.'
+];
+
+let SEQ = 100;
+const nid = p => p + '_' + (SEQ++).toString(36) + Math.floor(Math.random()*46656).toString(36);
+
+function seedThreads(now) {
+  return [
+    { id:'c_7f3k2q', repo:'group/service-api', path:'src/Cargos/CargoService.cs', line:42, endLine:45, sev:'warning', status:'open',
+      author:'kim.p', body:'Проверка на пустоту недостижима: Flags в контракте non-nullable, коллекция всегда приходит. Лог в этой ветке только шумит.',
+      at:now-5400000, replies:[{author:'claude', role:'agent', body:'Убрал ветку с логом, контракт гарантирует непустую коллекцию. Валидатор теперь единственное место проверки.', at:now-3600000}] },
+    { id:'c_2m8x1v', repo:'group/service-api', path:'src/Cargos/CargoService.cs', line:72, sev:'question', status:'open',
+      author:'kim.p', body:'Зачем два условия, если Any по пустой коллекции уже false?', at:now-2700000, replies:[] },
+    { id:'c_5t0p9d', repo:'group/service-api', path:'src/Cargos/CargoService.cs', line:null, sev:'nit', status:'resolved',
+      author:'kim.p', body:'Порядок using-ов не по конвенции.', at:now-9000000, replies:[] },
+    { id:'c_9a1m4x', repo:'group/service-web', path:'src/cargo/FlagPicker.tsx', line:113, sev:'critical', status:'open',
+      author:'kim.p', body:'Стейт флагов держится в компоненте — при переключении таба выбор теряется без предупреждения.',
+      at:now-1800000, replies:[{author:'codex', role:'agent', body:'Перенёс в useCargoStore, выбор живёт между табами.', at:now-600000}] },
+    { id:'c_4k7w2s', repo:'group/service-billing', path:'src/Jobs/InvoiceJob.cs', line:80, sev:'critical', status:'open',
+      author:'kim.p', body:'Запрос теперь тянет флаги из опций — на пустом списке вернётся весь набор строк.', at:now-900000, replies:[] },
+    { id:'c_3z6h8k', repo:'group/service-api', path:'src/Cargos/CargoService.cs', line:null, sev:'warning', status:'orphaned',
+      anchorText:'if (flags is null) return null;', author:'kim.p',
+      body:'Эта проверка дублирует валидатор — уберите её вместе с фолбэком.', at:now-7200000, replies:[] },
+    { id:'c_8r3n5c', repo:'infra/terraform', path:'cargo-api.tf', line:22, sev:'nit', status:'open',
+      author:'kim.p', body:'Лимиты по CPU убраны — это осознанно или потерялось при мердже?', at:now-1200000, replies:[] }
+  ];
+}
+
+class Component extends DCLogic {
+  constructor(props){
+    super(props);
+    const now = Date.now();
+    this._pref = React.createRef();
+    this.state = {
+      theme:'dark', mode:'branch', baseOpen:false, baseSrc:'origin', baseName:'main', refText:'v0.3.1',
+      sessions:[
+        { id:'ls-240372', title:'Cargo flags across services', mode:'branch', repos:4, resolved:31, when:'updated 18:30', threads:seedThreads(now) },
+        { id:'ls-239118', title:'Tariff import rewrite', mode:'head', repos:3, resolved:44, when:'28 Aug', threads:[] },
+        { id:'spike-bun-perf', title:'Phase 0 budgets check', mode:'ref', repos:21, resolved:9, when:'12 Aug', threads:[] }
+      ],
+      sessionId:'ls-240372',
+      expanded:{'group/service-api':true,'group/service-web':true},
+      repo:'group/service-api', path:'src/Cargos/CargoService.cs',
+      sidebarTab:'changes', browse:false, plainPath:null, plainRev:'work',
+      diffView:'split', query:'', railScope:'file', unansweredOnly:false,
+      composer:null, composerEnd:null, sel:null, dragging:false, sev:'auto', body:'', sugIdx:0, focusId:'c_7f3k2q',
+      replyId:null, replyText:'',
+      expandedHunks:{}, feedOpen:false,
+      sessionMenuOpen:false, paletteOpen:false, paletteQuery:'', palIdx:0, exportOpen:false,
+      newName:'', toast:null, tick:0, exportView:'rendered', proposing:null, proposal:null, view:'review', warningsOn:true, reanchorId:null,
+      events:[
+        { who:'claude', verb:'is editing', target:'group/service-api', sub:'CargoValidator.cs', at:now-12000, kind:'live' },
+        { who:'codex', verb:'is editing', target:'group/service-web', sub:'FlagPicker.tsx', at:now-40000, kind:'live' },
+        { who:'codex', verb:'replied in', target:'FlagPicker.tsx L113', sub:'service-web', at:now-600000, kind:'reply' },
+        { who:'diff changed', verb:'in', target:'infra/terraform', sub:'+2 −1', at:now-180000, kind:'diff' }
+      ]
+    };
+  }
+
+  focusPalette(){
+    const tryFocus = n => {
+      const el = (this._pref && this._pref.current) || document.querySelector('input[placeholder^="файлы"]');
+      if (el) { el.focus(); return; }
+      if (n < 8) setTimeout(() => tryFocus(n + 1), 30);
+    };
+    tryFocus(0);
+  }
+  componentDidMount(){
+    this._t = setInterval(() => this.setState(s => ({ tick:s.tick+1 })), 5000);
+    document.title = 'diffalanche';
+    this._k = e => this.onKey(e);
+    this._u = () => this.endSel();
+    document.addEventListener('keydown', this._k);
+    document.addEventListener('mouseup', this._u);
+  }
+  componentWillUnmount(){ clearInterval(this._t); document.removeEventListener('keydown', this._k); document.removeEventListener('mouseup', this._u); if(this._toastT) clearTimeout(this._toastT); if(this._pt) clearTimeout(this._pt); }
+
+  onKey(e){
+    const tag = (e.target && e.target.tagName) || '';
+    const typing = tag === 'INPUT' || tag === 'TEXTAREA';
+    if ((e.metaKey || e.ctrlKey) && e.key.toLowerCase() === 'k'){ e.preventDefault(); const willOpen = !this.state.paletteOpen; this.setState({ paletteOpen:willOpen, paletteQuery:'' }); if (willOpen) this.focusPalette(); return; }
+    if (e.key === 'Shift'){
+      const t = Date.now();
+      if (this._shift && t - this._shift < 400){ this._shift = 0; this.setState({ paletteOpen:true, paletteQuery:'' }); this.focusPalette(); return; }
+      this._shift = t;
+      return;
+    }
+    if ((e.metaKey || e.ctrlKey) && e.key === 'Enter' && this.state.composer){ e.preventDefault(); this.submit(); return; }
+    if (this.state.paletteOpen){
+      const list = this.paletteList();
+      if (e.key === 'ArrowDown' && list.length){ e.preventDefault(); this.setState(s2 => ({ palIdx:(s2.palIdx + 1) % list.length })); return; }
+      if (e.key === 'ArrowUp' && list.length){ e.preventDefault(); this.setState(s2 => ({ palIdx:(s2.palIdx - 1 + list.length) % list.length })); return; }
+      if (e.key === 'Enter' && list.length){ e.preventDefault(); const it = list[Math.min(this.state.palIdx, list.length - 1)]; if (it) it.open(); return; }
+    }
+    if (this.state.baseOpen && e.key === 'Enter'){ e.preventDefault(); this.applyBase(); return; }
+    if (e.key === 'Escape'){ this.setState({ paletteOpen:false, exportOpen:false, sessionMenuOpen:false, baseOpen:false, composer:null, composerEnd:null, replyId:null }); return; }
+    if (typing) return;
+    const k = e.key.toLowerCase();
+    if (k === 'j' || k === 'k'){ e.preventDefault(); this.cycle(k === 'j' ? 1 : -1); }
+    else if (k === 'c'){ e.preventDefault(); this.openComposerAt(this.firstAddLine()); }
+    else if (k === 'b'){ e.preventDefault(); this.setState(s => s.browse ? { browse:false, plainPath:null, sidebarTab:'changes' } : { sidebarTab:'all', browse:true, plainPath:(REPOS.find(x => x.path === s.repo).extra || [])[0] || null }); }
+    else if (k === 'r'){ e.preventDefault(); const t = this.threads().find(x => x.id === this.state.focusId); if (t) this.toggleResolve(t.id); }
+  }
+
+  guessAnchor(t){
+    const words = (t.anchorText || '').toLowerCase().match(/[a-z_]{3,}/g) || [];
+    let best = { score:-1, line:null, text:'' };
+    (FILES[t.repo + '|' + t.path] || []).forEach(h => {
+      (h.before || []).concat(h.rows).forEach(rw => {
+        if (rw.n == null) return;
+        const lw = (rw.x || '').toLowerCase();
+        const sc = words.filter(w => lw.indexOf(w) >= 0).length + (rw.t === 'add' ? 0.5 : 0);
+        if (sc > best.score) best = { score:sc, line:rw.n, text:(rw.x || '').trim() };
+      });
+    });
+    return { line:best.line, text:best.text, conf:Math.min(0.97, 0.52 + best.score * 0.13).toFixed(2),
+      why:'Прежняя строка удалена. Ближайшая по смыслу проверка живёт здесь — тот же флаг, та же ветка условия.' };
+  }
+  askModel(id){
+    const t = this.threads().find(x => x.id === id);
+    if (!t) return;
+    this.setState({ proposing:id, proposal:null });
+    if (this._pt) clearTimeout(this._pt);
+    this._pt = setTimeout(() => {
+      const g = this.guessAnchor(t);
+      this.setState({ proposing:null, proposal:{ id:id, line:g.line, text:g.text, conf:g.conf, why:g.why } });
+    }, 900);
+  }
+  acceptProposal(){
+    const p = this.state.proposal;
+    if (!p) return;
+    this.setState(s => ({
+      proposal:null, focusId:p.id,
+      sessions: s.sessions.map(x => x.id !== s.sessionId ? x : Object.assign({}, x, {
+        threads: x.threads.map(t => t.id !== p.id ? t : Object.assign({}, t, { line:p.line, endLine:null, status:'open', reanchored:true, anchorText:null }))
+      }))
+    }));
+    this.flash('Модель привязала комментарий к L' + p.line);
+  }
+  paletteList(){
+    const st = this.state, pq = (st.paletteQuery || '').trim().toLowerCase();
+    const hit = t => !pq || t.toLowerCase().indexOf(pq) >= 0;
+    const out = [];
+    REPOS.forEach(rr => {
+      rr.files.forEach(f => { if (hit(f.p + ' ' + rr.path)) out.push({ kind:'file', name:f.p, repo:rr.path, path:f.p, tag:'file', open: () => this.openFile(rr.path, f.p) }); });
+      (rr.extra || []).forEach(p => { if (hit(p + ' ' + rr.path)) out.push({ kind:'plain', name:p, repo:rr.path, path:p, tag:'file · unchanged', open: () => this.openPlain(rr.path, p) }); });
+    });
+    SYMBOLS.forEach(x => { if (hit(x.name + ' ' + x.repo)) out.push({ kind:'symbol', name:x.name, repo:x.repo, path:x.path, plain:!!x.plain, tag:'symbol', open: () => x.plain ? this.openPlain(x.repo, x.path) : this.openFile(x.repo, x.path) }); });
+    this.threads().forEach(x => { if (hit(x.body + ' ' + (x.path || '') + ' ' + x.repo)) out.push({ kind:'comment', name:x.body, repo:x.repo, path:x.path, line:x.line, thread:x, tag: x.status === 'orphaned' ? 'comment · orphaned' : 'comment',
+      open: () => this.setState({ repo:x.repo, path:x.path || this.state.path, browse:false, plainPath:null, focusId:x.id, railScope:'file', paletteOpen:false }) }); });
+    return out.slice(0, 12);
+  }
+  previewOf(item){
+    if (!item) return { title:'', meta:'', lines:[], note:'' };
+    const key = item.repo + '|' + item.path;
+    const plain = PLAIN[key];
+    let lines = [];
+    if (plain) lines = plain.map((x, i) => ({ n:i + 1, x:x }));
+    else (FILES[key] || []).forEach(h => (h.before || []).concat(h.rows).forEach(rw => { if (rw.n != null) lines.push({ n:rw.n, x:rw.x, add:rw.t === 'add' }); }));
+    let hi = null;
+    if (item.kind === 'symbol'){
+      const short = item.name.split('.').slice(-1)[0].toLowerCase();
+      const found = lines.find(l => (l.x || '').toLowerCase().indexOf(short) >= 0);
+      hi = found ? found.n : null;
+    } else if (item.kind === 'comment') hi = item.line;
+    const at = hi != null ? Math.max(0, lines.findIndex(l => l.n === hi) - 4) : 0;
+    return {
+      title: item.path || item.repo, meta: item.repo + (hi ? ' · L' + hi : ''),
+      lines: lines.slice(at, at + 12).map(l => ({ n:l.n, x:l.x, hi:l.n === hi, add:l.add })),
+      note: item.kind === 'comment' ? item.thread.body : plain ? 'рабочее дерево · вне ревью' : ''
+    };
+  }
+  applyBase(){
+    const st = this.state;
+    this.setState({ baseOpen:false });
+    this.flash(st.mode === 'branch' ? 'base: merge-base с ' + st.baseSrc + '/' + st.baseName
+      : st.mode === 'ref' ? 'base: ref ' + (st.refText || 'HEAD') : 'base: working tree vs HEAD');
+  }
+  session(){ return this.state.sessions.find(s => s.id === this.state.sessionId); }
+  threads(){ return this.session().threads; }
+  repoObj(){ return REPOS.find(r => r.path === this.state.repo) || REPOS[0]; }
+  hunks(){ return FILES[this.state.repo + '|' + this.state.path] || []; }
+  firstAddLine(){
+    for (const h of this.hunks()) for (const r of h.rows) if (r.t === 'add') return r.n;
+    return 1;
+  }
+  patchThreads(fn){
+    this.setState(s => ({ sessions: s.sessions.map(x => x.id === s.sessionId ? Object.assign({}, x, { threads: fn(x.threads) }) : x) }));
+  }
+  flash(msg){
+    if (this._toastT) clearTimeout(this._toastT);
+    this.setState({ toast:msg });
+    this._toastT = setTimeout(() => this.setState({ toast:null }), 2200);
+  }
+  rel(at){
+    const s = Math.max(1, Math.round((Date.now() - at)/1000));
+    if (s < 60) return s + 's ago';
+    const m = Math.round(s/60); if (m < 60) return m + 'm ago';
+    const h = Math.round(m/60); if (h < 24) return h + 'h ago';
+    return Math.round(h/24) + 'd ago';
+  }
+  cycle(dir){
+    const list = this.threads().filter(t => t.status === 'open');
+    if (!list.length) return;
+    const i = list.findIndex(t => t.id === this.state.focusId);
+    const t = list[(i + dir + list.length) % list.length] || list[0];
+    this.setState({ focusId:t.id, repo:t.repo, path:t.path, browse:false, railScope:'file' });
+  }
+  openComposerAt(line, extend){
+    if (!line) return;
+    if (extend && this.state.composer){ this.setState({ composerEnd:line }); return; }
+    this.setState({ composer:line, composerEnd:null, sel:null, body:'', sev:'auto' });
+  }
+  startSel(line, ev){
+    if (ev && ev.button) return;
+    if (this.state.reanchorId){
+      const id = this.state.reanchorId;
+      this.setState(s => ({
+        reanchorId:null, focusId:id,
+        sessions: s.sessions.map(x => x.id !== s.sessionId ? x : Object.assign({}, x, {
+          threads: x.threads.map(t => t.id !== id ? t : Object.assign({}, t, { line:line, endLine:null, status:'open', reanchored:true, anchorText:null }))
+        }))
+      }));
+      this.flash('Комментарий привязан к L' + line);
+      return;
+    }
+    if (ev && ev.shiftKey && this.state.composer){ this.setState({ composerEnd:line }); return; }
+    this._drag = { a:line, b:line };
+    this.setState({ sel:{ a:line, b:line }, dragging:true, composer:null, composerEnd:null });
+  }
+  extendSel(line){
+    if (!this.state.dragging || !this._drag) return;
+    this._drag.b = line;
+    this.setState({ sel:{ a:this._drag.a, b:line } });
+  }
+  endSel(){
+    if (!this.state.dragging) return;
+    const dg = this._drag || { a:null, b:null };
+    const a = Math.min(dg.a, dg.b), b = Math.max(dg.a, dg.b);
+    this.setState({ dragging:false, sel:null, composer:a, composerEnd: b > a ? b : null, body:'', sev:'auto', sugIdx:0 });
+  }
+  range(){
+    const st = this.state;
+    if (st.sel) return { a:Math.min(st.sel.a, st.sel.b), b:Math.max(st.sel.a, st.sel.b), live:true };
+    const a = st.composer;
+    if (!a) return null;
+    const b = st.composerEnd || a;
+    return { a:Math.min(a,b), b:Math.max(a,b), live:false };
+  }
+  labelOf(text){
+    const t = (text || '').toLowerCase();
+    if (/\?|зачем|почему|правда ли|это осознанно/.test(t)) return 'question';
+    if (/теряется|потеряется|недостижим|весь набор|падёт|упадёт|null|утечк|небезопасн|весь список/.test(t)) return 'critical';
+    if (/порядок|вынеси|переимен|конвенц|стиль|формат|нейминг|лишн/.test(t)) return 'nit';
+    const sim = this.ranked()[0];
+    return sim ? sim.sev : 'warning';
+  }
+  ranked(){
+    const q = (this.state.body || '').toLowerCase().split(/[^a-z\u0430-\u044f\u04510-9]+/).filter(w => w.length > 3);
+    if (!q.length) return SUGGESTIONS;
+    return SUGGESTIONS.map(s => ({ s:s, n:q.filter(w => s.body.toLowerCase().indexOf(w) >= 0).length }))
+      .sort((x, y) => y.n - x.n).map(x => x.s);
+  }
+  submit(){
+    const body = this.state.body.trim();
+    if (!body) { this.flash('Комментарий пустой'); return; }
+    const rg = this.range();
+    const auto = this.state.sev === 'auto';
+    const t = { id:nid('c'), repo:this.state.repo, path:this.state.path, line:rg.a, endLine: rg.b > rg.a ? rg.b : null, sev: auto ? this.labelOf(body) : this.state.sev, auto:auto, status:'open', author:'kim.p', body:body, at:Date.now(), replies:[] };
+    this.patchThreads(list => [t].concat(list));
+    this.setState({ composer:null, composerEnd:null, body:'', focusId:t.id });
+    this.flash('Комментарий сохранён в reviews/' + this.state.sessionId + '.json');
+  }
+  toggleResolve(id){
+    this.patchThreads(list => list.map(t => t.id === id ? Object.assign({}, t, { status: t.status === 'open' ? 'resolved' : 'open' }) : t));
+  }
+  sendReply(id){
+    const body = this.state.replyText.trim();
+    if (!body) return;
+    this.patchThreads(list => list.map(t => t.id === id ? Object.assign({}, t, { replies: t.replies.concat([{ author:'kim.p', role:'human', body:body, at:Date.now() }]) }) : t));
+    this.setState({ replyId:null, replyText:'' });
+  }
+  simulate(){
+    const target = this.threads().find(t => t.status === 'open' && (!t.replies.length || t.replies[t.replies.length-1].role === 'human'));
+    if (!target){ this.flash('Нечего отвечать — все треды уже с ответом агента'); return; }
+    const who = target.repo === 'group/service-web' ? 'codex' : 'claude';
+    const line = AGENT_LINES[Math.floor(Math.random()*AGENT_LINES.length)];
+    this.patchThreads(list => list.map(t => t.id === target.id ? Object.assign({}, t, { replies: t.replies.concat([{ author:who, role:'agent', body:line, at:Date.now() }]) }) : t));
+    const relabel = target.auto ? this.labelOf(target.body) : null;
+    if (relabel) this.patchThreads(list => list.map(t => t.id === target.id ? Object.assign({}, t, { sev:relabel, auto:false, labelledBy:who }) : t));
+    const place = (target.path ? target.path.split('/').slice(-1)[0] : target.repo) + (target.line ? ' L' + target.line : '');
+    this.setState(s => ({ events:[{ who:who, verb:'replied in', target:place, sub:target.repo.split('/').slice(-1)[0], at:Date.now(), kind:'reply' }].concat(s.events).slice(0,8) }));
+    this.flash(who + ' ответил · ' + place);
+  }
+  openFile(repo, path){
+    this.setState({ repo:repo, path:path, browse:false, plainPath:null, composer:null, paletteOpen:false, railScope:'file' });
+  }
+  openPlain(repo, path){
+    this.setState({ repo:repo, plainPath:path, browse:true, sidebarTab:'all', composer:null, paletteOpen:false });
+  }
+
+  exportMd(){
+    const open = this.threads().filter(t => t.status === 'open');
+    const byRepo = {};
+    open.forEach(t => { (byRepo[t.repo] = byRepo[t.repo] || []).push(t); });
+    let out = '# Review ' + this.state.sessionId + ' — ' + this.session().title + '\n\nbase: ' + this.state.mode + ' · ' + open.length + ' open comments\n';
+    Object.keys(byRepo).forEach(r => {
+      out += '\n## ' + r + '\n';
+      byRepo[r].forEach(t => {
+        const loc = t.path ? t.path + (t.line ? ':' + t.line : '') : '(repository)';
+        out += '\n- **' + t.sev + '** `' + loc + '` — ' + t.body + '\n';
+        t.replies.forEach(rp => { out += '  - ' + rp.author + ' (' + (rp.role || 'human') + '): ' + rp.body + '\n'; });
+      });
+    });
+    return out;
+  }
+
+  renderVals(){
+    const st = this.state, V = st.theme === 'dark' ? DARK : LIGHT;
+    const vars = Object.assign({}, V, { height:'100vh', minWidth:'1560px', display:'flex', flexDirection:'column', background:'var(--bg)', color:'var(--tx)', fontSize:'13px', overflow:'hidden' });
+    const mono = "'JetBrains Mono',monospace";
+    const threads = this.threads();
+    const openCount = threads.filter(t => t.status === 'open').length;
+    const awaiting = threads.filter(t => t.status === 'open' && t.replies.length && t.replies[t.replies.length-1].role === 'agent').length;
+
+    const themeSeg = on => ({ padding:'6px 10px', fontSize:'12px', background: on ? 'var(--bd)' : 'transparent', color: on ? 'var(--tx)' : 'var(--tx3)' });
+    const tab = on => ({ flex:1, textAlign:'center', padding:'6px 0', font:'500 11.5px ' + mono, borderRadius:'7px', cursor:'pointer',
+      background: on ? 'var(--panel3)' : 'transparent', color: on ? 'var(--tx)' : 'var(--tx3)' });
+    const smallBtn = { padding:'3px 10px', font:'10.5px ' + mono, cursor:'pointer', flex:'none' };
+    const demoTab = on => ({ padding:'1px 7px', borderRadius:'5px', cursor:'pointer', font:'9.5px ' + mono,
+      border:'1px solid ' + (on ? 'var(--accBd)' : 'transparent'), background: on ? 'var(--accBg)' : 'transparent', color: on ? 'var(--accTx)' : 'var(--tx3)' });
+    const baseRow = on => ({ padding:'10px 11px', borderRadius:'9px', cursor:'pointer',
+      border:'1px solid ' + (on ? 'var(--accBd)' : 'var(--bd)'), background: on ? 'var(--accBg)' : 'var(--panel3)' });
+    const mark = on => on ? { font:'11px ' + mono, color:'var(--accTx)' } : { display:'none' };
+
+    // ---- sidebar
+    const q = st.query.trim().toLowerCase();
+    let shown = 0;
+    const navRepos = REPOS.map(r => {
+      const cnt = threads.filter(t => t.repo === r.path && t.status === 'open').length;
+      const inAll = st.sidebarTab === 'all';
+      const list = inAll
+        ? r.files.map(f => ({ p:f.p, add:f.add, del:f.del, isNew:f.isNew })).concat((r.extra||[]).map(p => ({ p:p, unchanged:true })))
+        : r.files.slice();
+      const files = list.filter(f => !q || f.p.toLowerCase().indexOf(q) >= 0);
+      shown += files.length;
+      const worst = threads.filter(t => t.repo === r.path && t.status === 'open').some(t => t.sev === 'critical') ? '--crit' : '--warn';
+      return {
+        path:r.path, caret: st.expanded[r.path] ? '▾' : '▸', expanded: !!st.expanded[r.path] && files.length > 0,
+        onToggle: () => this.setState(s => ({ expanded: Object.assign({}, s.expanded, { [r.path]: !s.expanded[r.path] }) })),
+        countLabel: cnt ? String(cnt) : '', countStyle: { font:'11px ' + mono, color:'var(' + worst + ')', flex:'none' },
+        filesLabel: (() => { const n = inAll ? list.length : r.files.length; return '· ' + n + (n === 1 ? ' file' : ' files'); })(),
+        rowStyle: Object.assign({ display:'flex', alignItems:'center', gap:'8px', padding:'8px 10px', borderRadius:'7px', cursor:'pointer', marginTop:'2px' },
+          r.path === st.repo ? { background:'var(--panel3)' } : {}),
+        files: files.map(f => {
+          const sel = r.path === st.repo && (st.browse ? f.p === st.plainPath : f.p === st.path);
+          const c = threads.filter(t => t.repo === r.path && t.path === f.p && t.status === 'open').length;
+          const crit = threads.some(t => t.repo === r.path && t.path === f.p && t.status === 'open' && t.sev === 'critical');
+          return {
+            name: f.p.split('/').slice(-1)[0],
+            onOpen: () => f.unchanged ? this.openPlain(r.path, f.p) : this.openFile(r.path, f.p),
+            rowStyle: Object.assign({ display:'flex', alignItems:'center', gap:'8px', padding:'7px 10px 7px 28px', borderRadius:'7px', cursor:'pointer' },
+              sel ? { background:'var(--sel)' } : {}),
+            nameStyle: { font:'11.5px ' + mono, minWidth:0, overflow:'hidden', textOverflow:'ellipsis', whiteSpace:'nowrap',
+              color: sel ? 'var(--tx)' : f.unchanged ? 'var(--tx3)' : 'var(--tx2)' },
+            addLabel: f.unchanged ? 'unchanged' : f.add ? '+' + f.add : '',
+            addStyle: { font:'10px ' + mono, flex:'none', color: f.unchanged ? 'var(--tx3)' : 'var(--addTx)' },
+            delLabel: f.unchanged ? '' : f.del ? '−' + f.del : '',
+            delStyle: { font:'10px ' + mono, flex:'none', color:'var(--delTx)' },
+            badgeLabel: c ? String(c) : '',
+            badgeStyle: c ? { font:'10px ' + mono, flex:'none', color:'var(--onAcc)', background:'var(' + (crit ? '--crit' : '--warn') + ')', borderRadius:'9px', padding:'0 6px' } : { display:'none' }
+          };
+        })
+      };
+    });
+
+    // ---- diff blocks
+    const hunks = this.hunks();
+    const rng = this.range();
+    const blocks = [];
+    const lnStyle = { width:'42px', flex:'none', textAlign:'right', paddingRight:'11px', color:'var(--ln)' };
+    const txStyle = { color:'var(--code)', whiteSpace:'pre' };
+    const bgOf = t => t === 'add' ? 'var(--add)' : t === 'del' ? 'var(--del)' : t === 'gap' ? 'var(--gap)' : 'transparent';
+    const colorOf = t => t === 'add' ? 'var(--addTx)' : t === 'del' ? 'var(--delTx)' : 'var(--code)';
+
+    if (st.browse && st.plainPath){
+      const lines = PLAIN[st.repo + '|' + st.plainPath] || ['// file not loaded'];
+      blocks.push({ isH:true, isP:false, isC:false, isU:false, text: st.plainRev === 'work' ? 'working tree · read-only' : 'base ' + this.repoObj().mb + ' · read-only', expandLabel:'', expandStyle:{ display:'none' }, onExpand:()=>{} });
+      lines.forEach((l, i) => blocks.push({
+        isH:false, isP:false, isC:false, isU:true, ln:'', rn:String(i+1), rt:l,
+        lnStyle:{ display:'none' }, rnStyle:lnStyle, rtStyle:txStyle,
+        uStyle:{ display:'flex', font:'12px/22px ' + mono, cursor:'pointer' },
+        plusStyle:{ display:'none' }, onComment: () => this.openComposerAt(i+1)
+      }));
+    } else {
+      hunks.forEach((h, hi) => {
+        const opened = !!st.expandedHunks[hi];
+        blocks.push({
+          isH:true, isP:false, isC:false, isU:false, text:h.h,
+          expandLabel: h.hidden ? (opened ? 'collapse context' : '↑ ' + h.hidden + ' lines') : '',
+          expandStyle: h.hidden ? Object.assign({}, smallBtn, { border:'1px solid var(--bd)', borderRadius:'5px', color:'var(--tx2)' }) : { display:'none' },
+          onExpand: () => this.setState(s => ({ expandedHunks: Object.assign({}, s.expandedHunks, { [hi]: !s.expandedHunks[hi] }) }))
+        });
+        const rows = (opened ? (h.before || []) : []).concat(h.rows);
+        const emit = (l, r) => {
+          const lt = l ? l.t : 'gap', rt = r ? r.t : 'gap';
+          const thr = r && threads.find(t => t.repo === st.repo && t.path === st.path && t.line === r.n && t.status !== 'hidden');
+          const focus = thr && thr.id === st.focusId;
+          blocks.push({
+            isH:false, isP:true, isC:false, isU:false,
+            leftWrap:{ flex:1, minWidth:0, overflow:'hidden', borderRight:'1px solid var(--bd2)' },
+            rightWrap:{ flex:1, minWidth:0, overflow:'hidden' },
+            lStyle:{ display:'flex', background:bgOf(lt) },
+            rStyle:Object.assign({ display:'flex', background:bgOf(rt), cursor:'pointer' },
+              thr ? { boxShadow:'inset 3px 0 0 var(' + SEV[thr.sev] + ')' } : {},
+              focus ? { outline:'1px solid var(--accBd)', outlineOffset:'-1px' } : {},
+              (r && r.n != null && rng && r.n >= rng.a && r.n <= rng.b)
+                ? { background:'var(--accBg)', boxShadow:'inset 3px 0 0 var(--acc)' } : {}),
+            ln: l ? String(l.o == null ? '' : l.o) : '', lt: l ? l.x : ' ',
+            rn: r ? String(r.n == null ? '' : r.n) : '', rt: r ? r.x : ' ',
+            lnStyle:lnStyle, rnStyle:lnStyle,
+            ltStyle:Object.assign({}, txStyle, { color:colorOf(lt) }),
+            rtStyle:Object.assign({}, txStyle, { color:colorOf(rt) }),
+            plusStyle: { display:'none' },
+            onComment: r && r.n != null ? ev => this.openComposerAt(r.n, ev && ev.shiftKey) : () => {},
+            onDown: r && r.n != null ? ev => this.startSel(r.n, ev) : () => {},
+            onEnter: r && r.n != null ? () => this.extendSel(r.n) : () => {}
+          });
+          if (r && r.n != null && rng && !rng.live && r.n === rng.b) blocks.push({ isH:false, isP:false, isC:true, isU:false });
+        };
+        let i = 0;
+        while (i < rows.length){
+          const row = rows[i];
+          if (row.t === 'ctx'){ emit(row, row); i++; continue; }
+          const dels = [], adds = [];
+          while (i < rows.length && rows[i].t === 'del') dels.push(rows[i++]);
+          while (i < rows.length && rows[i].t === 'add') adds.push(rows[i++]);
+          const n = Math.max(dels.length, adds.length);
+          for (let j = 0; j < n; j++) emit(dels[j] || null, adds[j] || null);
+        }
+      });
+      if (st.diffView === 'unified'){
+        blocks.forEach(b => { if (b.isP){ b.isP = false; b.isU = true;
+          const isDel = b.rt === ' ' || b.rn === '';
+          b.uStyle = Object.assign({ display:'flex', font:'12px/22px ' + mono, cursor:'pointer' }, isDel ? { background:'var(--del)' } : b.rStyle.background === 'var(--add)' ? { background:'var(--add)' } : {});
+          if (isDel){ b.rn = ''; b.rt = b.lt; b.rtStyle = b.ltStyle; }
+          b.lnStyle = Object.assign({}, lnStyle, { width:'36px', paddingRight:'6px' });
+          b.rnStyle = Object.assign({}, lnStyle, { width:'36px' });
+        }});
+      }
+    }
+
+    // ---- rail
+    const scoped = st.railScope === 'file'
+      ? threads.filter(t => t.repo === st.repo && t.path === st.path)
+      : threads;
+    const visible = scoped.filter(t => !st.unansweredOnly || (t.status === 'open' && (!t.replies.length || t.replies[t.replies.length-1].role === 'human')));
+    const sevChip = sev => ({ font:'9.5px ' + mono, letterSpacing:'.04em', flex:'none', color:'var(--onAcc)', background:'var(' + SEV[sev] + ')', borderRadius:'4px', padding:'1px 6px' });
+
+    const threadCards = visible.map(t => {
+      const resolved = t.status === 'resolved';
+      const orphan = t.status === 'orphaned';
+      const last = t.replies[t.replies.length-1];
+      const waiting = !resolved && last && last.role === 'agent';
+      const where = t.path ? t.path.split('/').slice(-1)[0] + (t.line ? ' L' + t.line + (t.endLine ? '–' + t.endLine : '') : '') : t.repo;
+      return {
+        id: t.author + ' · ' + this.rel(t.at),
+        cardStyle: Object.assign({ borderRadius:'9px', padding:'11px 12px', border:'1px solid var(--bd)', background:'var(--panel3)' },
+          resolved ? { opacity:.55 } : {},
+          orphan ? { borderColor:'var(--warn)' } : {},
+          t.id === st.focusId ? { borderColor:'var(--accBd)', background:'var(--accBg)' } : {}),
+        sevStyle: sevChip(t.sev), sevLabel: t.sev.toUpperCase(),
+        autoLabel: t.status === 'orphaned' ? 'anchor lost' : t.reanchored ? 're-anchored' : t.auto ? 'auto' : t.labelledBy ? 'labelled by ' + t.labelledBy : '',
+        lostText: t.status === 'orphaned' ? t.anchorText : '',
+        lostStyle: t.status === 'orphaned' ? { marginTop:'8px', padding:'7px 9px', borderRadius:'6px', background:'var(--del)', font:'11px ' + mono, color:'var(--delTx)', textDecoration:'line-through' } : { display:'none' },
+        lostActionsStyle: t.status === 'orphaned' ? { display:'flex', gap:'7px', marginTop:'9px' } : { display:'none' },
+        reanchorLabel: st.reanchorId === t.id ? 'выберите строку…' : 'Найти новое место',
+        reanchorStyle: Object.assign({ padding:'4px 10px', borderRadius:'7px', fontSize:'11px', cursor:'pointer' },
+          st.reanchorId === t.id
+            ? { background:'var(--acc)', color:'var(--onAcc)', fontWeight:600 }
+            : { border:'1px solid var(--accBd)', background:'var(--accBg)', color:'var(--accTx)' }),
+        onReanchor: () => this.setState(s => ({ reanchorId: s.reanchorId === t.id ? null : t.id })),
+        askLabel: st.proposing === t.id ? 'модель ищет…' : 'Спросить модель',
+        askStyle: Object.assign({ padding:'4px 10px', borderRadius:'7px', fontSize:'11px', cursor:'pointer' },
+          st.proposing === t.id
+            ? { background:'var(--accBg)', border:'1px solid var(--accBd)', color:'var(--accTx)', animation:'dcpulse 1.1s ease-in-out infinite' }
+            : { background:'var(--acc)', color:'var(--onAcc)', fontWeight:600 }),
+        onAskModel: () => this.askModel(t.id),
+        propStyle: (st.proposal && st.proposal.id === t.id)
+          ? { marginTop:'10px', padding:'10px 11px', borderRadius:'8px', border:'1px solid var(--accBd)', background:'var(--accBg)', animation:'dcin .16s ease-out' }
+          : { display:'none' },
+        propHead: st.proposal && st.proposal.id === t.id ? 'L' + st.proposal.line + ' · confidence ' + st.proposal.conf : '',
+        propText: st.proposal && st.proposal.id === t.id ? st.proposal.text : '',
+        propWhy: st.proposal && st.proposal.id === t.id ? st.proposal.why : '',
+        onAcceptProp: () => this.acceptProposal(),
+        onRejectProp: () => this.setState({ proposal:null }),
+        onAttachFile: () => { this.patchThreads(list => list.map(x => x.id === t.id ? Object.assign({}, x, { status:'open', line:null }) : x)); this.flash('Комментарий прикреплён к файлу'); },
+        autoStyle: (t.auto || t.labelledBy || orphan || t.reanchored) ? { font:'9px ' + mono, flex:'none', color:'var(--accTx)', border:'1px solid var(--accBd)', borderRadius:'4px', padding:'1px 5px' } : { display:'none' },
+        anchor: (st.railScope === 'file' ? '' : t.repo.split('/').slice(-1)[0] + ' · ') + (t.line ? 'L' + t.line + (t.endLine ? '–' + t.endLine : '') : t.path ? 'file' : 'review'),
+        stateLabel: t.status === 'orphaned' ? 'ORPHANED' : resolved ? 'RESOLVED' : waiting ? 'awaiting' : '',
+        stateStyle: t.status === 'orphaned'
+          ? { font:'9.5px ' + mono, color:'var(--warn)', border:'1px solid var(--warn)', borderRadius:'4px', padding:'1px 6px', flex:'none' }
+          : resolved
+          ? { font:'9.5px ' + mono, color:'var(--nit)', border:'1px solid var(--nit)', borderRadius:'4px', padding:'1px 6px', flex:'none' }
+          : waiting ? { font:'9.5px ' + mono, color:'var(--accTx)', border:'1px solid var(--accBd)', borderRadius:'4px', padding:'1px 6px', flex:'none' } : { display:'none' },
+        body:t.body,
+        onFocus: () => this.setState({ focusId:t.id, repo:t.repo, path:t.path, browse:false }),
+        replies: t.replies.map(rp => ({
+          style: { marginTop:'9px', padding:'9px 11px', borderRadius:'7px', background: rp.role === 'agent' ? 'var(--accBg)' : 'var(--panel2)', border:'1px solid ' + (rp.role === 'agent' ? 'var(--accBd)' : 'var(--bd)') },
+          author: rp.author, authorStyle:{ font:'600 11.5px ' + mono, color: rp.role === 'agent' ? 'var(--accTx)' : 'var(--tx)' },
+          meta: (rp.role || 'human') + ' · ' + this.rel(rp.at), body: rp.body
+        })),
+        replyOpen: st.replyId === t.id,
+        onReply: () => this.setState(s => ({ replyId: s.replyId === t.id ? null : t.id, replyText:'' })),
+        onSendReply: () => this.sendReply(t.id),
+        onResolve: () => this.toggleResolve(t.id),
+        resolveLabel: resolved ? 'Reopen' : 'Resolve',
+        resolveStyle: resolved
+          ? { padding:'4px 11px', borderRadius:'7px', border:'1px solid var(--bd)', color:'var(--tx2)', fontSize:'11.5px', cursor:'pointer', background:'var(--panel2)' }
+          : { padding:'4px 11px', borderRadius:'7px', background:'var(--ok)', color:'var(--onAcc)', fontWeight:600, fontSize:'11.5px', cursor:'pointer' }
+      };
+    });
+
+    const events = st.events.map(e => ({
+      who:e.who, verb:e.verb, target:e.target, sub: e.sub ? e.sub + ' · ' + this.rel(e.at) : this.rel(e.at),
+      whoStyle:{ color: e.kind === 'diff' ? 'var(--tx2)' : 'var(--accTx)' },
+      dotStyle:{ width:'6px', height:'6px', borderRadius:'50%', marginTop:'5px', flex:'none',
+        background: e.kind === 'live' ? 'var(--ok)' : e.kind === 'reply' ? 'var(--acc)' : 'var(--bd)',
+        animation: e.kind === 'live' ? 'dcpulse 2.4s ease-in-out infinite' : 'none' }
+    }));
+
+    const orphanCount = threads.filter(t => t.status === 'orphaned').length;
+    const r = this.repoObj();
+    const rAdd = r.files.reduce((a, f) => a + f.add, 0), rDel = r.files.reduce((a, f) => a + f.del, 0);
+    const fileMeta = r.files.find(f => f.p === st.path);
+    const fileThreads = threads.filter(t => t.repo === st.repo && t.path === st.path && t.status === 'open').length;
+
+    const palList = this.paletteList();
+    const palIdx = Math.min(st.palIdx, Math.max(0, palList.length - 1));
+    const prev = this.previewOf(palList[palIdx]);
+
+    const sevBtn = k => Object.assign({ font:'10px ' + mono, padding:'5px 10px', borderRadius:'6px', letterSpacing:'.04em', cursor:'pointer' },
+      st.sev === k
+        ? { background:'var(' + SEV[k] + ')', color:'var(--onAcc)', fontWeight:700, border:'1px solid transparent' }
+        : { border:'1px solid var(--bd)', color:'var(--tx3)' });
+    const predicted = this.labelOf(st.body);
+
+    return {
+      shell:vars,
+      sessionName:st.sessionId, sessionTitle:this.session().title,
+      openCount:openCount, awaitingCount:awaiting,
+      baseLabel: st.mode === 'branch' ? st.baseSrc + '/' + st.baseName : st.mode === 'ref' ? (st.refText || 'HEAD') : 'HEAD',
+      baseButtonStyle:{ display:'flex', alignItems:'center', gap:'9px', flex:'none', padding:'5px 11px', border:'1px solid var(--bd)', borderRadius:'8px', background:'var(--panel3)', cursor:'pointer' },
+      setHead: () => this.setState({ mode:'head' }),
+      setBranch: () => this.setState({ mode:'branch', baseOpen:true }),
+      setRef: () => this.setState({ mode:'ref', baseOpen:true }),
+      openBase: () => this.setState(s => ({ baseOpen:!s.baseOpen })),
+      stopClick: e => { if (e && e.stopPropagation) e.stopPropagation(); },
+      baseOpen:st.baseOpen,
+      branchPickerOpen: st.mode === 'branch', refPickerOpen: st.mode === 'ref',
+      baseHeadStyle:baseRow(st.mode === 'head'), baseBranchStyle:baseRow(st.mode === 'branch'), baseRefStyle:baseRow(st.mode === 'ref'),
+      baseHeadMark:mark(st.mode === 'head'), baseBranchMark:mark(st.mode === 'branch'), baseRefMark:mark(st.mode === 'ref'),
+      baseCandidates:BASES.map(c => {
+        const on = c.src === st.baseSrc && c.name === st.baseName;
+        return {
+          src:c.src, name:c.name, note:c.note,
+          srcStyle:{ font:'9.5px ' + mono, flex:'none', width:'56px', color: on ? 'var(--accTx)' : 'var(--tx3)' },
+          style:{ display:'flex', alignItems:'center', gap:'9px', padding:'6px 9px', borderRadius:'6px', cursor:'pointer',
+            border:'1px solid ' + (on ? 'var(--accBd)' : 'transparent'), background: on ? 'var(--accBg)' : 'var(--panel2)' },
+          onPick: ev => { if (ev && ev.stopPropagation) ev.stopPropagation(); this.setState({ baseSrc:c.src, baseName:c.name }); }
+        };
+      }),
+      refText:st.refText, onRefText: e => this.setState({ refText:e.target.value }),
+      baseSummary: st.mode === 'head' ? 'working tree ↔ HEAD' : st.mode === 'branch' ? 'merge-base ↔ ' + st.baseSrc + '/' + st.baseName : 'ref ↔ ' + (st.refText || 'HEAD'),
+      applyBase: () => this.applyBase(),
+      moonStyle:themeSeg(st.theme === 'dark'), sunStyle:themeSeg(st.theme === 'light'),
+      toggleTheme: () => this.setState(s => ({ theme: s.theme === 'dark' ? 'light' : 'dark' })),
+      toggleSessionMenu: () => this.setState(s => ({ sessionMenuOpen:!s.sessionMenuOpen })),
+      openPalette: () => { this.setState({ paletteOpen:true, paletteQuery:'' }); this.focusPalette(); },
+      openExport: () => this.setState({ exportOpen:true }),
+      filterOpen: () => this.setState({ railScope:'all', unansweredOnly:false }),
+      filterUnanswered: () => this.setState({ railScope:'all', unansweredOnly:true }),
+      closeOverlays: () => this.setState({ paletteOpen:false, exportOpen:false, sessionMenuOpen:false, baseOpen:false }),
+
+      tabChanges: () => this.setState({ sidebarTab:'changes', browse:false, plainPath:null }),
+      tabAll: () => this.setState({ sidebarTab:'all' }),
+      tabChangesStyle:tab(st.sidebarTab === 'changes'), tabAllStyle:tab(st.sidebarTab === 'all'),
+      query:st.query, onQuery: e => this.setState({ query:e.target.value }), shownCount:String(shown),
+      navRepos:navRepos,
+
+      repoPath:r.path,
+      repoBaseLine: st.mode === 'branch' ? r.branch + ' ← ' + st.baseSrc + '/' + st.baseName + ' · merge-base ' + r.mb : st.mode === 'head' ? r.branch + ' ← HEAD (working tree)' : r.branch + ' ← ' + (st.refText || 'HEAD'),
+      repoFilesLabel: r.files.length + ' files', repoAdd:'+' + rAdd, repoDel:'−' + rDel,
+      commentOnRepo: () => { this.patchThreads(list => [{ id:nid('c'), repo:r.path, path:null, line:null, sev:'question', status:'open', author:'kim.p', body:'Комментарий к репозиторию ' + r.path, at:Date.now(), replies:[] }].concat(list)); this.setState({ railScope:'all' }); this.flash('Комментарий на уровне репозитория'); },
+
+      filePath: st.browse && st.plainPath ? st.plainPath : st.path,
+      fileBadge: fileThreads && !st.browse ? String(fileThreads) : '',
+      fileBadgeStyle: fileThreads && !st.browse ? { font:'10px ' + mono, flex:'none', color:'var(--onAcc)', background:'var(--warn)', borderRadius:'9px', padding:'1px 7px' } : { display:'none' },
+      fileChip: st.browse ? 'not in this review' : fileMeta && fileMeta.isNew ? 'new file' : '',
+      fileChipStyle: (st.browse || (fileMeta && fileMeta.isNew)) ? { font:'10.5px ' + mono, flex:'none', color:'var(--tx3)', border:'1px solid var(--bd)', borderRadius:'5px', padding:'1px 6px' } : { display:'none' },
+      browseLabel: st.browse ? '← back to review' : 'Browse repo',
+      browseStyle: Object.assign({}, smallBtn, { border:'1px solid var(--bd)', borderRadius:'6px', color:'var(--tx2)', background:'var(--panel2)' }),
+      toggleBrowse: () => st.browse ? this.setState({ browse:false, plainPath:null, sidebarTab:'changes' }) : this.setState({ sidebarTab:'all', browse:true, plainPath:(REPOS.find(x => x.path === st.repo).extra || [])[0] || null }),
+      setSplit: () => this.setState({ diffView:'split' }), setUnified: () => this.setState({ diffView:'unified' }),
+      splitStyle:Object.assign({}, smallBtn, st.diffView === 'split' ? { background:'var(--bd)', color:'var(--tx)' } : { color:'var(--tx3)' }),
+      unifiedStyle:Object.assign({}, smallBtn, st.diffView === 'unified' ? { background:'var(--bd)', color:'var(--tx)' } : { color:'var(--tx3)' }),
+
+      blocks:blocks,
+      diffBody:{ minWidth:'1080px', userSelect: st.dragging ? 'none' : 'auto' },
+      composerHint: 'потяните по строкам — диапазон · \u2318\u23ce отправить',
+      sevSuggest: st.sev === 'auto' ? 'модель разметит при отправке, агент подтвердит' : 'severity задан вручную',
+      composerAnchor: rng ? '→ new side · ' + st.path.split('/').slice(-1)[0] + ' L' + rng.a + (rng.b > rng.a ? '–' + rng.b : '') + (rng.b > rng.a ? ' · ' + (rng.b - rng.a + 1) + ' lines' : '') : '',
+      body:st.body, onBody: e => this.setState({ body:e.target.value }),
+      onBodyKey: e => {
+        const list = this.ranked();
+        if (e.key === 'ArrowDown' && list.length){ e.preventDefault(); this.setState(s => ({ sugIdx:(s.sugIdx + 1) % list.length })); return; }
+        if (e.key === 'ArrowUp' && list.length){ e.preventDefault(); this.setState(s => ({ sugIdx:(s.sugIdx - 1 + list.length) % list.length })); return; }
+        if (e.key === 'Tab' && list.length){ e.preventDefault(); const p = list[st.sugIdx] || list[0]; this.setState({ body:p.body, sev:p.sev }); return; }
+        if (e.key === 'Enter' && (e.metaKey || e.ctrlKey)) this.submit();
+      },
+      closeComposer: () => this.setState({ composer:null, composerEnd:null, body:'' }),
+      submitComment: () => this.submit(),
+      submitStyle:{ padding:'7px 16px', borderRadius:'8px', background:'var(--acc)', color:'var(--onAcc)', fontWeight:600, fontSize:'12.5px', cursor:'pointer' },
+      sevCritical: () => this.setState({ sev:'critical' }), sevWarning: () => this.setState({ sev:'warning' }),
+      sevNit: () => this.setState({ sev:'nit' }), sevQuestion: () => this.setState({ sev:'question' }),
+      sevCriticalStyle:sevBtn('critical'), sevWarningStyle:sevBtn('warning'), sevNitStyle:sevBtn('nit'), sevQuestionStyle:sevBtn('question'),
+      sevAuto: () => this.setState({ sev:'auto' }),
+      sevAutoLabel: 'AUTO · ' + predicted,
+      sevAutoStyle: Object.assign({ font:'10px ' + mono, padding:'5px 10px', borderRadius:'6px', letterSpacing:'.04em', cursor:'pointer' },
+        st.sev === 'auto'
+          ? { background:'var(--acc)', color:'var(--onAcc)', fontWeight:700, border:'1px solid transparent' }
+          : { border:'1px solid var(--bd)', color:'var(--tx3)' }),
+
+      railFile: () => this.setState({ railScope:'file' }), railAll: () => this.setState({ railScope:'all' }),
+      railFileLabel:'This file ' + threads.filter(t => t.repo === st.repo && t.path === st.path).length,
+      railAllLabel:'Review ' + threads.length,
+      railFileStyle:{ padding:'12px 14px', font:'500 11.5px ' + mono, cursor:'pointer', color: st.railScope === 'file' ? 'var(--tx)' : 'var(--tx3)', boxShadow: st.railScope === 'file' ? 'inset 0 -2px 0 var(--acc)' : 'none' },
+      railAllStyle:{ padding:'12px 14px', font:'500 11.5px ' + mono, cursor:'pointer', color: st.railScope === 'all' ? 'var(--tx)' : 'var(--tx3)', boxShadow: st.railScope === 'all' ? 'inset 0 -2px 0 var(--acc)' : 'none' },
+      unansweredStyle:Object.assign({ marginRight:'12px', padding:'3px 9px', borderRadius:'10px', font:'10px ' + mono, cursor:'pointer' },
+        st.unansweredOnly ? { background:'var(--accBg)', border:'1px solid var(--accBd)', color:'var(--accTx)' } : { border:'1px solid var(--bd)', color:'var(--tx3)' }),
+      toggleUnansweredOnly: () => this.setState(s => ({ unansweredOnly:!s.unansweredOnly })),
+      threadCards:threadCards,
+      railEmpty: threadCards.length === 0,
+      railEmptyText: st.unansweredOnly ? 'Нет тредов без ответа агента' : st.railScope === 'file' ? 'В этом файле пока нет комментариев.\nНажмите + на строке или C.' : 'Комментариев в сессии нет.',
+      replyText:st.replyText, onReply: e => this.setState({ replyText:e.target.value }),
+      closeReply: () => this.setState({ replyId:null, replyText:'' }),
+
+      hasSuggestions: !!st.composer && this.ranked().length > 0,
+      sugCount: this.ranked().length + ' / ' + SUGGESTIONS.length,
+      suggestions:this.ranked().map((s, i) => {
+        const on = i === (st.sugIdx % Math.max(1, this.ranked().length));
+        return {
+          sev:s.sev.toUpperCase(), sevStyle:{ font:'9.5px ' + mono, flex:'none', color:'var(' + SEV[s.sev] + ')', width:'62px' },
+          meta:s.meta, body:s.body,
+          keyStyle: on ? { font:'9.5px ' + mono, flex:'none', color:'var(--onAcc)', background:'var(--acc)', borderRadius:'4px', padding:'1px 6px' } : { display:'none' },
+          style:{ display:'flex', alignItems:'center', gap:'10px', border:'1px solid ' + (on ? 'var(--accBd)' : 'transparent'), background: on ? 'var(--accBg)' : 'var(--panel3)', borderRadius:'7px', padding:'8px 10px', cursor:'pointer' },
+          onAccept: () => this.setState({ body:s.body, sev:s.sev, sugIdx:i })
+        };
+      }),
+
+      feedOpen:st.feedOpen, feedCaret: st.feedOpen ? '▾' : '▸',
+      toggleFeed: () => this.setState(s => ({ feedOpen:!s.feedOpen })),
+      events:events, simulateAgent: () => this.simulate(),
+
+      isReview: st.view !== 'firstrun', isFirstRun: st.view === 'firstrun',
+      isEmpty: st.view === 'empty', hasChanges: st.view === 'review',
+      viewReview: () => this.setState({ view:'review' }), viewEmpty: () => this.setState({ view:'empty' }), viewFirstRun: () => this.setState({ view:'firstrun' }),
+      viewReviewStyle:demoTab(st.view === 'review'), viewEmptyStyle:demoTab(st.view === 'empty'), viewFirstRunStyle:demoTab(st.view === 'firstrun'),
+      hasWarnings: st.warningsOn && st.view !== 'firstrun',
+      warnings:[
+        { repo:'infra/terraform-legacy', text: st.mode === 'ref' ? 'ref ' + (st.refText || 'HEAD') + ' не резолвится — репозиторий пропущен' : 'нет remote — base ведёт себя как head' },
+        { repo:'group/service-api-wt-flags', text:'worktree того же репозитория — показан отдельной записью' }
+      ].concat(orphanCount ? [{ repo:'group/service-api', text: orphanCount + ' комментарий потерял строку после правки агента' }] : []),
+      dismissWarnings: () => this.setState({ warningsOn:false }),
+      statusRight: (st.reanchorId ? 'выберите строку для якоря' : st.browse ? 'browsing · read-only' : st.mode === 'branch' ? 'branch ↔ ' + st.baseSrc + '/' + st.baseName : st.mode === 'ref' ? 'ref ' + st.refText : 'head') + ' · ' + threads.length + ' threads in ' + st.sessionId,
+
+      sessionMenuOpen:st.sessionMenuOpen,
+      sessionRows:st.sessions.map(s => ({
+        name:s.id, title:s.title, mode:s.mode,
+        tag: s.id === st.sessionId ? 'CURRENT' : '',
+        tagStyle: s.id === st.sessionId ? { font:'9.5px ' + mono, color:'var(--onAcc)', background:'var(--acc)', borderRadius:'4px', padding:'1px 6px' } : { display:'none' },
+        repos:s.repos + ' repos', open:s.threads.filter(t => t.status === 'open').length + ' open', resolved:s.resolved + ' resolved', when:s.when,
+        style:Object.assign({ padding:'13px 14px', borderBottom:'1px solid var(--bd2)', cursor:'pointer' },
+          s.id === st.sessionId ? { background:'var(--accBg)' } : {}),
+        onUse: () => { this.setState({ sessionId:s.id, mode:s.mode, sessionMenuOpen:false, railScope:'all' }); this.flash('review use ' + s.id); }
+      })),
+      newName:st.newName, onNewName: e => this.setState({ newName:e.target.value }),
+      createSession: () => {
+        const name = (st.newName || '').trim() || 'ls-' + Math.floor(100000 + Math.random()*899999);
+        this.setState(s => ({ sessions:s.sessions.concat([{ id:name, title:'New review', mode:s.mode, repos:REPOS.length, resolved:0, when:'just now', threads:[] }]), sessionId:name, newName:'', sessionMenuOpen:false }));
+        this.flash('review new ' + name);
+      },
+
+      paletteOpen:st.paletteOpen, paletteQuery:st.paletteQuery, paletteRef:this._pref,
+      onPaletteQuery: e => this.setState({ paletteQuery:e.target.value, palIdx:0 }),
+      paletteResults:palList.map((p, i) => ({
+        name:p.name, tag:p.tag,
+        tagStyle:{ font:'9.5px ' + mono, flex:'none', color:'var(' + (p.kind === 'symbol' ? '--warn' : p.kind === 'comment' ? '--nit' : p.kind === 'plain' ? '--tx3' : '--accTx') + ')', border:'1px solid var(--bd)', borderRadius:'4px', padding:'1px 6px' },
+        style:{ display:'flex', alignItems:'center', gap:'10px', padding:'8px 10px', borderRadius:'7px', cursor:'pointer',
+          background: i === palIdx ? 'var(--accBg)' : 'transparent', border:'1px solid ' + (i === palIdx ? 'var(--accBd)' : 'transparent') },
+        onHover: () => this.setState({ palIdx:i }),
+        onOpen: () => p.open()
+      })),
+      previewTitle:prev.title, previewMeta:prev.meta,
+      previewLines:prev.lines.map(l => ({ n:String(l.n), x:l.x,
+        style:Object.assign({ display:'flex' }, l.hi ? { background:'var(--accBg)', boxShadow:'inset 3px 0 0 var(--acc)' } : l.add ? { background:'var(--add)' } : {}) })),
+      previewNote:prev.note,
+      previewNoteStyle: prev.note ? { padding:'10px 14px', borderTop:'1px solid var(--bd2)', fontSize:'12.5px', lineHeight:1.5, color:'var(--tx2)' } : { display:'none' },
+
+      exportOpen:st.exportOpen, exportText:this.exportMd(),
+      exportRendered: st.exportView === 'rendered', exportRaw: st.exportView === 'raw',
+      showRendered: () => this.setState({ exportView:'rendered' }), showRaw: () => this.setState({ exportView:'raw' }),
+      renderedStyle:Object.assign({}, smallBtn, st.exportView === 'rendered' ? { background:'var(--bd)', color:'var(--tx)' } : { color:'var(--tx3)' }),
+      rawStyle:Object.assign({}, smallBtn, st.exportView === 'raw' ? { background:'var(--bd)', color:'var(--tx)' } : { color:'var(--tx3)' }),
+      exportBlocks: (() => {
+        const open = threads.filter(t => t.status === 'open');
+        const byRepo = {};
+        open.forEach(t => { (byRepo[t.repo] = byRepo[t.repo] || []).push(t); });
+        const out = [
+          { isH1:true, text:'Review ' + st.sessionId + ' — ' + this.session().title, wrap:{ marginBottom:'6px' } },
+          { isMeta:true, text:'base ' + (st.mode === 'branch' ? st.baseSrc + '/' + st.baseName : st.mode === 'ref' ? st.refText : 'HEAD') + ' · ' + open.length + ' open comments', wrap:{ marginBottom:'22px' } }
+        ];
+        Object.keys(byRepo).forEach(rp => {
+          out.push({ isH2:true, text:rp, note:byRepo[rp].length + ' comments', wrap:{ marginBottom:'14px' } });
+          byRepo[rp].forEach(t => {
+            out.push({ isItem:true, sev:t.sev, sevStyle:{ font:'9.5px ' + mono, letterSpacing:'.04em', flex:'none', width:'62px', textAlign:'right', paddingTop:'2px', color:'var(' + SEV[t.sev] + ')' },
+              loc:(t.path || '(repository)') + (t.line ? ':' + t.line + (t.endLine ? '-' + t.endLine : '') : ''), text:t.body, wrap:{ marginBottom:'12px' } });
+            t.replies.forEach(rr => out.push({ isReply:true, who:rr.author + ' (' + (rr.role || 'human') + ')', text:rr.body, wrap:{ marginBottom:'12px' } }));
+          });
+          out[out.length-1].wrap = { marginBottom:'24px' };
+        });
+        return out;
+      })(),
+      copyExport: () => { try { navigator.clipboard.writeText(this.exportMd()); } catch (e) {} this.flash('Markdown в буфере'); },
+
+      toast:st.toast
+    };
+  }
+}
+</script>
+</body>
+</html>

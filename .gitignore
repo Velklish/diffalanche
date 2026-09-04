@@ -1,0 +1,5 @@
+node_modules/
+dist/
+.diffalanche/
+.DS_Store
+.claude/worktrees/
