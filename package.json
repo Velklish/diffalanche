@@ -1,6 +1,6 @@
 {
   "name": "diffalanche",
-  "version": "0.0.0",
+  "version": "0.1.0",
   "description": "A local code-review tool for a folder that holds many independent git repositories",
   "license": "MIT",
   "repository": {

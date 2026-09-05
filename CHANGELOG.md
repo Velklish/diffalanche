@@ -13,6 +13,8 @@ and `bun run release` refuses a version that has no section. See
 
 ## [Unreleased]
 
+## [0.1.0] - 2026-09-05
+
 ### Changed
 
 - The session-switch budget is measured over the whole wait — the press, the

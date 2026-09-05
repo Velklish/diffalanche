@@ -60,7 +60,7 @@ working tree against `HEAD` and needs neither a remote nor a branch. `serve`
 scans the root, reads the change set, and prints where it is:
 
 ```
-diffalanche 0.0.0 on http://127.0.0.1:4880
+diffalanche 0.1.0 on http://127.0.0.1:4880
   3 repositories, 20 files, 2000 changed lines
 ```
 
@@ -95,7 +95,7 @@ A root with no session is not an error — the server says so and the UI offers 
 create one:
 
 ```
-diffalanche 0.0.0 on http://127.0.0.1:4880
+diffalanche 0.1.0 on http://127.0.0.1:4880
   no current review session: create one with `diffalanche review new <name>`
 ```
 
