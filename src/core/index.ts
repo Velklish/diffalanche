@@ -1,3 +1,5 @@
+export type { ReviewScan } from "./change-set.ts";
+export { findRepositories, refreshRepository, scanReview, totalsOf } from "./change-set.ts";
 export type { BaseResolution } from "./git/index.ts";
 export {
   DEFAULT_MAX_FILE_BYTES,

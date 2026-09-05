@@ -7,6 +7,28 @@ the project follows [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
 ### Added
 
+- CLI comments: `list`, `show`, `reply`, `comment`, `resolve`, `reopen`, and
+  `export`, the commands an agent works a review through. Defaults are
+  `--author agent` and `--role agent`; `resolve` and `reopen` refuse anything but
+  `--role human` and change nothing. `--body -` reads standard input. A line
+  anchor is captured from `diff.json` with the repository read again first, so a
+  comment written right after an edit points at the line that is there now, and
+  `--repo` may be left out for a comment on the whole review. Every write goes
+  through the domain and its lock, so two CLI processes and the UI interleave
+  without losing a message. See [06-cli.md](docs/reference/06-cli.md).
+- CLI core: `review new`, `review use`, `review list [--json]`, and `review base`
+  over the review sessions, and `diff [--repo] [--json|--patch]`, which scans the
+  whole root against the session's base, rewrites `diff.json`, and prints the
+  same set it wrote — as JSON, or as a unified patch with a `#` line naming each
+  repository. `serve` gains `--open`. Every command takes `--review`,
+  `--data-dir`, and `--root`; every command's flags and its `--help` come from
+  one set of definitions that `util.parseArgs` is configured from. Exit code 0
+  is success, 1 a user error with one line on stderr, 2 anything unexpected with
+  its stack trace, and JSON goes to stdout with nothing mixed into it. `diff.json`
+  now records the base it was computed with, so a session whose base changed is
+  rescanned rather than patched, and a `--repo` no repository sits at is refused
+  instead of printing an empty review. See
+  [06-cli.md](docs/reference/06-cli.md).
 - Impeccable in the project: `PRODUCT.md` records the durable product truth a
   design pass needs — users, purpose, positioning, operating context,
   constraints, brand commitments, and the evidence that does not exist and must

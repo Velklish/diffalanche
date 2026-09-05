@@ -33,7 +33,13 @@ export type {
   Severity,
   Side,
 } from "./types.ts";
-export { SCHEMA_VERSION } from "./types.ts";
+export {
+  COMMENT_STATUSES,
+  ROLES,
+  SCHEMA_VERSION,
+  SEVERITIES,
+  SIDES,
+} from "./types.ts";
 
 /** The name of the data directory inside the root; `--data-dir` replaces the whole path. */
 export const DATA_DIR_NAME = ".diffalanche";

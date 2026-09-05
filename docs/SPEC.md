@@ -23,7 +23,7 @@ None of them combines many repositories in one review with on-disk comments and 
 
 1. **Name and home.** `diffalanche`, `github.com/Velklish/diffalanche`, public from the first commit, MIT.
 2. **Stack and delivery.** TypeScript. Bun is the toolchain (dev, test, bundling, single-file executables). Server code uses only APIs shared by Node and Bun. Two delivery channels: npm (`npx diffalanche`, Node >= 22) and prebuilt binaries for macOS, Linux, and Windows on x64 and arm64. UI in React. Diff parsing, rendering, and syntax highlighting come from an existing library (`@git-diff-view/react`, fallback `react-diff-view`); the project does not write its own.
-3. **Root and repositories.** The root is the directory diffalanche runs in; `--root` overrides it. A repository is any directory containing `.git` (a directory or a worktree file) found at most `depth` levels below each entry of `roots`. A found repository is not scanned inside, so nested submodules and worktrees under it are not listed. A repository is identified by its path relative to the root, for example `group/service-api`.
+3. **Root and repositories.** The root is the directory diffalanche runs in; `--root` overrides it. A repository is any directory containing `.git` (a directory or a worktree file) found at most `depth` levels below each entry of `roots`. A found repository is not scanned inside, so nested submodules and worktrees under it are not listed. A repository is identified by its path relative to the root — including the `roots` entry it was found under, so with `roots: ["repos"]` the id is `repos/group/service-api`, and with the default `roots: ["."]` it is `group/service-api`.
 4. **Diff base.** Three modes. A review session has one mode; the tool applies it to every repository separately. `head`: working tree against HEAD. `branch`: working tree against the merge base of HEAD and a branch — the remote default branch unless the session names one (`base.branch`, for example `origin/develop`); a repository where the named branch does not resolve uses its remote default branch with a warning; without a remote it behaves like `head`. `ref`: an explicit ref; repositories where it does not resolve are skipped with a warning. Untracked files are part of the diff. The tool reads git and never changes a repository's index, working tree, or history.
 5. **Storage.** `<root>/.diffalanche/`, overridable with `--data-dir`. One review session is one directory with three JSON files: session metadata, comments, and a cache of the last scanned diff. Metadata and comments are readable and editable by hand; the diff cache is written only by the tool. Sessions are never deleted automatically. Concurrent writes from the UI and the CLI lose no data.
 6. **Comment anchors.** A comment attaches to a line, a line range, a file, a repository, or the whole review. A line comment stores the line text and surrounding context, which is the input for re-anchoring in Phase 3.
@@ -143,7 +143,7 @@ A review session is the directory `reviews/<name>/` with three files. `review.js
   "comments": [
     {
       "id": "c_7f3k2q",
-      "repo": "group/service-api",
+      "repo": "repos/group/service-api",
       "path": "src/Cargos/CargoService.cs",
       "side": "new",
       "line": 42,

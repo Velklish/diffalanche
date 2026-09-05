@@ -22,6 +22,17 @@ export type CommentStatus = "open" | "resolved";
 export type Role = "human" | "agent";
 export type Side = "new" | "old";
 
+/**
+ * The values themselves, in the order they are written about: the schema checks
+ * a file against them and the CLI checks a flag against them, and two lists of
+ * the same four words drift the moment one of them gains a fifth.
+ * `SEVERITIES` is worst first (`docs/SPEC.md` section 3, decision 7).
+ */
+export const SEVERITIES: readonly Severity[] = ["critical", "warning", "nit", "question"];
+export const COMMENT_STATUSES: readonly CommentStatus[] = ["open", "resolved"];
+export const ROLES: readonly Role[] = ["human", "agent"];
+export const SIDES: readonly Side[] = ["new", "old"];
+
 /** Where a line comment sits in the change set; the input for Phase 3 re-anchoring. */
 export type Anchor = {
   lineContent: string;
@@ -77,8 +88,13 @@ export type CommentsFile = {
   comments: Comment[];
 };
 
-/** `diff.json`: the change set of the last scan, the set `diff --json` prints. */
-export type DiffCache = { version: number } & ReviewBundle;
+/**
+ * `diff.json`: the change set of the last scan, the set `diff --json` prints.
+ * It records the base it was computed with, because a session whose base has
+ * changed since has a cache that answers a different question than the one now
+ * being asked.
+ */
+export type DiffCache = { version: number; base: Base } & ReviewBundle;
 
 /** What `reviews/` holds: the session names, and why a directory was left out. */
 export type SessionListing = {

@@ -9,7 +9,7 @@ The “Term” column gives the spelling for prose; EN is the name in code and E
 | Term | EN | Definition | Evidence |
 |---|---|---|---|
 | root | `root` | The directory under review; holds the repositories and the data directory. Defaults to the current directory, overridden by `--root`. | SPEC.md §3.3, §4 |
-| repository | `repo` | A git working tree found under the root, identified by its path relative to the root, for example `group/service-api`. Sibling worktrees count; nested submodules and worktrees do not. | SPEC.md §3.3, §4 |
+| repository | `repo` | A git working tree found under the root, identified by its path relative to the root, `roots` entry included — `repos/group/service-api` with `roots: ["repos"]`, `group/service-api` with the default `roots: ["."]`. Sibling worktrees count; nested submodules and worktrees do not. | SPEC.md §3.3, §4 |
 | base mode | `base.mode` | How a repository's change set is computed: `head`, `branch`, or `ref`. Set per review session, resolved per repository. | SPEC.md §3.4, §7 |
 | merge-base branch | `base.branch` | The branch used for the merge base in `branch` mode; the remote default branch when not set. | SPEC.md §3.4, §7 |
 | resolved base | `base` | The base one repository's change set was computed against: the mode the resolution ended at, the ref it came from, and the sha. `null` when it did not resolve and the repository is out of the review. | SPEC.md §7, reference/02-git.md |

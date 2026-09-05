@@ -50,6 +50,7 @@ beforeAll(async () => {
   const repository = readHunks(root, REPO);
   await writeDiffCache(dataDir, SESSION, {
     version: 1,
+    base: { mode: "head" },
     root,
     repositories: [repository],
     totals: { repositories: 1, files: repository.files.length, lines: 0 },

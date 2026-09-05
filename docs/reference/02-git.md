@@ -213,6 +213,41 @@ A `diff --git` block the parser makes nothing of — not known to happen — is
 listed as `binary`: the file is real, git printed the header, and while the
 reason for having no content is unknown, having none is the part that is true.
 
+## The whole review in one call
+
+`src/core/change-set.ts` puts the scanner and the reader above together. The CLI
+calls it; the server switches to it in DA-16 and walks the root its own way
+until then.
+
+```ts
+const cache = await scanReview(config, review.base);
+await refreshRepository(config, session, review.base, "repos/group/service-api");
+```
+
+- `scanReview(config, base)` finds the repositories of `config.roots` to
+  `config.depth`, reads each against `base`, drops the ones with no files, keeps
+  every warning — a repository whose base did not resolve has none of the first
+  and one of the second — and returns the `DiffCache` of `docs/SPEC.md` section
+  7, sorted by path with its totals counted. It asks for the structured hunks,
+  because the anchor of a line comment is captured from them.
+  It comes back as `{ cache, found }`: `found` is every repository the walk saw,
+  with changes or without, which is how a caller tells a `--repo` nothing is at
+  from a repository that has nothing to show.
+- `findRepositories(config)` is that list on its own, without reading any git:
+  what a command checks a `--repo` against before it writes anything.
+- `totalsOf(repositories)` counts a set of repositories again, for a caller that
+  narrowed one.
+- `refreshRepository(config, session, base, repo)` reads one repository
+  again and writes it into the cache in place, so a comment written right after
+  an edit anchors to the line that is there now. A cache computed against
+  another base is not patched — `review base` puts it there, and one full scan
+  repairs it. It re-reads rather than
+  comparing the cache against the mtimes of `.git` and the working tree: one
+  `git diff` on one repository costs less than walking that tree, and it is
+  right in the case a mtime comparison gets wrong — a file saved within the same
+  second as the scan. With no cache at all there is nothing to patch, so the
+  whole root is scanned once.
+
 ## What it does not do yet
 
 - Full-file content for browsing is Phase 2, and the cache on disk is DA-8.

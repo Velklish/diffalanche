@@ -183,6 +183,7 @@ describe("reading", () => {
 
     const cache = {
       version: 1,
+      base: { mode: "head" } as const,
       root,
       repositories: [],
       totals: { repositories: 0, files: 0, lines: 0 },

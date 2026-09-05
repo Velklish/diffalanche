@@ -7,7 +7,7 @@ The table names the subsystems the task cut expects; each section file is writte
 | Section | About | Planned path |
 |---|---|---|
 | [01-scanner.md](01-scanner.md) | Finding repositories under the root: roots, depth, exclude, worktrees, warnings | `src/core/scanner` |
-| [02-git.md](02-git.md) | Reading the change set: base modes, merge base, untracked files, patch parsing | `src/core/git` |
+| [02-git.md](02-git.md) | Reading the change set: base modes, merge base, untracked files, patch parsing, one scan of the whole review | `src/core/git`, `src/core/change-set.ts` |
 | [03-storage.md](03-storage.md) | Data directory, session directories, locking, atomic writes, schema version, configuration | `src/core/storage`, `src/core/config` |
 | [04-domain.md](04-domain.md) | Sessions, comments, anchors, roles, unanswered and awaiting, export | `src/core/domain` |
 | 05-watcher.md | Watching repositories and the data directory, incremental rescans, activity events | `src/core/watcher` |

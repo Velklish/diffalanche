@@ -192,6 +192,7 @@ describe("listSessions", () => {
     });
     await writeDiffCache(dataDir, "newer", {
       version: 1,
+      base: { mode: "head" },
       root,
       repositories: [
         { path: "repos/a", branch: "main", base: head, files: [], warnings: [] },

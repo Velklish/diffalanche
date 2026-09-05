@@ -16,25 +16,8 @@ import {
   fail,
   parseJson,
 } from "./fields.ts";
-import type {
-  Anchor,
-  Base,
-  Comment,
-  CommentStatus,
-  CommentsFile,
-  DiffCache,
-  Reply,
-  Review,
-  Role,
-  Severity,
-  Side,
-} from "./types.ts";
-import { SCHEMA_VERSION } from "./types.ts";
-
-const SEVERITIES: readonly Severity[] = ["critical", "warning", "nit", "question"];
-const STATUSES: readonly CommentStatus[] = ["open", "resolved"];
-const ROLES: readonly Role[] = ["human", "agent"];
-const SIDES: readonly Side[] = ["new", "old"];
+import type { Anchor, Base, Comment, CommentsFile, DiffCache, Reply, Review } from "./types.ts";
+import { COMMENT_STATUSES, ROLES, SCHEMA_VERSION, SEVERITIES, SIDES } from "./types.ts";
 
 /** Serialises a value the way every file of the data directory is written. */
 export function toJson(value: unknown): string {
@@ -94,7 +77,7 @@ function parseComment(file: string, field: string, value: unknown): Comment {
     endLine: asNullableNumber(file, `${field}.endLine`, raw.endLine),
     anchor: parseAnchor(file, `${field}.anchor`, raw.anchor),
     severity: asOneOf(file, `${field}.severity`, raw.severity, SEVERITIES),
-    status: asOneOf(file, `${field}.status`, raw.status, STATUSES),
+    status: asOneOf(file, `${field}.status`, raw.status, COMMENT_STATUSES),
     author: asString(file, `${field}.author`, raw.author),
     role: asOneOf(file, `${field}.role`, raw.role, ROLES),
     body: asString(file, `${field}.body`, raw.body),
@@ -135,11 +118,17 @@ export function parseComments(file: string, text: string): CommentsFile {
  * down to its envelope only: the change set inside it is the git reader's
  * contract, not storage's.
  */
-export function parseDiffCache(file: string, text: string): DiffCache {
+export function parseDiffCache(file: string, text: string): DiffCache | null {
   const raw = asObject(file, null, parseJson(file, text));
   asVersion(file, raw.version);
+  // A cache written before `base` was recorded cannot say what it was computed
+  // against, so it is no answer at all: `null` is "never scanned", and the
+  // caller scans. Only this file is treated that way — the tool writes it and
+  // rewrites it, and `docs/SPEC.md` section 7 already says hand edits are lost.
+  if (raw.base === undefined) return null;
+  const base = parseBase(file, "base", raw.base);
   asString(file, "root", raw.root);
   asArray(file, "repositories", raw.repositories);
   asObject(file, "totals", raw.totals);
-  return raw as unknown as DiffCache;
+  return { ...(raw as unknown as DiffCache), base };
 }

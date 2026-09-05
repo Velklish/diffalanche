@@ -14,10 +14,42 @@ A local code-review tool for a folder that holds many independent git repositori
 | [DESIGN.md](DESIGN.md) | The visual system as `src/ui/tokens.css` implements it, both themes |
 
 
+## Commands
+
+The CLI is the contract coding agents work through: its flags, its output, and
+its exit codes ([ADR-004](docs/adr/adr-004-agent-contract.md)). The full table,
+the global flags, and the exit codes are in
+[docs/reference/06-cli.md](docs/reference/06-cli.md).
+
+```sh
+diffalanche review new ls-240372 --base branch:origin/develop --title "Cargo flags"
+diffalanche diff --json          # the change set of every repository; rewrites diff.json
+diffalanche diff --repo repos/group/service-api
+diffalanche review list          # the sessions, most recently updated first
+diffalanche serve --open         # the review and the UI on 127.0.0.1
+
+diffalanche list --unanswered --json          # what no agent has answered yet
+diffalanche show c_7f3k2q
+diffalanche reply c_7f3k2q --body "Fixed: the fallback is gone." --author claude
+diffalanche comment --repo repos/group/service-api --path src/CargoService.cs --line 42 \
+  --severity warning --body -                 # - reads standard input
+diffalanche export --format md > review.md
+```
+
+Every command takes `--review <name>`, `--data-dir <dir>`, and `--root <dir>`
+after the command name; without `--review` it works on the current session.
+Comments are signed `--author agent` and `--role agent` unless told otherwise,
+and only `--role human` may `resolve` or `reopen` a thread. Exit code 0 is
+success, 1 is a user error with one line on stderr, and 2 is anything the tool
+did not expect, with its stack trace.
+
 ## Development
 
 Bun is the toolchain; the server and the CLI run on Node >= 22 as well and use
-only APIs shared by both runtimes.
+only APIs shared by both runtimes. That is the published package's floor: the
+bundle is plain JavaScript. Development needs Node >= 22.18, because the tests
+start the CLI from its TypeScript source and Node has stripped types without a
+flag only since then; below that one test skips and says so.
 
 ```sh
 bun install        # dependencies and the lockfile
