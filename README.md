@@ -514,7 +514,7 @@ missing from the release page too.
 | [CHANGELOG.md](CHANGELOG.md) | What changed, per release |
 
 Tasks and decisions are tracked with [backslop](https://github.com/Velklish/backslop):
-`npx github:Velklish/backslop#v0.3.1 status` prints the queue, the active work,
+`npx github:Velklish/backslop#v0.4.0 status` prints the queue, the active work,
 and the triage. The rules for working in this repository are in
 [AGENTS.md](AGENTS.md).
 

@@ -6,7 +6,7 @@ description: A worker run over the backslop backlog — split the queue into tra
 
 # backslop-batch — a worker run over the backlog
 
-You are the orchestrator: the session that holds the queue, splits it into tracks, writes briefs, and accepts work. Do not write code for a worker — that removes the only reason to separate contexts. The one-task lifecycle in `backslop-task` fully applies; this file adds what appears when there are several tasks and workers. `npx github:Velklish/backslop#v0.3.1` is called `backslop` below.
+You are the orchestrator: the session that holds the queue, splits it into tracks, writes briefs, and accepts work. Do not write code for a worker — that removes the only reason to separate contexts. The one-task lifecycle in `backslop-task` fully applies; this file adds what appears when there are several tasks and workers. `npx github:Velklish/backslop#v0.4.0` is called `backslop` below.
 
 A worker run is justified when the queue splits into **tracks** — directions that do not overlap in files. Two or three consecutive tasks in one subsystem are faster alone: launching a worker, briefing, and review cost more than the change itself.
 
@@ -31,6 +31,8 @@ A worker run is justified when the queue splits into **tracks** — directions t
 One worker equals one subsystem, not one task. Tasks within a track share context; adjacent tracks do not overlap in files. Work that splits poorly stays with the orchestrator: tasks changing shared files — `AGENTS.md`, configuration, versions, or the whole CHANGELOG — create merge conflicts for no reason.
 
 After distributing briefs, **move every assigned task to active work**: `backslop mv N active`. You hold directories; workers do not touch them at all. When the run ends and you have not accepted work, return it to the queue with `backslop mv N queue --top` or `--after M` so it does not lose its position.
+
+**Until integration, findings under task N are created only by the worker of its track** — `backslop new <slug> --parent N` in the worker branch. Do not create findings under the same parent before integration: `new` counts `N.k` across neighbouring worktrees and local branches, but not across a separate clone or a worker branch not yet fetched, and two identical `N.k` meet only in `lint` at integration. Record your own observation about task N before integration in the acceptance notes or as a task without a parent.
 
 ## How to raise a worker
 
@@ -99,7 +101,12 @@ The signal in the right column is not finding severity but whether the correctio
 ## Integration and acceptance
 
 1. **One commit per task:** `git merge --squash <worker-branch>` into the main branch; the message names the task and summary: `DA-N: <what was done>`; review-round history remains in `result.md`. For a track with several tasks, integrate by task when worker commits are separable by prefix; otherwise one commit per track lists the tasks. **Second and later tasks from the same branch are not integrated by another `merge --squash`; use `git cherry-pick -n <task commits>` and one commit**: a squash commit has no parent relation, so a second squash uses the branch point as base, reapplies the first task, and conflicts in all its files.
-2. You resolve conflicts. They are usually in files shared by tracks. **Merge CHANGELOG** so entries from both sides remain; matching `- **…**` headings are one revised entry, not two — keep the new revision. Do not resolve conflict markers manually; build the file from both revisions (`git show HEAD:CHANGELOG.md` and `git show <worker-head>:CHANGELOG.md`) and put it in place. Section headings repeat in each release, so insert only into the unreleased section.
+2. You resolve conflicts. They are usually in files shared by tracks, and **a merge strategy cannot resolve them**: `-X theirs` and `-X ours` take one side’s file whole and silently drop the neighbouring track’s hunks — CHANGELOG entries, reference sections, list items in code — or duplicate the file’s tail. Build a shared file from both revisions (`git show HEAD:<file>` and `git show <worker-head>:<file>`) by the units of its structure, not by resolving conflict markers:
+   - **CHANGELOG** — merge entries by their `- **…**` heading: entries from both sides remain; a matching heading is one revised entry, not two — keep the new revision. Section headings repeat in each release, so insert only into the unreleased section;
+   - **a document split by headings** (a reference by `###`, a README by sections) — merge sections by heading: one side’s sections whole plus the other side’s missing sections; a section changed by both — by hand, with both changes;
+   - **a list in code** (a regex list, a prefix set, a table of names) — by hand, then grep to confirm that both sides’ names are present.
+
+   Put the assembled file in place of the conflict. The measure is step 3: the diff against the worker head over its files is empty.
 3. **Run gates after integration, not only for the worker:** two green branches can be red together. After the final acceptance commit, compare the tree with the worker head: `git diff HEAD <worker-head> -- <worker files>` must be empty. Otherwise a diff portion lost during conflict resolution reaches main silently.
 4. Acceptance is in that commit: `backslop archive N`, `result.md`, and green `backslop lint`. Run gates before committing, on an unchanged tree.
 5. Clean up in the same pass: `git worktree remove <path>`, `git branch -D <branch>`, and close worker and reviewer sessions using the harness mechanism.

@@ -6,7 +6,7 @@ alwaysApply: false
 
 # backslop-seed — populate the documentation skeleton
 
-`backslop init` creates a skeleton: index, glossary, roadmap, reference, first ADR, and task directories. Only someone who has read the repository and spoken to the owner can populate it. This skill defines that order: evidence first, then questions, then text. `npx github:Velklish/backslop#v0.3.1` is called `backslop` below; the documentation directory is `docs/`.
+`backslop init` creates a skeleton: index, glossary, roadmap, reference, first ADR, and task directories. Only someone who has read the repository and spoken to the owner can populate it. This skill defines that order: evidence first, then questions, then text. `npx github:Velklish/backslop#v0.4.0` is called `backslop` below; the documentation directory is `docs/`.
 
 **Precondition:** `backslop.json` and the `docs/` directory exist at the root. If not, run `backslop init` first; this skill does not lay out the skeleton itself.
 
