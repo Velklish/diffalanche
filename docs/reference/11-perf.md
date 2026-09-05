@@ -485,7 +485,9 @@ The workflow does the rest, on the commit the tag names.
   can sign the attestation naming the commit and the run. The binaries stay out
   of the tarball — `files` in `package.json` lists `dist` and `skills` and
   excludes `dist/diffalanche-*`, which are release assets and about 490 MB of
-  them.
+  them. Without the secret the step says so in a notice and stops green: the
+  GitHub release is then the whole release, which is how a tag is published
+  before the npm channel is opened.
 
 The release is a draft until its binaries are on it — `gh release create
 --draft`, then the upload, then `gh release edit --draft=false` — so the page

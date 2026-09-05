@@ -184,5 +184,12 @@ test("an edit patches its own card, holds the reading position, and leaves the c
     await expect(page.locator(".composer-field")).toHaveValue("half a sentence");
   } finally {
     writeFileSync(target, original);
+    // The restore is an edit too, and the watcher reports it a few hundred
+    // milliseconds later. Wait for the page to have taken it, or the frame lands
+    // in the next spec's page — one that stubbed the review empty and then grew
+    // a whole repository out of a `diff-changed` it never asked for (DA-25.4).
+    await expect(page.locator(`[data-file="${edited}"]`)).not.toContainText(
+      "an agent added this while the review was open",
+    );
   }
 });

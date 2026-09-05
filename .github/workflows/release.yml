@@ -138,6 +138,14 @@ jobs:
         # npm page then names the commit and the run it was built from. `files`
         # in package.json keeps the six binaries out of the tarball — they are
         # release assets, and the npm channel is the bundle and the UI.
+        #
+        # Without the `NPM_TOKEN` secret the step says so and stops green: the
+        # GitHub release above is then the whole release, which is how a tag is
+        # published before the npm channel is opened.
         run: |
           set -eu
+          if [ -z "${NODE_AUTH_TOKEN:-}" ]; then
+            echo "::notice::NPM_TOKEN is not set; the npm publish is skipped, the GitHub release stands"
+            exit 0
+          fi
           npm publish --provenance --access public --tag "$DIST_TAG"

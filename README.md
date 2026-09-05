@@ -476,7 +476,8 @@ point at the commit before it.
 - `npm publish --provenance` publishes the npm channel from the repository
   secret `NPM_TOKEN`, with the workflow's OIDC token as the provenance
   attestation. The six binaries stay out of the tarball: they are release
-  assets, and `files` in `package.json` excludes them.
+  assets, and `files` in `package.json` excludes them. Without the secret the
+  step is skipped with a notice, and the GitHub release is the whole release.
 
 The release page appears only once its binaries are on it: the release is
 created as a draft, the assets are uploaded, and the draft is published last.

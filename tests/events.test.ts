@@ -189,7 +189,6 @@ describe("the live stream", () => {
       comments.find((one) => one.repo === REPO) ?? (comments[0] as (typeof comments)[0]);
     const stream = read(await fetch(`${server.url}/api/events`));
     try {
-      const started = Date.now();
       await run(process.execPath, [
         cli,
         "reply",
@@ -202,10 +201,15 @@ describe("the live stream", () => {
         config.dataDir,
       ]);
 
-      const frame = await stream.next("reply-added");
+      // The clock starts when the CLI has written, not when it was spawned: a
+      // Node process under a full parallel suite can take seconds to start, and
+      // that is not the watcher's latency. The wait itself is generous for the
+      // same reason (DA-31.1).
+      const written = Date.now();
+      const frame = await stream.next("reply-added", 20_000);
       const data = JSON.parse(frame.data) as { id: string; commentId: string };
       expect(data.commentId).toBe(target.id);
-      expect(Date.now() - started).toBeLessThan(5_000);
+      expect(Date.now() - written).toBeLessThan(5_000);
 
       // The activity line is emitted with the event, so it may already be here.
       const activity = await stream.waitFor("activity", 1_000);

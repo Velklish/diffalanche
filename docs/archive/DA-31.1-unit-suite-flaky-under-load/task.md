@@ -3,6 +3,7 @@
 - **Scope:** 11-perf (see [reference](../../reference/README.md))
 - **Created:** 2026-09-05
 - **Dependencies:** none
+- **Taken:** 2026-09-05
 
 ## Context
 
@@ -68,7 +69,7 @@ attempt did not reach.
   the process alive, no CPU, no browser child. Seen twice more here while
   verifying DA-31.
 - The gate going red under load rather than hanging — that is DA-5.1,
-  [*The performance gate has never run on a GitHub runner*](../deferred/DA-5.1-perf-gate-on-ci-runner.md),
+  [*The performance gate has never run on a GitHub runner*](../../backlog/deferred/DA-5.1-perf-gate-on-ci-runner.md),
   which already records CPU per frame at 9.4 ms against the 8.3 ms budget on
   this machine at a load average of about 13.
 - The budgets themselves: this is the unit suite, not `perf/`.
