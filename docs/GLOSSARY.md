@@ -17,7 +17,7 @@ The “Term” column gives the spelling for prose; EN is the name in code and E
 | data directory | `dataDir` | `<root>/.diffalanche/` with `config.json`, `reviews/`, `current`, and the embedding index; overridden by `--data-dir`. | SPEC.md §3.5, §7 |
 | change set | `diff` | The changes of every repository that has changes, computed against the base mode; untracked files included. Cached in `diff.json`. | SPEC.md §5, §7 |
 | scan | `scan` | One pass that finds repositories and computes the change set; rewrites `diff.json` and produces scanner warnings. | SPEC.md §7, ADR-003 |
-| scanner warning | `warning` | A message from a scan about one repository or one directory it walked: ref does not resolve, no remote, worktree of a listed repository, directory cannot be read. Shown in the warnings bar. | SPEC.md §3.4, HANDOFF.md §1.2 |
+| warning | `warning` | A message from a subsystem about something it skipped and why. Two sources: the scan, about one repository or one directory it walked — ref does not resolve, no remote, worktree of a listed repository, root is itself a repository, directory cannot be read — shown in the warnings bar and spelled *scanner warning* in prose; and storage — a directory under `reviews/` without a `review.json`. | SPEC.md §3.4, HANDOFF.md §1.2, reference/01-scanner.md, reference/03-storage.md |
 | comment | `comment` | A finding with severity, status, author, role, body, and an anchor. | SPEC.md §4, §7 |
 | thread | `thread` | A comment with its replies. | SPEC.md §4 |
 | reply | `reply` | A message inside a thread, with author and role. | SPEC.md §7 |

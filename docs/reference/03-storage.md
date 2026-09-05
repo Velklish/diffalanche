@@ -29,7 +29,7 @@ DA-16 rewires the server onto `loadConfig`.
 an empty name, `.`, `..`, and anything holding a slash or a backslash: `resolve`
 would otherwise leave the data directory, and `../../repos/group/svc` would put
 review files inside a reviewed repository — the one thing the tool must never
-write to. The domain checks names as well ([04-domain.md](04-domain.md)); the
+write to. The domain checks names as well (`04-domain.md` (written by DA-9)); the
 check is here too because this is the module that touches the file system, and
 `current` is hand-editable, so its content reaches these functions directly.
 
@@ -137,6 +137,41 @@ read is inside too. The value `update` returns is the value the call returns.
 `updateComments` requires the session to exist: it reads `review.json` to bump
 it, and a session without one is not a session.
 
+## Config
+
+`src/core/config` turns `config.json` and the command-line flags into one
+`Config` with every path already resolved, so nothing downstream has to know
+which value came from where. `loadConfig(overrides, cwd)` is the only entry
+point; `configPath(dataDir)` names the file.
+
+| Field | Where it comes from | Default |
+|---|---|---|
+| `root` | `--root`, resolved against the current directory | the current directory |
+| `dataDir` | `--data-dir`, resolved against the current directory | `<root>/.diffalanche` |
+| `roots` | `roots` of the file, each entry resolved **against the root** | `["."]`, that is the root itself |
+| `depth` | `depth` | `2` |
+| `exclude` | `exclude` | `[]` |
+| `user` | `user`, else `git config user.name` read in the root, else the operating system user | — |
+| `port` | `--port`, else `port` | `4880` |
+| `lsp` | `lsp`, a command per language | `{}` |
+
+The two kinds of path are relative to different directories on purpose:
+`--root` and `--data-dir` are typed at a shell prompt, so they follow the
+current directory, while `roots` is written into a file that travels with the
+root and so follows the root.
+
+A missing `config.json` is not an error — the defaults are the configuration.
+A present one is validated like every other file of the data directory: `port`
+has to be a port, `depth` a whole number of levels, `lsp.<language>` a non-empty
+command, and a refusal names the file and the field.
+
+The `user` fallback runs `git config user.name` in the root through the `git`
+binary ([ADR-002](../adr/adr-002-stack-and-delivery.md)). Reading a
+configuration value writes nothing, and unlike the change-set reader this call
+keeps the developer's own git configuration, because that is exactly where the
+name lives. The server's address is not configurable: it listens on `127.0.0.1`
+(`docs/SPEC.md` section 7).
+
 ## Validation and errors
 
 Everything storage refuses is a `StorageError` carrying `file` and `field`:
@@ -171,3 +206,5 @@ next one, so the shape inside it is the git reader's contract
 - The lock covers one session directory. `current` and `config.json` sit outside
   every session and are written atomically but unlocked; two processes switching
   sessions at the same instant leave one of the two names, never a mixture.
+- Nothing writes `config.json`: it is read and never rewritten. Writing it from
+  the UI is Phase 2.

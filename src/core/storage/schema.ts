@@ -4,7 +4,18 @@
  * ordinary event: every refusal names the file and the field, and nothing
  * half-parsed reaches the caller.
  */
-import { StorageError } from "./errors.ts";
+import {
+  asArray,
+  asNullableNumber,
+  asNullableOneOf,
+  asNullableString,
+  asObject,
+  asOneOf,
+  asString,
+  asStrings,
+  fail,
+  parseJson,
+} from "./fields.ts";
 import type {
   Anchor,
   Base,
@@ -28,84 +39,6 @@ const SIDES: readonly Side[] = ["new", "old"];
 /** Serialises a value the way every file of the data directory is written. */
 export function toJson(value: unknown): string {
   return `${JSON.stringify(value, null, 2)}\n`;
-}
-
-function fail(file: string, field: string | null, message: string): never {
-  throw new StorageError(file, field, message);
-}
-
-/** Names the type of a value the way a message about a wrong field should. */
-function describe(value: unknown): string {
-  if (value === null) return "null";
-  if (Array.isArray(value)) return "an array";
-  return `a ${typeof value}`;
-}
-
-function parseJson(file: string, text: string): unknown {
-  try {
-    return JSON.parse(text);
-  } catch (error) {
-    fail(file, null, `not valid JSON: ${error instanceof Error ? error.message : String(error)}`);
-  }
-}
-
-function asObject(file: string, field: string | null, value: unknown): Record<string, unknown> {
-  if (typeof value !== "object" || value === null || Array.isArray(value)) {
-    fail(file, field, `expected an object, got ${describe(value)}`);
-  }
-  return value as Record<string, unknown>;
-}
-
-function asString(file: string, field: string, value: unknown): string {
-  if (typeof value !== "string") fail(file, field, `expected a string, got ${describe(value)}`);
-  return value;
-}
-
-function asNullableString(file: string, field: string, value: unknown): string | null {
-  if (value === undefined || value === null) return null;
-  return asString(file, field, value);
-}
-
-function asNullableNumber(file: string, field: string, value: unknown): number | null {
-  if (value === undefined || value === null) return null;
-  if (typeof value !== "number" || !Number.isInteger(value)) {
-    fail(file, field, `expected an integer, got ${describe(value)}`);
-  }
-  return value;
-}
-
-function asArray(file: string, field: string, value: unknown): unknown[] {
-  if (!Array.isArray(value)) fail(file, field, `expected an array, got ${describe(value)}`);
-  return value;
-}
-
-function asStrings(file: string, field: string, value: unknown): string[] {
-  return asArray(file, field, value).map((item, index) =>
-    asString(file, `${field}[${index}]`, item),
-  );
-}
-
-function asOneOf<T extends string>(
-  file: string,
-  field: string,
-  value: unknown,
-  allowed: readonly T[],
-): T {
-  const text = asString(file, field, value);
-  if (!(allowed as readonly string[]).includes(text)) {
-    fail(file, field, `expected one of ${allowed.join(", ")}, got ${JSON.stringify(text)}`);
-  }
-  return text as T;
-}
-
-function asNullableOneOf<T extends string>(
-  file: string,
-  field: string,
-  value: unknown,
-  allowed: readonly T[],
-): T | null {
-  if (value === undefined || value === null) return null;
-  return asOneOf(file, field, value, allowed);
 }
 
 /**

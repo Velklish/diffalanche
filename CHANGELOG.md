@@ -42,6 +42,11 @@ the project follows [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
   with a bounded wait and takeover of a lock past the deadline recorded in it.
   A broken file is refused with the file and the field named. The synthetic
   review now writes the `current` pointer too.
+- `src/core/config`: `config.json` with defaults, type checking, and the
+  `--root`, `--data-dir`, and `--port` overrides, resolved into one typed
+  `Config`. `roots` is relative to the root, the two flags to the current
+  directory. Without a `user` the name comes from `git config user.name` read in
+  the root, and from the operating system user after that.
 - Performance gate: `bun run perf` measures the page on the synthetic review
   three times in headless Chromium and fails when the median of any line of the
   budget table is over budget. It runs in CI as the `perf` job, prints the table
