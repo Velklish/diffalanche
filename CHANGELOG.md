@@ -450,6 +450,13 @@ and `bun run release` refuses a version that has no section. See
 
 ### Fixed
 
+- `bun run perf` completes its three repetitions. The gate ran them in one
+  process, and the second browser that process launched after a whole
+  measurement stalled — no ready signal, no step returning, no timeout firing —
+  so the gate printed `run 1/3` and sat there until it was killed. Each
+  repetition is now its own `perf/run.ts --runs 1` process with its own server
+  and browser; the cause of the stall is recorded, not found. See
+  [11-perf.md](docs/reference/11-perf.md).
 - A line anchor's context is the anchored side of the hunk. `anchor.before` and
   `anchor.after` were sliced out of the hunk's raw line list, which holds both
   sides, so a `new`-side anchor kept lines the change removed — text that is not

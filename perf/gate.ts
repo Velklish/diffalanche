@@ -9,7 +9,7 @@ import { appendFileSync, existsSync, rmSync } from "node:fs";
 import { join } from "node:path";
 import { evaluate, formatTable, GATE_VARIANT } from "./budgets.ts";
 import type { Measurement } from "./harness.ts";
-import { measure, parseArgs, withServer } from "./harness.ts";
+import { parseArgs } from "./harness.ts";
 
 /**
  * The fixture and the built UI are what the harness needs; make them if they
@@ -27,19 +27,39 @@ function prepare(fixture: string): void {
   execFileSync("bun", ["run", "build:ui"], { stdio: "inherit" });
 }
 
+/**
+ * One repetition is one process. The second browser a process launches after a
+ * whole measurement stalls on this harness's runtime — the page never reports
+ * ready, or a later step never returns, and Playwright's own timeouts do not
+ * fire — while a process that measures once and exits completes every time
+ * (DA-25.2). So the gate runs `perf/run.ts` once per repetition, each with its
+ * own server and browser, and reads the number back from its stdout.
+ */
+function measureOnce(fixture: string): Measurement {
+  const stdout = execFileSync(
+    "bun",
+    ["perf/run.ts", "--fixture", fixture, "--variant", GATE_VARIANT.name, "--runs", "1"],
+    { stdio: ["ignore", "pipe", "inherit"], encoding: "utf8" },
+  );
+  const results = JSON.parse(stdout) as Measurement[];
+  const measurement = results[0];
+  if (results.length !== 1 || measurement === undefined) {
+    throw new Error(`perf/run.ts printed ${results.length} measurements, one was expected`);
+  }
+  return measurement;
+}
+
 async function main(): Promise<void> {
   const options = parseArgs(process.argv.slice(2), 3);
   const runs = options.runs;
   prepare(options.fixture);
 
   const measurements: Measurement[] = [];
-  await withServer(options.fixture, async (baseUrl, sessions) => {
-    for (let run = 0; run < runs; run += 1) {
-      const measurement = await measure(baseUrl, GATE_VARIANT, options.fixture, sessions);
-      measurements.push(measurement);
-      process.stderr.write(`run ${run + 1}/${runs}: ${JSON.stringify(measurement)}\n`);
-    }
-  });
+  for (let run = 0; run < runs; run += 1) {
+    const measurement = measureOnce(options.fixture);
+    measurements.push(measurement);
+    process.stderr.write(`run ${run + 1}/${runs}: ${JSON.stringify(measurement)}\n`);
+  }
 
   const rows = evaluate(measurements);
   const table = formatTable(rows, runs);

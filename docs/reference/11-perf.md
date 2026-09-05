@@ -327,7 +327,13 @@ by an older generator** — a fixture without the `current` pointer has no revie
 session, and the server refusing the review reads as a broken server rather than
 as a stale directory — always rebuilds the UI, since a gate that measures a
 stale build measures nothing, and then runs the harness three times on the page
-as it ships.
+as it ships — **each repetition in a process of its own**, `perf/run.ts --runs 1`
+with its own server and browser, the number read back from its stdout. The
+second browser one process launches after a whole measurement stalls on Bun:
+the page never reports ready, or a later step never returns, and Playwright's
+own timeouts do not fire, while a process that measures once and exits
+completes every time. The cause is not found; the shape that works is what the
+gate runs.
 It prints one row per budget line and exits 1 when the **median** of any line is
 over budget. One slow run does not fail the build; two do.
 
