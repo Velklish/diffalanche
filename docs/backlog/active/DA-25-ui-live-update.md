@@ -1,9 +1,9 @@
 # DA-25 · Live update and activity feed in the UI
 
-- **Order:** 250
 - **Scope:** 08-ui (see [reference](../../reference/README.md))
 - **Created:** 2026-09-05
 - **Dependencies:** DA-18, DA-21, DA-23
+- **Taken:** 2026-09-05
 
 ## Context
 

@@ -1,9 +1,9 @@
 # DA-27 · Empty states
 
-- **Order:** 270
 - **Scope:** 08-ui (see [reference](../../reference/README.md))
 - **Created:** 2026-09-05
 - **Dependencies:** DA-24
+- **Taken:** 2026-09-05
 
 ## Context
 

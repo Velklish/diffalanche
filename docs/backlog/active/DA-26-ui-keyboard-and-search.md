@@ -1,9 +1,9 @@
 # DA-26 · Keyboard map and global search
 
-- **Order:** 260
 - **Scope:** 08-ui (see [reference](../../reference/README.md))
 - **Created:** 2026-09-05
 - **Dependencies:** DA-22, DA-23
+- **Taken:** 2026-09-05
 
 ## Context
 
