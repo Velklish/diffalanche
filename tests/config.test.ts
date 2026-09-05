@@ -1,13 +1,23 @@
 import { mkdirSync, mkdtempSync, rmSync, writeFileSync } from "node:fs";
 import { devNull, tmpdir, userInfo } from "node:os";
-import { join, resolve } from "node:path";
+import { dirname, join, resolve } from "node:path";
 import { afterEach, beforeEach, describe, expect, it } from "vitest";
-import { configPath, DEFAULT_DEPTH, DEFAULT_PORT, loadConfig } from "../src/core/config/index.ts";
+import {
+  configPath,
+  DEFAULT_DEPTH,
+  DEFAULT_PORT,
+  loadConfig,
+  userConfigPath,
+} from "../src/core/config/index.ts";
 import { dataDirOf, StorageError } from "../src/core/storage/index.ts";
 
 let root: string;
 let savedGlobal: string | undefined;
 let savedSystem: string | undefined;
+let savedConfigHome: string | undefined;
+let savedDataDirEnv: string | undefined;
+/** An empty user configuration directory, so the developer's own stays out of the way. */
+let configHome: string;
 
 /** Writes `config.json` into the data directory of the root. */
 function writeConfig(value: unknown): void {
@@ -29,18 +39,28 @@ function gitIdentity(name: string | null): void {
 
 beforeEach(() => {
   root = mkdtempSync(join(tmpdir(), "diffalanche-config-"));
+  configHome = mkdtempSync(join(tmpdir(), "diffalanche-config-home-"));
   savedGlobal = process.env.GIT_CONFIG_GLOBAL;
   savedSystem = process.env.GIT_CONFIG_SYSTEM;
+  savedConfigHome = process.env.XDG_CONFIG_HOME;
+  savedDataDirEnv = process.env.DIFFALANCHE_DATA_DIR;
   process.env.GIT_CONFIG_SYSTEM = devNull;
+  process.env.XDG_CONFIG_HOME = configHome;
+  delete process.env.DIFFALANCHE_DATA_DIR;
   gitIdentity(null);
 });
 
 afterEach(() => {
   process.env.GIT_CONFIG_GLOBAL = savedGlobal;
   process.env.GIT_CONFIG_SYSTEM = savedSystem;
+  process.env.XDG_CONFIG_HOME = savedConfigHome;
+  process.env.DIFFALANCHE_DATA_DIR = savedDataDirEnv;
   if (savedGlobal === undefined) delete process.env.GIT_CONFIG_GLOBAL;
   if (savedSystem === undefined) delete process.env.GIT_CONFIG_SYSTEM;
+  if (savedConfigHome === undefined) delete process.env.XDG_CONFIG_HOME;
+  if (savedDataDirEnv === undefined) delete process.env.DIFFALANCHE_DATA_DIR;
   rmSync(root, { recursive: true, force: true });
+  rmSync(configHome, { recursive: true, force: true });
 });
 
 describe("defaults", () => {
@@ -103,6 +123,60 @@ describe("paths", () => {
     const config = await loadConfig({ root: "nested" }, root);
     expect(config.root).toBe(resolve(root, "nested"));
     expect(config.dataDir).toBe(join(root, "nested", ".diffalanche"));
+  });
+});
+
+describe("data directory", () => {
+  /** Writes the user's `diffalanche/config.json` into the test's own configuration directory. */
+  function writeUserConfig(value: unknown): void {
+    const file = userConfigPath(configHome);
+    mkdirSync(dirname(file), { recursive: true });
+    writeFileSync(file, `${JSON.stringify(value)}\n`);
+  }
+
+  it("takes DIFFALANCHE_DATA_DIR relative to the root", async () => {
+    const env = { DIFFALANCHE_DATA_DIR: ".agents/diffalanche" };
+    const config = await loadConfig({}, root, { env, configHome });
+    expect(config.dataDir).toBe(join(root, ".agents", "diffalanche"));
+  });
+
+  it("takes the dataDir of the user config relative to the root", async () => {
+    writeUserConfig({ dataDir: ".agents/diffalanche" });
+    const config = await loadConfig({}, root, { env: {}, configHome });
+    expect(config.dataDir).toBe(join(root, ".agents", "diffalanche"));
+  });
+
+  it("finds the user config through XDG_CONFIG_HOME when no directory is given", async () => {
+    writeUserConfig({ dataDir: "state" });
+    const config = await loadConfig({}, root);
+    expect(config.dataDir).toBe(join(root, "state"));
+  });
+
+  it("puts --data-dir above the variable", async () => {
+    const env = { DIFFALANCHE_DATA_DIR: ".agents/diffalanche" };
+    const config = await loadConfig({ dataDir: "elsewhere" }, root, { env, configHome });
+    expect(config.dataDir).toBe(join(root, "elsewhere"));
+  });
+
+  it("puts the variable above the user config", async () => {
+    writeUserConfig({ dataDir: "from-user-config" });
+    const env = { DIFFALANCHE_DATA_DIR: "from-env" };
+    const config = await loadConfig({}, root, { env, configHome });
+    expect(config.dataDir).toBe(join(root, "from-env"));
+  });
+
+  it("treats an empty variable as unset", async () => {
+    writeUserConfig({ dataDir: "from-user-config" });
+    const env = { DIFFALANCHE_DATA_DIR: "" };
+    const config = await loadConfig({}, root, { env, configHome });
+    expect(config.dataDir).toBe(join(root, "from-user-config"));
+  });
+
+  it("refuses a dataDir in the user config that is not a string, naming the file", async () => {
+    writeUserConfig({ dataDir: 7 });
+    const attempt = loadConfig({}, root, { env: {}, configHome });
+    await expect(attempt).rejects.toThrow(userConfigPath(configHome));
+    await expect(attempt).rejects.toThrow("dataDir");
   });
 });
 

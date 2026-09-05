@@ -5,7 +5,7 @@
  */
 import { execFile } from "node:child_process";
 import { readFile } from "node:fs/promises";
-import { userInfo } from "node:os";
+import { homedir, userInfo } from "node:os";
 import { resolve } from "node:path";
 import { promisify } from "node:util";
 import { asObject, asString, asStrings, fail, parseJson } from "../storage/fields.ts";
@@ -42,6 +42,32 @@ export type ConfigOverrides = {
   port?: number;
 };
 
+/**
+ * Where the data directory may come from besides the command line and the
+ * root. Both are parameters so that a test never reads the developer's own
+ * environment or `~/.config`.
+ */
+export type ConfigSources = {
+  /** The process environment; `DIFFALANCHE_DATA_DIR` is read from it. */
+  env?: NodeJS.ProcessEnv;
+  /** The user's configuration directory: `$XDG_CONFIG_HOME`, or `~/.config` without it. */
+  configHome?: string;
+};
+
+/** The variable that names the data directory, relative to the root. */
+export const DATA_DIR_ENV = "DIFFALANCHE_DATA_DIR";
+
+/** `<configHome>/diffalanche/config.json`: the user's own settings, outside every root. */
+export function userConfigPath(configHome: string): string {
+  return resolve(configHome, "diffalanche", "config.json");
+}
+
+/** `$XDG_CONFIG_HOME`, or `~/.config` when the variable is unset or empty. */
+export function defaultConfigHome(env: NodeJS.ProcessEnv = process.env): string {
+  const xdg = env.XDG_CONFIG_HOME;
+  return xdg ? xdg : resolve(homedir(), ".config");
+}
+
 /** Defaults without a config file: `docs/SPEC.md` section 7. */
 export const DEFAULT_ROOTS: readonly string[] = ["."];
 export const DEFAULT_DEPTH = 2;
@@ -57,15 +83,16 @@ export function configPath(dataDir: string): string {
 /**
  * Loads the configuration. `cwd` is the directory the command was run in: both
  * `--root` and `--data-dir` are relative to it, while everything inside the
- * file is relative to the root.
+ * file — and the data directory named by the environment or the user config —
+ * is relative to the root.
  */
 export async function loadConfig(
   overrides: ConfigOverrides = {},
   cwd: string = process.cwd(),
+  sources: ConfigSources = {},
 ): Promise<Config> {
   const root = resolve(cwd, overrides.root ?? ".");
-  const dataDir =
-    overrides.dataDir === undefined ? dataDirOf(root) : resolve(cwd, overrides.dataDir);
+  const dataDir = await resolveDataDir(root, overrides, cwd, sources);
   const file = configPath(dataDir);
   const raw = await readConfigFile(file);
 
@@ -86,6 +113,32 @@ export async function loadConfig(
     port,
     lsp: asLsp(file, raw.lsp),
   };
+}
+
+/**
+ * The data directory, from the first source that names one: `--data-dir`
+ * against the current directory; `DIFFALANCHE_DATA_DIR` against the root; the
+ * `dataDir` of the user config against the root; else `<root>/.diffalanche`.
+ * The order runs from the most to the least specific — the flag is this run,
+ * the variable is this shell, the user config is this person — and everything
+ * but the flag is relative to the root, so one value serves every root. An
+ * empty variable counts as unset: a shell that exports it blank is not asking
+ * for a data directory named "".
+ */
+async function resolveDataDir(
+  root: string,
+  overrides: ConfigOverrides,
+  cwd: string,
+  sources: ConfigSources,
+): Promise<string> {
+  if (overrides.dataDir !== undefined) return resolve(cwd, overrides.dataDir);
+  const env = sources.env ?? process.env;
+  const fromEnv = env[DATA_DIR_ENV];
+  if (fromEnv) return resolve(root, fromEnv);
+  const file = userConfigPath(sources.configHome ?? defaultConfigHome(env));
+  const user = await readConfigFile(file);
+  if (user.dataDir !== undefined) return resolve(root, asString(file, "dataDir", user.dataDir));
+  return dataDirOf(root);
 }
 
 /** A missing `config.json` is not an error: the defaults are the configuration. */

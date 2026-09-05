@@ -50,7 +50,7 @@ Every command takes these, and they go after the command: `diffalanche diff
 | Flag | Default |
 |---|---|
 | `--review <name>` | the current session, from the `current` pointer |
-| `--data-dir <dir>` | `<root>/.diffalanche` |
+| `--data-dir <dir>` | `DIFFALANCHE_DATA_DIR`, then `dataDir` of `$XDG_CONFIG_HOME/diffalanche/config.json` (`~/.config` without the variable), then `<root>/.diffalanche` |
 | `--root <dir>` | the current directory |
 | `--help`, `-h` | prints the options of that command and does nothing else |
 
@@ -59,6 +59,14 @@ derived from it: without it, no command run from anywhere but the root would
 find the review. A `--root` that is not a directory that exists is exit code 1,
 and so is a `--data-dir` that names a file; a `--data-dir` that does not exist
 yet is not, because the data directory is the one place the tool creates.
+
+Without the flag, `loadConfig` ([03-storage.md](03-storage.md)) asks the
+environment and then the user config before falling back to the root: the
+flag is this run, the variable is this shell, the user config is this person.
+A relative flag is resolved against the current directory, a relative variable
+or `dataDir` against the root. An empty variable counts as unset. Only
+`dataDir` is read from the user config; a `dataDir` that is not a string is
+refused naming that file and the field, like a broken value of `config.json`.
 
 `serve` starts the review server of [07-server.md](07-server.md): it scans the
 root, reads the change set of the current session against that session's base

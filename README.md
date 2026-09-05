@@ -122,6 +122,21 @@ It is plain JSON, documented in [docs/SPEC.md](docs/SPEC.md) section 7 and in
 `jq` is supported; the CLI is what writes it, because writes take the session's
 lock.
 
+The directory can live somewhere else. `--data-dir` moves it for one command;
+to move it for good, set `DIFFALANCHE_DATA_DIR` in the shell, or put `dataDir`
+in a configuration file of your own at `~/.config/diffalanche/config.json`
+(`$XDG_CONFIG_HOME/diffalanche/config.json` when the variable is set):
+
+```json
+{ "dataDir": ".agents/diffalanche" }
+```
+
+The flag wins over the variable, the variable over the file, and the file over
+the default. A relative flag is taken from the current directory; a relative
+variable or `dataDir` is taken from the root, so one value serves every root.
+Only `dataDir` is read from that file — the settings below stay in
+`config.json` inside the data directory.
+
 ## Configuration
 
 `.diffalanche/config.json`, all of it optional — with no file at all, the
@@ -180,7 +195,7 @@ Every command also takes these, **after** the command name — `diffalanche diff
 | Global flag | Default |
 |---|---|
 | `--review <name>` | the review session to work on; the current one |
-| `--data-dir <dir>` | the data directory; `<root>/.diffalanche` |
+| `--data-dir <dir>` | the data directory; `DIFFALANCHE_DATA_DIR`, then `dataDir` of the user config, then `<root>/.diffalanche` |
 | `--root <dir>` | the directory under review; the current directory |
 | `--help`, `-h` | the options of that command, and nothing else |
 

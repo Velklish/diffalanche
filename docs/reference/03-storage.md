@@ -16,7 +16,8 @@ server, which takes a `Config` and never opens the file itself.
 ## The data directory
 
 ```
-<root>/.diffalanche/            dataDirOf(root); --data-dir replaces the whole path
+<root>/.diffalanche/            dataDirOf(root); --data-dir, DIFFALANCHE_DATA_DIR, or the
+                                user config's dataDir replaces the whole path (06-cli.md)
   config.json                   the configuration, read by src/core/config
   current                       the name of the current session, one line
   reviews/<name>/

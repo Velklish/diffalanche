@@ -13,6 +13,16 @@ and `bun run release` refuses a version that has no section. See
 
 ## [Unreleased]
 
+### Added
+
+- The data directory can be moved for good, not only per command: after
+  `--data-dir`, `loadConfig` reads `DIFFALANCHE_DATA_DIR`, then `dataDir` from
+  the user config `$XDG_CONFIG_HOME/diffalanche/config.json` (`~/.config`
+  without the variable), and only then falls back to `<root>/.diffalanche`. A
+  relative variable or `dataDir` is taken from the root, so one value serves
+  every root; an empty variable counts as unset; only `dataDir` is read from
+  that file (DA-52).
+
 ### Changed
 
 - The performance gate on a GitHub-hosted runner holds every millisecond

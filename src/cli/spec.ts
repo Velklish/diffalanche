@@ -35,7 +35,8 @@ export const GLOBAL: Record<string, OptionSpec> = {
   "data-dir": {
     type: "string",
     value: "<dir>",
-    about: "the data directory; default: <root>/.diffalanche",
+    about:
+      "the data directory; default: DIFFALANCHE_DATA_DIR, the user config, or <root>/.diffalanche",
   },
   root: {
     type: "string",
