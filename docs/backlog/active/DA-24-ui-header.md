@@ -1,9 +1,9 @@
 # DA-24 · Header: sessions, base picker, counters, export, warnings
 
-- **Order:** 240
 - **Scope:** 08-ui (see [reference](../../reference/README.md))
 - **Created:** 2026-09-05
 - **Dependencies:** DA-19
+- **Taken:** 2026-09-05
 
 ## Context
 

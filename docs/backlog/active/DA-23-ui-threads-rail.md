@@ -1,9 +1,9 @@
 # DA-23 · Threads rail
 
-- **Order:** 230
 - **Scope:** 08-ui (see [reference](../../reference/README.md))
 - **Created:** 2026-09-05
 - **Dependencies:** DA-21
+- **Taken:** 2026-09-05
 
 ## Context
 
