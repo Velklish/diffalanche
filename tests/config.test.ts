@@ -111,6 +111,17 @@ describe("overrides", () => {
     writeConfig({ port: 5100, user: "kim.p" });
     expect((await loadConfig({ port: 5000 }, root)).port).toBe(5000);
   });
+
+  it("checks --port itself", async () => {
+    const error = await loadConfig({ port: 70_000 }, root).catch((caught: unknown) => caught);
+    expect((error as StorageError).field).toBe("--port");
+    expect((error as StorageError).message).toContain("between 1 and 65535");
+  });
+
+  it("still checks the file's port when --port replaces it", async () => {
+    writeConfig({ port: 0, user: "kim.p" });
+    await expect(loadConfig({ port: 5000 }, root)).rejects.toThrow(/config\.json: port:/);
+  });
 });
 
 describe("errors", () => {

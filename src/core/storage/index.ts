@@ -8,13 +8,14 @@ import { mkdir, readdir, readFile, stat } from "node:fs/promises";
 import { resolve } from "node:path";
 import { writeFileAtomic } from "./atomic.ts";
 import { StorageError } from "./errors.ts";
+import type { LockOptions } from "./lock.ts";
 import { withLock } from "./lock.ts";
 import { parseComments, parseDiffCache, parseReview, toJson } from "./schema.ts";
 import type { Comment, DiffCache, Review, SessionListing } from "./types.ts";
 import { SCHEMA_VERSION } from "./types.ts";
 
 export { StorageError } from "./errors.ts";
-export type { LockOptions } from "./lock.ts";
+export type { Lock, LockOptions } from "./lock.ts";
 export { withLock } from "./lock.ts";
 export { parseBase, toJson } from "./schema.ts";
 export type {
@@ -89,6 +90,15 @@ export function diffCachePath(dataDir: string, name: string): string {
 export async function ensureDataDir(dataDir: string): Promise<string> {
   await mkdir(reviewsDir(dataDir), { recursive: true });
   return dataDir;
+}
+
+/**
+ * Whether the data directory holds this review session. It answers from the
+ * presence of `review.json` alone: a session whose file is broken still exists,
+ * and a caller that treated it as absent would overwrite it.
+ */
+export async function sessionExists(dataDir: string, name: string): Promise<boolean> {
+  return exists(reviewPath(dataDir, name));
 }
 
 export async function ensureSessionDir(dataDir: string, name: string): Promise<string> {
@@ -201,33 +211,98 @@ export async function writeCurrent(dataDir: string, name: string): Promise<void>
 // writing comments
 // ---------------------------------------------------------------------------
 
+/** The session's two files as a writer sees them inside the lock. */
+export type SessionDraft = {
+  /** Changed in place, or replaced outright; written back either way. */
+  review: Review;
+  /**
+   * The comments, read on first use. A writer that never asks for them leaves
+   * `comments.json` alone: rewriting a file nothing changed wakes the watcher
+   * for nothing.
+   */
+  comments: Comment[];
+};
+
+export type UpdateSessionOptions = LockOptions & {
+  /** The metadata to start from when the session is being created. */
+  create?: Review;
+};
+
 /**
- * The read-modify-write every comment writer goes through: under the session's
- * lock, read `comments.json`, let `update` change the list in place, write it
- * back, and bump the session's `updatedAt`. Reading outside the lock and
- * writing inside it would lose the replies written in between.
+ * The one write path of a session's files. Under the session's lock it reads
+ * what is there, lets `change` alter the draft, checks the lock is still ours,
+ * and writes back. Reading outside the lock and writing inside it is what loses
+ * a reply written in between, so the read is inside too; and `assertHeld` is
+ * here rather than in each writer, because a writer that forgets it is outside
+ * the guarantee without anything saying so.
+ */
+export async function updateSession<T>(
+  dataDir: string,
+  name: string,
+  change: (draft: SessionDraft) => T | Promise<T>,
+  options: UpdateSessionOptions = {},
+): Promise<T> {
+  const { create, ...lock } = options;
+  const path = reviewPath(dataDir, name);
+  // Before the lock, so a mistyped name does not leave an empty session
+  // directory behind that every later listing warns about.
+  if (create === undefined && !(await sessionExists(dataDir, name))) {
+    throw new StorageError(path, null, "no such review session");
+  }
+
+  await ensureSessionDir(dataDir, name);
+  return withLock(
+    sessionDir(dataDir, name),
+    async (held) => {
+      // Inside the lock, so two writers cannot both pass it.
+      const exists = await sessionExists(dataDir, name);
+      if (exists && create !== undefined) {
+        throw new StorageError(path, null, "review session already exists");
+      }
+      if (!exists && create === undefined) {
+        throw new StorageError(path, null, "no such review session");
+      }
+
+      let comments: Comment[] | null = null;
+      let touched = false;
+      const draft: SessionDraft = {
+        review: exists || create === undefined ? await readReview(dataDir, name) : create,
+        get comments(): Comment[] {
+          touched = true;
+          comments ??= [];
+          return comments;
+        },
+        set comments(next: Comment[]) {
+          touched = true;
+          comments = next;
+        },
+      };
+      if (exists) comments = await readComments(dataDir, name);
+
+      const result = await change(draft);
+      // Every write to a session's files bumps `updatedAt`; a session being
+      // created already carries the instant it was created at.
+      if (exists) draft.review.updatedAt = timestamp();
+      // `change` is the caller's code and may take longer than the lock lease.
+      await held.assertHeld();
+      await writeReview(dataDir, name, draft.review);
+      if (touched || !exists) await writeComments(dataDir, name, comments ?? []);
+      return result;
+    },
+    lock,
+  );
+}
+
+/**
+ * The read-modify-write every comment writer goes through: `updateSession`
+ * with only the comments in view.
  */
 export async function updateComments<T>(
   dataDir: string,
   name: string,
   update: (comments: Comment[]) => T | Promise<T>,
 ): Promise<T> {
-  const path = reviewPath(dataDir, name);
-  // Before the lock, so a mistyped name does not leave an empty session
-  // directory behind that every later listing warns about.
-  if (!(await exists(path))) {
-    throw new StorageError(path, null, "no such review session");
-  }
-  return withLock(sessionDir(dataDir, name), async (lock) => {
-    const review = await readReview(dataDir, name);
-    const comments = await readComments(dataDir, name);
-    const result = await update(comments);
-    // `update` is the caller's code and may take longer than the lock lease.
-    await lock.assertHeld();
-    await writeComments(dataDir, name, comments);
-    await writeReview(dataDir, name, { ...review, updatedAt: timestamp() });
-    return result;
-  });
+  return updateSession(dataDir, name, (draft) => update(draft.comments));
 }
 
 // ---------------------------------------------------------------------------
@@ -253,13 +328,19 @@ export async function listSessionNames(dataDir: string): Promise<SessionListing>
   const warnings: string[] = [];
   for (const entry of entries.sort((a, b) => (a.name < b.name ? -1 : 1))) {
     if (!entry.isDirectory()) continue;
-    if (!(await exists(reviewPath(dataDir, entry.name)))) {
+    // A listing never fails over one bad entry: a directory whose name is not a
+    // session name at all is a warning like any other, not the end of the list.
+    try {
+      if (!(await sessionExists(dataDir, entry.name))) {
+        warnings.push(`${resolve(dir, entry.name)}: no review.json, not a review session; ignored`);
+        continue;
+      }
+      names.push(entry.name);
+    } catch (error) {
       warnings.push(
-        `${sessionDir(dataDir, entry.name)}: no review.json, not a review session; ignored`,
+        `${resolve(dir, entry.name)}: ${error instanceof Error ? error.message : String(error)}; ignored`,
       );
-      continue;
     }
-    names.push(entry.name);
   }
   return { names, warnings };
 }

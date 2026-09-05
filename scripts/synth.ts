@@ -503,8 +503,8 @@ function anchorOf(file: FilePlan, line: number): Anchor {
   return {
     lineContent: file.work[line - 1] ?? "",
     hunk: `@@ -${oldStart},${oldCount} +${oldStart},${newCount} @@`,
-    before: file.work.slice(Math.max(0, line - 1 - 2), line - 1),
-    after: file.work.slice(line, line + 2),
+    before: file.work.slice(Math.max(0, line - 1 - context), line - 1),
+    after: file.work.slice(line, line + context),
   };
 }
 

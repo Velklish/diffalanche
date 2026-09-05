@@ -3,18 +3,19 @@
  * is the only module that reads and writes these files; every other module
  * takes the parsed value and never touches the JSON.
  */
-import type { ReviewBundle } from "../types.ts";
+import type { BaseSpec, ReviewBundle } from "../types.ts";
 
 /** The version every file of the data directory carries. Migrations are a task of their own. */
 export const SCHEMA_VERSION = 1;
 
-export type BaseMode = "head" | "branch" | "ref";
+export type { BaseMode } from "../types.ts";
 
-/** The base of a review session: `docs/SPEC.md` section 3, decision 4. */
-export type Base =
-  | { mode: "head" }
-  | { mode: "branch"; branch?: string }
-  | { mode: "ref"; ref: string };
+/**
+ * The base of a review session, as `review.json` stores it under `base`: the
+ * change-set reader's own `BaseSpec` (`docs/SPEC.md` section 3, decision 4).
+ * One name for one thing — storage parses it, git resolves it.
+ */
+export type Base = BaseSpec;
 
 export type Severity = "critical" | "warning" | "nit" | "question";
 export type CommentStatus = "open" | "resolved";

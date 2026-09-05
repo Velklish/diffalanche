@@ -37,7 +37,7 @@ export const BUDGETS: Budget[] = [
     field: null,
     budget: 100,
     unit: "ms",
-    pendingUntil: "DA-9",
+    pendingUntil: "DA-24",
   },
   {
     label: "Update after an edit in one repository",

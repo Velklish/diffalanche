@@ -60,6 +60,23 @@ the project follows [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
   `Config`. `roots` is relative to the root, the two flags to the current
   directory. Without a `user` the name comes from `git config user.name` read in
   the root, and from the operating system user after that.
+- `src/core/domain`: review sessions. `createSession` writes the session and
+  makes it current, `useSession` switches, `setBase` changes the base and bumps
+  `updatedAt`, and `listSessions` gives the history most recently updated first
+  with open and resolved counts and the repositories of the last scan.
+  `parseBaseArgument` reads `head`, `branch`, `branch:<name>`, and a ref in one
+  place for the CLI and the API alike; a session name is lowercase letters,
+  digits, dot, dash, and underscore.
+- Comments in `src/core/domain`: `addComment`, `reply`, `resolve`, `reopen`,
+  `get`, and `list` with filters by status, repository, severity, and
+  unanswered. A line comment's anchor is captured from `diff.json` — the line
+  text, the hunk header, and three lines of context on each side — and a line
+  the change set does not have is refused with the nearest hunk named. Only a
+  human resolves or reopens. `countReview` gives the open, resolved,
+  unanswered, and awaiting counts per file, per repository, and per review with
+  the worst open severity, and `exportMarkdown` writes the export grouped by
+  repository. The synthetic review now keeps three lines of anchor context, as
+  the tool does.
 - Performance gate: `bun run perf` measures the page on the synthetic review
   three times in headless Chromium and fails when the median of any line of the
   budget table is over budget. It runs in CI as the `perf` job, prints the table

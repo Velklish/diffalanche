@@ -5,6 +5,7 @@ import {
   readdirSync,
   readFileSync,
   rmSync,
+  statSync,
   writeFileSync,
 } from "node:fs";
 import { tmpdir } from "node:os";
@@ -25,6 +26,7 @@ import {
   StorageError,
   sessionDir,
   updateComments,
+  updateSession,
   withLock,
   writeCurrent,
   writeDiffCache,
@@ -119,6 +121,16 @@ describe("session listing", () => {
     expect(listing.warnings[0]).toContain("no review.json");
   });
 
+  it("warns about a directory that is not a session name instead of failing", async () => {
+    await makeSession(dataDir, "alpha");
+    mkdirSync(join(dataDir, "reviews", "a\\b"));
+
+    const listing = await listSessionNames(dataDir);
+    expect(listing.names).toEqual(["alpha"]);
+    expect(listing.warnings).toHaveLength(1);
+    expect(listing.warnings[0]).toContain("single path segment");
+  });
+
   it("is empty on a data directory with no reviews/ at all", async () => {
     expect(await listSessionNames(join(root, "nowhere"))).toEqual({ names: [], warnings: [] });
   });
@@ -208,6 +220,44 @@ describe("updateComments", () => {
       /no such review session/,
     );
     expect(existsSync(sessionDir(dataDir, "typo"))).toBe(false);
+  });
+
+  it("refuses a change whose lock was taken over while it ran, and writes nothing", async () => {
+    await makeSession(dataDir, "one", [comment("c_aaaaaa")]);
+
+    await expect(
+      updateSession(
+        dataDir,
+        "one",
+        async (draft) => {
+          draft.comments.push(comment("c_bbbbbb"));
+          await sleep(20);
+          // Another writer took the lock over while the change was running.
+          staleLock(sessionDir(dataDir, "one"), "someone else");
+        },
+        { staleMs: 10 },
+      ),
+    ).rejects.toThrow(/taken over while this write was in progress/);
+
+    // Every writer of a session's files goes through `updateSession`, so this
+    // is the check that covers `createSession`, `setBase`, and every comment
+    // writer at once.
+    expect((await readComments(dataDir, "one")).map((one) => one.id)).toEqual(["c_aaaaaa"]);
+  });
+
+  it("writes comments.json only when the change asked for the comments", async () => {
+    await makeSession(dataDir, "one", [comment("c_aaaaaa")]);
+    const before = statSync(commentsPath(dataDir, "one")).mtimeMs;
+    await sleep(5);
+
+    await updateSession(dataDir, "one", (draft) => {
+      draft.review = { ...draft.review, title: "renamed" };
+    });
+
+    // `setBase` and the like leave the comments alone; rewriting the file would
+    // wake the watcher for nothing.
+    expect(statSync(commentsPath(dataDir, "one")).mtimeMs).toBe(before);
+    expect((await readReview(dataDir, "one")).title).toBe("renamed");
   });
 
   it("leaves the file untouched when the change throws", async () => {

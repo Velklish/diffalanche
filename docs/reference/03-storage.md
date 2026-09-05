@@ -4,7 +4,8 @@
 only module that reads or writes them. It holds the on-disk shapes of
 `docs/SPEC.md` section 7, the write lock of
 [ADR-003](../adr/adr-003-on-disk-format.md), and nothing above them: what a
-comment means and when a session is current is the domain, `src/core/domain`.
+comment means and when a session is current is the domain
+([04-domain.md](04-domain.md)).
 
 `config.json` sits in the same directory but belongs to `src/core/config`,
 described under [Config](#config) below; it shares storage's field readers and
@@ -29,7 +30,7 @@ DA-16 rewires the server onto `loadConfig`.
 an empty name, `.`, `..`, and anything holding a slash or a backslash: `resolve`
 would otherwise leave the data directory, and `../../repos/group/svc` would put
 review files inside a reviewed repository — the one thing the tool must never
-write to. The domain checks names as well (`04-domain.md` (written by DA-9)); the
+write to. The domain checks names as well ([04-domain.md](04-domain.md)); the
 check is here too because this is the module that touches the file system, and
 `current` is hand-editable, so its content reaches these functions directly.
 
@@ -56,6 +57,7 @@ review writes it too ([11-perf.md](11-perf.md)).
 | `readDiffCache(dataDir, name)` | `diff.json`, or `null` before the first scan |
 | `writeDiffCache(dataDir, name, diff)` | replaces `diff.json` whole |
 | `readCurrent(dataDir)`, `writeCurrent(dataDir, name)` | the current-session pointer |
+| `sessionExists(dataDir, name)` | whether `review.json` is there, whatever is in it |
 | `listSessionNames(dataDir)` | `{ names, warnings }` |
 
 Every file is written as JSON with `"version": 1`, two-space indentation, and a
@@ -65,7 +67,13 @@ diffable by hand.
 `listSessionNames` takes the session names from the directory names under
 `reviews/`, sorted. A directory without a `review.json` is not a session: it is
 left out and named in `warnings`, because a session that disappears from a list
-with no explanation looks like a lost session.
+with no explanation looks like a lost session. A directory whose name is not a
+session name at all becomes a warning too — one bad entry does not end the
+listing.
+
+`sessionExists(dataDir, name)` answers from `review.json` being there, not from
+it parsing. A session whose file was broken by hand still exists, and a caller
+that treated it as absent would overwrite it.
 
 ## Atomic writes
 
@@ -92,11 +100,12 @@ its token, pid, `acquiredAt`, and `expiresAt`.
 | `staleMs` | 30 000 | How long the holder claims the lock for |
 
 `staleMs` is a lease, not a guarantee: a body that runs longer than it can have
-the lock taken from it. A body that writes therefore calls `lock.assertHeld()`
-immediately before the write — the second argument of `withLock` receives the
-lock — and gets a refusal instead of silently overwriting the work of the writer
-that took over. `updateComments` does this after the caller's change and before
-either file is written.
+the lock taken from it. **Every writing body calls `lock.assertHeld()`
+immediately before its write** — the body receives the lock as its argument —
+and gets a refusal instead of silently overwriting the work of the writer that
+took over. `updateComments` does this after the caller's change and before
+either file is written; so do `createSession` and `setBase`
+([04-domain.md](04-domain.md)).
 
 A writer that finds the lock taken retries with a backoff of 5 ms doubling to
 100 ms until `timeoutMs` runs out. Before each retry it reads `expiresAt`: past
@@ -113,6 +122,18 @@ away — two holders and the lost write ADR-003 exists to prevent. A rename is
 atomic, so exactly one of the two moves the stale lock aside and the other finds
 it gone and tries again.
 
+Reading the lock and moving it are still two steps, so what gets moved may no
+longer be the lock that was found stale. The token settles it: after the rename
+the moved directory's `info.json` is compared with the one the staleness check
+read, and a lock that is not the stale one is renamed straight back.
+
+**The end-to-end guarantee is the rename together with `assertHeld` in every
+writer**, not either alone. The rename keeps two takeovers from both winning;
+`assertHeld` is what a writer whose lock was taken from it anyway — because its
+body outran the lease, or because a takeover could not put its lock back —
+finds out from before it writes. A writing body that skips `assertHeld` is
+outside the guarantee.
+
 Release is conditional on the token in `info.json` still being ours. Without
 that check a writer whose lock was taken over as stale would delete the lock of
 the writer that took it, and hand a third writer the same session at the same
@@ -120,22 +141,38 @@ time.
 
 ## Read-modify-write
 
-`updateComments(dataDir, name, update)` is the path every comment writer goes
-through:
+`updateSession(dataDir, name, change, options?)` is **the one write path of a
+session's files**. Under the session's lock it reads what is there, hands the
+caller a draft, checks the lock is still ours, and writes back:
 
 ```ts
-await updateComments(dataDir, "ls-240372", (comments) => {
-  comments.push(newComment);
+await updateSession(dataDir, "ls-240372", (draft) => {
+  draft.comments.push(newComment);
 });
 ```
 
-Under the session's lock it reads `comments.json`, hands the list to `update`,
-writes the list back, and bumps `updatedAt` in `review.json`. Reading outside
-the lock and writing inside it is what loses a reply written in between, so the
-read is inside too. The value `update` returns is the value the call returns.
+Reading outside the lock and writing inside it is what loses a reply written in
+between, so the read is inside too. The value `change` returns is the value the
+call returns.
 
-`updateComments` requires the session to exist: it reads `review.json` to bump
-it, and a session without one is not a session.
+- `updatedAt` is bumped for the caller: every write to a session's files bumps
+  it, and a writer that had to remember would eventually not.
+- `assertHeld` is called for the caller as well, right before the write. A
+  writer that forgets it is outside the lock's guarantee with nothing saying so,
+  so no writer is given the chance to forget.
+- `comments.json` is written only when the change asked for `draft.comments`.
+  `setBase` never touches them, and rewriting a file nothing changed would wake
+  the watcher for nothing.
+- Without `options.create` the session has to exist. With it, the session has to
+  **not** exist and is created from the metadata given; the check is inside the
+  lock, so two creates of one name cannot both pass it.
+
+`updateComments(dataDir, name, update)` is `updateSession` with only the
+comments in view, and is what every comment writer calls.
+
+The lock options go through as well, which is how the lease is tested: a change
+that outruns `staleMs` and has the lock taken from it is refused and writes
+nothing.
 
 ## Config
 
@@ -188,6 +225,10 @@ checked and nothing half-parsed reaches the caller.
 
 `endLine`, `title`, and `side` may be absent as well as `null` — both read as
 `null`, which is what the anchor levels of section 7 mean by an omitted field.
+
+The `base` of `review.json` is the change-set reader's own `BaseSpec`
+([02-git.md](02-git.md)): storage parses it, git resolves it, and one name means
+one thing on both sides.
 
 `diff.json` is checked down to its envelope only — `version`, `root`,
 `repositories`, `totals`. It is written by a scan and overwritten whole by the

@@ -192,13 +192,13 @@ over budget. One slow run does not fail the build; two do.
 | Scrolling the diff: CPU per frame | 8.3 ms | 6.4 ms | ok |
 | Opening the comment form | 50 ms | 13.9 ms | ok |
 | Jumping to a file from the navigation | 50 ms | 7.7 ms | ok |
-| Switching review sessions | 100 ms | pending | DA-9 |
+| Switching review sessions | 100 ms | pending | DA-24 |
 | Update after an edit in one repository | 300 ms | pending | DA-25 |
 ```
 
 Two lines are **pending**: nothing in the code can switch a session or change a
 file under an open review yet. A pending line is printed and never fails; the
-task named in the last column — DA-9 for sessions, DA-25 for live update — makes
+task named in the last column — DA-24 for sessions, DA-25 for live update — makes
 it measurable and gives its budget line a field to read.
 
 `8.3 ms` is the frame of 120 fps. The specification asks for 120 fps and a

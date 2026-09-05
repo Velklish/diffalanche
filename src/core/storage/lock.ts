@@ -105,7 +105,16 @@ async function acquire(lockDir: string, token: string, staleMs: number): Promise
     acquiredAt: new Date(now).toISOString(),
     expiresAt: new Date(now + staleMs).toISOString(),
   };
-  await writeFileAtomic(infoPath(lockDir), toJson(info));
+  try {
+    await writeFileAtomic(infoPath(lockDir), toJson(info));
+  } catch (error) {
+    // The directory was moved out from under us between the `mkdir` and this
+    // write: another writer was taking over a lock it had found stale a moment
+    // earlier and had not looked at since. The claim simply did not happen, so
+    // this is a failed acquisition and not a fault.
+    if ((error as NodeJS.ErrnoException).code === "ENOENT") return false;
+    throw error;
+  }
   return true;
 }
 
@@ -119,7 +128,8 @@ async function acquire(lockDir: string, token: string, staleMs: number): Promise
  * simply tries again.
  */
 async function takeOverIfStale(lockDir: string): Promise<void> {
-  const deadline = await lockDeadline(lockDir);
+  const seen = await readInfo(lockDir);
+  const deadline = await lockDeadline(lockDir, seen);
   if (deadline === null || Date.now() < deadline) return;
 
   const aside = `${lockDir}.stale-${randomUUID()}`;
@@ -129,6 +139,27 @@ async function takeOverIfStale(lockDir: string): Promise<void> {
     if ((error as NodeJS.ErrnoException).code === "ENOENT") return;
     throw error;
   }
+
+  // Reading the lock and moving it are two steps, so what was moved may not be
+  // the lock that was found stale: another writer can take over and start
+  // working in between. The token says which it is, and a live lock goes
+  // straight back.
+  //
+  // A moved lock with no `info.json` at all is nobody's: its holder either died
+  // between the `mkdir` and the write, or has not finished claiming it. Putting
+  // that back would leave a lock no writer owns and no writer may take over
+  // until it ages out; deleting it makes the unfinished claim fail, and that
+  // writer simply tries again.
+  const moved = await readInfo(aside);
+  if (moved !== null && moved.token !== seen?.token) {
+    try {
+      await rename(aside, lockDir);
+      return;
+    } catch {
+      // The slot is taken again; the writer whose lock this was finds out from
+      // `assertHeld` before it writes anything.
+    }
+  }
   await rm(aside, { recursive: true, force: true });
 }
 
@@ -137,8 +168,10 @@ async function takeOverIfStale(lockDir: string): Promise<void> {
  * and its write, or after it died in that gap — the directory's own age plus
  * the default. `null` means the lock is gone and the caller should simply retry.
  */
-async function lockDeadline(lockDir: string): Promise<number | null> {
-  const info = await readInfo(lockDir);
+async function lockDeadline(
+  lockDir: string,
+  info: Partial<LockInfo> | null,
+): Promise<number | null> {
   const expires = Date.parse(String(info?.expiresAt));
   if (Number.isFinite(expires)) return expires;
   try {

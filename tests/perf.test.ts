@@ -53,7 +53,7 @@ describe("perf gate", () => {
     const pending = rows.filter((row) => row.measured === null);
     expect(pending.length).toBeGreaterThan(0);
     expect(pending.every((row) => !row.failed)).toBe(true);
-    expect(formatTable(rows, 1)).toContain("| pending | DA-9 |");
+    expect(formatTable(rows, 1)).toContain("| pending | DA-24 |");
   });
 
   it("marks the line that is over budget and only that one", () => {

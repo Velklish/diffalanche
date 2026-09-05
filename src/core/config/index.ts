@@ -8,7 +8,7 @@ import { readFile } from "node:fs/promises";
 import { userInfo } from "node:os";
 import { resolve } from "node:path";
 import { promisify } from "node:util";
-import { asArray, asObject, asString, asStrings, fail, parseJson } from "../storage/fields.ts";
+import { asObject, asString, asStrings, fail, parseJson } from "../storage/fields.ts";
 import { dataDirOf } from "../storage/index.ts";
 
 const run = promisify(execFile);
@@ -47,6 +47,9 @@ export const DEFAULT_ROOTS: readonly string[] = ["."];
 export const DEFAULT_DEPTH = 2;
 export const DEFAULT_PORT = 4880;
 
+/** What a refusal names when the fault is in a flag rather than in the file. */
+const COMMAND_LINE = "command line";
+
 export function configPath(dataDir: string): string {
   return resolve(dataDir, "config.json");
 }
@@ -66,14 +69,18 @@ export async function loadConfig(
   const file = configPath(dataDir);
   const raw = await readConfigFile(file);
 
-  const port = overrides.port ?? asPort(file, "port", raw.port) ?? DEFAULT_PORT;
+  // The file's own values are checked even when a flag replaces them: a config
+  // with `port: 70000` is broken whether or not this run passed `--port`.
+  const filePort = raw.port === undefined ? DEFAULT_PORT : asPort(file, "port", raw.port);
+  const port =
+    overrides.port === undefined ? filePort : asPort(COMMAND_LINE, "--port", overrides.port);
   const roots = raw.roots === undefined ? DEFAULT_ROOTS : asStrings(file, "roots", raw.roots);
 
   return {
     root,
     dataDir,
     roots: roots.map((entry) => resolve(root, entry)),
-    depth: asCount(file, "depth", raw.depth) ?? DEFAULT_DEPTH,
+    depth: raw.depth === undefined ? DEFAULT_DEPTH : asCount(file, "depth", raw.depth),
     exclude: raw.exclude === undefined ? [] : asStrings(file, "exclude", raw.exclude),
     user: raw.user === undefined ? await resolveUser(root) : asString(file, "user", raw.user),
     port,
@@ -93,16 +100,14 @@ async function readConfigFile(file: string): Promise<Record<string, unknown>> {
   return asObject(file, null, parseJson(file, text));
 }
 
-function asCount(file: string, field: string, value: unknown): number | undefined {
-  if (value === undefined) return undefined;
+function asCount(file: string, field: string, value: unknown): number {
   if (typeof value !== "number" || !Number.isInteger(value) || value < 0) {
     fail(file, field, `expected a whole number of levels, got ${JSON.stringify(value)}`);
   }
   return value;
 }
 
-function asPort(file: string, field: string, value: unknown): number | undefined {
-  if (value === undefined) return undefined;
+function asPort(file: string, field: string, value: unknown): number {
   if (typeof value !== "number" || !Number.isInteger(value) || value < 1 || value > 65_535) {
     fail(file, field, `expected a port between 1 and 65535, got ${JSON.stringify(value)}`);
   }
@@ -116,7 +121,7 @@ function asLsp(file: string, value: unknown): Record<string, string[]> {
   for (const [language, command] of Object.entries(raw)) {
     const field = `lsp.${language}`;
     const parts = asStrings(file, field, command);
-    if (asArray(file, field, command).length === 0) {
+    if (parts.length === 0) {
       fail(file, field, "expected a command, got an empty array");
     }
     lsp[language] = parts;
