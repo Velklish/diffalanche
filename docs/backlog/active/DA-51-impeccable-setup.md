@@ -1,9 +1,9 @@
 # DA-51 · Impeccable in the project: product truth, design system, hook
 
-- **Order:** 60
 - **Scope:** 08-ui (see [reference](../../reference/README.md))
 - **Created:** 2026-09-05
 - **Dependencies:** DA-19
+- **Taken:** 2026-09-05
 
 ## Context
 
