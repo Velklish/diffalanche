@@ -1,9 +1,9 @@
 # DA-15 · CLI smoke matrix on Node, Bun, and binary
 
-- **Order:** 150
 - **Scope:** 06-cli, 11-perf (see [reference](../../reference/README.md))
 - **Created:** 2026-09-05
 - **Dependencies:** DA-4, DA-14
+- **Taken:** 2026-09-05
 
 ## Context
 

@@ -1,9 +1,9 @@
 # DA-30 · README and subsystem reference
 
-- **Order:** 300
 - **Scope:** all subsystems (see [reference](../../reference/README.md))
 - **Created:** 2026-09-05
 - **Dependencies:** DA-14, DA-16
+- **Taken:** 2026-09-05
 
 ## Context
 

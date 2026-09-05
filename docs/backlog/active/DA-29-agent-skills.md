@@ -1,9 +1,9 @@
 # DA-29 · Agent skills: diffalanche-apply and diffalanche-review
 
-- **Order:** 290
 - **Scope:** 10-skills (see [reference](../../reference/README.md))
 - **Created:** 2026-09-05
 - **Dependencies:** DA-14
+- **Taken:** 2026-09-05
 
 ## Context
 
