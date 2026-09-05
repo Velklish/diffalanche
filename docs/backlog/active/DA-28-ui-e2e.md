@@ -1,9 +1,9 @@
 # DA-28 · UI end-to-end tests on the fixture root
 
-- **Order:** 280
 - **Scope:** 08-ui, 11-perf (see [reference](../../reference/README.md))
 - **Created:** 2026-09-05
 - **Dependencies:** DA-15, DA-25, DA-26
+- **Taken:** 2026-09-05
 
 ## Context
 
