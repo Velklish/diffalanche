@@ -127,6 +127,17 @@ describe("perf gate", () => {
     // The long-task line is a count of zero on every machine.
     const tasks = evaluate([measurement({ scrollLongTasks: 1 })], { allowance: RUNNER_ALLOWANCE });
     expect(tasks.find((row) => row.budget.field === "scrollLongTasks")?.failed).toBe(true);
+    // A zero budget times anything is zero, so that line cannot tell whether
+    // the allowance stayed off `tasks`; a table with a count of one can.
+    const counted: Budget[] = [
+      { label: "long tasks", field: "scrollLongTasks", budget: 1, unit: "tasks" },
+    ];
+    const twoTasks = evaluate([measurement({ scrollLongTasks: 2 })], {
+      budgets: counted,
+      allowance: RUNNER_ALLOWANCE,
+    });
+    expect(twoTasks[0]?.ceiling).toBe(1);
+    expect(twoTasks[0]?.failed).toBe(true);
     // Twice the runner's own reading is a regression the allowance does not hide.
     const slow = measurement({ cpuPerFrameMs: 21 });
     expect(evaluate([slow], { allowance: RUNNER_ALLOWANCE }).some((row) => row.failed)).toBe(true);
