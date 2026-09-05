@@ -3,6 +3,7 @@
 - **Scope:** 11-perf (see [reference](../../reference/README.md))
 - **Created:** 2026-09-05
 - **Dependencies:** DA-5
+- **Taken:** 2026-09-05
 
 ## Context
 

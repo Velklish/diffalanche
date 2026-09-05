@@ -7,7 +7,7 @@
 import { execFileSync } from "node:child_process";
 import { appendFileSync, existsSync, rmSync } from "node:fs";
 import { join } from "node:path";
-import { evaluate, formatTable, GATE_VARIANT } from "./budgets.ts";
+import { evaluate, formatTable, GATE_VARIANT, RUNNER_ALLOWANCE } from "./budgets.ts";
 import type { Measurement } from "./harness.ts";
 import { parseArgs } from "./harness.ts";
 
@@ -61,8 +61,14 @@ async function main(): Promise<void> {
     process.stderr.write(`run ${run + 1}/${runs}: ${JSON.stringify(measurement)}\n`);
   }
 
-  const rows = evaluate(measurements);
+  // A GitHub-hosted runner gets the named allowance; a development machine the
+  // specification's numbers (DA-5.1).
+  const allowance = process.env.GITHUB_ACTIONS === "true" ? RUNNER_ALLOWANCE : 1;
+  const rows = evaluate(measurements, { allowance });
   const table = formatTable(rows, runs);
+  if (allowance !== 1) {
+    process.stderr.write(`runner allowance ${allowance} on every ms line (perf/budgets.ts)\n`);
+  }
   process.stdout.write(table);
 
   const summary = process.env.GITHUB_STEP_SUMMARY;

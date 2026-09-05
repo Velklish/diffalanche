@@ -335,7 +335,21 @@ own timeouts do not fire, while a process that measures once and exits
 completes every time. The cause is not found; the shape that works is what the
 gate runs.
 It prints one row per budget line and exits 1 when the **median** of any line is
-over budget. One slow run does not fail the build; two do.
+over its ceiling. One slow run does not fail the build; two do.
+
+**Which numbers are enforced where.** On a development machine the ceilings
+are the specification's numbers, as the table prints them. On a GitHub-hosted
+runner (`GITHUB_ACTIONS=true`, the `perf` job) every `ms` ceiling is the
+specification's number times `RUNNER_ALLOWANCE` in `perf/budgets.ts` — 2.5 —
+and the long-task line stays at zero. The first run of the job on
+`ubuntu-latest` measured the same commit a little over twice as slow on every
+millisecond line as the machine the budgets were written on (CPU per frame
+17.3 ms against 7.8, the composer 50.5 against 22.6, first render 161 against
+87) with zero long tasks (DA-5.1); the allowance leaves about fifteen percent
+over that, so a regression of a runner's own size is still red there, and a
+smaller one is red on the development machine first. The table names the
+widened ceiling beside the budget — `8.3 ms (20.8 on a runner)` — so a green
+runner is never read as the strict number holding.
 
 ```
 | Metric | Budget | Median of 3 | |

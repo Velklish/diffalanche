@@ -57,28 +57,59 @@ export const GATE_VARIANT: VariantSpec = { name: "default", query: "" };
 /** Frame rate is not measurable headless; the CPU ceiling is the frame of 120 fps. */
 export const CPU_PER_FRAME_NOTE = "8.3 ms is the frame of 120 fps (docs/SPEC.md section 6)";
 
+/**
+ * The allowance of a GitHub-hosted runner. The budgets are the specification's
+ * numbers and the development machine (Apple M1 Pro) meets them; `ubuntu-latest`
+ * measured a little over twice as slow on every millisecond line of the same
+ * commit — CPU per frame 17.3 ms against 7.8, the composer 50.5 against 22.6,
+ * first render 161 against 87 (DA-5.1) — with zero long tasks. So on a runner
+ * every `ms` ceiling is multiplied by this, the `tasks` line is not, and the
+ * local run keeps the strict numbers: a budget that only CI enforces stops
+ * being a budget developers meet. The ratio leaves about fifteen percent over
+ * what the runner measured; a regression of that size on the development
+ * machine is caught there first.
+ */
+export const RUNNER_ALLOWANCE = 2.5;
+
 export type GateRow = {
   budget: Budget;
   /** Median over the runs, or `null` for a line that is still pending. */
   measured: number | null;
+  /** What the median was held against: the budget, times the allowance for `ms` lines. */
+  ceiling: number;
   failed: boolean;
 };
 
+export type EvaluateOptions = {
+  /** The table to evaluate; the one above unless a test brings its own. */
+  budgets?: Budget[];
+  /** 1 on a development machine; `RUNNER_ALLOWANCE` on a GitHub-hosted runner. */
+  allowance?: number;
+};
+
 /**
- * A line fails when the median is over budget: one slow run does not fail a
- * build. `budgets` is the table above unless a caller brings its own, which is
- * how the rules here are tested without a pending line having to exist in it.
+ * A line fails when the median is over its ceiling: one slow run does not fail
+ * a build. `budgets` is the table above unless a caller brings its own, which
+ * is how the rules here are tested without a pending line having to exist in
+ * it; `allowance` widens the `ms` ceilings and never the `tasks` one.
  */
-export function evaluate(measurements: Measurement[], budgets: Budget[] = BUDGETS): GateRow[] {
+export function evaluate(measurements: Measurement[], options: EvaluateOptions = {}): GateRow[] {
+  const budgets = options.budgets ?? BUDGETS;
+  const allowance = options.allowance ?? 1;
   return budgets.map((budget) => {
     const field = budget.field;
-    if (field === null) return { budget, measured: null, failed: false };
+    const ceiling = budget.unit === "ms" ? round(budget.budget * allowance) : budget.budget;
+    if (field === null) return { budget, measured: null, ceiling, failed: false };
     const measured = median(measurements.map((one) => one[field]));
     // A line still waiting for the task that completes it is printed, not
     // failed: what it measures is a part of what the budget is about.
-    const failed = budget.pendingUntil === undefined && measured > budget.budget;
-    return { budget, measured, failed };
+    const failed = budget.pendingUntil === undefined && measured > ceiling;
+    return { budget, measured, ceiling, failed };
   });
+}
+
+function round(value: number): number {
+  return Math.round(value * 10) / 10;
 }
 
 export function formatTable(rows: GateRow[], runs: number): string {
@@ -86,7 +117,10 @@ export function formatTable(rows: GateRow[], runs: number): string {
     `| Metric | Budget | Median of ${runs} | |`,
     "|---|---|---|---|",
     ...rows.map((row) => {
-      const budget = `${row.budget.budget} ${row.budget.unit}`;
+      const widened = row.ceiling !== row.budget.budget;
+      const budget = widened
+        ? `${row.budget.budget} ${row.budget.unit} (${row.ceiling} on a runner)`
+        : `${row.budget.budget} ${row.budget.unit}`;
       if (row.measured === null) {
         return `| ${row.budget.label} | ${budget} | pending | ${row.budget.pendingUntil} |`;
       }

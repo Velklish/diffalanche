@@ -1,6 +1,6 @@
 import { describe, expect, it } from "vitest";
 import type { Budget } from "../perf/budgets.ts";
-import { BUDGETS, evaluate, formatTable } from "../perf/budgets.ts";
+import { BUDGETS, evaluate, formatTable, RUNNER_ALLOWANCE } from "../perf/budgets.ts";
 import type { Measurement } from "../perf/harness.ts";
 import { parseArgs } from "../perf/harness.ts";
 
@@ -67,7 +67,7 @@ describe("perf gate", () => {
         pendingUntil: "DA-99",
       },
     ];
-    const rows = evaluate([measurement()], nothing);
+    const rows = evaluate([measurement()], { budgets: nothing });
     expect(rows[0]?.measured).toBeNull();
     expect(rows[0]?.failed).toBe(false);
     expect(formatTable(rows, 1)).toContain("| pending | DA-99 |");
@@ -98,10 +98,9 @@ describe("perf gate", () => {
         pendingUntil: "DA-99",
       },
     ];
-    const rows = evaluate(
-      [measurement({ updateMs: 900 }), measurement({ updateMs: 900 })],
-      waiting,
-    );
+    const rows = evaluate([measurement({ updateMs: 900 }), measurement({ updateMs: 900 })], {
+      budgets: waiting,
+    });
     expect(rows[0]?.measured).toBe(900);
     expect(rows[0]?.failed).toBe(false);
     expect(formatTable(rows, 2)).toContain("| 900 ms | DA-99 |");
@@ -115,6 +114,22 @@ describe("perf gate", () => {
     // for — the watcher, the stream, the fetch, the patch, and the paint.
     expect(update?.failed).toBe(true);
     expect(formatTable(rows, 2)).toContain("| 900 ms | FAIL |");
+  });
+
+  it("widens every ms ceiling by the runner allowance, and never the long-task one", () => {
+    // What ubuntu-latest measured on the same commit the development machine
+    // held (DA-5.1): a little over twice as slow, zero long tasks.
+    const runner = measurement({ cpuPerFrameMs: 17.3, composerOpenMs: 50.5, firstRenderMs: 161 });
+    expect(evaluate([runner]).some((row) => row.failed)).toBe(true);
+    const rows = evaluate([runner], { allowance: RUNNER_ALLOWANCE });
+    expect(rows.filter((row) => row.failed)).toEqual([]);
+    expect(formatTable(rows, 1)).toContain("| 8.3 ms (20.8 on a runner) | 17.3 ms | ok |");
+    // The long-task line is a count of zero on every machine.
+    const tasks = evaluate([measurement({ scrollLongTasks: 1 })], { allowance: RUNNER_ALLOWANCE });
+    expect(tasks.find((row) => row.budget.field === "scrollLongTasks")?.failed).toBe(true);
+    // Twice the runner's own reading is a regression the allowance does not hide.
+    const slow = measurement({ cpuPerFrameMs: 21 });
+    expect(evaluate([slow], { allowance: RUNNER_ALLOWANCE }).some((row) => row.failed)).toBe(true);
   });
 
   it("marks the line that is over budget and only that one", () => {

@@ -13,6 +13,16 @@ and `bun run release` refuses a version that has no section. See
 
 ## [Unreleased]
 
+### Changed
+
+- The performance gate on a GitHub-hosted runner holds every millisecond
+  ceiling times a named allowance — `RUNNER_ALLOWANCE` in `perf/budgets.ts`,
+  2.5 — and the long-task line at zero; a development machine holds the
+  specification's numbers. The first `perf` job on `ubuntu-latest` measured the
+  same commit a little over twice as slow on every millisecond line, with zero
+  long tasks, and the table now names the widened ceiling beside the budget.
+  See [11-perf.md](docs/reference/11-perf.md).
+
 ## [0.1.0] - 2026-09-05
 
 ### Changed
