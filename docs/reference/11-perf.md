@@ -1,4 +1,4 @@
-# 11 · Synthetic review generator, the performance gate, the smoke matrix, and the runtime of the unit suite
+# 11 · Synthetic review generator, the performance gate, the smoke matrix, the runtime of the unit suite, and the release
 
 `scripts/synth.ts` builds the synthetic review: the fixture the performance
 gate, the diff rendering spike, and the scanner and storage tests all measure
@@ -415,3 +415,85 @@ the CLI, or the scanner; the gates stay the fast ones.
 the ones in the repository were taken on macOS, so a Linux runner would compare
 against pixels it never draws; the acceptance suite, which takes no screenshots,
 is what CI runs instead ([08-ui.md](08-ui.md#ui-tests)).
+
+## The release
+
+The two delivery channels of [06-cli.md](06-cli.md) are published by one
+workflow, `.github/workflows/release.yml`, triggered by one annotated tag:
+
+```sh
+bun run release 0.1.0               # the preflight, then the tag
+bun run release 0.1.0 -- --dry-run  # the preflight, no tag
+git push origin v0.1.0              # the owner's step, and the trigger
+```
+
+`scripts/release.ts` is the local half — everything that can be answered before
+a tag exists, cheapest check first, so a failure costs the seconds before the
+suite rather than a published version:
+
+| Check | Fails when |
+|---|---|
+| version | `package.json` declares another version than the argument |
+| working tree | `git status --porcelain` is not empty, untracked files included |
+| branch | `HEAD` is not `main`, or is detached |
+| tag | `v<version>` already exists |
+| changelog | `CHANGELOG.md` has no `## [<version>]` section, or the section is empty, or there is no Unreleased one |
+| suite | `bun run test` fails |
+
+The changelog check reads the section the way the workflow reads it — from under
+the heading to the next `## [` — rather than looking for the heading alone. A
+heading with nothing under it would otherwise pass here and fail the workflow,
+after six binaries have been built and the tag is already on the remote.
+
+Then it writes `git tag -a v<version>` and stops. It never pushes: the push is
+the owner's, and it is the whole trigger. It never edits a file either — moving
+the Unreleased entries under a version heading is a commit made before the
+release, because an edit made by the preflight would dirty the tree it has just
+checked and the tag would point at the commit before that edit. The script says
+which edit to make and refuses until it is committed.
+
+The workflow does the rest, on the commit the tag names.
+
+- **The version comes from the tag** — `GITHUB_REF_NAME` without its `v` — and
+  is checked against `package.json` a second time, so a tag made by hand rather
+  than by the script is caught before anything is published.
+- **The release notes are read, not written:** the `## [<version>]` section of
+  `CHANGELOG.md`, up to the next version heading. A version with no section, or
+  one whose heading has nothing but blank lines under it, stops the release
+  there.
+- **One job builds all six binaries.** `bun build --compile` cross-compiles, so
+  a matrix of six runners would install the toolchain and rebuild the same UI
+  six times to emit one file each, and the checksums would have to be collected
+  back from six uploads instead of computed over one directory. The binaries are
+  not executed in this workflow: running each channel on its own platform is
+  what the smoke matrix does, on the same commit.
+- **`SHA256SUMS.txt`** is written over `dist/diffalanche-*` and attached to the
+  release beside the six binaries. The step counts its own lines first — six
+  targets, six lines — and then re-reads the files with `sha256sum -c`. What
+  that rules out is a build that emitted fewer binaries than the six targets,
+  which would otherwise produce a release quietly short of a platform; what it
+  does not do is authenticate the download, which is the provenance
+  attestation's job on the npm side and the release page's on this one.
+- **npm is published with provenance:** `npm publish --provenance --access
+  public` from the repository secret `NPM_TOKEN`, with `id-token: write` so npm
+  can sign the attestation naming the commit and the run. The binaries stay out
+  of the tarball — `files` in `package.json` lists `dist` and `skills` and
+  excludes `dist/diffalanche-*`, which are release assets and about 490 MB of
+  them.
+
+The release is a draft until its binaries are on it — `gh release create
+--draft`, then the upload, then `gh release edit --draft=false` — so the page
+appears complete or not at all. Half a gigabyte takes time to upload and an
+upload can fail; published first would mean a page carrying notes and no
+downloads, for seconds when it works and until someone noticed when it did not.
+
+The GitHub release is created before the npm publish, and the job can be re-run:
+an existing release is reused rather than refused, and `gh release upload
+--clobber` replaces the assets. That ordering and that idempotence are the same
+decision — a published npm version cannot be taken back, so the step that can
+fail on its own (a token, a name, a registry) is the last one, and retrying it
+means re-running the job, which passes back through the release step.
+
+A pre-release version — one with a `-`, such as `0.1.0-rc.1` — goes to the npm
+`next` dist-tag and is marked a pre-release on GitHub, so `npx diffalanche`
+keeps resolving to the last stable version.

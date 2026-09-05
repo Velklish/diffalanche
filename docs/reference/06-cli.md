@@ -222,3 +222,10 @@ the runner's platform. What it asks of each command is in
 
 Run from source, `bun src/cli/index.ts serve` takes the UI from `dist/ui` two
 levels up, which is where `bun run build:ui` puts it.
+
+The two channels are published by one workflow from one tag, and they are
+published differently: the npm channel is `dist/cli.js` and `dist/ui` in the
+tarball, and the binaries are assets of the GitHub release with a
+`SHA256SUMS.txt` beside them — `files` in `package.json` keeps them out of the
+tarball, where 490 MB of executables for six platforms have no business being.
+See [11-perf.md](11-perf.md).

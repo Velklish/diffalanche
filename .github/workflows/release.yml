@@ -1,0 +1,143 @@
+name: release
+
+# One annotated tag, made by `scripts/release.ts` and pushed by the owner, is
+# the whole trigger. Nothing here creates a tag, and nothing releases from a
+# branch: what is published is the commit the tag points at.
+on:
+  push:
+    tags: ["v*"]
+
+permissions:
+  contents: read
+
+jobs:
+  release:
+    runs-on: ubuntu-latest
+    permissions:
+      # The GitHub release and the binaries attached to it.
+      contents: write
+      # The OIDC token npm signs the provenance attestation with.
+      id-token: write
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-node@v4
+        with:
+          node-version: 22
+          # Writes the .npmrc that `npm publish` reads NODE_AUTH_TOKEN from.
+          registry-url: https://registry.npmjs.org
+      - uses: oven-sh/setup-bun@v2
+        with:
+          bun-version: 1.3.14
+      - run: bun install --frozen-lockfile
+
+      - name: the version comes from the tag
+        id: version
+        # `package.json` is the second opinion, not the source: a tag that
+        # disagrees with it would publish one version under another's name.
+        # `scripts/release.ts` checks the same pair before the tag is made, so
+        # this is the check surviving a tag made by hand.
+        run: |
+          set -eu
+          version="${GITHUB_REF_NAME#v}"
+          declared=$(node -p "require('./package.json').version")
+          if [ "$version" != "$declared" ]; then
+            echo "::error::tag $GITHUB_REF_NAME says $version, package.json says $declared"
+            exit 1
+          fi
+          # A pre-release — 0.1.0-rc.1 — goes to the `next` dist-tag and is
+          # marked a pre-release on GitHub, so `npx diffalanche` keeps pointing
+          # at the last stable version.
+          case "$version" in
+            *-*) dist_tag=next; prerelease=--prerelease ;;
+            *) dist_tag=latest; prerelease= ;;
+          esac
+          {
+            echo "version=$version"
+            echo "dist_tag=$dist_tag"
+            echo "prerelease=$prerelease"
+          } >> "$GITHUB_OUTPUT"
+          echo "$GITHUB_REF_NAME: npm dist-tag $dist_tag"
+
+      - name: the release notes are this version's changelog section
+        env:
+          VERSION: ${{ steps.version.outputs.version }}
+        # Keep a Changelog gives one section per version, so the notes are read
+        # rather than written; a version with no section stops the release here,
+        # before anything is published.
+        run: |
+          set -eu
+          awk -v head="## [$VERSION]" '
+            index($0, head) == 1 { inside = 1; next }
+            inside && /^## \[/ { exit }
+            inside { print }
+          ' CHANGELOG.md > "$RUNNER_TEMP/notes.md"
+          # Not `-s`: a section of blank lines is a file with a size and no
+          # notes in it, and `scripts/release.ts` reads it the same way.
+          if ! grep -q '[^[:space:]]' "$RUNNER_TEMP/notes.md"; then
+            echo "::error::CHANGELOG.md has no section for $VERSION, or nothing under its heading"
+            exit 1
+          fi
+
+      # `bun build --compile` cross-compiles, so all six binaries come out of
+      # one runner. A matrix of six would install the toolchain and rebuild the
+      # UI six times to emit one file each, and the checksums would have to be
+      # collected back from six uploads instead of computed over one directory.
+      # The binaries are not executed here: running each channel on its own
+      # platform is the `smoke` matrix of ci.yml, on the commit this tag names.
+      - name: build both channels
+        run: bun run build
+
+      - name: checksums
+        # Six lines, one per target: a build that emitted fewer binaries would
+        # otherwise produce a release short one platform and say nothing. The
+        # `-c` re-reads the files the release is about to upload.
+        run: |
+          set -eu
+          cd dist
+          sha256sum diffalanche-* > SHA256SUMS.txt
+          lines=$(wc -l < SHA256SUMS.txt | tr -d " ")
+          if [ "$lines" -ne 6 ]; then
+            echo "::error::SHA256SUMS.txt has $lines lines, one per binary built; six targets were expected"
+            exit 1
+          fi
+          sha256sum -c SHA256SUMS.txt
+          cat SHA256SUMS.txt
+
+      # The GitHub release first, npm second: a published npm version cannot be
+      # taken back, and this step can be run again. Which is the point of the
+      # three commands: the npm publish below is the step most likely to fail on
+      # its own — a token, a name, a registry — and the only way to retry it is
+      # to re-run the job, which comes back through here. So an existing release
+      # is reused rather than a second one refused, and the assets are replaced.
+      #
+      # It is a draft until the binaries are on it. Half a gigabyte takes time to
+      # upload, and an upload can fail: published-then-filled would show a
+      # release page with notes and no downloads, for seconds on the happy path
+      # and until someone noticed on the unhappy one.
+      - name: github release
+        env:
+          GH_TOKEN: ${{ github.token }}
+          PRERELEASE: ${{ steps.version.outputs.prerelease }}
+        run: |
+          set -eu
+          gh release view "$GITHUB_REF_NAME" > /dev/null 2>&1 || gh release create "$GITHUB_REF_NAME" \
+            --draft \
+            --title "$GITHUB_REF_NAME" \
+            --notes-file "$RUNNER_TEMP/notes.md" \
+            $PRERELEASE
+          gh release upload "$GITHUB_REF_NAME" \
+            dist/diffalanche-* dist/SHA256SUMS.txt \
+            --clobber
+          gh release edit "$GITHUB_REF_NAME" --draft=false
+
+      - name: publish to npm
+        env:
+          NODE_AUTH_TOKEN: ${{ secrets.NPM_TOKEN }}
+          DIST_TAG: ${{ steps.version.outputs.dist_tag }}
+        # `--provenance` signs the package with this workflow's OIDC token: the
+        # npm page then names the commit and the run it was built from. `files`
+        # in package.json keeps the six binaries out of the tarball — they are
+        # release assets, and the npm channel is the bundle and the UI.
+        run: |
+          set -eu
+          npm publish --provenance --access public --tag "$DIST_TAG"

@@ -3,6 +3,14 @@
 The format follows [Keep a Changelog](https://keepachangelog.com/en/1.1.0/), and
 the project follows [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
+One section per version, newest first, under `## [x.y.z] - YYYY-MM-DD`, and an
+`## [Unreleased]` section that is always present: every change lands there
+first, and a release renames it and opens an empty one above it. The release
+workflow reads the section of the version it is publishing and uses it as the
+release notes, so an entry missing here is missing from the release page too —
+and `bun run release` refuses a version that has no section. See
+[Releases](README.md#releases).
+
 ## [Unreleased]
 
 ### Changed
@@ -30,6 +38,30 @@ the project follows [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
   together, and `tests/design-contrast.test.ts` is what holds the ratios.
 
 ### Added
+
+- The release pipeline. One annotated tag, `v0.1.0`, made by `bun run release`
+  and pushed by hand, publishes both delivery channels:
+  `.github/workflows/release.yml` takes the version from the tag and checks it
+  against `package.json`, reads the release notes out of this file, builds the
+  UI, `dist/cli.js`, and all six binaries in one job — `bun build --compile`
+  cross-compiles, so a matrix of six would rebuild the same UI six times —
+  attaches the binaries and a `SHA256SUMS.txt` to a GitHub release — the step
+  counts its lines against the six targets, so a build short of a binary stops
+  the release rather than shipping a page missing a platform — and publishes to
+  npm with provenance from the `NPM_TOKEN` secret. The release is a draft until
+  its binaries are on it, and it is made before the npm publish, because it can
+  be made again and a published npm version cannot be taken back; a pre-release
+  version goes to the `next` dist-tag. `scripts/release.ts` is the local
+  preflight — the declared version, a clean tree, the branch `main`, a free tag,
+  this file's section with something under it, and `bun run test` — and it makes
+  the tag and nothing else: pushing is the owner's step. `files` in
+  `package.json` now excludes `dist/diffalanche-*`, so the npm tarball is the
+  bundle, the UI, and the skills rather than 490 MB of binaries that are release
+  assets. `ci.yml` gains a `concurrency` group that cancels superseded pull
+  request runs — a push to `main` gets a group per commit, because a shared
+  group cancels what is queued in it as well — and a note of the check-run names
+  the branch protection rule has to list, which are not the job ids. See
+  [11-perf.md](docs/reference/11-perf.md).
 
 - The acceptance list of specification section 10 as a suite (DA-28). Every
   line of it that involves the UI is one named test in `e2e/acceptance.spec.ts`

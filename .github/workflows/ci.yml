@@ -5,9 +5,42 @@ on:
     branches: [main]
   pull_request:
 
+# A superseded run of a pull request is cancelled. A push to `main` gets a group
+# of its own, one per commit, rather than `cancel-in-progress: false` in a shared
+# one: a shared group cancels the runs *queued* in it too, so three pushes inside
+# one run's duration would leave the middle commit with no CI result at all.
+concurrency:
+  group: ci-${{ github.workflow }}-${{ github.event_name == 'pull_request' && github.ref || github.sha }}
+  cancel-in-progress: true
+
 permissions:
   contents: read
 
+# What is required on a pull request to `main` is a branch protection rule — a
+# GitHub setting on the repository, not a file. The rule matches **check-run
+# names**, not job ids: a job reports under its `name:` when it has one and under
+# its id when it does not, and a matrix job reports one check per cell. The names
+# to list, spelled as they report:
+#
+#     check
+#     unit suite on Bun          <- the job id is `test-bun`
+#     perf
+#     smoke node on ubuntu-latest
+#     smoke node on macos-latest
+#     smoke bun on ubuntu-latest
+#     smoke bun on macos-latest
+#     smoke binary on ubuntu-latest
+#     smoke binary on macos-latest
+#     e2e                        <- once DA-28's job is on `main`
+#
+# There is no check called `test-bun` and none called `smoke`: a rule asking for
+# those waits for a report that never comes, and every pull request sits at
+# "Expected — waiting for status to be reported" instead. `smoke node on
+# windows-latest` is deliberately not in the list until DA-45 has run that cell
+# and fixed what it finds: nobody has watched it pass, so it is not a gate yet.
+# `pull_request` stays unfiltered above — a pull request between two work
+# branches is worth the same run, and what makes a check required is the rule,
+# not the trigger.
 jobs:
   check:
     runs-on: ubuntu-latest

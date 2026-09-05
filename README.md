@@ -18,8 +18,9 @@ and later are in [docs/SPEC.md](docs/SPEC.md) section 10.
 
 ## Install
 
-From the first release on (see the release task DA-31 — **the package is not on
-npm yet**), the npm channel needs no install of its own:
+From the first release on (**the package is not on npm yet**; how a release is
+made is under [Releases](#releases)), the npm channel needs no install of its
+own:
 
 ```sh
 npx diffalanche serve --open
@@ -438,6 +439,64 @@ Without a hook the check is manual, once, on the files a change touched:
 ```sh
 node ~/.claude/skills/impeccable/scripts/detect.mjs --json src/ui/App.tsx src/ui/styles.css
 ```
+
+## Releases
+
+A release is one annotated tag, `v0.1.0`, on `main`. The tag is made locally and
+pushed by hand; the push is the only thing that publishes anything.
+
+```sh
+bun run release 0.1.0             # every check, then the tag
+bun run release 0.1.0 -- --dry-run  # every check, no tag
+git push origin v0.1.0            # yours, and what starts the release workflow
+```
+
+`scripts/release.ts` is the preflight, cheapest check first: `package.json`
+declares that version, the working tree is clean with untracked files included,
+the branch is `main`, the tag is free, `CHANGELOG.md` has a `## [0.1.0]` section
+with something under it and still has an Unreleased one, and `bun run test`
+passes. Then it writes the annotated tag and stops. It never pushes and never
+edits a file — moving the Unreleased entries under a version heading is a commit
+you make first, because an edit made here would dirty the tree and the tag would
+point at the commit before it.
+
+`.github/workflows/release.yml` does the rest, on the commit the tag names:
+
+- the version comes from the tag and is checked against `package.json` again, so
+  a tag made by hand is caught too;
+- the release notes are that version's `CHANGELOG.md` section, read out of the
+  file;
+- `bun run build` builds the UI, `dist/cli.js`, and all six binaries in one job —
+  `bun build --compile` cross-compiles, so a matrix of six would only rebuild the
+  same UI six times;
+- the binaries and a `SHA256SUMS.txt` are attached to a GitHub release. The
+  checksum step counts its own lines against the six targets and re-reads the
+  files with `sha256sum -c`, so a build that emitted fewer binaries stops the
+  release instead of shipping one short a platform;
+- `npm publish --provenance` publishes the npm channel from the repository
+  secret `NPM_TOKEN`, with the workflow's OIDC token as the provenance
+  attestation. The six binaries stay out of the tarball: they are release
+  assets, and `files` in `package.json` excludes them.
+
+The release page appears only once its binaries are on it: the release is
+created as a draft, the assets are uploaded, and the draft is published last.
+Half a gigabyte takes time to upload and an upload can fail, and a release page
+with notes and no downloads is worse than one that is not there yet.
+
+The job can be run again. The GitHub release is reused if it already exists and
+its assets are replaced, which is what makes a retry of the npm publish — the
+step most likely to fail on its own — a matter of re-running the job.
+
+A pre-release version — `0.1.0-rc.1` — goes to the npm `next` dist-tag and is
+marked a pre-release on GitHub, so `npx diffalanche` keeps pointing at the last
+stable one.
+
+`CHANGELOG.md` follows [Keep a Changelog](https://keepachangelog.com/en/1.1.0/):
+one section per version, newest first, under `## [x.y.z] - YYYY-MM-DD`, and an
+`## [Unreleased]` section that is always present — every change lands there
+first, and a release renames it and opens an empty one above. The release reads
+that file rather than a hand-written note, so an entry missing from it is
+missing from the release page too.
 
 ## Documentation
 
