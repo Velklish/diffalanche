@@ -1,9 +1,9 @@
 # DA-17 · Write API: comments, sessions, base, export
 
-- **Order:** 170
 - **Scope:** 07-server (see [reference](../../reference/README.md))
 - **Created:** 2026-09-05
 - **Dependencies:** DA-10, DA-16
+- **Taken:** 2026-09-05
 
 ## Context
 

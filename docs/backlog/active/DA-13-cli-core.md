@@ -1,9 +1,9 @@
 # DA-13 · CLI core: serve, review, diff
 
-- **Order:** 130
 - **Scope:** 06-cli (see [reference](../../reference/README.md))
 - **Created:** 2026-09-05
 - **Dependencies:** DA-9, DA-11
+- **Taken:** 2026-09-05
 
 ## Context
 

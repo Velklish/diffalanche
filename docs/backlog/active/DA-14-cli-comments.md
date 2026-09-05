@@ -1,9 +1,9 @@
 # DA-14 · CLI comments: list, show, reply, comment, resolve, reopen, export
 
-- **Order:** 140
 - **Scope:** 06-cli (see [reference](../../reference/README.md))
 - **Created:** 2026-09-05
 - **Dependencies:** DA-10, DA-13
+- **Taken:** 2026-09-05
 
 ## Context
 

@@ -1,9 +1,9 @@
 # DA-18 · SSE stream of live events
 
-- **Order:** 180
 - **Scope:** 07-server (see [reference](../../reference/README.md))
 - **Created:** 2026-09-05
 - **Dependencies:** DA-12, DA-16
+- **Taken:** 2026-09-05
 
 ## Context
 

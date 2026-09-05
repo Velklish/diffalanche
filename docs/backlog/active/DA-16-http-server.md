@@ -1,9 +1,9 @@
 # DA-16 · HTTP server on Hono: static UI and the review bundle
 
-- **Order:** 160
 - **Scope:** 07-server (see [reference](../../reference/README.md))
 - **Created:** 2026-09-05
 - **Dependencies:** DA-11, DA-12
+- **Taken:** 2026-09-05
 
 ## Context
 

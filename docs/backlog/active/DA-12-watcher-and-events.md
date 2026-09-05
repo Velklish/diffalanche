@@ -1,9 +1,9 @@
 # DA-12 · Watcher and activity events
 
-- **Order:** 120
 - **Scope:** 05-watcher (see [reference](../../reference/README.md))
 - **Created:** 2026-09-05
 - **Dependencies:** DA-7, DA-9, DA-10
+- **Taken:** 2026-09-05
 
 ## Context
 
