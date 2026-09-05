@@ -2,7 +2,7 @@
 
 How diffalanche works today — from the code, not intention. Intent and rationale are in [ADRs](../README.md); this reference describes only the behaviour of the running version. It is organised by subsystem so each file can be edited independently. The “Scope” field of tasks links here.
 
-There is no product code yet. The table names the subsystems the task cut expects; each section file is written by the task that creates the subsystem (see DA-30 for the pass that fills them in).
+There is no product code yet. The table names the subsystems the task cut expects; each section file is written by the task that creates the subsystem (see DA-30 for the pass that fills them in). A section that links to a file has been written.
 
 | Section | About | Planned path |
 |---|---|---|
@@ -16,4 +16,4 @@ There is no product code yet. The table names the subsystems the task cut expect
 | 08-ui.md | Screens, store, keyboard map, live patching | `src/ui` |
 | 09-ml.md | Embedding model, index, suggestions, generative model (Phase 2 and later) | `src/core/ml` |
 | 10-skills.md | Shipped agent skills and the reply protocol | `skills/` |
-| 11-perf.md | Synthetic review generator and the performance gate | `scripts/`, `perf/` |
+| [11-perf.md](11-perf.md) | Synthetic review generator and the performance gate | `scripts/`, `perf/` |

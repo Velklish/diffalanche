@@ -23,5 +23,5 @@ The performance budgets in `docs/SPEC.md` section 6 are measured on a synthetic 
 ## Verification
 
 - Running the generator twice with the same seed produces byte-identical trees except `.git` metadata timestamps.
-- `git diff --stat` over all repositories sums to 300 files and 30 000 changed lines (±1 %), printed by the script at the end.
+- The change set in the sense of `docs/SPEC.md` section 3 (tracked edits from `git diff` plus untracked files, which `git diff --stat` alone does not show) sums to exactly 300 files and 30 000 changed lines; the script prints the three totals (git diff, untracked, change set) at the end.
 - A Vitest test runs the small profile in a temporary directory and checks the counts.

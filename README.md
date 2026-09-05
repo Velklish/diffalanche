@@ -26,7 +26,7 @@ bun run build      # bundle the CLI into dist/cli.js
 ```
 
 `bun run dev` runs the CLI from source. The same lint, typecheck, and test
-commands run in CI on every push and pull request. Biome skips `backslop.json`:
+commands run in CI on pushes to `main` and on pull requests. Biome skips `backslop.json`:
 the backslop CLI rewrites that file in its own style, so formatting it here
 would only make the two tools fight.
 

@@ -22,7 +22,8 @@
     "build": "bun build src/cli/index.ts --target node --outfile dist/cli.js",
     "test": "vitest run",
     "lint": "biome check .",
-    "typecheck": "tsc --noEmit"
+    "typecheck": "tsc --noEmit",
+    "synth": "bun run scripts/synth.ts"
   },
   "devDependencies": {
     "@biomejs/biome": "^2.5.12",
