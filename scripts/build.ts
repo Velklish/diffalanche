@@ -7,6 +7,7 @@
 import { execFileSync } from "node:child_process";
 import { mkdirSync, readdirSync, readFileSync, rmSync, statSync, writeFileSync } from "node:fs";
 import { join, relative } from "node:path";
+import { arch, argv, exit, platform, stderr, stdout } from "node:process";
 import { contentType } from "../src/server/assets.ts";
 
 type Target = { platform: string; arch: string; suffix?: string };
@@ -22,6 +23,55 @@ const TARGETS: Target[] = [
 ];
 
 const GENERATED = ".build";
+
+const USAGE = `Usage: bun run build [-- --target <name>]
+
+  --target <name>  one binary instead of six: a platform-architecture name such
+                   as darwin-arm64, or "current" for the machine building
+`;
+
+/** This machine's target, spelled the way `TARGETS` spells it. */
+function currentTarget(): string {
+  return `${platform === "win32" ? "windows" : platform}-${arch}`;
+}
+
+/**
+ * Which binaries to compile. A release builds all six; a CI job that only runs
+ * the binary it built compiles one, which is six times less work on a runner
+ * that throws the other five away.
+ */
+function parse(args: string[]): Target[] {
+  let name: string | undefined;
+  for (let i = 0; i < args.length; i += 1) {
+    const arg = args[i];
+    if (arg === "--target") {
+      i += 1;
+      const value = args[i];
+      if (value === undefined) throw new Error(`--target needs a name\n\n${USAGE}`);
+      name = value === "current" ? currentTarget() : value;
+    } else if (arg === "--help" || arg === "-h") {
+      stdout.write(USAGE);
+      exit(0);
+    } else {
+      throw new Error(`unknown argument: ${arg}\n\n${USAGE}`);
+    }
+  }
+  if (name === undefined) return TARGETS;
+  const chosen = TARGETS.filter((target) => `${target.platform}-${target.arch}` === name);
+  if (chosen.length === 0) {
+    const names = TARGETS.map((target) => `${target.platform}-${target.arch}`).join(", ");
+    throw new Error(`--target: no target ${name}; one of ${names}, or current\n\n${USAGE}`);
+  }
+  return chosen;
+}
+
+let targets: Target[];
+try {
+  targets = parse(argv.slice(2));
+} catch (error) {
+  stderr.write(`build: ${error instanceof Error ? error.message : String(error)}\n`);
+  exit(1);
+}
 
 function bun(args: string[]): void {
   execFileSync("bun", args, { stdio: "inherit" });
@@ -92,7 +142,7 @@ bun(["build", "src/cli/index.ts", "--target", "node", "--outfile", "dist/cli.js"
 console.log(`dist/cli.js  ${size("dist/cli.js")}`);
 
 const entry = generateEmbeddedUi();
-for (const target of TARGETS) {
+for (const target of targets) {
   const outfile = `dist/diffalanche-${target.platform}-${target.arch}${target.suffix ?? ""}`;
   bun([
     "build",

@@ -1,6 +1,7 @@
 # ADR-006: Vitest, Node and Bun smoke matrix, Playwright performance gate
 
 **Status:** Accepted
+**Revised by [ADR-009](adr-009-unit-suite-on-bun.md):** the unit suite runs on Bun's runtime as well, not only the smoke matrix.
 **Date:** 2026-09-05
 **Deciders:** Velklish
 

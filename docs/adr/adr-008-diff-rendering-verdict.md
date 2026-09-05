@@ -1,6 +1,7 @@
 # ADR-008: Diff rendering verdict — react-diff-view with file-card virtualisation
 
 **Status:** Accepted
+**Revises [ADR-002](adr-002-stack-and-delivery.md):** the diff library is `react-diff-view`, and `src/server/runtime.ts` is the one exception to "no `Bun.*` outside build scripts".
 **Date:** 2026-09-05
 **Deciders:** Velklish
 

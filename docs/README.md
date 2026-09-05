@@ -19,6 +19,7 @@ The canonical project documentation. For current work, use `npx github:Velklish/
 | [adr/adr-006-verification.md](adr/adr-006-verification.md) | Vitest, Node and Bun smoke matrix, Playwright performance gate | Accepted |
 | [adr/adr-007-execution-model.md](adr/adr-007-execution-model.md) | Phase 0 in one session, Phase 1 by tracks with isolated review | Accepted |
 | [adr/adr-008-diff-rendering-verdict.md](adr/adr-008-diff-rendering-verdict.md) | Diff rendering verdict: react-diff-view with file-card virtualisation | Accepted |
+| [adr/adr-009-unit-suite-on-bun.md](adr/adr-009-unit-suite-on-bun.md) | The unit suite also runs on Bun's runtime, asserted by the suite itself | Accepted |
 
 ## Cross-cutting principles
 

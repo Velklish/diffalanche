@@ -22,7 +22,26 @@ jobs:
       - run: bun install --frozen-lockfile
       - run: bun run lint
       - run: bun run typecheck
+      # The log says which runtime ran the suite, not only the assertion inside
+      # it: Vitest runs the tests on Node here, and `test-bun` is the other half.
+      - name: the runtime of this job
+        run: node --version && node -e 'console.log(process.versions)'
       - run: bun run test
+
+  test-bun:
+    name: unit suite on Bun
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - uses: oven-sh/setup-bun@v2
+        with:
+          bun-version: 1.3.14
+      - run: bun install --frozen-lockfile
+      - name: the runtime of this job
+        run: bun --version && bun -e 'console.log(process.versions)'
+      # The same Vitest suite as `check`, on Bun's own runtime instead of Node's.
+      # `tests/runtime.test.ts` refuses the job if it is Node after all.
+      - run: bun run test:bun
 
   perf:
     runs-on: ubuntu-latest
@@ -35,3 +54,60 @@ jobs:
       - run: bunx playwright install --with-deps chromium
       - run: bun run synth -- --out .perf/fixture
       - run: bun run perf
+
+  smoke:
+    name: smoke ${{ matrix.channel }} on ${{ matrix.os }}
+    runs-on: ${{ matrix.os }}
+    # Windows is written here and verified in DA-45, which runs it, fixes what
+    # it finds, and makes the job required. Until then a red Windows job is
+    # something to read, not a blocked pull request.
+    continue-on-error: ${{ matrix.os == 'windows-latest' }}
+    strategy:
+      fail-fast: false
+      matrix:
+        include:
+          # The npm channel runs on Node; Bun is the toolchain that builds the
+          # bundle and generates the fixture, so it is pinned with the others.
+          - { channel: node, os: ubuntu-latest, bun: 1.3.14 }
+          - { channel: node, os: macos-latest, bun: 1.3.14 }
+          - { channel: node, os: windows-latest, bun: 1.3.14 }
+          # Here Bun is what is under test, so the job takes the release of the
+          # day: a Bun that breaks the tool shows up in this matrix.
+          - { channel: bun, os: ubuntu-latest, bun: latest }
+          - { channel: bun, os: macos-latest, bun: latest }
+          - { channel: binary, os: ubuntu-latest, bun: 1.3.14 }
+          - { channel: binary, os: macos-latest, bun: 1.3.14 }
+    defaults:
+      run:
+        # Git Bash on the Windows runner: the smoke script is POSIX shell.
+        shell: bash
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-node@v4
+        with:
+          node-version: 22
+      - uses: oven-sh/setup-bun@v2
+        with:
+          bun-version: ${{ matrix.bun }}
+      - run: bun install --frozen-lockfile
+      - name: build the channel
+        run: |
+          case "${{ matrix.channel }}" in
+            node) bun run build:ui && bun run build:cli ;;
+            bun) bun run build:ui ;;
+            # One binary, not six: the job runs the one of its own runner.
+            binary) bun run build -- --target current ;;
+          esac
+      - name: smoke
+        run: |
+          case "${{ matrix.channel }}" in
+            node) command="node dist/cli.js" ;;
+            bun) command="bun src/cli/index.ts" ;;
+            binary)
+              platform=$(node -p "process.platform === 'win32' ? 'windows' : process.platform")
+              suffix=""
+              [ "$platform" = windows ] && suffix=".exe"
+              command="./dist/diffalanche-$platform-$(node -p process.arch)$suffix"
+              ;;
+          esac
+          scripts/smoke.sh $command

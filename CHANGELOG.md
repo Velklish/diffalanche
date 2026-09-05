@@ -7,6 +7,26 @@ the project follows [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
 ### Added
 
+- The unit suite runs on both runtimes. `bun run test` starts Vitest through Bun
+  and Vitest runs the tests on Node; `bun run test:bun` runs the same suite on
+  Bun's own runtime, and the `test-bun` job of `.github/workflows/ci.yml` is
+  that half in CI. `tests/runtime.test.ts` compares the runtime it finds with
+  `DIFFALANCHE_TEST_RUNTIME`, so a runner that quietly goes back to spawning
+  Node workers fails the job instead of passing it. See
+  [11-perf.md](docs/reference/11-perf.md).
+- CLI smoke matrix: `scripts/smoke.sh <command>` runs one review from
+  `review new` to `export` through whichever CLI it is given — the npm bundle on
+  Node, the sources on Bun, or a compiled binary — under a temporary root of its
+  own that no repository of the checkout is in. It generates the small synthetic
+  profile, reads the anchor of its comment out of `diff --json`, serves the
+  review in the background and checks that `/api/review` agrees with it, opens a
+  comment as a human, replies as an agent, resolves it, and exports it; a
+  failure prints the command as it would be typed again, its exit code, and its
+  stderr. The `smoke` job of `.github/workflows/ci.yml` runs it on Node 22
+  (ubuntu, macOS, Windows), on the current Bun (ubuntu, macOS), and against the
+  binary built in the same job (ubuntu, macOS); the Windows job is
+  `continue-on-error` until DA-45 verifies it. See
+  [11-perf.md](docs/reference/11-perf.md).
 - The live stream: `GET /api/events` sends what the watcher noticed as named
   Server-Sent Events with an id that counts up — `diff-changed`,
   `comment-added`, `reply-added`, `comment-status`, `session-changed`,

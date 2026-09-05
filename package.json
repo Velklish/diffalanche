@@ -22,6 +22,7 @@
     "dev": "bun run src/cli/index.ts",
     "build": "bun run scripts/build.ts",
     "test": "vitest run",
+    "test:bun": "DIFFALANCHE_TEST_RUNTIME=bun bunx --bun vitest run",
     "lint": "biome check .",
     "typecheck": "tsc -p tsconfig.json && tsc -p src/ui/tsconfig.json && tsc -p tsconfig.tools.json",
     "synth": "bun run scripts/synth.ts",

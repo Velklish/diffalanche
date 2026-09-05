@@ -105,9 +105,11 @@ flag only since then; below that one test skips and says so.
 bun install        # dependencies and the lockfile
 bun run lint       # Biome: lint and format check
 bun run typecheck  # tsc over the three TypeScript projects
-bun run test       # Vitest
+bun run test       # Vitest on Node
+bun run test:bun   # the same suite on Bun's runtime
 bun run test:ui    # Playwright: the UI against its screenshot baselines
 bun run build      # both delivery channels: dist/cli.js and six binaries
+bun run build -- --target current   # one binary, for this machine
 bun run build:cli  # the npm bundle alone
 bun run build:ui   # build the UI into dist/ui with Vite
 ```
@@ -132,6 +134,25 @@ tests run against that fixture, and only the shell tests stub an empty review to
 measure the shell on its own. It needs Chromium, the same one the performance
 harness uses. The baselines are per platform and the ones in the repository were
 taken on macOS.
+
+`scripts/smoke.sh <command>` runs one review from `review new` to `export`
+through one delivery channel, whichever CLI it is given, under a temporary root
+of its own:
+
+```sh
+scripts/smoke.sh node dist/cli.js                # the npm bundle on Node
+scripts/smoke.sh bun src/cli/index.ts            # the sources on Bun
+scripts/smoke.sh ./dist/diffalanche-darwin-arm64 # the binary of this platform
+```
+
+It needs the channel built first (`bun run build`, or `build:ui` alone for the
+sources on Bun) and takes about 4 seconds. CI runs the same script on Node, on
+Bun, and against the binary of the runner's platform.
+
+`bun run test` runs Vitest on Node: Bun starts the runner, and the runner runs
+the tests on Node. `bun run test:bun` runs the same suite on Bun's own runtime,
+which is what CI's `test-bun` job does — the tool promises both runtimes, so
+both execute the suite. `tests/runtime.test.ts` says which one it got.
 
 `bun run typecheck` checks three TypeScript projects in one command: the runtime
 code without the browser's globals, `src/ui` without Node's, and the tests and

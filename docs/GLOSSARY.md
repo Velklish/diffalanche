@@ -34,6 +34,7 @@ The “Term” column gives the spelling for prose; EN is the name in code and E
 | composer | `composer` | The inline form under the selected lines where a comment is written. | HANDOFF.md §2 |
 | thread rail | `rail` | The right column that lists threads for the open file or the whole review. | HANDOFF.md §3 |
 | synthetic review | `synth` | The deterministic fixture of 21 repositories, 300 files, 30 000 diff lines, and 200 comments used by the performance gate. | SPEC.md §6 |
+| smoke matrix | `smoke` | One CLI scenario run on every delivery channel and every runtime: the npm bundle on Node, the sources on Bun, and the compiled binary. | ADR-006, scripts/smoke.sh, reference/11-perf.md |
 | orphaned | `orphaned` | A comment whose anchor cannot be found after code edits; kept, marked, re-anchored by hand or by a model proposal. Phase 3. | SPEC.md §3.8, HANDOFF.md §3 |
 | suggestion | `suggest` | A similar past comment proposed while typing, retrieved from the embedding index. Phase 2. | SPEC.md §5, §8 |
 | surface brief | `brief` | One document per screen for design work: visitor mode, the job on that screen, its constraints, and what is still undecided there. Lives in `.impeccable/surfaces/`. | .impeccable/surfaces/, reference/08-ui.md |

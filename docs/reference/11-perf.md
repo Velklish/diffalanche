@@ -1,4 +1,4 @@
-# 11 · Synthetic review generator and the performance gate
+# 11 · Synthetic review generator, the performance gate, the smoke matrix, and the runtime of the unit suite
 
 `scripts/synth.ts` builds the synthetic review: the fixture the performance
 gate, the diff rendering spike, and the scanner and storage tests all measure
@@ -125,6 +125,135 @@ checks the same properties: the profile counts, the tracked and untracked split,
 the sibling worktree and the nested submodule, the on-disk format, that every
 line comment sits on the line it names, that a foreign directory is refused
 untouched, and that the two trees are byte-identical.
+
+## The smoke matrix
+
+`scripts/smoke.sh` runs one review from end to end through one delivery
+channel. The channel is the command it is given, so the same scenario covers
+all three of them:
+
+```sh
+scripts/smoke.sh node dist/cli.js                # the npm bundle on Node
+scripts/smoke.sh bun src/cli/index.ts            # the sources on Bun
+scripts/smoke.sh ./dist/diffalanche-darwin-arm64 # the binary of this platform
+```
+
+Run it from the repository root: the fixture comes from `bun run synth`, and the
+command is taken as it is typed, so its paths are the ones a person would type
+there. The words of the command must not contain spaces — a POSIX shell has one
+list and the arguments are in it.
+
+Everything happens under a temporary root that is removed on the way out, so no
+repository of the checkout is read or written. The scenario is
+[ADR-006](../adr/adr-006-verification.md)'s: the small synthetic profile is
+generated into that root, then
+
+| Step | What is checked |
+|---|---|
+| `review new smoke` | the session is created and becomes current |
+| `diff --json` | the change set, and the anchor of the comment read out of it: a repository, a file, and a line the fixture really changed |
+| `serve` in the background | `/api/review` answers with the same totals `diff --json` printed, `/` serves the review page, and the address is on stdout |
+| `comment --role human` | the comment opens on the anchor the change set named |
+| `list --json` | it comes back with its severity, its anchor, and its author |
+| `list --unanswered --json` | the human's thread is there |
+| `reply` | the reply's id is the first word of the line |
+| `list --unanswered --json` | it is empty now: the agent has answered |
+| `resolve --role human --note` | the thread closes, named by `--author` |
+| `list --json`, `list --status resolved --json` | it is out of the open comments and carries both the reply and the note |
+| `export --status all`, `--format json` | the comment is in the markdown under its repository, and in the JSON |
+| the server is stopped | nothing answers on the port any more |
+
+The unanswered check is made twice on purpose. An empty `list --unanswered`
+after the reply proves nothing on its own — a thread that was never unanswered
+is empty as well — so the comment is opened with `--role human` and the thread
+is seen in the list before the agent replies to it.
+
+A failure prints the command as it would be typed again, its exit code, and its
+stderr; an expectation that did not hold prints the command, what was expected,
+and the output it read. `serve` prints the same three things itself, and only
+one of its deaths is retried: a port already in use, which Node and Bun word
+differently and which the script matches both ways. Every other death is the
+channel failing to serve — a `Bun.file` in the server on Node is exactly that —
+and it stops the run with `serve`'s own exit code and stderr rather than being
+counted as a busy port. The server counts as up only once it has printed the
+address it listens on: something else already holding the port answers
+`/api/review` with its own review, and a scenario that accepted it would test a
+stranger's server.
+
+The JSON is read with `jq` where there is one and with a small Node script where
+there is not — a Windows runner has Node before it has jq — and both readers
+answer the same three questions: the anchor out of the change set, the totals,
+and one line per comment. No rows and a reader that broke are told apart:
+`jq -e` exits 4 when a filter produced no output, which is what an empty comment
+list is, and 2, 3, or 5 when the input or the filter was wrong. Without that
+difference a `jq` that cannot parse the JSON would satisfy every expectation of
+zero comments.
+
+The script needs `bun` for the fixture, `curl` for the running server, and `git`,
+which the generator uses. One channel takes about 4 seconds on an M1 Pro.
+
+### The job
+
+`smoke` in `.github/workflows/ci.yml` is the matrix of ADR-006: `node` on
+ubuntu, macOS, and Windows, `bun` on ubuntu and macOS, and `binary` on ubuntu
+and macOS, each building its own channel in the job that runs it. The binary job
+builds the one binary it runs — `bun run build -- --target current` — rather
+than all six and throwing five away; the name comes from `process.platform` and
+`process.arch`.
+
+Bun is pinned to the version of the other jobs where it is the toolchain that
+builds the bundle and generates the fixture, and taken as `latest` in the `bun`
+channel, where it is what is being tested: a Bun release that breaks the tool
+shows up there. The Windows job is written and not verified — DA-45 runs it,
+fixes what it finds, and makes it required — so until then it is
+`continue-on-error` and a red one is something to read rather than a blocked
+pull request.
+
+## The runtime the unit suite runs on
+
+`bun run test` reads as though the tests run on Bun. They do not: Bun starts
+Vitest, and Vitest runs the tests themselves on Node. Inside a test
+`process.execPath` is the Node binary, `process.versions.bun` is undefined, and
+`globalThis.Bun` is not there. The whole unit suite was therefore only ever
+executed on one of the two runtimes the tool promises, while the specification
+(section 10) asks for CI green on Node and on Bun.
+
+`bunx --bun vitest run` is what moves them across. Measured here, with a probe
+writing `process.execPath` and `process.versions` out of a test:
+
+| Command | `process.execPath` in a test | `process.versions.bun` |
+|---|---|---|
+| `bun run test` | the Node binary | undefined |
+| `bun run test:bun` | the Bun binary | `1.3.14` |
+
+The whole suite passes on both, and the Bun run is not the slower one: 19 files
+and 246 tests, 11.0 s on Bun against 15.0 s on Node, measured back to back on an
+M1 Pro under load — 8.9 s against 10.1 s in a quieter pair. So the
+suite runs twice, once per runtime, rather than a runtime-sensitive subset of
+it being picked out by hand: the modules where the two runtimes can differ are
+storage's lock, the git reader, and the watcher, and a hand-picked subset is a
+list that goes stale the first time a module is added to it.
+
+`bun test` is not the same thing and is not what this does: that is Bun's own
+runner with its own API, and the suite is written against Vitest.
+
+```sh
+bun run test       # Vitest on Node, the default
+bun run test:bun   # the same suite on Bun's runtime
+```
+
+`tests/runtime.test.ts` is what keeps the promise honest. It compares the
+runtime it finds against `DIFFALANCHE_TEST_RUNTIME`, which `test:bun` sets to
+`bun` and which is `node` when nothing sets it. A Vitest release that goes back
+to spawning Node workers turns that job red instead of passing it quietly, and a
+`bunx --bun vitest run` typed by hand without the variable says which runtime it
+actually got.
+
+In CI this is the `test-bun` job of `.github/workflows/ci.yml`, beside `check`,
+which is the Node half of the same suite. Both jobs print their runtime —
+`bun -e 'console.log(process.versions)'` in one, `node -e …` in the other —
+before running the suite, so the log says which runtime executed it and does not
+leave the answer to an assertion the reader has to find.
 
 ## The measurement harness
 
