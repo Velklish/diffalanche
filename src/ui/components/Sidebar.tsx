@@ -1,7 +1,8 @@
 import { useMemo } from "react";
 import type { FileChange, RepositoryChange } from "../../core/types.ts";
-import type { CommentCount } from "../store.ts";
+import { revealCard } from "../reveal.ts";
 import { useStore } from "../store.ts";
+import type { Counters } from "../types.ts";
 import { SidebarSkeleton } from "./Skeleton.tsx";
 
 /**
@@ -93,21 +94,23 @@ function FileRow({ repo, file }: { repo: string; file: FileChange }) {
       className={selected ? "file-row on" : "file-row"}
       onClick={() => {
         select(repo, file.path);
-        document.querySelector(`[data-file="${CSS.escape(id)}"]`)?.scrollIntoView();
+        void revealCard(`[data-file="${CSS.escape(id)}"]`);
       }}
     >
       <span className="file-name">{file.path}</span>
       <span className="spacer" />
       <span className="add">+{file.additions}</span>
       <span className="del">−{file.deletions}</span>
-      {count ? <span className={`badge ${count.severity ?? ""}`}>{count.open}</span> : null}
+      {count && count.open > 0 ? (
+        <span className={`badge ${count.severity ?? ""}`}>{count.open}</span>
+      ) : null}
     </button>
   );
 }
 
 /** The open comments of a repository, in the colour of the worst of them. */
-function Counter({ count }: { count: CommentCount | undefined }) {
-  if (!count) return null;
+function Counter({ count }: { count: Counters | undefined }) {
+  if (!count || count.open === 0) return null;
   return <span className={`counter-open ${count.severity ?? ""}`}>{count.open}</span>;
 }
 

@@ -1,5 +1,6 @@
 import { useEffect, useMemo } from "react";
 import type { RepositoryChange, ResolvedBase } from "../../core/types.ts";
+import { Composer } from "../Composer.tsx";
 import { useStore } from "../store.ts";
 import { FileCard } from "./FileCard.tsx";
 import { FileCardSkeleton } from "./Skeleton.tsx";
@@ -42,11 +43,25 @@ export function CentrePanel() {
 
   return (
     <main className="centre">
+      <ReviewComposer />
       {repositories.map((repo) => (
         <RepoSection key={repo.path} repo={repo} indexById={indexById} />
       ))}
     </main>
   );
+}
+
+/**
+ * A comment on the whole review has no diff to sit under, so it opens at the
+ * top of the reading column — the one place that belongs to every repository.
+ */
+function ReviewComposer() {
+  const open = useStore((store) => store.composer !== null && store.composer.repo === null);
+  return open ? (
+    <div className="composer-loose" data-testid="review-composer">
+      <Composer />
+    </div>
+  ) : null;
 }
 
 function RepoSection({
@@ -58,9 +73,14 @@ function RepoSection({
 }) {
   const additions = repo.files.reduce((sum, file) => sum + file.additions, 0);
   const deletions = repo.files.reduce((sum, file) => sum + file.deletions, 0);
+  const openComposer = useStore((store) => store.openComposer);
+  const composing = useStore(
+    (store) =>
+      store.composer !== null && store.composer.repo === repo.path && store.composer.path === null,
+  );
 
   return (
-    <section className="repo">
+    <section className="repo" data-repo-section={repo.path}>
       <div className="repo-head">
         <div>
           <div className="repo-path">{repo.path}</div>
@@ -72,10 +92,19 @@ function RepoSection({
         <span className="repo-count">{repo.files.length} files</span>
         <span className="add">+{additions}</span>
         <span className="del">−{deletions}</span>
-        <button type="button" className="ghost" disabled>
+        <button
+          type="button"
+          className="ghost"
+          onClick={() => openComposer({ repo: repo.path, path: null, side: null, line: null })}
+        >
           Comment on repo
         </button>
       </div>
+      {composing ? (
+        <div className="composer-loose" data-testid="repo-composer">
+          <Composer />
+        </div>
+      ) : null}
       {repo.files.map((file) => {
         const id = `${repo.path}/${file.path}`;
         return (

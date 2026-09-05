@@ -167,6 +167,16 @@ button:disabled {
   font-size: 12px;
 }
 
+.ghost:not(:disabled):hover {
+  background: var(--panel3);
+  color: var(--tx);
+}
+
+.ghost:focus-visible {
+  border-color: var(--accBd);
+  outline: none;
+}
+
 .key {
   padding: 1px 4px;
   border: 1px solid var(--bd);
@@ -421,6 +431,7 @@ button:disabled {
 
 .rail-list {
   flex: 1;
+  padding: 10px 12px 14px;
   overflow: auto;
 }
 
@@ -549,6 +560,7 @@ button:disabled {
   inset: 0;
   z-index: 20;
   display: flex;
+  align-items: flex-start;
   justify-content: center;
   padding-top: 68px;
   background: var(--scrim);
@@ -766,4 +778,913 @@ button:disabled {
 .file-row .badge {
   font-size: 10px;
   white-space: nowrap;
+}
+
+/* composer */
+
+/*
+ * The strip of handoff section 2. It is a widget row of the library's table, so
+ * it is as wide as the diff — over 1080 px — and the block inside it sticks to
+ * the left edge, the way the hunk header does, and stays in reach wherever the
+ * reader has scrolled sideways to.
+ */
+.composer {
+  background: var(--panel2);
+  border-top: 1px solid var(--bd);
+  border-bottom: 1px solid var(--bd);
+  animation: dcin 160ms ease-out;
+}
+
+.composer-inner {
+  position: sticky;
+  left: 0;
+  width: 100%;
+  max-width: 560px;
+  padding: 11px 14px 12px;
+  border-left: 2px solid var(--acc);
+}
+
+/* A comment on a repository or on the review has no diff to sit in. */
+.composer-loose {
+  margin: 0 0 10px;
+  border: 1px solid var(--bd);
+  border-radius: 10px;
+  overflow: hidden;
+}
+
+.composer-loose .composer {
+  border-top: 0;
+  border-bottom: 0;
+}
+
+/* Inside a card the block is already framed; it only needs its own edge. */
+.file-card .composer-loose {
+  margin: 0;
+  border: 0;
+  border-bottom: 1px solid var(--bd);
+  border-radius: 0;
+}
+
+.composer-head {
+  display: flex;
+  align-items: center;
+  gap: 10px;
+  margin-bottom: 9px;
+}
+
+.composer-anchor {
+  color: var(--tx3);
+  font: 10.5px / 1.4 var(--mono);
+}
+
+.composer-severity {
+  display: flex;
+  align-items: center;
+  gap: 6px;
+  margin-bottom: 9px;
+}
+
+.sev-chip {
+  padding: 2px 7px;
+  border: 1px solid var(--bd);
+  border-radius: 4px;
+  background: none;
+  color: var(--tx3);
+  font: 9.5px / 1.5 var(--mono);
+  letter-spacing: 0.04em;
+}
+
+.sev-chip:focus-visible {
+  border-color: var(--accBd);
+  outline: none;
+}
+
+.sev-chip.on {
+  border-color: transparent;
+  color: var(--onAcc);
+  font-weight: 700;
+}
+
+.sev-chip.on.critical {
+  background: var(--crit);
+}
+
+.sev-chip.on.warning {
+  background: var(--warn);
+}
+
+.sev-chip.on.nit {
+  background: var(--nit);
+}
+
+.sev-chip.on.question {
+  background: var(--q);
+}
+
+.composer-note {
+  color: var(--tx3);
+  font: 10.5px / 1.4 var(--mono);
+}
+
+.composer-field {
+  display: block;
+  width: 100%;
+  height: 72px;
+  padding: 8px 10px;
+  border: 1px solid var(--accBd);
+  border-radius: 9px;
+  background: var(--panel);
+  color: var(--tx);
+  font: 13px / 1.6 var(--sans);
+  resize: vertical;
+}
+
+.composer-field:focus-visible {
+  border-color: var(--acc);
+  outline: none;
+}
+
+.composer-actions {
+  display: flex;
+  align-items: center;
+  gap: 9px;
+  margin-top: 9px;
+}
+
+.primary {
+  height: 28px;
+  padding: 0 12px;
+  border: 1px solid transparent;
+  border-radius: 8px;
+  background: var(--acc);
+  color: var(--onAcc);
+  font: 600 12px / 1 var(--sans);
+}
+
+.primary:focus-visible {
+  border-color: var(--accTx);
+  outline: none;
+}
+
+.primary:disabled {
+  opacity: 0.5;
+}
+
+.ghost.small {
+  height: 22px;
+  padding: 0 8px;
+  border-radius: 5px;
+  font: 10.5px / 1 var(--mono);
+}
+
+/*
+ * While a range is being dragged the browser must not select the code as text
+ * underneath it (`docs/design/HANDOFF.md`, "Выбор строк").
+ */
+.app.dragging {
+  user-select: none;
+}
+
+/* the session menu, anchored under its pill */
+
+.pill-holder {
+  position: relative;
+  display: inline-flex;
+}
+
+.menu {
+  position: absolute;
+  top: 36px;
+  left: 0;
+  z-index: 15;
+  width: 420px;
+  padding: 6px;
+  border: 1px solid var(--bd);
+  border-radius: 12px;
+  background: var(--panel);
+  box-shadow: var(--shadow);
+  animation: dcin 140ms ease-out;
+}
+
+.menu-row {
+  display: flex;
+  align-items: center;
+  gap: 9px;
+  width: 100%;
+  padding: 7px 9px;
+  border: 0;
+  border-radius: 7px;
+  background: none;
+  color: var(--tx);
+  font-size: 12.5px;
+  text-align: left;
+}
+
+.menu-row:hover {
+  background: var(--panel2);
+}
+
+.menu-row:focus-visible {
+  outline: 1px solid var(--accBd);
+}
+
+/* thread cards */
+
+.rail-empty {
+  margin: 8px 2px;
+  color: var(--tx3);
+  font-size: 11.5px;
+}
+
+.rail-tabs .tab {
+  border: 0;
+  background: none;
+  font: 500 11.5px / 1 var(--mono);
+}
+
+.rail-tabs .tab:focus-visible,
+.chip:focus-visible {
+  outline: 1px solid var(--accBd);
+}
+
+.chip.on {
+  border-color: var(--accBd);
+  background: var(--accBg);
+  color: var(--accTx);
+}
+
+button.chip {
+  background: none;
+}
+
+.thread {
+  margin-bottom: 9px;
+  padding: 11px 12px;
+  border: 1px solid var(--bd);
+  border-radius: 9px;
+  background: var(--panel3);
+}
+
+/*
+ * Only in the rail, where a card appearing is news. Under a line it appears
+ * because the card was scrolled to, and animating every widget a mounting card
+ * brings with it costs more CPU per scrolled frame than the budget of
+ * `docs/SPEC.md` section 6 has.
+ */
+.rail-list .thread {
+  animation: dcin 160ms ease-out;
+}
+
+.thread.on {
+  border-color: var(--accBd);
+  background: var(--accBg);
+}
+
+/* A closed thread stays on the list, one step back from the open ones. */
+.thread.resolved {
+  opacity: 0.55;
+}
+
+.thread-head {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  width: 100%;
+  padding: 0;
+  border: 0;
+  background: none;
+  text-align: left;
+}
+
+.thread-head:focus-visible {
+  outline: 1px solid var(--accBd);
+}
+
+.sev-tag {
+  flex: none;
+  padding: 1px 6px;
+  border-radius: 4px;
+  color: var(--onAcc);
+  font: 9.5px / 1.6 var(--mono);
+  letter-spacing: 0.04em;
+}
+
+.sev-tag.critical {
+  background: var(--crit);
+}
+
+.sev-tag.warning {
+  background: var(--warn);
+}
+
+.sev-tag.nit {
+  background: var(--nit);
+}
+
+.sev-tag.question {
+  background: var(--q);
+}
+
+.thread-anchor {
+  overflow: hidden;
+  color: var(--tx2);
+  font: 11px / 1.5 var(--mono);
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+.thread-state {
+  flex: none;
+  padding: 1px 6px;
+  border: 1px solid;
+  border-radius: 4px;
+  font: 9.5px / 1.6 var(--mono);
+}
+
+.thread-state.awaiting {
+  border-color: var(--accBd);
+  color: var(--accTx);
+}
+
+.thread-state.resolved {
+  border-color: var(--nit);
+  color: var(--nit);
+}
+
+.thread-body,
+.reply-body {
+  margin: 9px 0 0;
+  font-size: 12.5px;
+  line-height: 1.55;
+  white-space: pre-wrap;
+}
+
+.reply {
+  margin-top: 9px;
+  padding: 9px 11px;
+  border: 1px solid var(--bd);
+  border-radius: 7px;
+  background: var(--panel2);
+}
+
+/* An agent's answer is the one thing on this card the reader did not write. */
+.reply.agent {
+  border-color: var(--accBd);
+  background: var(--accBg);
+}
+
+.reply-head {
+  display: flex;
+  align-items: baseline;
+  gap: 8px;
+}
+
+.reply-author {
+  font: 600 11.5px / 1.4 var(--mono);
+}
+
+.reply.agent .reply-author {
+  color: var(--accTx);
+}
+
+.reply-meta,
+.thread-meta {
+  color: var(--tx3);
+  font: 10.5px / 1.4 var(--mono);
+}
+
+.thread-actions {
+  display: flex;
+  align-items: center;
+  gap: 7px;
+  margin-top: 10px;
+}
+
+.ok {
+  border: 1px solid transparent;
+  border-radius: 7px;
+  background: var(--ok);
+  color: var(--onAcc);
+  font: 600 11.5px / 1 var(--sans);
+}
+
+.ok.small {
+  height: 22px;
+  padding: 0 11px;
+}
+
+.primary.small {
+  height: 22px;
+  padding: 0 11px;
+  border-radius: 7px;
+  font-size: 11.5px;
+}
+
+.ok:focus-visible {
+  border-color: var(--tx);
+  outline: none;
+}
+
+.ok:disabled,
+.ghost:disabled {
+  opacity: 0.5;
+}
+
+.reply-form {
+  margin-top: 9px;
+}
+
+.reply-field {
+  display: block;
+  width: 100%;
+  height: 56px;
+  padding: 7px 9px;
+  border: 1px solid var(--accBd);
+  border-radius: 8px;
+  background: var(--panel);
+  color: var(--tx);
+  font: 12.5px / 1.55 var(--sans);
+  resize: vertical;
+}
+
+.reply-field:focus-visible {
+  border-color: var(--acc);
+  outline: none;
+}
+
+/* the thread under its own line */
+
+.thread-widgets {
+  width: 560px;
+  padding: 10px 0 10px 14px;
+  border-left: 2px solid var(--accBd);
+}
+
+/*
+ * The widget lives inside a `table-layout: fixed` table that the diff shares
+ * with three hundred rows; containment keeps a card's own layout and paint out
+ * of the table's, which is what the scrolled frame is paying for.
+ */
+.thread-widget {
+  contain: layout paint style;
+}
+
+.thread-widget .thread {
+  margin-bottom: 0;
+}
+
+.thread-widget + .thread-widget {
+  margin-top: 9px;
+}
+
+/*
+ * A widget on an added line lands in the new side's half of the split table:
+ * `SplitWidget` gives a cell across the whole row only when both sides carry
+ * the same node, and an insertion has no old side. This puts the strip back
+ * across the whole diff, which is what the handoff asks it to be, and gives the
+ * block inside it the width to stick to the left edge over.
+ */
+.dc-split .diff-widget td:nth-child(2) > .widget-row {
+  margin-left: -100%;
+  width: 200%;
+}
+
+/*
+ * The bar on a line that carries a thread, in the colour of the worst open one
+ * (`docs/design/HANDOFF.md`, "Границы"). It is drawn on the new side's gutter:
+ * the third cell of a split row, the second of a unified one.
+ */
+.diff-line.marked.critical {
+  --marker: var(--crit);
+}
+
+.diff-line.marked.warning {
+  --marker: var(--warn);
+}
+
+.diff-line.marked.nit {
+  --marker: var(--nit);
+}
+
+.diff-line.marked.question {
+  --marker: var(--q);
+}
+
+.dc-split .diff-line.marked > td:nth-child(3),
+.dc-unified .diff-line.marked > td:nth-child(2) {
+  box-shadow: inset 3px 0 0 var(--marker);
+}
+
+/* the session menu's history and its create form */
+
+.menu-list {
+  max-height: 340px;
+  overflow: auto;
+}
+
+.session-row {
+  display: flex;
+  flex-direction: column;
+  gap: 4px;
+  width: 100%;
+  padding: 8px 9px;
+  border: 0;
+  border-radius: 7px;
+  background: none;
+  text-align: left;
+}
+
+.session-row:hover {
+  background: var(--panel2);
+}
+
+.session-row:focus-visible {
+  outline: 1px solid var(--accBd);
+}
+
+.session-row.on {
+  background: var(--accBg);
+}
+
+.session-head {
+  display: flex;
+  align-items: center;
+  gap: 7px;
+  width: 100%;
+}
+
+.session-name {
+  font: 600 12.5px / 1.3 var(--mono);
+}
+
+.chip.current {
+  border-color: var(--accBd);
+  color: var(--accTx);
+}
+
+.session-title {
+  color: var(--tx2);
+  font-size: 12px;
+}
+
+.session-metrics {
+  display: flex;
+  gap: 12px;
+  color: var(--tx2);
+  font: 11px / 1.4 var(--mono);
+}
+
+.session-metrics .crit {
+  color: var(--crit);
+}
+
+.session-metrics .nit {
+  color: var(--nit);
+}
+
+.session-metrics .tx3 {
+  color: var(--tx3);
+}
+
+.menu-create {
+  display: flex;
+  gap: 7px;
+  margin-top: 6px;
+  padding: 9px 9px 0;
+  border-top: 1px solid var(--bd2);
+}
+
+.menu-create input {
+  flex: 1;
+  min-width: 0;
+  height: 28px;
+  padding: 0 9px;
+  border: 1px solid var(--bd);
+  border-radius: 8px;
+  background: var(--panel2);
+  color: var(--tx);
+  font: 11.5px / 1 var(--mono);
+}
+
+.menu-create input:focus-visible {
+  border-color: var(--accBd);
+  outline: none;
+}
+
+.menu-create .menu-base {
+  flex: 0 0 150px;
+}
+
+.menu-hint {
+  padding: 6px 9px 2px;
+  color: var(--tx3);
+  font: 10.5px / 1.4 var(--mono);
+}
+
+/* base picker */
+
+.picker {
+  display: flex;
+  flex-direction: column;
+  gap: 7px;
+  padding: 12px;
+}
+
+.picker-mode {
+  border: 1px solid var(--bd);
+  border-radius: 9px;
+  overflow: hidden;
+}
+
+.picker-mode.on {
+  border-color: var(--accBd);
+  background: var(--accBg);
+}
+
+.picker-head {
+  display: flex;
+  align-items: baseline;
+  gap: 9px;
+  width: 100%;
+  padding: 9px 11px;
+  border: 0;
+  background: none;
+  text-align: left;
+}
+
+.picker-head:focus-visible {
+  outline: 1px solid var(--accBd);
+}
+
+.picker-check {
+  width: 12px;
+  color: var(--accTx);
+  font-size: 11px;
+}
+
+.picker-title {
+  font: 600 12.5px / 1.3 var(--mono);
+}
+
+.picker-about {
+  color: var(--tx3);
+  font-size: 11.5px;
+}
+
+.picker-list {
+  max-height: 220px;
+  padding: 0 9px 9px 32px;
+  overflow: auto;
+}
+
+.picker-branch {
+  display: flex;
+  align-items: baseline;
+  gap: 10px;
+  width: 100%;
+  padding: 4px 7px;
+  border: 0;
+  border-radius: 6px;
+  background: none;
+  font: 11.5px / 1.6 var(--mono);
+  text-align: left;
+}
+
+.picker-branch:hover {
+  background: var(--panel2);
+}
+
+.picker-branch:focus-visible {
+  outline: 1px solid var(--accBd);
+}
+
+.picker-branch.on {
+  background: var(--sel);
+}
+
+.picker-source {
+  flex: 0 0 56px;
+  color: var(--tx3);
+}
+
+.picker-name {
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+.picker-note-inline {
+  margin-left: auto;
+  color: var(--tx3);
+  font-size: 10.5px;
+  white-space: nowrap;
+}
+
+.picker-note {
+  margin: 0;
+  padding: 0 11px 10px 32px;
+  color: var(--tx3);
+  font-size: 11.5px;
+}
+
+.picker-ref {
+  display: block;
+  width: calc(100% - 43px);
+  height: 28px;
+  margin: 0 11px 10px 32px;
+  padding: 0 9px;
+  border: 1px solid var(--accBd);
+  border-radius: 8px;
+  background: var(--panel);
+  color: var(--tx);
+  font: 11.5px / 1 var(--mono);
+}
+
+.picker-foot {
+  display: flex;
+  align-items: center;
+  gap: 10px;
+  padding-top: 4px;
+}
+
+.picker-summary {
+  color: var(--tx2);
+  font: 11.5px / 1 var(--mono);
+}
+
+/* export */
+
+.export {
+  display: flex;
+  flex-direction: column;
+  height: 74vh;
+}
+
+/* The segments of the header are two glyphs wide; these are two words. */
+.export-head .segments .segment {
+  width: auto;
+  height: 24px;
+  padding: 0 11px;
+  font: 11px / 1 var(--mono);
+}
+
+.export-head {
+  display: flex;
+  align-items: center;
+  gap: 10px;
+  padding: 11px 13px;
+  border-bottom: 1px solid var(--bd);
+}
+
+.export-body {
+  flex: 1;
+  padding: 14px 18px 22px;
+  overflow: auto;
+}
+
+.export-raw {
+  margin: 0;
+  font: 12px / 1.75 var(--mono);
+  white-space: pre-wrap;
+}
+
+.export-rendered h1 {
+  margin: 0 0 6px;
+  font-size: 19px;
+  font-weight: 600;
+  letter-spacing: -0.01em;
+}
+
+.export-meta {
+  margin: 0 0 18px;
+  color: var(--tx3);
+  font: 11.5px / 1.4 var(--mono);
+}
+
+.export-rendered h2 {
+  display: flex;
+  align-items: baseline;
+  gap: 10px;
+  margin: 18px 0 10px;
+  padding-bottom: 5px;
+  border-bottom: 1px solid var(--bd);
+  font: 600 14px / 1.3 var(--mono);
+}
+
+.export-count {
+  margin-left: auto;
+  color: var(--tx3);
+  font: 11px / 1 var(--mono);
+  font-weight: 400;
+}
+
+.export-item {
+  display: flex;
+  gap: 11px;
+  margin-bottom: 12px;
+}
+
+.export-sev {
+  flex: 0 0 62px;
+  font: 10px / 1.9 var(--mono);
+  letter-spacing: 0.04em;
+  text-align: right;
+}
+
+.export-sev.critical {
+  color: var(--crit);
+}
+
+.export-sev.warning {
+  color: var(--warn);
+}
+
+.export-sev.nit {
+  color: var(--nit);
+}
+
+.export-sev.question {
+  color: var(--q);
+}
+
+.export-text {
+  min-width: 0;
+}
+
+.export-anchor {
+  color: var(--accTx);
+  font: 11.5px / 1.6 var(--mono);
+}
+
+.export-text p {
+  margin: 3px 0 0;
+  font-size: 13px;
+  line-height: 1.6;
+  white-space: pre-wrap;
+}
+
+.export-text blockquote {
+  margin: 8px 0 0;
+  padding-left: 11px;
+  border-left: 2px solid var(--accBd);
+  color: var(--tx2);
+  font-size: 12.5px;
+}
+
+/* scanner warnings */
+
+/*
+ * Not sticky: the header is, and a second bar under it would sit over the point
+ * the centre panel asks which card is being read at, and over the top of a card
+ * `scrollIntoView` has just brought up. It is a bar above the workspace and it
+ * scrolls away with it.
+ */
+.warnings {
+  display: flex;
+  align-items: flex-start;
+  gap: 11px;
+  padding: 8px 15px;
+  background: var(--panel2);
+  border-bottom: 1px solid var(--bd);
+}
+
+.tag.scan {
+  padding: 1px 6px;
+  border: 1px solid var(--warn);
+  border-radius: 4px;
+  color: var(--warn);
+}
+
+.warnings ul {
+  margin: 0;
+  padding: 0;
+  list-style: none;
+}
+
+.warnings li {
+  color: var(--tx2);
+  font: 11px / 1.6 var(--mono);
+}
+
+/* the counters are buttons: they filter the rail */
+
+button.counter {
+  padding: 2px 6px;
+  border: 1px solid transparent;
+  border-radius: 6px;
+  background: none;
+}
+
+button.counter:hover {
+  border-color: var(--bd);
+}
+
+button.counter:focus-visible {
+  border-color: var(--accBd);
+  outline: none;
+}
+
+.context {
+  color: var(--tx3);
+  font: 10.5px / 1 var(--mono);
 }

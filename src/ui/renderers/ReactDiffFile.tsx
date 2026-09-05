@@ -1,6 +1,6 @@
 import type { ReactNode } from "react";
 import { useMemo } from "react";
-import type { ChangeData, HunkData } from "react-diff-view";
+import type { ChangeData, EventMap, HunkData } from "react-diff-view";
 import {
   computeNewLineNumber,
   Decoration,
@@ -23,6 +23,7 @@ import tsx from "refractor/tsx";
 import typescript from "refractor/typescript";
 import type { FileChange } from "../../core/types.ts";
 import type { DiffView } from "../store.ts";
+import type { Severity } from "../types.ts";
 
 /**
  * The core of refractor plus the nine grammars below: the root export of the
@@ -68,6 +69,34 @@ export type DiffSlots = {
   rows: { line: number; node: ReactNode }[];
 };
 
+/**
+ * How the card is told about the drag that selects a range. The library binds
+ * the handlers to its own cells, which is where the line a pointer is over is
+ * known; the store turns them into a selection (DA-22).
+ */
+export type LineEvents = {
+  /** `mousedown` on a line of the new side, with whether shift was held. */
+  onLineDown: (line: number, shift: boolean) => void;
+  /**
+   * `mouseenter` over a line. `held` is whether a button is still down: a
+   * pointer that comes back over the diff with none held was let go outside
+   * the window, and the drag ended there rather than going on for ever.
+   */
+  onLineEnter: (line: number, held: boolean) => void;
+};
+
+/**
+ * The bar a line with a thread carries in its gutter, in the colour of the
+ * worst open severity on it (`docs/design/HANDOFF.md`, "Границы"). It is a
+ * class on the row and a `box-shadow` in the stylesheet: the library calls
+ * `generateLineClassName` once per row, and anything drawn per *cell* — a
+ * `renderGutter` that returns an element — costs about a millisecond of the
+ * eight the scrolled frame has (DA-23).
+ */
+export type LineMarkers = {
+  severityByLine: Map<number, Severity>;
+};
+
 export type ReactDiffFileProps = {
   file: FileChange;
   view: DiffView;
@@ -75,9 +104,19 @@ export type ReactDiffFileProps = {
   collapsed: Record<number, boolean>;
   onToggleHunk: (index: number) => void;
   slots: DiffSlots;
+  lines: LineEvents;
+  markers: LineMarkers;
 };
 
-export function ReactDiffFile({ file, view, collapsed, onToggleHunk, slots }: ReactDiffFileProps) {
+export function ReactDiffFile({
+  file,
+  view,
+  collapsed,
+  onToggleHunk,
+  slots,
+  lines,
+  markers,
+}: ReactDiffFileProps) {
   /**
    * `zip` pairs a deletion with the insertion beside it, so the two columns of
    * the split view line up instead of running one block after the other.
@@ -103,6 +142,44 @@ export function ReactDiffFile({ file, view, collapsed, onToggleHunk, slots }: Re
 
   const widgets = useMemo(() => keyed(shown, slots), [shown, slots]);
 
+  /**
+   * A selection runs over the new column, so the old one starts nothing and
+   * extends nothing, and neither does a cell with no line on the new side — a
+   * deletion, or the filler beside it. The unified view has one column and
+   * names no side. `preventDefault` on the press is what stops the browser
+   * from selecting the code as text underneath the drag.
+   */
+  const events = useMemo<EventMap>(
+    () => ({
+      onMouseDown: ({ side, change }, event) => {
+        // The primary button only: a right-click opens a menu, not a range.
+        if (event.button !== 0) return;
+        const line = newLine(side, change);
+        if (line === null) return;
+        event.preventDefault();
+        lines.onLineDown(line, event.shiftKey);
+      },
+      onMouseEnter: ({ side, change }, event) => {
+        const line = newLine(side, change);
+        if (line !== null) lines.onLineEnter(line, event.buttons > 0);
+      },
+    }),
+    [lines],
+  );
+
+  /** Only where there is something to mark; most files carry no comment at all. */
+  const generateLineClassName = useMemo(
+    () =>
+      ({ changes, defaultGenerate }: { changes: ChangeData[]; defaultGenerate: () => string }) => {
+        const change = changes.at(-1);
+        const line = change === undefined ? null : newLine(undefined, change);
+        const severity = line === null ? undefined : markers.severityByLine.get(line);
+        const own = defaultGenerate();
+        return severity === undefined ? own : `${own} marked ${severity}`;
+      },
+    [markers],
+  );
+
   if (!parsed) return null;
 
   return (
@@ -113,6 +190,9 @@ export function ReactDiffFile({ file, view, collapsed, onToggleHunk, slots }: Re
       widgets={widgets.rows}
       selectedChanges={widgets.selected}
       className={view === "split" ? "dc-split" : "dc-unified"}
+      gutterEvents={events}
+      codeEvents={events}
+      {...(markers.severityByLine.size > 0 ? { generateLineClassName } : {})}
       {...(tokens ? { tokens } : {})}
     >
       {(hunks) =>
@@ -166,6 +246,13 @@ function trimContext(hunk: HunkData, collapse: boolean): { hunk: HunkData; hidde
   const hidden = changes.length - (to - from);
   if (!collapse || hidden === 0) return { hunk, hidden };
   return { hunk: { ...hunk, changes: changes.slice(from, to) }, hidden };
+}
+
+/** The new-side line of a cell or a row, or `null` when it has none. */
+function newLine(side: "old" | "new" | undefined, change: ChangeData | null): number | null {
+  if (side === "old" || change === null) return null;
+  const line = computeNewLineNumber(change);
+  return line > 0 ? line : null;
 }
 
 /** Turns the slots' line numbers into the change keys the library indexes by. */

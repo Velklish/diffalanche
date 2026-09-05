@@ -14,6 +14,7 @@ function measurement(over: Partial<Measurement> = {}): Measurement {
     scrollDistancePx: 700_000,
     composerOpenMs: 14,
     fileJumpMs: 8,
+    sessionSwitchMs: 40,
     loadLongTaskMs: 0,
     updateMs: 210,
     ...over,
@@ -49,12 +50,11 @@ describe("perf gate", () => {
     expect(evaluate([slow, slow, measurement()]).some((row) => row.failed)).toBe(true);
   });
 
-  it("prints a pending line without failing it", () => {
-    const rows = evaluate([measurement()]);
-    const pending = rows.filter((row) => row.measured === null);
-    expect(pending.length).toBeGreaterThan(0);
-    expect(pending.every((row) => !row.failed)).toBe(true);
-    expect(formatTable(rows, 1)).toContain("| pending | DA-24 |");
+  it("measures the session switch now that the harness can drive one", () => {
+    const rows = evaluate([measurement({ sessionSwitchMs: 140 })]);
+    const switching = rows.find((row) => row.budget.label === "Switching review sessions");
+    expect(switching?.measured).toBe(140);
+    expect(switching?.failed).toBe(true);
   });
 
   it("prints a line that is measured but still waiting for its task, and does not fail it", () => {

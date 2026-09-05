@@ -2,7 +2,7 @@
 version: 1
 slug: "src-ui-app-tsx"
 primary_target: "src/ui/App.tsx"
-related_targets: ["src/ui/components/Header.tsx","src/ui/components/Sidebar.tsx","src/ui/components/CentrePanel.tsx","src/ui/components/ThreadRail.tsx","src/ui/components/StatusBar.tsx","src/ui/components/FileCard.tsx","src/ui/components/Overlay.tsx","src/ui/components/Toast.tsx","src/ui/components/Skeleton.tsx","src/ui/components/Logo.tsx","src/ui/Composer.tsx","src/ui/renderers/ReactDiffFile.tsx","src/ui/styles.css"]
+related_targets: ["src/ui/components/Header.tsx","src/ui/components/Sidebar.tsx","src/ui/components/CentrePanel.tsx","src/ui/components/ThreadRail.tsx","src/ui/components/ThreadCard.tsx","src/ui/components/StatusBar.tsx","src/ui/components/FileCard.tsx","src/ui/components/Overlay.tsx","src/ui/components/Toast.tsx","src/ui/components/Skeleton.tsx","src/ui/components/Logo.tsx","src/ui/Composer.tsx","src/ui/renderers/ReactDiffFile.tsx","src/ui/styles.css"]
 ---
 
 # Surface: the review workspace
@@ -90,10 +90,10 @@ instead of in a side panel that has lost the code.
 
 ## Unresolved on this surface
 
-- The composer, the thread cards, the header's menus, live update, the keyboard
-  map and search, and the empty states are not built yet (DA-22 to DA-27). Each
-  arrives with the store slice it needs; this brief is what they are built
-  against.
+- The header's menus, live update, the keyboard map and search, and the empty
+  states are not built yet (DA-24 to DA-27). Each arrives with the store slice it
+  needs; this brief is what they are built against. The composer (DA-22) and the
+  thread cards (DA-23) are built.
 - The focus treatment is currently two shapes — a border change on bordered
   controls, a 1 px outline on rows that have none. That is deliberate and
   recorded in `DESIGN.md`, but no keyboard pass has walked the whole surface yet;

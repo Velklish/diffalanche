@@ -7,7 +7,23 @@ import { appendFile, readFile, writeFile } from "node:fs/promises";
 import { join } from "node:path";
 import type { Page } from "@playwright/test";
 import { chromium } from "@playwright/test";
+import type { Config } from "../src/core/config/index.ts";
 import { loadConfig } from "../src/core/config/index.ts";
+import {
+  addComment,
+  createSession,
+  // Not by its own name: a `use…` call is read as a React hook by the linter,
+  // and this file is checked by the same rules as the page.
+  useSession as makeCurrent,
+  resolveSessionName,
+} from "../src/core/domain/index.ts";
+import {
+  readDiffCache,
+  sessionDir,
+  sessionExists,
+  withLock,
+  writeDiffCache,
+} from "../src/core/storage/index.ts";
 import { directoryAssets, startReviewServer } from "../src/server/index.ts";
 
 export type VariantSpec = { name: string; query: string };
@@ -20,6 +36,9 @@ export type VariantSpec = { name: string; query: string };
  */
 export const VARIANTS: VariantSpec[] = [{ name: "default", query: "" }];
 
+/** The two sessions a run switches between; the second one the harness makes. */
+export type Sessions = { current: string; other: string };
+
 export type Measurement = {
   variant: string;
   firstRenderMs: number;
@@ -30,6 +49,7 @@ export type Measurement = {
   scrollDistancePx: number;
   composerOpenMs: number;
   fileJumpMs: number;
+  sessionSwitchMs: number;
   loadLongTaskMs: number;
   /** From the edit of one file to the page holding that repository's new diff. */
   updateMs: number;
@@ -55,6 +75,7 @@ export async function measure(
   baseUrl: string,
   variant: VariantSpec,
   fixture: string,
+  sessions: Sessions,
 ): Promise<Measurement> {
   const browser = await chromium.launch();
   try {
@@ -96,6 +117,19 @@ export async function measure(
     }
 
     const updateMs = await measureUpdate(page, baseUrl, fixture);
+
+    // Both ways, and the slower of them counts: the run has to leave the
+    // fixture on the session it found it on, so the switch back happens either
+    // way and there is no reason to measure only one of the two.
+    const there = (await page.evaluate(
+      (name: string) => window.__perf.switchSession(name),
+      sessions.other,
+    )) as number;
+    const back = (await page.evaluate(
+      (name: string) => window.__perf.switchSession(name),
+      sessions.current,
+    )) as number;
+
     await context.close();
 
     const scrollLongTaskMs = scroll.longTasks.reduce((sum, task) => sum + task.duration, 0);
@@ -109,6 +143,7 @@ export async function measure(
       scrollDistancePx: Math.round(scroll.distance),
       composerOpenMs: round(composerOpenMs),
       fileJumpMs: round(median(jumps)),
+      sessionSwitchMs: round(Math.max(there, back)),
       loadLongTaskMs: round(loaded.longTasks.reduce((sum, task) => sum + task.duration, 0)),
       updateMs: round(updateMs),
     };
@@ -200,22 +235,78 @@ function round(value: number): number {
 
 export async function withServer<T>(
   fixture: string,
-  body: (baseUrl: string) => Promise<T>,
+  body: (baseUrl: string, sessions: Sessions) => Promise<T>,
 ): Promise<T> {
   // Port 0 is not a port a configuration may name, so it is set here rather
   // than through `loadConfig`: the harness takes whatever is free.
   const config = { ...(await loadConfig({ root: fixture })), port: 0 };
+  const sessions = await twoSessions(config);
   const server = await startReviewServer({ config, ui: directoryAssets("dist/ui") });
   try {
     const { totals } = await server.review.document();
     process.stderr.write(
       `fixture ${fixture}: ${totals.repositories} repositories, ` +
-        `${totals.files} files, ${totals.lines} lines\n`,
+        `${totals.files} files, ${totals.lines} lines, ` +
+        `sessions ${sessions.current} and ${sessions.other}\n`,
     );
-    return await body(server.url);
+    return await body(server.url, sessions);
   } finally {
+    // A run that threw between the two switches would leave the fixture on the
+    // other session, and the next run would measure that one.
+    await makeCurrent(config.dataDir, sessions.current);
     await server.close();
   }
+}
+
+/** How many comments the second session is given, spread over the change set. */
+const OTHER_COMMENTS = 40;
+
+/**
+ * The fixture carries one review session; switching between sessions needs two.
+ * The second is made here rather than by the generator, because it is the
+ * harness that measures the switch and nothing else needs it.
+ *
+ * It is given the first one's change set — the base is the same, so the answer
+ * is the same — and comments of its own, so the swap really is a different set
+ * of threads and not an empty rail.
+ */
+async function twoSessions(config: Config): Promise<Sessions> {
+  const current = await resolveSessionName(config.dataDir);
+  const other = `${current}-b`;
+  if (await sessionExists(config.dataDir, other)) return { current, other };
+
+  try {
+    await createSession(config.dataDir, other, { mode: "head" }, "The other session");
+    const cache = await readDiffCache(config.dataDir, current);
+    if (cache !== null) {
+      await withLock(sessionDir(config.dataDir, other), async (held) => {
+        await held.assertHeld();
+        await writeDiffCache(config.dataDir, other, cache);
+      });
+      const files = cache.repositories.flatMap((repo) =>
+        repo.files.map((file) => ({ repo: repo.path, path: file.path })),
+      );
+      for (let i = 0; i < Math.min(OTHER_COMMENTS, files.length); i += 1) {
+        const at = files[i];
+        if (at === undefined) continue;
+        await addComment(config.dataDir, other, {
+          repo: at.repo,
+          path: at.path,
+          severity: "nit",
+          body: `the other session says something about ${at.path}`,
+          author: "kim.p",
+          role: "human",
+        });
+      }
+    }
+  } finally {
+    // `createSession` made it current. Whatever happened after that, the
+    // fixture is left on the session it was found on: the next run reads
+    // `current` and would otherwise measure the wrong review — or, worse,
+    // measure it and say nothing.
+    await makeCurrent(config.dataDir, current);
+  }
+  return { current, other };
 }
 
 export type Options = { fixture: string; variants: string[]; runs: number };

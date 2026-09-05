@@ -6,6 +6,16 @@ type Review = {
   comments: { repo: string | null; path: string | null; status: string }[];
 };
 
+/** The file card the reading position points at: the one under the header. */
+function underTheHeader(): string | null {
+  return (
+    document
+      .elementFromPoint(window.innerWidth / 2, 62)
+      ?.closest("[data-path]")
+      ?.getAttribute("data-path") ?? null
+  );
+}
+
 async function open(page: Page) {
   await page.goto("/");
   await page.waitForFunction(() => window.__perf?.ready === true);
@@ -97,6 +107,21 @@ test("choosing a file brings its card into view inside the budget", async ({ pag
     .evaluate((card) => card.getBoundingClientRect().top);
   expect(top).toBeGreaterThanOrEqual(0);
   expect(top).toBeLessThan(200);
+});
+
+test("a file chosen in the tree is still the current one once the cards have mounted", async ({
+  page,
+}) => {
+  await open(page);
+  const row = page.locator(".file-row").last();
+  const wanted = await row.locator(".file-name").textContent();
+
+  await row.click();
+  // The cards around the target replace their estimated heights with their real
+  // ones as they mount, and the reading position follows the target rather than
+  // the pixel it was at ([ADR-008](../docs/adr/adr-008-diff-rendering-verdict.md)).
+  await expect.poll(() => page.evaluate(underTheHeader)).toBe(wanted);
+  await expect(page.locator(".file-row.on .file-name")).toHaveText(wanted ?? "");
 });
 
 test("the current file follows the reading position", async ({ page }) => {

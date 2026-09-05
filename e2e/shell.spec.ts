@@ -15,6 +15,10 @@ const EMPTY_REVIEW = {
     updatedAt: "2026-09-05T00:00:00Z",
   },
   comments: [],
+  counters: {
+    counters: { total: 0, open: 0, resolved: 0, unanswered: 0, awaiting: 0, severity: null },
+    repositories: [],
+  },
   warnings: [],
 };
 

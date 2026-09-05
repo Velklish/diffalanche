@@ -337,19 +337,28 @@ over budget. One slow run does not fail the build; two do.
 | Scrolling the diff: CPU per frame | 8.3 ms | 6.4 ms | ok |
 | Opening the comment form | 50 ms | 13.9 ms | ok |
 | Jumping to a file from the navigation | 50 ms | 7.7 ms | ok |
-| Switching review sessions | 100 ms | pending | DA-24 |
+| Switching review sessions | 100 ms | 35.6 ms | ok |
 | Update after an edit in one repository | 300 ms | 254 ms | DA-25 |
 ```
 
-The last column names the task a line is still waiting for. **Switching review
-sessions** is pending outright: nothing in the code can switch a session under
-an open review yet, so there is nothing to measure, and a pending line is
-printed and never fails. **Update after an edit** is measured — the server's
-share of it, from the edit to the page holding the new diff — and printed with
-the task named instead of a verdict: the render of the patched diff is DA-25's
-and belongs in the same number, so the line does not fail the build until it
-covers the whole path. On the machine this was written on the server's share is
-about 250 ms of the 300, of which 100 ms is the watcher's debounce.
+The last column names the task a line is still waiting for. **Update after an
+edit** is measured — the server's share of it, from the edit to the page holding
+the new diff — and printed with the task named instead of a verdict: the render
+of the patched diff is DA-25's and belongs in the same number, so the line does
+not fail the build until it covers the whole path. On the machine this was
+written on the server's share is about 250 ms of the 300, of which 100 ms is the
+watcher's debounce.
+
+The session switch became measurable with DA-24. The fixture the generator
+writes carries one review session and switching needs two, so the harness makes
+the second itself, in `withServer`: a session with the same base, the first
+one's change set copied into its `diff.json` — the same base is the same answer,
+and copying it spares the run a rescan — and forty comments of its own, so the
+swap really is a different set of threads. A run switches to it and back and
+reports the slower of the two, which also leaves the fixture on the session it
+found it on. What is timed is the swap: from the moment the new review was
+parsed to the frame that showed it, the same window the first-render line
+measures over.
 
 `8.3 ms` is the frame of 120 fps. The specification asks for 120 fps and a
 headless runner cannot measure frame rate, so the gate checks the two things it

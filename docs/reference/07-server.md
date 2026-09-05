@@ -44,6 +44,7 @@ duration. Without it the server writes nothing but its own failures.
 | `GET /api/sessions` | every review session with its counters, most recently updated first |
 | `GET /api/config` | `{ user, port }` — what the UI signs comments with, and where it is |
 | `GET /api/scan` | every repository under the root, with whether it has changes |
+| `GET /api/repos/branches` | every branch of the root, for the base picker |
 | `GET /api/events` | the live stream: what the watcher noticed, as it happens |
 | `GET /api/repos/:repo/diff` | one repository of the change set |
 | `GET /api/comments/:id` | one thread |
@@ -129,6 +130,40 @@ anything to review, and it exists for the screen shown before there is a session
   "warnings": []
 }
 ```
+
+### The branches
+
+`GET /api/repos/branches` is the other route that reads git per request, and it
+exists for the base picker (`docs/design/HANDOFF.md` section 5). A base is one
+spec per review session applied to every repository separately
+(`docs/SPEC.md` section 3, decision 4), so what the picker needs is not one
+repository's branches but the union of them:
+
+```json
+{
+  "root": "/abs/path",
+  "branches": [
+    { "name": "origin/main", "remote": "origin", "repositories": 21, "default": true },
+    { "name": "main", "remote": null, "repositories": 21, "default": false }
+  ],
+  "warnings": [{ "path": "repos/closed", "message": "branches could not be read" }]
+}
+```
+
+`name` is what `branch:<name>` takes, read by the domain's own parser, so the
+picker and the CLI have one grammar for a base. `remote` is the remote a branch
+belongs to and `null` for a local one; `repositories` is how many repositories of
+the root resolve that branch, which is what the picker's note says, and `default`
+means some repository's remote points its `HEAD` at it. The order is the default
+branches, then the ones most repositories have, then the name by code point —
+the same order under Node and under Bun.
+
+One `git for-each-ref` per repository over `refs/heads` and `refs/remotes` reads
+all of it. The full ref name is what tells a local branch from a remote one, and
+`%(symref:short)` is what tells `origin/HEAD` — the pointer, which is not a
+branch and is not listed — from a branch, while naming the branch it points at.
+A repository whose refs cannot be read is a warning and not a failure; the
+review has other repositories.
 
 ### Refusals
 

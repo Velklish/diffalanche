@@ -33,9 +33,9 @@ async function main(): Promise<void> {
   prepare(options.fixture);
 
   const measurements: Measurement[] = [];
-  await withServer(options.fixture, async (baseUrl) => {
+  await withServer(options.fixture, async (baseUrl, sessions) => {
     for (let run = 0; run < runs; run += 1) {
-      const measurement = await measure(baseUrl, GATE_VARIANT, options.fixture);
+      const measurement = await measure(baseUrl, GATE_VARIANT, options.fixture, sessions);
       measurements.push(measurement);
       process.stderr.write(`run ${run + 1}/${runs}: ${JSON.stringify(measurement)}\n`);
     }

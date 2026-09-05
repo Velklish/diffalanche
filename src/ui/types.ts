@@ -1,97 +1,105 @@
 /**
- * The on-disk shapes of `docs/SPEC.md` section 7 as the UI receives them, field
- * for field. They live here until the domain of DA-10 lands them in `src/core`;
- * DA-24 and DA-25 then switch the imports, which is why the names match the
- * specification rather than anything the UI would have called them.
+ * The shapes the UI shares with the rest of the tool, in one import for the
+ * components: the on-disk format of `docs/SPEC.md` section 7, the change set,
+ * and the counters the domain computes. They are `src/core`'s own types — the
+ * UI mirrored them while the domain was being written and now reads the
+ * originals, so the two can no longer drift.
+ *
+ * `src/core/types.ts` and everything it imports has to stay a leaf of pure
+ * types and pure functions: `src/ui/tsconfig.json` compiles the UI with
+ * `"types": []` and type-checks that graph through these imports, so nothing in
+ * it may reach the Node API ([07-server.md](../../docs/reference/07-server.md)).
  */
-import type { ReviewBundle as ChangeSet } from "../core/types.ts";
 
-export type { ScanWarning } from "../core/types.ts";
+export type {
+  Counters,
+  FileCounters,
+  RepositoryCounters,
+  ReviewCounters,
+} from "../core/domain/counters.ts";
+export type {
+  Anchor,
+  Base,
+  Comment,
+  CommentStatus,
+  Reply,
+  Review,
+  Role,
+  Severity,
+  Side,
+} from "../core/storage/types.ts";
+/** Worst first (`docs/SPEC.md` section 3, decision 7): the order of the composer's chips. */
+export { SEVERITIES } from "../core/storage/types.ts";
 
-export type BaseMode = "head" | "branch" | "ref";
+import type { Base } from "../core/storage/types.ts";
+import type { ScanWarning } from "../core/types.ts";
 
-/** `base` of `review.json`: `branch` is set in `branch` mode, `ref` in `ref` mode. */
-export type Base = {
-  mode: BaseMode;
-  branch?: string;
-  ref?: string;
+export type {
+  BaseMode,
+  FileChange,
+  FileOmission,
+  FileStatus,
+  RepositoryChange,
+  ResolvedBase,
+  ReviewBundle,
+  ReviewDocument,
+  ScanWarning,
+} from "../core/types.ts";
+
+/**
+ * What `GET /api/repos/branches` answers with (DA-24): every branch of the
+ * root, with the remote it belongs to, how many repositories carry it, and
+ * whether a remote points its `HEAD` at it
+ * ([07-server.md](../../docs/reference/07-server.md)).
+ *
+ * The server owns the shape, in `src/server/routes/branches.ts`, and this is
+ * the same shape written again rather than imported: that module reaches the
+ * Node API through git, and the UI compiles with `"types": []`. What keeps the
+ * two from drifting is `tests/ui-wire.test.ts`, which is checked with both of
+ * them in scope.
+ */
+export type BranchCandidate = {
+  /** `origin/main` for a branch of a remote, `main` for a local one. */
+  name: string;
+  /** The remote it belongs to, or `null` when the branch is local. */
+  remote: string | null;
+  /** In how many repositories of the root this branch resolves. */
+  repositories: number;
+  /** Whether some repository's remote points its `HEAD` at it. */
+  default: boolean;
 };
 
-/** `review.json`: the metadata of one review session. */
-export type ReviewSession = {
-  version: number;
+export type BranchList = {
+  root: string;
+  branches: BranchCandidate[];
+  warnings: ScanWarning[];
+};
+
+/**
+ * One row of `GET /api/sessions` (DA-24): the metadata of a review session with
+ * the counters the menu of handoff section 7 shows.
+ *
+ * Written again here for the same reason as `BranchCandidate` below: the
+ * domain's own `SessionSummary` lives in a module that reaches the storage
+ * barrel, and the barrel reaches the Node API, which the UI compiles without.
+ * `tests/ui-wire.test.ts` is what keeps the two the same type.
+ */
+export type SessionSummary = {
   name: string;
-  title: string;
+  title: string | null;
   base: Base;
   createdAt: string;
   updatedAt: string;
-};
-
-export type Severity = "critical" | "warning" | "nit" | "question";
-
-/** `orphaned` is Phase 3; the UI carries it because the file format does. */
-export type CommentStatus = "open" | "resolved" | "orphaned";
-
-export type Role = "human" | "agent";
-
-export type Side = "new" | "old";
-
-/** The context a line anchor keeps so Phase 3 can find the line again. */
-export type Anchor = {
-  lineContent: string;
-  hunk: string;
-  before: string[];
-  after: string[];
-};
-
-export type Reply = {
-  id: string;
-  author: string;
-  role: Role;
-  body: string;
-  createdAt: string;
-};
-
-/**
- * One thread. The anchor level is read from the nulls: `repo: null` is the whole
- * review, `path: null` a repository, `line: null` a file; `endLine` widens a
- * line anchor into a range.
- */
-export type Comment = {
-  id: string;
-  repo: string | null;
-  path: string | null;
-  side: Side | null;
-  line: number | null;
-  endLine: number | null;
-  anchor: Anchor | null;
-  severity: Severity;
-  status: CommentStatus;
-  author: string;
-  role: Role;
-  body: string;
-  createdAt: string;
-  resolvedAt: string | null;
-  resolvedBy: string | null;
-  replies: Reply[];
-};
-
-/**
- * The header's two numbers plus the resolved count. `open` is every comment that
- * is not resolved; `awaiting` is the part of those whose last message is from an
- * agent, so the human has not verified it yet (`docs/GLOSSARY.md`).
- */
-export type ReviewCounters = {
+  /** Whether `current` names this session. */
+  current: boolean;
   open: number;
-  awaiting: number;
   resolved: number;
+  /** Repositories with changes in the last scan; `null` when it has never been scanned. */
+  repositories: number | null;
 };
 
-/** What `GET /api/review` returns: the change set plus the current session. */
-export type ReviewBundle = ChangeSet & {
-  session: ReviewSession | null;
-  comments: Comment[];
+export type SessionList = {
+  sessions: SessionSummary[];
+  /** Directories under `reviews/` that are not review sessions. */
+  warnings: string[];
 };
-
-/** Worst first: the colour of a repository's counter is the worst of its comments. */
-export const SEVERITY_ORDER: Severity[] = ["critical", "warning", "nit", "question"];

@@ -25,6 +25,8 @@ export type PerfApi = {
   scrollRun: (step: number, maxFrames: number) => Promise<ScrollResult>;
   openComposer: () => Promise<number>;
   jumpToFile: (index: number) => Promise<number>;
+  /** Makes a session current and reports the milliseconds to the frame that showed it. */
+  switchSession: (name: string) => Promise<number>;
 };
 
 const notReady = () => Promise.reject(new Error("the review has not rendered yet"));
@@ -38,6 +40,7 @@ export const perf: PerfApi = {
   scrollRun,
   openComposer: notReady,
   jumpToFile: notReady,
+  switchSession: notReady,
 };
 
 /** Resolves after the browser has painted the frame the caller's work produced. */

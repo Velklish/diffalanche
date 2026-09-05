@@ -7,6 +7,57 @@ the project follows [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
 ### Added
 
+- The header (DA-24): the session menu of handoff section 7 with the history
+  from `GET /api/sessions`, its metrics, a `CURRENT` chip and a create form that
+  takes a name and a base in the CLI's own grammar; the base picker of section 5
+  with its three modes and the branches of the whole root from the new
+  `GET /api/repos/branches`; the two counters as buttons that filter the rail —
+  `awaiting you` becomes a chip beside `unanswered` while it is on; the export
+  of section 9, rendered and raw, with `Copy .md` — both tabs group and sort the
+  export the same way the markdown does; the scanner warnings bar with a dismiss
+  remembered in `sessionStorage` per session; and the status bar's context line.
+  A whole review arriving replaces a whole review: no draft, selection, open
+  reply or focused thread survives a session switch or a change of base.
+  The performance budget for switching review sessions is measured rather than
+  pending: the harness makes a second session out of the fixture and times the
+  swap of the thread set. `src/ui/base.ts` is the one place that writes a base
+  as the argument the domain parses and reads it back as a label. See
+  [08-ui.md](docs/reference/08-ui.md).
+- `GET /api/repos/branches`: every branch of the root, with the remote it
+  belongs to, how many repositories resolve it, and whether a remote points its
+  `HEAD` at it. One `git for-each-ref` per repository, read-only; `name` is what
+  `branch:<name>` takes, so the picker and the CLI have one grammar for a base.
+  See [07-server.md](docs/reference/07-server.md).
+
+- The thread rail and the threads in the diff (DA-23). One card, drawn the same
+  in the rail and as a widget under the line it is anchored to: severity chip,
+  anchor, `awaiting` or `RESOLVED`, body, replies coloured by role, `Resolve` /
+  `Reopen` and `Reply`. The rail's two tabs count this file's threads and the
+  review's, and the `unanswered` chip is the domain's own `isUnanswered`. Focus
+  runs both ways — a card in the rail scrolls the page to its widget, and the
+  widget's own header focuses the card; a commented line is marked with a bar in
+  its gutter in the colour of its worst open thread. Reply, resolve and
+  reopen go through one write that shows the change before the server has it and
+  puts the threads back with the server's own sentence when it refuses. A card
+  claims the height of its threads before it is mounted, and a jump to a card
+  scrolls again once the cards around it have mounted — without that the reading
+  position landed on a different file within 120 ms of the click. See
+  [08-ui.md](docs/reference/08-ui.md).
+
+- Line selection and the comment composer (DA-22). A drag over the new column of
+  a diff — or a click, or shift-click to widen — lights the range and opens the
+  form of handoff section 2 under its last line, inside the card. `C` opens it
+  on the first line the change set adds to the file being read; the card header,
+  the repository header, and the session menu open it on the file, the
+  repository, and the whole review, the three anchor levels that have no line;
+  a card that is collapsed when its form opens stops being collapsed.
+  The form proposes `warning`, `⌘⏎` sends and `esc` closes, and the comment goes
+  to `POST /api/comments` and into the store at once, so the badges move before
+  the next read. A card being written in is not unmounted by virtualisation.
+  `src/ui/types.ts` now re-exports `src/core` instead of mirroring it, and the
+  counters the badges show are the domain's own rather than a second count in
+  the browser. See [08-ui.md](docs/reference/08-ui.md).
+
 - Documentation for a first reader: `README.md` rewritten end to end — what the
   tool is, the two delivery channels and what is not published yet, a first run
   with the output it really prints, where the data lives, every field of

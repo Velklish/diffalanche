@@ -16,10 +16,10 @@ async function main(): Promise<void> {
   if (chosen.length === 0) throw new Error(`unknown variant: ${options.variants.join(", ")}`);
 
   const results: Measurement[] = [];
-  await withServer(options.fixture, async (baseUrl) => {
+  await withServer(options.fixture, async (baseUrl, sessions) => {
     for (const variant of chosen) {
       for (let run = 0; run < options.runs; run += 1) {
-        const measurement = await measure(baseUrl, variant, options.fixture);
+        const measurement = await measure(baseUrl, variant, options.fixture, sessions);
         results.push(measurement);
         process.stderr.write(`${variant.name} run ${run + 1}: ${JSON.stringify(measurement)}\n`);
       }

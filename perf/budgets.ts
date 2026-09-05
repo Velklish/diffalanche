@@ -38,13 +38,7 @@ export const BUDGETS: Budget[] = [
   { label: "Scrolling the diff: CPU per frame", field: "cpuPerFrameMs", budget: 8.3, unit: "ms" },
   { label: "Opening the comment form", field: "composerOpenMs", budget: 50, unit: "ms" },
   { label: "Jumping to a file from the navigation", field: "fileJumpMs", budget: 50, unit: "ms" },
-  {
-    label: "Switching review sessions",
-    field: null,
-    budget: 100,
-    unit: "ms",
-    pendingUntil: "DA-24",
-  },
+  { label: "Switching review sessions", field: "sessionSwitchMs", budget: 100, unit: "ms" },
   {
     label: "Update after an edit in one repository",
     field: "updateMs",
