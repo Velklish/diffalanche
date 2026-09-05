@@ -134,6 +134,12 @@ A line comment stores the line's own text, the header of the hunk it sits in,
 and **three lines of context on each side**, taken from the change set when the
 comment is written. This is the input Phase 3 re-anchors from.
 
+The context is the neighbourhood in the file the comment is about, so it is
+taken from the lines the anchored side has: `context` and `insert` for `new`,
+`context` and `delete` for `old`. A hunk's line list holds both sides, and
+context sliced out of it would put text that never existed in that file into
+`before` and `after` — which is what re-anchoring later matches against.
+
 The change set comes from `diff.json`, the cache a scan wrote, and is read as
 the `RepositoryChange` of [02-git.md](02-git.md) — the hunks with per-line old
 and new numbers. It has to come from there: the review response of the server

@@ -81,15 +81,21 @@ export function captureAnchor(
   const file = findFile(repositories, repo, path);
 
   for (const hunk of file.hunks) {
-    const index = hunk.lines.findIndex((one) => lineNumber(one, side) === line);
+    // The context is the neighbourhood in the file the comment is about, so it
+    // is taken from the lines that side has — `context` and `insert` for `new`,
+    // `context` and `delete` for `old`. The raw list holds both sides, and
+    // slicing it puts text that never existed in that file into `before` and
+    // `after`, which is what re-anchoring later matches against.
+    const onSide = hunk.lines.filter((one) => lineNumber(one, side) !== null);
+    const index = onSide.findIndex((one) => lineNumber(one, side) === line);
     if (index === -1) continue;
-    const found = hunk.lines[index];
+    const found = onSide[index];
     if (found === undefined) continue;
     return {
       lineContent: found.content,
       hunk: hunk.header,
-      before: hunk.lines.slice(Math.max(0, index - CONTEXT), index).map((one) => one.content),
-      after: hunk.lines.slice(index + 1, index + 1 + CONTEXT).map((one) => one.content),
+      before: onSide.slice(Math.max(0, index - CONTEXT), index).map((one) => one.content),
+      after: onSide.slice(index + 1, index + 1 + CONTEXT).map((one) => one.content),
     };
   }
 

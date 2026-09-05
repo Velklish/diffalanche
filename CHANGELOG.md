@@ -239,3 +239,13 @@ the project follows [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
   paths with the number of matches inside the field and a line when nothing
   matches. Choosing a file scrolls its card into view, and the current file
   follows the reading position once the scroll has stopped.
+
+### Fixed
+
+- A line anchor's context is the anchored side of the hunk. `anchor.before` and
+  `anchor.after` were sliced out of the hunk's raw line list, which holds both
+  sides, so a `new`-side anchor kept lines the change removed — text that is not
+  in the file the comment is about, and what re-anchoring after an edit matches
+  against. The context now comes from the lines that side has: `context` and
+  `insert` for `new`, `context` and `delete` for `old`. See
+  [04-domain.md](docs/reference/04-domain.md).

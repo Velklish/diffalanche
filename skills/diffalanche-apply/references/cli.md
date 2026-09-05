@@ -70,14 +70,10 @@ Fields you act on:
 | `repo` | path relative to the root; the file is `<root>/<repo>/<path>` |
 | `path`, `line`, `endLine`, `side` | `null` down to the level the comment was written at: a comment with `repo` and no `path` is about the whole repository, one with no `repo` about the whole review |
 | `anchor.lineContent` | the line as it was when the comment was written — compare it with the file before you edit |
-| `anchor.before`, `anchor.after` | three lines of context each way, straight from the hunk |
+| `anchor.before`, `anchor.after` | three lines of context each way, from the side the comment is on |
 | `severity` | `critical`, `warning`, `nit`, `question` — the order you work in |
 | `role` | `human` or `agent`; `--unanswered` means the last message is `human` |
 | `replies` | the rest of the thread, oldest first |
-
-`anchor.before` and `anchor.after` are taken from the hunk without filtering by
-side, so a `new`-side anchor can carry a line the change removed. Read them as a
-hint about the neighbourhood, not as the file.
 
 Without `--json` the same list is one line per comment, which is what you show a
 human:

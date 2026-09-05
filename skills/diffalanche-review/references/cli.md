@@ -144,8 +144,8 @@ $ diffalanche list --severity critical --json
     "anchor": {
       "lineContent": "    private readonly ILogger<ShipmentSet491Resolver> _logger;",
       "hunk": "@@ -10,41 +10,72 @@ public sealed class InvoiceSet471Resolver",
-      "before": ["public sealed class ShipmentSet491Resolver", "{", "    private readonly ILogger<InvoiceSet472Resolver> _logger;"],
-      "after": ["", "    public InvoiceSet472 Expand(InvoiceSet472Request request)", "    public ShipmentSet491 Resolve(ShipmentSet491Request request)"]
+      "before": ["/// <summary>The request carries the raw values, the resolver normalises them.</summary>", "public sealed class ShipmentSet491Resolver", "{"],
+      "after": ["", "    public ShipmentSet491 Resolve(ShipmentSet491Request request)", "    {"]
     },
     "severity": "critical",
     "status": "open",
@@ -164,10 +164,9 @@ $ diffalanche list --severity critical --json
 comment was opened at. The `anchor` is filled by the tool, not by you: it reads
 the repository again so the anchor points at the line that is there now.
 
-Today `anchor.before` and `anchor.after` are taken from the hunk without
-filtering by side, so a `new`-side anchor can carry lines the change removed —
-the third entry of `before` above is one. It is a known defect of the anchor
-capture, not something a finding you write can avoid.
+`anchor.before` and `anchor.after` are the three lines each way on the side the
+comment is on, so a `new`-side anchor carries the new file's own neighbourhood
+and never a line the change removed.
 
 Without `--json`, the same list is one line per comment:
 

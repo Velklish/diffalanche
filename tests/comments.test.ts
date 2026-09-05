@@ -6,6 +6,7 @@ import { afterAll, beforeAll, describe, expect, it } from "vitest";
 import { generate, PROFILES } from "../scripts/synth.ts";
 import {
   addComment,
+  captureAnchor,
   countReview,
   createSession,
   DomainError,
@@ -20,6 +21,7 @@ import {
 } from "../src/core/domain/index.ts";
 import type { Comment } from "../src/core/storage/index.ts";
 import { dataDirOf, readComments, readReview, writeDiffCache } from "../src/core/storage/index.ts";
+import type { DiffLine, RepositoryChange } from "../src/core/types.ts";
 import { readHunks } from "./helpers/change-set.ts";
 
 const SMALL = PROFILES.small;
@@ -146,7 +148,10 @@ describe("anchor capture", () => {
 
     const hunks = readHunks(root, REPO).files.find((one) => one.path === file)?.hunks ?? [];
     const hunk = hunks.find((one) => one.lines.some((l) => l.newLine === line));
-    const index = hunk?.lines.findIndex((l) => l.newLine === line) ?? -1;
+    // The context of a `new`-side anchor is the new side of the hunk: the
+    // lines that have a new number, in their order.
+    const onSide = hunk?.lines.filter((l) => l.newLine !== null) ?? [];
+    const index = onSide.findIndex((l) => l.newLine === line);
 
     expect(comment.anchor?.hunk).toBe(hunk?.header);
     expect(comment.anchor?.hunk).toMatch(/^@@ -\d+(,\d+)? \+\d+(,\d+)? @@/);
@@ -154,11 +159,9 @@ describe("anchor capture", () => {
     const working = readFileSync(join(root, REPO, file), "utf8").split("\n");
     expect(comment.anchor?.lineContent).toBe(working[line - 1]);
     expect(comment.anchor?.before).toEqual(
-      hunk?.lines.slice(Math.max(0, index - 3), index).map((l) => l.content),
+      onSide.slice(Math.max(0, index - 3), index).map((l) => l.content),
     );
-    expect(comment.anchor?.after).toEqual(
-      hunk?.lines.slice(index + 1, index + 4).map((l) => l.content),
-    );
+    expect(comment.anchor?.after).toEqual(onSide.slice(index + 1, index + 4).map((l) => l.content));
     expect(comment.anchor?.before.length).toBeLessThanOrEqual(3);
     expect(comment.anchor?.after.length).toBeLessThanOrEqual(3);
   });
@@ -187,6 +190,63 @@ describe("anchor capture", () => {
       ...HUMAN,
     }).catch((caught: unknown) => caught);
     expect((error as DomainError).message).toContain("is not in the change set");
+  });
+});
+
+/**
+ * A hunk that deletes lines both above and below the anchored one, so context
+ * taken from the raw line list would carry the other side's text. The old side
+ * runs 10-16 and the new side runs 10-16 over the same lines.
+ */
+function mixedSides(): RepositoryChange {
+  const lines: DiffLine[] = [
+    { type: "context", content: "one", oldLine: 10, newLine: 10 },
+    { type: "delete", content: "gone a", oldLine: 11, newLine: null },
+    { type: "insert", content: "add a", oldLine: null, newLine: 11 },
+    { type: "delete", content: "gone b", oldLine: 12, newLine: null },
+    { type: "insert", content: "add b", oldLine: null, newLine: 12 },
+    { type: "insert", content: "anchored", oldLine: null, newLine: 13 },
+    { type: "delete", content: "gone c", oldLine: 13, newLine: null },
+    { type: "insert", content: "add c", oldLine: null, newLine: 14 },
+    { type: "delete", content: "gone d", oldLine: 14, newLine: null },
+    { type: "context", content: "two", oldLine: 15, newLine: 15 },
+    { type: "context", content: "three", oldLine: 16, newLine: 16 },
+  ];
+  return {
+    path: REPO,
+    branch: "main",
+    base: { mode: "head", ref: "HEAD", sha: "HEAD" },
+    files: [
+      {
+        path: "src/mixed.ts",
+        oldPath: null,
+        status: "modified",
+        additions: 4,
+        deletions: 4,
+        patch: "",
+        hunks: [{ header: "@@ -10,7 +10,7 @@", lines }],
+        omitted: null,
+      },
+    ],
+    warnings: [],
+  };
+}
+
+describe("anchor context by side", () => {
+  it("keeps a new-side anchor to the lines the new file has", () => {
+    const anchor = captureAnchor([mixedSides()], REPO, "src/mixed.ts", "new", 13);
+
+    expect(anchor.lineContent).toBe("anchored");
+    expect(anchor.before).toEqual(["one", "add a", "add b"]);
+    expect(anchor.after).toEqual(["add c", "two", "three"]);
+  });
+
+  it("keeps an old-side anchor to the lines the old file had", () => {
+    const anchor = captureAnchor([mixedSides()], REPO, "src/mixed.ts", "old", 13);
+
+    expect(anchor.lineContent).toBe("gone c");
+    expect(anchor.before).toEqual(["one", "gone a", "gone b"]);
+    expect(anchor.after).toEqual(["gone d", "two", "three"]);
   });
 });
 
