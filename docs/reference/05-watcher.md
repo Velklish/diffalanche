@@ -93,16 +93,39 @@ Inside a repository these are left out:
 
 | Left out | Why |
 |---|---|
-| everything under `.git` except `HEAD` and `index` | those two move when the base of the change set does; the rest is git's own bookkeeping. `.git` itself is not left out: a runtime that reports the directory rather than the file inside it would otherwise never say that HEAD moved |
+| everything under `.git` except `HEAD`, `index`, and `info/exclude` | the first two move when the base of the change set does and the third holds ignore rules; the rest is git's own bookkeeping. `.git` itself is not left out: a runtime that reports the directory rather than the file inside it would otherwise never say that HEAD moved |
 | any `node_modules` | not part of a review, and large enough to make the walk of the polling fallback cost real time |
 | the `exclude` globs of `config.json` | matched against the path inside the repository and against the file's own name, the way the scanner matches them ([01-scanner.md](01-scanner.md)) |
 | the data directory | on a root that is itself a repository the tool's own `diff.json` sits inside the watched tree, and without this writing it would wake the watcher that wrote it |
 
-Everything else wakes the watcher, build outputs included: a `dist/` or a
-`target/` that git ignores is still a file inside the tree. What keeps that from
-becoming a stream of events is the other end — a rescan whose result is the same
-as what the cache held announces nothing. Asking git which of the paths it
-ignores, before the rescan rather than after, is DA-12.1.
+Everything else wakes the watcher, except what git itself ignores. Which paths
+those are is git's answer, not a guess: once the debounce window closes,
+`git check-ignore --stdin -z` is asked about the paths of that burst — one
+process for the whole window, whatever the burst holds — and a burst whose every
+path is ignored produces no rescan and no event at all. The index is read, so a
+file that is tracked is never reported as ignored: it is in the diff whatever a
+pattern says about it. `git status` would answer the same question and is not
+used, because it refreshes the index and the tool never writes to a reviewed
+repository (`docs/SPEC.md` section 11).
+
+**Nothing under `.git` is ever suppressed**, and that is a rule of this module
+rather than of git: git makes no exception for its own directory, so under a
+`.gitignore` that starts with `*` — a whitelist — `check-ignore` answers that
+`.git/HEAD` is ignored. A burst holding one of the paths the watch reports
+inside `.git` is rescanned whatever the answer would be; without that, a commit
+or a branch switch would be swallowed and the base of the review go stale
+without a word. A git that could not answer at all is read the same way: the
+burst is rescanned and nothing is kept from the failure.
+
+The answers are kept per repository between bursts, so a build writing the same
+`dist/` file a hundred times asks once. Each repository keeps at most 4096 of
+them, oldest out first, so a build writing thousands of distinct paths cannot
+grow the cache for as long as the server runs. Three paths drop what was kept
+and are changes in their own right: `.gitignore` anywhere in the repository and
+`.git/info/exclude`, which hold the rules, and `.git/index`, which decides which
+files the rules reach at all — one `git add -f` on a build output would
+otherwise leave every later edit of a now-tracked file suppressed by a cached
+verdict.
 
 In the data directory every change is one signal: the reload reads `current`,
 `comments.json`, and `review.json` and compares each with the last read, so a
@@ -122,11 +145,13 @@ through the two.
 
 Changes are debounced per repository: a change restarts the wait, but never past
 one second after the first one, so a build that writes into the working tree for
-a minute still produces a rescan every second instead of none at all. The rescan
-that follows reads that repository alone. Rescans run one at a time: two of them
-write the same `diff.json`, and queueing costs less than making each wait for the
-session lock. The write goes through the lock all the same, because the CLI
-writes the same directory.
+a minute still produces a rescan every second instead of none at all — and where
+that build writes into a directory git ignores, the one `check-ignore` of the
+window ends it instead, in place of the four git processes and the cache rewrite
+a rescan costs. The rescan that follows reads that repository alone. Rescans run
+one at a time: two of them write the same `diff.json`, and queueing costs less
+than making each wait for the session lock. The write goes through the lock all
+the same, because the CLI writes the same directory.
 
 | Event | Data | When |
 |---|---|---|
@@ -215,6 +240,11 @@ all together on a quiet machine, of which 100 ms is the debounce, and two to
 three times that while the rest of the test suite runs in parallel. The flat
 number belongs to the performance gate, which measures a machine that is doing
 nothing else — 220 ms there.
+
+The `check-ignore` of the burst is on that path too, and it is one process
+against the four of the rescan. Measured once rather than gated: about 20 ms
+over fifty paths in `tests/watcher.test.ts`, with the update after an edit in
+the same run where it was before.
 
 A platform without a recursive watch cannot meet the budget at all: there the
 interval of the walk is added to every measurement.

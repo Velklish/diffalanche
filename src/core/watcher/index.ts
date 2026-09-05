@@ -9,7 +9,7 @@
 import { relative } from "node:path";
 import { sameBase, scanReview, totalsOf } from "../change-set.ts";
 import type { Config } from "../config/index.ts";
-import { readRepositoryChange } from "../git/index.ts";
+import { checkIgnore, readRepositoryChange } from "../git/index.ts";
 import { byCodePoint } from "../order.ts";
 import { globToRegExp } from "../scanner/index.ts";
 import type { Comment, CommentStatus, DiffCache, Review } from "../storage/index.ts";
@@ -49,6 +49,14 @@ export const DEFAULT_DEBOUNCE_MS = 100;
  * long as it runs and the review would never update.
  */
 export const MAX_DEBOUNCE_MS = 1_000;
+
+/**
+ * How many of git's ignore verdicts one repository keeps. A build writing
+ * thousands of distinct paths would otherwise grow the cache for as long as the
+ * server runs; past this the oldest answers go and are asked again if those
+ * paths come back.
+ */
+export const IGNORE_CACHE_LIMIT = 4_096;
 
 export type WatcherOptions = {
   config: Config;
@@ -141,10 +149,66 @@ export async function startWatcher(options: WatcherOptions): Promise<Watcher> {
     });
   }
 
-  async function rescan(repo: string): Promise<void> {
+  /**
+   * What git said about the paths of a repository, kept between bursts. The
+   * rules change only when a `.gitignore` or `.git/info/exclude` does, and
+   * asking git about the same `dist/` file on every write of a build would cost
+   * the process this cache is here to save. It holds `IGNORE_CACHE_LIMIT`
+   * paths per repository, oldest out first.
+   */
+  const ignoredPaths = new Map<string, Map<string, boolean>>();
+
+  /**
+   * Whether git ignores every path of this burst. One `git check-ignore` per
+   * repository per debounce window answers for the whole burst, and a burst
+   * that is all build output — `dist/`, `target/`, a coverage report — is not a
+   * change of the review: rescanning it costs four git processes and a rewrite
+   * of the cache for nothing (`docs/SPEC.md` section 6).
+   *
+   * A path that changes what git ignores is never ignored itself and drops
+   * what was cached for that repository: `.gitignore` and `.git/info/exclude`
+   * hold the rules, and `.git/index` decides which files they apply to at all,
+   * since a tracked file is never reported as ignored.
+   *
+   * Nothing under `.git` is ever suppressed, and the check is on the whole
+   * burst rather than a filter over it. git makes no exception for `.git`
+   * — under a `.gitignore` that starts with `*`, `check-ignore` answers that
+   * `.git/HEAD` is ignored — so a burst that is a commit or a branch switch
+   * would be swallowed and the review's base go stale without a word.
+   */
+  async function burstIsIgnored(repository: Repository, paths: string[]): Promise<boolean> {
+    if (paths.length === 0) return false;
+    const cache = ignoredPaths.get(repository.path) ?? new Map<string, boolean>();
+    ignoredPaths.set(repository.path, cache);
+    if (paths.some(changesWhatGitIgnores)) {
+      cache.clear();
+      return false;
+    }
+    if (paths.some(insideGitDir)) return false;
+    const unknown = paths.filter((path) => !cache.has(path));
+    if (unknown.length > 0) {
+      const ignored = await checkIgnore(repository.absolutePath, unknown);
+      // git had no answer. Nothing is kept from that, and the burst is treated
+      // as the change it may well be.
+      if (ignored === null) return false;
+      for (const path of unknown) cache.set(path, ignored.has(path));
+    }
+    // Trimmed after the answer is read, which leaves a burst larger than the
+    // cap correct: what was just asked is what decides it.
+    const answer = paths.every((path) => cache.get(path) === true);
+    trimVerdicts(cache);
+    return answer;
+  }
+
+  async function rescan(repository: Repository): Promise<void> {
+    const repo = repository.path;
     const files = [...(pending.get(repo) ?? [])].sort(byCodePoint);
     pending.delete(repo);
     if (session === null) return;
+    // A build writing into a directory git ignores restarts the debounce for as
+    // long as it runs, and the ceiling then forces a rescan a second that can
+    // find nothing. Asking git first costs one process instead of four.
+    if (await burstIsIgnored(repository, files)) return;
     // Announced from inside the rescan, before `diff.json` is written: what the
     // person sees must not wait for a file of megabytes. A file that was
     // touched without its content changing — a build output, a save with the
@@ -227,7 +291,7 @@ export async function startWatcher(options: WatcherOptions): Promise<Watcher> {
           const files = pending.get(repository.path) ?? new Set<string>();
           files.add(path);
           pending.set(repository.path, files);
-          schedule(`repo:${repository.path}`, () => enqueue(() => rescan(repository.path)));
+          schedule(`repo:${repository.path}`, () => enqueue(() => rescan(repository)));
         },
         ...(options.pollIntervalMs === undefined ? {} : { pollIntervalMs: options.pollIntervalMs }),
       }),
@@ -462,13 +526,48 @@ function recordWrite(
 }
 
 /**
+ * Drops the oldest of a repository's ignore verdicts until it is inside
+ * `IGNORE_CACHE_LIMIT`. A `Map` keeps insertion order, so the oldest answers
+ * are its first keys, and a path dropped here is simply asked again.
+ */
+export function trimVerdicts(cache: Map<string, boolean>): void {
+  for (const path of cache.keys()) {
+    if (cache.size <= IGNORE_CACHE_LIMIT) break;
+    cache.delete(path);
+  }
+}
+
+/** The repository-local exclude file, whose rules are git's as much as a `.gitignore`'s. */
+const IGNORE_RULES_EXCLUDE = ".git/info/exclude";
+
+/**
+ * Whether a change of this path changes what git ignores in its repository.
+ * `.gitignore` and `.git/info/exclude` hold the rules; `.git/index` decides
+ * which files the rules reach at all, because a tracked file is never reported
+ * as ignored — without it, one `git add -f` on a build output would leave every
+ * later edit of a now-tracked file suppressed by a cached verdict. Each is news
+ * on its own and makes every cached verdict of that repository stale.
+ */
+function changesWhatGitIgnores(path: string): boolean {
+  if (path === IGNORE_RULES_EXCLUDE || path === ".git/index") return true;
+  return path === ".gitignore" || path.endsWith("/.gitignore");
+}
+
+/** Whether the path is git's own directory, or anything the watch reports inside it. */
+function insideGitDir(path: string): boolean {
+  return path === ".git" || path.startsWith(".git/");
+}
+
+/**
  * What a repository's watch reports. Inside `.git` everything is noise except
- * `HEAD` and `index`, which move when the base of the change set does — but
+ * `HEAD`, `index`, and `info/exclude` — the first two move when the base of the
+ * change set does and the third holds ignore rules — but
  * `.git` itself is not, because a runtime that reports the directory rather
  * than the file inside it (Bun does) would otherwise never say that HEAD moved;
  * `node_modules` and the `exclude` globs of the configuration are out; and so
  * is the data directory, on the one root that is a repository itself — without
- * that, writing `diff.json` would wake the watcher that wrote it.
+ * that, writing `diff.json` would wake the watcher that wrote it. What git
+ * itself ignores is left to git, once per burst, rather than guessed here.
  */
 export function repositoryIgnore(config: Config, repository: Repository): Ignore {
   const exclude = config.exclude.map(globToRegExp);
@@ -479,10 +578,12 @@ export function repositoryIgnore(config: Config, repository: Repository): Ignore
     const segments = path.split("/");
     if (segments.includes("node_modules")) return true;
     if (segments[0] === ".git") {
-      // The directory itself is walked into, for the two files at its top, and
-      // it is a signal in its own right when that is all a runtime reports.
+      // The directory itself is walked into, for the two files at its top and
+      // the exclude file one level down, and it is a signal in its own right
+      // when that is all a runtime reports.
       if (segments.length === 1) return false;
-      return kind === "dir" || (path !== ".git/HEAD" && path !== ".git/index");
+      if (kind === "dir") return path !== ".git/info";
+      return path !== ".git/HEAD" && path !== ".git/index" && path !== IGNORE_RULES_EXCLUDE;
     }
     if (dataDir !== null && (path === dataDir || path.startsWith(`${dataDir}/`))) return true;
     const name = segments.at(-1) as string;

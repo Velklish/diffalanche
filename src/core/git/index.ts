@@ -15,6 +15,7 @@ import {
 
 export type { PatchOptions } from "./patch.ts";
 export { DEFAULT_MAX_FILE_BYTES, parseDiff } from "./patch.ts";
+export { checkIgnore } from "./run.ts";
 
 /** What a base resolution came to in one repository. */
 export type BaseResolution = {

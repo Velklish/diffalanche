@@ -37,6 +37,7 @@ files. That is how `ref` mode skips one.
 | `merge-base HEAD <branch>` | the base of `branch` mode |
 | `diff <base> --no-color --no-ext-diff -U3` | the change set of tracked files |
 | `ls-files --others --exclude-standard -z` | untracked files |
+| `check-ignore --stdin -z` | which of a burst's paths git ignores, for the watcher ([05-watcher.md](05-watcher.md)) |
 
 ## The three base modes
 

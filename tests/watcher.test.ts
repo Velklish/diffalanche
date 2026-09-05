@@ -16,6 +16,7 @@ import { generate, PROFILES } from "../scripts/synth.ts";
 import { scanReview } from "../src/core/change-set.ts";
 import type { Config } from "../src/core/config/index.ts";
 import { loadConfig } from "../src/core/config/index.ts";
+import { checkIgnore } from "../src/core/git/index.ts";
 import { scan } from "../src/core/index.ts";
 import {
   diffCachePath,
@@ -30,10 +31,12 @@ import {
   createActivityLog,
   createEventBus,
   dataIgnore,
+  IGNORE_CACHE_LIMIT,
   repositoryIgnore,
   rescanRepository,
   startWatcher,
   supportsRecursiveWatch,
+  trimVerdicts,
   watchTree,
 } from "../src/core/watcher/index.ts";
 
@@ -98,6 +101,37 @@ async function settle(): Promise<void> {
     if (performance.now() > deadline) throw new Error("the watcher never caught up");
     await new Promise((done) => setTimeout(done, 5));
   }
+}
+
+/**
+ * The rescan of the watched repository, waited for. `settle` only proves that a
+ * change made in *another* repository has been through, which says nothing
+ * about a write to this one that the walk has not snapshotted yet.
+ */
+async function waitForChangeOf(repo: string, mark: number, timeoutMs = 20_000): Promise<void> {
+  const deadline = performance.now() + timeoutMs;
+  for (;;) {
+    if (changesOf(mark, repo).length > 0) return;
+    if (performance.now() > deadline) throw new Error(`no diff-changed for ${repo}`);
+    await new Promise((done) => setTimeout(done, 5));
+  }
+}
+
+/**
+ * A change git sees and the watch does not: `node_modules` is out of the watch
+ * and no rule of these tests names it, so it is in the change set the next
+ * rescan of the repository reads. That is what makes "no rescan" visible at
+ * all — an ignored file rescanned on its own finds the change set exactly as
+ * the cache has it and announces nothing either way.
+ */
+async function hide(name: string, content: string): Promise<void> {
+  mkdirSync(join(root, REPO, "node_modules", name), { recursive: true });
+  await writeFile(join(root, REPO, "node_modules", name, "index.ts"), content);
+}
+
+/** Takes back what `hide` left, so the next test starts from the same tree. */
+async function reveal(name: string): Promise<void> {
+  await rm(join(root, REPO, "node_modules", name), { recursive: true, force: true });
 }
 
 async function waitFor(
@@ -273,6 +307,183 @@ describe("watcher", () => {
     expect(changesOf(mark, REPO)).toEqual([]);
   }, 30_000);
 
+  it("says nothing about a burst git ignores, and wakes when the rules stop ignoring it", async () => {
+    const gitignore = join(root, REPO, ".gitignore");
+    const built = join(root, REPO, "dist", "bundle.js");
+    mkdirSync(join(root, REPO, "dist"), { recursive: true });
+    // The rules are a change of their own: they decide which untracked files
+    // the change set has, so this write wakes the watcher, and the burst that
+    // follows must not be the one carrying it.
+    const rulesMark = performance.now();
+    await writeFile(gitignore, "dist/\n");
+    await waitForChangeOf(REPO, rulesMark);
+    await settle();
+
+    await hide("left-pad", "module.exports = 1;\n");
+
+    const ignoredMark = performance.now();
+    await writeFile(built, "console.log(1);\n");
+    await settle();
+    expect(changesOf(ignoredMark, REPO)).toEqual([]);
+
+    // The same path once `.gitignore` no longer names it: the write to the
+    // rules drops what was cached, so git is asked about it again.
+    const relaxedMark = performance.now();
+    await writeFile(gitignore, "nothing-here/\n");
+    await waitForChangeOf(REPO, relaxedMark);
+    await settle();
+
+    const watchedMark = performance.now();
+    await writeFile(built, "console.log(2);\n");
+    await waitForChangeOf(REPO, watchedMark);
+    expect(
+      changesOf(watchedMark, REPO).flatMap((one) => (one.event as { files: string[] }).files),
+    ).toContain("dist/bundle.js");
+
+    await reveal("left-pad");
+    await rm(join(root, REPO, "dist"), { recursive: true, force: true });
+    const cleanMark = performance.now();
+    await rm(gitignore);
+    await waitForChangeOf(REPO, cleanMark);
+    await settle();
+  }, 60_000);
+
+  it("says nothing about a path .git/info/exclude names", async () => {
+    mkdirSync(join(root, REPO, ".git", "info"), { recursive: true });
+    mkdirSync(join(root, REPO, "coverage"), { recursive: true });
+    // Writing the rules is a change, and this one has to be through before the
+    // burst under test: a hidden change gives its rescan something to announce,
+    // so there is an event to wait for rather than a `settle` to hope on.
+    await hide("right-pad-rules", "module.exports = 2;\n");
+    const rulesMark = performance.now();
+    await writeFile(join(root, REPO, ".git", "info", "exclude"), "coverage/\n");
+    await waitForChangeOf(REPO, rulesMark);
+    await settle();
+
+    await hide("right-pad", "module.exports = 3;\n");
+
+    const mark = performance.now();
+    await writeFile(join(root, REPO, "coverage", "lcov.info"), "TN:\n");
+    await settle();
+    expect(changesOf(mark, REPO)).toEqual([]);
+
+    await reveal("right-pad");
+    await reveal("right-pad-rules");
+    await rm(join(root, REPO, "coverage"), { recursive: true, force: true });
+    await writeFile(join(root, REPO, ".git", "info", "exclude"), "");
+    await settle();
+  }, 30_000);
+
+  it("has no answer where git has none", async () => {
+    // Not a repository, so git refuses. The answer is `null` rather than an
+    // empty set: an empty set would be cached as "none of these is ignored",
+    // and a failure must leave nothing behind.
+    const outside = mkdtempSync(join(tmpdir(), "diffalanche-not-a-repo-"));
+    try {
+      expect(await checkIgnore(outside, ["dist/bundle.js"])).toBeNull();
+    } finally {
+      rmSync(outside, { recursive: true, force: true });
+    }
+  }, 30_000);
+
+  it("asks git again once the index has moved", async () => {
+    const gitignore = join(root, REPO, ".gitignore");
+    const built = join(root, REPO, "dist", "tracked.js");
+    mkdirSync(join(root, REPO, "dist"), { recursive: true });
+    await writeFile(built, "console.log(1);\n");
+    const rulesMark = performance.now();
+    await writeFile(gitignore, "dist/\n");
+    await waitForChangeOf(REPO, rulesMark);
+    await settle();
+
+    // The verdict is cached now: this write is answered from it, not from git.
+    await writeFile(built, "console.log(2);\n");
+    await settle();
+
+    // `git add -f` makes it tracked, and a tracked file is in the diff whatever
+    // a pattern says. The index moving is what tells the watcher to ask again,
+    // and it has to be its own burst: coalesced with the edit below, the edit
+    // would ride on the rescan the index earned rather than on a fresh answer.
+    const stagedMark = performance.now();
+    await run("git", ["-C", join(root, REPO), "add", "-f", "dist/tracked.js"]);
+    await waitForChangeOf(REPO, stagedMark);
+    await settle();
+
+    const trackedMark = performance.now();
+    await writeFile(built, "console.log(3);\n");
+    await waitForChangeOf(REPO, trackedMark);
+    expect(
+      changesOf(trackedMark, REPO).flatMap((one) => (one.event as { files: string[] }).files),
+    ).toContain("dist/tracked.js");
+
+    await run("git", ["-C", join(root, REPO), "rm", "--cached", "-q", "-f", "dist/tracked.js"]);
+    await rm(join(root, REPO, "dist"), { recursive: true, force: true });
+    const cleanMark = performance.now();
+    await rm(gitignore);
+    await waitForChangeOf(REPO, cleanMark);
+    await settle();
+  }, 60_000);
+
+  it("wakes for a burst inside .git whatever the rules say about it", async () => {
+    const gitignore = join(root, REPO, ".gitignore");
+    const head = join(root, REPO, ".git", "HEAD");
+    // git makes no exception for its own directory: this pattern has it answer
+    // that `.git/HEAD` is ignored. A burst that is only a branch switch would
+    // then be swallowed and the base of the review go stale in silence.
+    const rulesMark = performance.now();
+    await writeFile(gitignore, "HEAD\n");
+    await waitForChangeOf(REPO, rulesMark);
+    await settle();
+
+    await hide("head-pad", "export const pad = 1;\n");
+
+    const headMark = performance.now();
+    // The same bytes: what moves is the file's stamp, the way a branch switch
+    // moves it, and no reviewed repository is changed by it.
+    await writeFile(head, await readFile(head, "utf8"));
+    await waitForChangeOf(REPO, headMark);
+    // The name a runtime reports for it is its own — Bun hands back the bare
+    // `.git` where Node names the file — so what is asserted is that the burst
+    // was git's directory and nothing else.
+    const woke = changesOf(headMark, REPO).flatMap(
+      (one) => (one.event as { files: string[] }).files,
+    );
+    expect(woke.length).toBeGreaterThan(0);
+    expect(woke.every((path) => path === ".git" || path.startsWith(".git/"))).toBe(true);
+
+    await reveal("head-pad");
+    const cleanMark = performance.now();
+    await rm(gitignore);
+    await waitForChangeOf(REPO, cleanMark);
+    await settle();
+  }, 60_000);
+
+  it("reports every ignored path of a list", async () => {
+    await writeFile(join(root, REPO, ".git", "info", "exclude"), "target/\n");
+    await settle();
+
+    const paths = Array.from({ length: 50 }, (_, one) => `target/chunk-${one}.js`);
+    const started = performance.now();
+    const ignored = await checkIgnore(join(root, REPO), paths);
+    const elapsed = performance.now() - started;
+    // Measured once, not a gated number: what a burst costs is one process for
+    // every path of the window, against the four a rescan spends on one
+    // repository.
+    process.stderr.write(
+      `check-ignore over ${paths.length} paths: ${elapsed.toFixed(1)} ms in one process\n`,
+    );
+    expect(ignored?.size).toBe(paths.length);
+
+    // A burst larger than the pipe between the two processes: the list is
+    // written to standard input, and a failure there is not allowed to become
+    // an uncaught exception in a server.
+    const many = Array.from({ length: 5_000 }, (_, one) => `target/many-${one}.js`);
+    expect((await checkIgnore(join(root, REPO), many))?.size).toBe(many.length);
+
+    await writeFile(join(root, REPO, ".git", "info", "exclude"), "");
+    await settle();
+  }, 30_000);
+
   it("turns a reply written by another process into an event with its author", async () => {
     const comments = await readComments(config.dataDir, SESSION);
     const target =
@@ -362,7 +573,7 @@ describe("a rescan that fails", () => {
 });
 
 describe("what a repository's watch reports", () => {
-  it("keeps the two files of .git that move with the change set and drops the rest", () => {
+  it("keeps the three files of .git that decide the change set and drops the rest", () => {
     const ignore = repositoryIgnore(config, {
       path: REPO,
       absolutePath: join(root, REPO),
@@ -370,6 +581,11 @@ describe("what a repository's watch reports", () => {
     });
     expect(ignore(".git/HEAD", "file")).toBe(false);
     expect(ignore(".git/index", "file")).toBe(false);
+    // The ignore rules of the repository: they decide which untracked files the
+    // change set has, and the walk has to be let into `.git/info` to see them.
+    expect(ignore(".git/info/exclude", "file")).toBe(false);
+    expect(ignore(".git/info", "dir")).toBe(false);
+    expect(ignore(".git/info/attributes", "file")).toBe(true);
     expect(ignore(".git/objects/ff/0123", "file")).toBe(true);
     expect(ignore(".git/objects", "dir")).toBe(true);
     expect(ignore(".git", "dir")).toBe(false);
@@ -378,6 +594,23 @@ describe("what a repository's watch reports", () => {
     expect(ignore(".git", "file")).toBe(false);
     expect(ignore("src/a.ts", "file")).toBe(false);
     expect(ignore("node_modules/left-pad/index.js", "file")).toBe(true);
+  }, 30_000);
+
+  it("keeps the ignore verdicts of a repository inside their cap, oldest out first", () => {
+    // A build writing thousands of distinct paths would otherwise grow the
+    // cache for as long as the server runs.
+    const cache = new Map<string, boolean>();
+    for (let one = 0; one < IGNORE_CACHE_LIMIT + 500; one += 1) {
+      cache.set(`dist/chunk-${one}.js`, true);
+    }
+    trimVerdicts(cache);
+
+    expect(cache.size).toBe(IGNORE_CACHE_LIMIT);
+    // What went is what was asked longest ago; what was asked last is still there.
+    expect(cache.has("dist/chunk-0.js")).toBe(false);
+    expect(cache.has("dist/chunk-499.js")).toBe(false);
+    expect(cache.has("dist/chunk-500.js")).toBe(true);
+    expect(cache.has(`dist/chunk-${IGNORE_CACHE_LIMIT + 499}.js`)).toBe(true);
   }, 30_000);
 
   it("takes every name a write in the data directory can be reported under", () => {

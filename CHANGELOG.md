@@ -261,3 +261,18 @@ the project follows [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
   against. The context now comes from the lines that side has: `context` and
   `insert` for `new`, `context` and `delete` for `old`. See
   [04-domain.md](docs/reference/04-domain.md).
+- Files git ignores no longer wake the watcher. Once a repository's debounce
+  window closes, `git check-ignore --stdin -z` is asked about the paths of that
+  burst — one process for the whole window — and a burst whose every path is
+  ignored produces no rescan and no event, instead of the four git processes and
+  the cache rewrite a rescan spends to find nothing. A build writing into
+  `dist/` for a minute cost one rescan a second before this. The answers are
+  kept per repository — at most 4096 paths, oldest out first — and dropped when
+  a `.gitignore`, `.git/info/exclude`, or `.git/index` inside that repository
+  changes; a tracked file is never reported as ignored, so it still wakes the
+  watcher whatever a pattern says. Nothing under `.git` is ever suppressed,
+  because git makes no exception for its own directory: under a `.gitignore`
+  starting with `*` it answers that `.git/HEAD` is ignored, and a commit would
+  otherwise leave the review's base stale in silence. `.git/info/exclude` is now
+  one of the files inside `.git` the watch reports. See
+  [05-watcher.md](docs/reference/05-watcher.md).

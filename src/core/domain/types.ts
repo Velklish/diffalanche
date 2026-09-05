@@ -1,5 +1,5 @@
 /** What the domain hands to the CLI and the API above the on-disk shapes. */
-import type { Base } from "../storage/index.ts";
+import type { Base } from "../storage/types.ts";
 
 /** One row of the session list: the metadata plus the counters the UI shows. */
 export type SessionSummary = {
