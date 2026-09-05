@@ -1,9 +1,9 @@
 # DA-19 · UI shell: tokens, themes, layout, store
 
-- **Order:** 190
 - **Scope:** 08-ui (see [reference](../../reference/README.md))
 - **Created:** 2026-09-05
 - **Dependencies:** DA-3
+- **Taken:** 2026-09-05
 
 ## Context
 

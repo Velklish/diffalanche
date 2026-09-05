@@ -1,9 +1,9 @@
 # DA-11 · Config: defaults, flags, user fallback
 
-- **Order:** 110
 - **Scope:** 03-storage (see [reference](../../reference/README.md))
 - **Created:** 2026-09-05
 - **Dependencies:** DA-8
+- **Taken:** 2026-09-05
 
 ## Context
 

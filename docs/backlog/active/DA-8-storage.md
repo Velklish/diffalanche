@@ -1,9 +1,9 @@
 # DA-8 · Storage: session directories, lock, atomic writes
 
-- **Order:** 80
 - **Scope:** 03-storage (see [reference](../../reference/README.md))
 - **Created:** 2026-09-05
 - **Dependencies:** DA-1
+- **Taken:** 2026-09-05
 
 ## Context
 

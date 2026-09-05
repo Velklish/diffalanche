@@ -1,9 +1,9 @@
 # DA-10 · Comments domain: anchors, roles, threads, export
 
-- **Order:** 100
 - **Scope:** 04-domain (see [reference](../../reference/README.md))
 - **Created:** 2026-09-05
 - **Dependencies:** DA-7, DA-8
+- **Taken:** 2026-09-05
 
 ## Context
 

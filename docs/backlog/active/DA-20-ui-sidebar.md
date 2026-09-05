@@ -1,9 +1,9 @@
 # DA-20 · Sidebar navigation
 
-- **Order:** 200
 - **Scope:** 08-ui (see [reference](../../reference/README.md))
 - **Created:** 2026-09-05
 - **Dependencies:** DA-19
+- **Taken:** 2026-09-05
 
 ## Context
 

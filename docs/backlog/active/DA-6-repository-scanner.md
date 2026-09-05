@@ -1,9 +1,9 @@
 # DA-6 · Repository scanner
 
-- **Order:** 60
 - **Scope:** 01-scanner (see [reference](../../reference/README.md))
 - **Created:** 2026-09-05
 - **Dependencies:** DA-1
+- **Taken:** 2026-09-05
 
 ## Context
 

@@ -1,9 +1,9 @@
 # DA-9 · Review sessions: new, use, list, base change
 
-- **Order:** 90
 - **Scope:** 04-domain (see [reference](../../reference/README.md))
 - **Created:** 2026-09-05
 - **Dependencies:** DA-8
+- **Taken:** 2026-09-05
 
 ## Context
 

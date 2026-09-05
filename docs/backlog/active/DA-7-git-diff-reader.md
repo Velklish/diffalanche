@@ -1,9 +1,9 @@
 # DA-7 · Git diff reader: three base modes
 
-- **Order:** 70
 - **Scope:** 02-git (see [reference](../../reference/README.md))
 - **Created:** 2026-09-05
 - **Dependencies:** DA-6
+- **Taken:** 2026-09-05
 
 ## Context
 
