@@ -1,9 +1,9 @@
 # DA-32 · Phase 1 acceptance
 
-- **Order:** 320
 - **Scope:** all subsystems (see [reference](../../reference/README.md))
 - **Created:** 2026-09-05
 - **Dependencies:** DA-28, DA-29, DA-30, DA-31
+- **Taken:** 2026-09-05
 
 ## Context
 
