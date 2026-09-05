@@ -10,6 +10,8 @@ A local code-review tool for a folder that holds many independent git repositori
 | [docs/design/HANDOFF.md](docs/design/HANDOFF.md) | UI design handoff: tokens, screens, interactions, keyboard map (Russian) |
 | [docs/design/prototype.dc.html](docs/design/prototype.dc.html) | Working HTML prototype of every screen and state |
 | [docs/README.md](docs/README.md) | Documentation index: reference, glossary, roadmap, decisions, backlog |
+| [PRODUCT.md](PRODUCT.md) | Durable product truth for design work: users, purpose, positioning, constraints |
+| [DESIGN.md](DESIGN.md) | The visual system as `src/ui/tokens.css` implements it, both themes |
 
 
 ## Development
@@ -63,5 +65,99 @@ Layout: `src/core` (scanner, git, storage, domain), `src/cli`, `src/server`,
 scripts), `skills` (shipped agent skills). Only `scripts` and `perf` may use
 runtime-specific APIs such as `Bun.*`; `src/server/runtime.ts` is the single
 place in `src/` that knows which runtime it is on.
+
+### Design artifacts and the design hook
+
+UI work runs against the Impeccable design skill, installed at the Claude Code
+user level (`~/.claude/skills/impeccable`). It reads four files in this
+repository:
+
+| File | What it is |
+|---|---|
+| `PRODUCT.md` | Durable product truth: users, purpose, positioning, constraints, brand commitments. Written once; it changes when the product does, not when a screen does. |
+| `DESIGN.md` | The visual system as `src/ui/tokens.css` implements it, both themes, in the [DESIGN.md format](https://github.com/google-labs-code/design.md). The token authority beside the handoff; its colours and `tokens.css` carry the same values and change in the same pass. |
+| `.impeccable/design.json` | What that format cannot hold: the two shadows, the two keyframes, the focus rings, the 1560 px floor, colour display names, and eight component snippets. |
+| `.impeccable/surfaces/*.md` | One brief per screen — scope, visitor mode, the job, constraints, and what is still unresolved there. `src-ui-app-tsx.md` covers the review workspace and every component in it. |
+
+Before editing anything under `src/ui`, load them together:
+
+```sh
+node ~/.claude/skills/impeccable/scripts/context.mjs --target src/ui/App.tsx
+```
+
+The **design detector hook** runs the same checks automatically after an editing
+tool writes a UI file, and a deeper pass over everything the session touched when
+it stops. `.impeccable/config.json` turns it on for this repository and is
+committed; `.impeccable/config.local.json` records one developer's consent and is
+not.
+
+No harness manifest is committed, because a manifest has to name the path where
+Impeccable is installed and that path differs per machine. Each developer wires
+it once:
+
+```sh
+node ~/.claude/skills/impeccable/scripts/hook-admin.mjs on      # installs manifests
+node ~/.claude/skills/impeccable/scripts/hook-admin.mjs status  # what is wired now
+```
+
+`on` writes the manifests only when the skill sits inside the project
+(`.claude/skills/impeccable`, `.agents/skills/impeccable`,
+`.cursor/skills/impeccable`). With a user-level install it enables the hook in
+`.impeccable/config.json` and prints *"No installed provider skill folders found
+to repair"* — then the manifest is added by hand. Replace
+`$HOME/.claude/skills/impeccable` below with wherever the skill actually lives.
+
+Claude Code, `.claude/settings.local.json` (gitignored):
+
+```json
+{
+  "hooks": {
+    "PostToolUse": [
+      { "matcher": "Edit|Write|MultiEdit",
+        "hooks": [{ "type": "command", "command": "node \"$HOME/.claude/skills/impeccable/scripts/hook.mjs\"", "timeout": 5, "statusMessage": "Checking UI changes" }] }
+    ],
+    "Stop": [
+      { "hooks": [{ "type": "command", "command": "node \"$HOME/.claude/skills/impeccable/scripts/hook.mjs\"", "timeout": 30, "statusMessage": "Design deep pass" }] }
+    ]
+  }
+}
+```
+
+Codex, `.codex/hooks.json` — the same two events, a different write matcher, and
+approval through `/hooks` the first time:
+
+```json
+{
+  "hooks": {
+    "PostToolUse": [
+      { "matcher": "Edit|Write|apply_patch",
+        "hooks": [{ "type": "command", "command": "node \"$HOME/.claude/skills/impeccable/scripts/hook.mjs\"", "timeout": 5, "statusMessage": "Checking UI changes" }] }
+    ],
+    "Stop": [
+      { "hooks": [{ "type": "command", "command": "node \"$HOME/.claude/skills/impeccable/scripts/hook.mjs\"", "timeout": 30, "statusMessage": "Design deep pass" }] }
+    ]
+  }
+}
+```
+
+Cursor, `.cursor/hooks.json` — a pre-write gate instead, which refuses a proposed
+write the detector objects to; enable hooks under Settings → Hooks:
+
+```json
+{
+  "version": 1,
+  "hooks": {
+    "preToolUse": [
+      { "command": "node \"$HOME/.claude/skills/impeccable/scripts/hook-before-edit.mjs\"", "timeout": 5 }
+    ]
+  }
+}
+```
+
+Without a hook the check is manual, once, on the files a change touched:
+
+```sh
+node ~/.claude/skills/impeccable/scripts/detect.mjs --json src/ui/App.tsx src/ui/styles.css
+```
 
 License: MIT.

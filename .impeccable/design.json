@@ -1,0 +1,556 @@
+{
+  "schemaVersion": 2,
+  "generatedAt": "2026-09-05T00:00:00.000Z",
+  "title": "Design System: diffalanche",
+  "extensions": {
+    "colorMeta": {
+      "acc": {
+        "role": "primary",
+        "displayName": "Muted Periwinkle",
+        "canonical": "#8b9ae0",
+        "tonalRamp": [
+          "#26293a",
+          "#3f4a80",
+          "#8b9ae0",
+          "#a8b3e6"
+        ]
+      },
+      "accBg": {
+        "role": "primary",
+        "displayName": "Accent Ground",
+        "canonical": "#26293a"
+      },
+      "accBd": {
+        "role": "primary",
+        "displayName": "Accent Edge",
+        "canonical": "#3f4a80"
+      },
+      "accTx": {
+        "role": "primary",
+        "displayName": "Accent Text",
+        "canonical": "#a8b3e6"
+      },
+      "crit": {
+        "role": "secondary",
+        "displayName": "Faded Terracotta",
+        "canonical": "#e0837a"
+      },
+      "warn": {
+        "role": "secondary",
+        "displayName": "Dim Amber",
+        "canonical": "#dfa85c"
+      },
+      "nit": {
+        "role": "secondary",
+        "displayName": "Pale Sage",
+        "canonical": "#7ec49c"
+      },
+      "q": {
+        "role": "secondary",
+        "displayName": "Muted Periwinkle",
+        "canonical": "#8b9ae0"
+      },
+      "ok": {
+        "role": "secondary",
+        "displayName": "Living Green",
+        "canonical": "#5ba37c"
+      },
+      "addTx": {
+        "role": "tertiary",
+        "displayName": "Pale Mint",
+        "canonical": "#a9dcc0"
+      },
+      "add": {
+        "role": "tertiary",
+        "displayName": "Added Wash",
+        "canonical": "rgba(110, 190, 145, 0.15)"
+      },
+      "delTx": {
+        "role": "tertiary",
+        "displayName": "Pale Clay",
+        "canonical": "#eeb4ad"
+      },
+      "del": {
+        "role": "tertiary",
+        "displayName": "Removed Wash",
+        "canonical": "rgba(214, 110, 100, 0.15)"
+      },
+      "code": {
+        "role": "tertiary",
+        "displayName": "Reading Grey",
+        "canonical": "#bcc2cb"
+      },
+      "ln": {
+        "role": "tertiary",
+        "displayName": "Gutter Grey",
+        "canonical": "#767e89"
+      },
+      "gap": {
+        "role": "tertiary",
+        "displayName": "Filler",
+        "canonical": "#22262c"
+      },
+      "bg": {
+        "role": "neutral",
+        "displayName": "Graphite Night",
+        "canonical": "#1d2025",
+        "tonalRamp": [
+          "#1d2025",
+          "#212429",
+          "#22262c",
+          "#282d34",
+          "#2c313a",
+          "#333941",
+          "#828a95",
+          "#dde1e7"
+        ]
+      },
+      "panel": {
+        "role": "neutral",
+        "displayName": "Slate Panel",
+        "canonical": "#212429"
+      },
+      "panel2": {
+        "role": "neutral",
+        "displayName": "Chrome",
+        "canonical": "#22262c"
+      },
+      "panel3": {
+        "role": "neutral",
+        "displayName": "Raised Chrome",
+        "canonical": "#282d34"
+      },
+      "bd": {
+        "role": "neutral",
+        "displayName": "Divider",
+        "canonical": "#333941"
+      },
+      "bd2": {
+        "role": "neutral",
+        "displayName": "Hairline",
+        "canonical": "#2c313a"
+      },
+      "tx": {
+        "role": "neutral",
+        "displayName": "Primary Text",
+        "canonical": "#dde1e7"
+      },
+      "tx2": {
+        "role": "neutral",
+        "displayName": "Secondary Text",
+        "canonical": "#9ba3ae"
+      },
+      "tx3": {
+        "role": "neutral",
+        "displayName": "Tertiary Text",
+        "canonical": "#828a95"
+      },
+      "sel": {
+        "role": "neutral",
+        "displayName": "Selection",
+        "canonical": "#333c66"
+      },
+      "onAcc": {
+        "role": "neutral",
+        "displayName": "On Accent",
+        "canonical": "#1c1f2b"
+      },
+      "scrim": {
+        "role": "neutral",
+        "displayName": "Scrim",
+        "canonical": "rgba(10, 11, 13, 0.5)"
+      },
+      "acc-light": {
+        "role": "primary",
+        "displayName": "Ink Indigo",
+        "canonical": "#4d5793",
+        "tonalRamp": [
+          "#3a4478",
+          "#4d5793",
+          "#aab2d8",
+          "#e6e9f5"
+        ]
+      },
+      "accBg-light": {
+        "role": "primary",
+        "displayName": "Accent Ground",
+        "canonical": "#e6e9f5"
+      },
+      "accBd-light": {
+        "role": "primary",
+        "displayName": "Accent Edge",
+        "canonical": "#aab2d8"
+      },
+      "accTx-light": {
+        "role": "primary",
+        "displayName": "Accent Text",
+        "canonical": "#3a4478"
+      },
+      "crit-light": {
+        "role": "secondary",
+        "displayName": "Deep Terracotta",
+        "canonical": "#a94a41"
+      },
+      "warn-light": {
+        "role": "secondary",
+        "displayName": "Burnt Amber",
+        "canonical": "#8a5f18"
+      },
+      "nit-light": {
+        "role": "secondary",
+        "displayName": "Deep Sage",
+        "canonical": "#376f4e"
+      },
+      "q-light": {
+        "role": "secondary",
+        "displayName": "Ink Indigo",
+        "canonical": "#4d5793"
+      },
+      "ok-light": {
+        "role": "secondary",
+        "displayName": "Living Green",
+        "canonical": "#3f6b4f"
+      },
+      "addTx-light": {
+        "role": "tertiary",
+        "displayName": "Deep Mint",
+        "canonical": "#26603c"
+      },
+      "add-light": {
+        "role": "tertiary",
+        "displayName": "Added Wash",
+        "canonical": "rgba(58, 122, 84, 0.17)"
+      },
+      "delTx-light": {
+        "role": "tertiary",
+        "displayName": "Deep Clay",
+        "canonical": "#8a352d"
+      },
+      "del-light": {
+        "role": "tertiary",
+        "displayName": "Removed Wash",
+        "canonical": "rgba(174, 70, 60, 0.15)"
+      },
+      "code-light": {
+        "role": "tertiary",
+        "displayName": "Reading Grey",
+        "canonical": "#403d38"
+      },
+      "ln-light": {
+        "role": "tertiary",
+        "displayName": "Gutter Grey",
+        "canonical": "#8a857a"
+      },
+      "gap-light": {
+        "role": "tertiary",
+        "displayName": "Filler",
+        "canonical": "#efece5"
+      },
+      "bg-light": {
+        "role": "neutral",
+        "displayName": "Warm Paper",
+        "canonical": "#f2f0eb",
+        "tonalRamp": [
+          "#2e2d29",
+          "#403d38",
+          "#57544d",
+          "#736f66",
+          "#8a857a",
+          "#d8d2c7",
+          "#e6e1d8",
+          "#e7e3da"
+        ]
+      },
+      "panel-light": {
+        "role": "neutral",
+        "displayName": "Bright Paper",
+        "canonical": "#fbfaf7"
+      },
+      "panel2-light": {
+        "role": "neutral",
+        "displayName": "Chrome",
+        "canonical": "#efece5"
+      },
+      "panel3-light": {
+        "role": "neutral",
+        "displayName": "Raised Chrome",
+        "canonical": "#e7e3da"
+      },
+      "bd-light": {
+        "role": "neutral",
+        "displayName": "Divider",
+        "canonical": "#d8d2c7"
+      },
+      "bd2-light": {
+        "role": "neutral",
+        "displayName": "Hairline",
+        "canonical": "#e6e1d8"
+      },
+      "tx-light": {
+        "role": "neutral",
+        "displayName": "Primary Text",
+        "canonical": "#2e2d29"
+      },
+      "tx2-light": {
+        "role": "neutral",
+        "displayName": "Secondary Text",
+        "canonical": "#57544d"
+      },
+      "tx3-light": {
+        "role": "neutral",
+        "displayName": "Tertiary Text",
+        "canonical": "#736f66"
+      },
+      "sel-light": {
+        "role": "neutral",
+        "displayName": "Selection",
+        "canonical": "#dbe0f2"
+      },
+      "onAcc-light": {
+        "role": "neutral",
+        "displayName": "On Accent",
+        "canonical": "#fbfaf7"
+      },
+      "scrim-light": {
+        "role": "neutral",
+        "displayName": "Scrim",
+        "canonical": "rgba(70, 64, 54, 0.26)"
+      }
+    },
+    "typographyMeta": {
+      "display": {
+        "displayName": "Display",
+        "purpose": "Empty-state and export headings. The largest type in the product; nothing sits above it."
+      },
+      "headline": {
+        "displayName": "Headline",
+        "purpose": "The repository path over a change set, in the centre panel header."
+      },
+      "title": {
+        "displayName": "Title",
+        "purpose": "The diffalanche wordmark in the header."
+      },
+      "body": {
+        "displayName": "Body",
+        "purpose": "Interface prose and comment bodies; 1.6 line-height inside a thread card."
+      },
+      "meta": {
+        "displayName": "Meta",
+        "purpose": "Counts, the base line, hunk headers, feed events, tree file rows."
+      },
+      "label": {
+        "displayName": "Label",
+        "purpose": "Uppercase tags (BASE, SCAN, AGENT ACTIVITY) and key chips. Severity chips are the same family at 9.5-10px, 600, 0.04em."
+      },
+      "code": {
+        "displayName": "Code",
+        "purpose": "The diff. 11.5px / 20px in the tighter layout."
+      }
+    },
+    "shadows": [
+      {
+        "name": "modal",
+        "value": "0 24px 64px rgba(0, 0, 0, 0.5)",
+        "purpose": "The only elevation over the scrim: base picker, sessions menu, global search, export. Light theme: 0 20px 48px rgba(70, 64, 54, 0.2). Token --shadow."
+      },
+      {
+        "name": "toast",
+        "value": "0 12px 32px rgba(0, 0, 0, 0.4)",
+        "purpose": "The transient message at bottom centre, which floats without a scrim. Light theme: 0 10px 26px rgba(70, 64, 54, 0.16). Token --shadowSm."
+      },
+      {
+        "name": "severity-marker",
+        "value": "inset 3px 0 0 var(--crit)",
+        "purpose": "Not an elevation: the inset bar marking a commented or selected line, in the severity colour (--acc for a selected range). The one place a 3px edge is allowed."
+      },
+      {
+        "name": "rail-tab-active",
+        "value": "inset 0 -2px 0 var(--acc)",
+        "purpose": "The active tab of the thread rail, which marks itself with an inset underline instead of a fill."
+      }
+    ],
+    "motion": [
+      {
+        "name": "dcin",
+        "value": "opacity 0 -> 1 with translateY(4px) -> 0, 140-160ms ease-out",
+        "purpose": "Everything that appears: overlays, the composer, a new thread, the model's re-anchoring proposal. Defined as a keyframe in src/ui/tokens.css."
+      },
+      {
+        "name": "dcpulse",
+        "value": "opacity 1 -> 0.35 -> 1, 2.4s ease-in-out infinite",
+        "purpose": "Everything alive: the watching dot and live agent indicators. 1.1s while the model is searching for an anchor. Defined as a keyframe in src/ui/tokens.css."
+      }
+    ],
+    "focusRings": [
+      {
+        "name": "field-focus",
+        "value": "border-color: var(--accBd); outline: none",
+        "purpose": "A bordered control (input, textarea, select) turns its 1px border to the accent edge on :focus-visible."
+      },
+      {
+        "name": "row-focus",
+        "value": "outline: 1px solid var(--accBd)",
+        "purpose": "A row that has no border of its own (tree rows, list items) takes a 1px accent-edge outline on :focus-visible. Focus is never removed and never a glow."
+      }
+    ],
+    "breakpoints": [
+      {
+        "name": "floor",
+        "value": "1560px",
+        "purpose": "Not a breakpoint: the minimum width of .app. Below it the window scrolls sideways and the panels keep 308 / flexible / 392. The system has no other breakpoint and must not gain one."
+      },
+      {
+        "name": "diff-min",
+        "value": "1080px",
+        "purpose": "The minimum width of a file card's own horizontal scroll, so the two diff columns stay aligned under one scrollbar."
+      }
+    ]
+  },
+  "components": [
+    {
+      "name": "Ghost Button",
+      "kind": "button",
+      "refersTo": "button-ghost",
+      "description": "The default control on every screen: header actions, Browse repo, dismiss.",
+      "html": "<button class=\"ds-btn-ghost\">Export .md</button>",
+      "css": ".ds-btn-ghost { display: flex; align-items: center; gap: 7px; height: 28px; padding: 0 10px; border: 1px solid var(--bd); border-radius: 8px; background: none; color: var(--tx2); font: 12px/1.5 var(--sans); cursor: pointer; transition: color 140ms ease-out, border-color 140ms ease-out; } .ds-btn-ghost:hover { color: var(--tx); } .ds-btn-ghost:focus-visible { border-color: var(--accBd); outline: none; }"
+    },
+    {
+      "name": "Primary Button",
+      "kind": "button",
+      "refersTo": "button-primary",
+      "description": "One per context at most: Comment in the composer, Apply in the base picker, Create for a session. Specified in handoff section 2; not implemented yet (DA-22).",
+      "html": "<button class=\"ds-btn-primary\">Comment</button>",
+      "css": ".ds-btn-primary { display: flex; align-items: center; height: 28px; padding: 0 12px; border: 1px solid var(--acc); border-radius: 8px; background: var(--acc); color: var(--onAcc); font: 600 12px/1 var(--sans); cursor: pointer; transition: background 140ms ease-out; } .ds-btn-primary:hover { background: var(--accTx); } .ds-btn-primary:focus-visible { outline: 1px solid var(--accBd); outline-offset: 1px; }"
+    },
+    {
+      "name": "Severity Badge",
+      "kind": "chip",
+      "refersTo": "badge-critical",
+      "description": "The count of open comments on a file or repository, filled with the worst severity among them. The most saturated object permitted on a screen.",
+      "html": "<span class=\"ds-badge ds-badge-critical\">3</span>",
+      "css": ".ds-badge { display: inline-block; padding: 1px 7px; border-radius: 9px; background: var(--tx3); color: var(--onAcc); font: 600 10px/1.6 var(--mono); } .ds-badge-critical { background: var(--crit); } .ds-badge-warning { background: var(--warn); } .ds-badge-nit { background: var(--nit); } .ds-badge-question { background: var(--q); }"
+    },
+    {
+      "name": "Segment Group",
+      "kind": "nav",
+      "refersTo": "segment",
+      "description": "A two- or three-way switch sharing one border: split/unified, the theme toggle, working tree/base.",
+      "html": "<div class=\"ds-segments\"><button class=\"ds-segment ds-segment-on\">☾</button><button class=\"ds-segment\">☀</button></div>",
+      "css": ".ds-segments { display: inline-flex; border: 1px solid var(--bd); border-radius: 6px; overflow: hidden; } .ds-segment { width: 26px; height: 26px; border: 0; background: none; color: var(--tx2); font: 12px/1 var(--sans); cursor: pointer; } .ds-segment:hover { color: var(--tx); } .ds-segment-on { background: var(--bd); color: var(--tx); } .ds-segment:focus-visible { outline: 1px solid var(--accBd); outline-offset: -1px; }"
+    },
+    {
+      "name": "Filter Field",
+      "kind": "input",
+      "refersTo": "input-filter",
+      "description": "The sidebar's file filter, with the number of matches inside the field on the right.",
+      "html": "<div class=\"ds-field\"><input class=\"ds-field-input\" placeholder=\"filter files\" /><span class=\"ds-field-count\">12</span></div>",
+      "css": ".ds-field { position: relative; } .ds-field-input { width: 100%; height: 28px; padding: 0 38px 0 9px; border: 1px solid var(--bd); border-radius: 8px; background: var(--panel2); color: var(--tx); font: 11.5px/1 var(--sans); } .ds-field-input::placeholder { color: var(--tx3); } .ds-field-input:focus-visible { border-color: var(--accBd); outline: none; } .ds-field-count { position: absolute; top: 50%; right: 10px; transform: translateY(-50%); color: var(--tx3); font: 10.5px/1 var(--mono); }"
+    },
+    {
+      "name": "Session Pill",
+      "kind": "custom",
+      "refersTo": "pill",
+      "description": "The header's session trigger: name, title, caret. The signature control of the header row.",
+      "html": "<button class=\"ds-pill\"><span class=\"ds-pill-name\">ls-240372</span><span class=\"ds-pill-title\">Cargo flags across services</span><span class=\"ds-pill-caret\">▾</span></button>",
+      "css": ".ds-pill { display: flex; align-items: center; gap: 7px; height: 28px; max-width: 340px; padding: 0 9px; border: 1px solid var(--bd); border-radius: 8px; background: var(--panel3); color: var(--tx); cursor: pointer; } .ds-pill-name { font: 500 12px/1 var(--mono); } .ds-pill-title { max-width: 220px; overflow: hidden; color: var(--tx3); font: 13.5px/1 var(--sans); text-overflow: ellipsis; white-space: nowrap; } .ds-pill-caret { color: var(--acc); } .ds-pill:focus-visible { border-color: var(--accBd); outline: none; }"
+    },
+    {
+      "name": "Thread Card",
+      "kind": "card",
+      "refersTo": "card-thread",
+      "description": "One comment and its replies in the right column. Focused takes the accent border and ground; resolved drops to 0.55 opacity; orphaned takes the warning border. Specified in handoff section 3; not implemented yet (DA-23).",
+      "html": "<article class=\"ds-thread\"><header class=\"ds-thread-head\"><span class=\"ds-thread-sev\">CRITICAL</span><span class=\"ds-thread-anchor\">L42–45</span><span class=\"ds-thread-state\">awaiting</span></header><p class=\"ds-thread-body\">The flag is read before the config is loaded.</p></article>",
+      "css": ".ds-thread { padding: 10px; border: 1px solid var(--bd); border-radius: 9px; background: var(--panel3); animation: dcin 160ms ease-out; } .ds-thread-head { display: flex; align-items: center; gap: 8px; } .ds-thread-sev { padding: 1px 6px; border-radius: 4px; background: var(--crit); color: var(--onAcc); font: 600 9.5px/1.6 var(--mono); letter-spacing: 0.04em; } .ds-thread-anchor { color: var(--tx3); font: 10.5px/1 var(--mono); } .ds-thread-state { margin-left: auto; color: var(--acc); font: 10.5px/1 var(--mono); } .ds-thread-body { margin: 8px 0 0; color: var(--tx); font: 12.5px/1.55 var(--sans); }"
+    },
+    {
+      "name": "Toast",
+      "kind": "custom",
+      "refersTo": "toast",
+      "description": "The 2.2-second confirmation at the bottom centre. One of the only two things in the system that casts a shadow.",
+      "html": "<div class=\"ds-toast\">Комментарий сохранён</div>",
+      "css": ".ds-toast { display: inline-block; padding: 9px 14px; border: 1px solid var(--bd); border-radius: 8px; background: var(--panel3); box-shadow: var(--shadowSm); color: var(--tx); font: 12.5px/1.5 var(--sans); animation: dcin 140ms ease-out; }"
+    }
+  ],
+  "narrative": {
+    "northStar": "The Quiet Control Room",
+    "overview": "diffalanche is read for hours at a stretch by one person checking what a set of coding agents did to a dozen repositories. The interface is the room they read in: dark by default, low in contrast everywhere except where it matters, and built out of instruments rather than pages. Everything countable — a path, a line number, a count, a hotkey, a severity — is set in monospace, so the eye can tell a measurement from a sentence without reading either. Panels have fixed widths and never move. Nothing spins, nothing blinks, and nothing reflows after data arrives.\n\nThe palette is deliberately quiet so that one thing can be loud. The accent is a muted periwinkle, not a saturated blue; added and removed lines are 15–17 % washes of green and clay, not the saturated bands a hosted diff viewer uses; the four severity colours are desaturated to the point where a filled critical badge is the single most saturated object on a full screen. That is the whole colour argument: a finding outranks the code it sits in, and it can only do that if the code is calm.\n\nBoth themes are first-class and neither is a tint of the other. The dark theme is cool graphite; the light theme is warm paper — an ivory ground with warm greys, chosen against the cool blue-white a developer tool defaults to, so that switching themes changes the room rather than inverting the picture.",
+    "keyCharacteristics": [
+      "Dark by default; the light theme is warm paper, not cool white.",
+      "Dense: a 9.5–14.5 px type ramp, 1 px borders, a spacing core of 9–14 px.",
+      "Monospace carries everything countable; the sans carries what a human wrote.",
+      "Flat inside the workspace; shadows lift only modals and the toast.",
+      "Fixed panel widths (308 / flexible / 392) and a 1560 px floor — the layout never compresses.",
+      "Text symbols instead of icons; the mark is three squares built in markup."
+    ],
+    "rules": [
+      {
+        "name": "The One Loud Thing Rule",
+        "section": "colors",
+        "body": "A filled critical badge is the most saturated object permitted on a screen. Any new colour is checked against it: if it competes, it is wrong, whatever it is for."
+      },
+      {
+        "name": "The Selection Rule",
+        "section": "colors",
+        "body": "sel marks the file the reader is in. accBg marks what is in play right now — a dragged line range, a focused thread, a highlighted search hit. They are never used for each other's job."
+      },
+      {
+        "name": "The Countable-Is-Mono Rule",
+        "section": "typography",
+        "body": "Anything a person could count, copy, or type back — a path, a line number, a sha, a count, a hotkey, a severity — is set in JetBrains Mono. Anything a person wrote in words is set in Instrument Sans. A count in the sans face is a bug."
+      },
+      {
+        "name": "The No-Larger-Than-Nineteen Rule",
+        "section": "typography",
+        "body": "19 px is the ceiling. The product has no hero and nothing to announce; type that reaches for attention is taking it from a finding."
+      },
+      {
+        "name": "The Panels-Do-Not-Shrink Rule",
+        "section": "layout",
+        "body": "308 / flexible / 392 are fixed. Below 1560 px the window scrolls; nothing compresses, nothing collapses, nothing becomes a drawer."
+      },
+      {
+        "name": "The No-Jump Rule",
+        "section": "layout",
+        "body": "The panels hold their final widths while the server answers. Loading shows the real header, silhouette rows in the sidebar, and one empty file card — never a spinner, and never a layout that moves when the data lands."
+      },
+      {
+        "name": "The Flat Workspace Rule",
+        "section": "elevation",
+        "body": "A surface that stays in the workspace gets a tone and a 1 px border, never a shadow. If a new element wants a shadow, either it belongs over the scrim or the shadow is wrong."
+      },
+      {
+        "name": "The One-Pixel Rule",
+        "section": "elevation",
+        "body": "Every border is 1 px. Weight is carried by colour — bd for a real edge, bd2 for an internal split — not by thickness. The only exception is the severity marker on a commented line, which is box-shadow: inset 3px 0 0 <severity>, an inset bar rather than an elevation."
+      },
+      {
+        "name": "The Two-Keyframe Rule",
+        "section": "shapes",
+        "body": "dcin for arrival, dcpulse for a heartbeat. A third animation is a new decision, not a flourish."
+      }
+    ],
+    "dos": [
+      "Do take every colour from src/ui/tokens.css. It and this file carry the same values and change in the same pass; a hard-coded hex in a component is a defect.",
+      "Do set anything countable in JetBrains Mono and anything a human wrote in Instrument Sans (The Countable-Is-Mono Rule).",
+      "Do give a new surface a tone from the bg/panel/panel2/panel3 ladder and a 1 px bd border (The Flat Workspace Rule).",
+      "Do keep both themes in step. A token added for one theme is added for the other in the same edit, and light is designed as warm paper, not as inverted dark.",
+      "Do show focus with accBd — a border change on a bordered control, a 1 px outline on a row that has none.",
+      "Do use dcin for anything that appears and dcpulse for anything alive.",
+      "Do keep panel widths fixed and let the window scroll below 1560 px.",
+      "Do use text symbols (▾ ▸ ⌕ ☾ ☀ ✓ ↑ ↓ ↵ ⏎ ⌘ ⇧ ◆) for iconography."
+    ],
+    "donts": [
+      "Don't add a colour more saturated than a filled critical badge (The One Loud Thing Rule).",
+      "Don't put a shadow on anything that stays in the workspace; the two shadows are for modals and the toast.",
+      "Don't use a gradient, a glow, a coloured drop shadow, or gradient text anywhere. The system has none and wants none.",
+      "Don't use a border other than 1 px (The One-Pixel Rule); the severity marker is an inset bar, not an exception to it.",
+      "Don't ship a spinner, a skeleton shimmer, or a layout that moves when data arrives (The No-Jump Rule). Loading is the real header, silhouette rows, and one empty card.",
+      "Don't repaint a file card on a live update; change the affected lines and threads and let dcin carry them in.",
+      "Don't add a breakpoint, a collapsing panel, or a mobile layout.",
+      "Don't add an icon font, a raster asset, or a third font family.",
+      "Don't set type above 19 px, and don't reach past the 9.5–19 px ramp for emphasis — use weight, the mono face, or a severity colour.",
+      "Don't use sel and accBg interchangeably (The Selection Rule)."
+    ]
+  }
+}

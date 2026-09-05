@@ -7,6 +7,19 @@ the project follows [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
 ### Added
 
+- Impeccable in the project: `PRODUCT.md` records the durable product truth a
+  design pass needs — users, purpose, positioning, operating context,
+  constraints, brand commitments, and the evidence that does not exist and must
+  not be invented. `DESIGN.md` records the visual system as `src/ui/tokens.css`
+  implements it: 56 colours across both themes byte-for-byte from the token
+  file, seven typography roles, the radius and spacing scales, 25 components,
+  and the named rules the handoff implies. `.impeccable/design.json` carries
+  what that format cannot — the two shadows, the two keyframes, the focus
+  rings, the 1560 px floor, and eight component snippets — and
+  `.impeccable/surfaces/src-ui-app-tsx.md` is the review workspace's own brief.
+  The design detector hook is enabled for the repository in
+  `.impeccable/config.json`; each developer wires their own harness manifest,
+  which `README.md` spells out. See [08-ui.md](docs/reference/08-ui.md).
 - A file whose name git does not write literally keeps the name it has on disk:
   a name outside ASCII, which git C-quotes with octal escapes, and a name with a
   space, which git pads with a tab. The path is the id a comment anchors to and

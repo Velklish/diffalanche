@@ -6,7 +6,7 @@
     "useIgnoreFile": true
   },
   "files": {
-    "includes": ["**", "!docs/design", "!backslop.json"]
+    "includes": ["**", "!docs/design", "!backslop.json", "!.impeccable"]
   },
   "formatter": {
     "enabled": true,
