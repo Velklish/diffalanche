@@ -1,0 +1,33 @@
+{
+  "name": "diffalanche",
+  "version": "0.0.0",
+  "description": "A local code-review tool for a folder that holds many independent git repositories",
+  "license": "MIT",
+  "repository": {
+    "type": "git",
+    "url": "git+https://github.com/Velklish/diffalanche.git"
+  },
+  "type": "module",
+  "bin": {
+    "diffalanche": "./dist/cli.js"
+  },
+  "engines": {
+    "node": ">=22"
+  },
+  "files": [
+    "dist"
+  ],
+  "scripts": {
+    "dev": "bun run src/cli/index.ts",
+    "build": "bun build src/cli/index.ts --target node --outfile dist/cli.js",
+    "test": "vitest run",
+    "lint": "biome check .",
+    "typecheck": "tsc --noEmit"
+  },
+  "devDependencies": {
+    "@biomejs/biome": "^2.5.12",
+    "@types/node": "^22.20.1",
+    "typescript": "^7.0.2",
+    "vitest": "^5.0.0"
+  }
+}

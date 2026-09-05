@@ -3,7 +3,10 @@
   "docs": "docs",
   "cli": "npx github:Velklish/backslop#v0.3.1",
   "gates": [
-    "npx github:Velklish/backslop#v0.3.1 lint"
+    "npx github:Velklish/backslop#v0.3.1 lint",
+    "bun run lint",
+    "bun run typecheck",
+    "bun run test"
   ],
   "version": "0.3.1",
   "lang": "en",

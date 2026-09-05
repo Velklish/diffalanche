@@ -14,6 +14,7 @@
 - `skills/diffalanche-apply/SKILL.md` and `skills/diffalanche-review/SKILL.md` in the Agent Skills format (frontmatter `name`, `description` with triggers, body with the procedure); a `references/` file each with command examples and JSON shapes.
 - The procedure names the exact commands and flags, the confirmation gate before edits, the reply rules, and the multi-agent conventions.
 - A section in `README.md` on installing the skills into Claude Code (`.claude/skills/`) and pointing other harnesses at the files.
+- From DA-1.3 (merged): `package.json` ships only `files: ["dist"]`, while `skills/README.md` and `docs/SPEC.md` section 9 say the skills ship with diffalanche, so `npx diffalanche` gives an agent the CLI and no skills. Decide where the shipped skills live in the published package: adding `skills` to `files` publishes the markdown as-is, bundling into `dist` lets the build rewrite paths and version strings. Make `package.json` match the documentation; DA-31 is the second owner if the choice affects the release build.
 
 ## Out of scope
 
@@ -23,3 +24,4 @@
 
 - A Claude Code session with the skill installed, run on the fixture with three unanswered comments in two repositories, presents the grouped plan, edits after confirmation, and replies to all three; `list --unanswered --json` is empty afterwards and no comment is resolved. The run transcript is attached to `result.md`.
 - `diffalanche-review` on a fixture diff opens at least one comment with a line anchor.
+- `npm pack --dry-run` lists the shipped skills where the skills' own documentation says they are.

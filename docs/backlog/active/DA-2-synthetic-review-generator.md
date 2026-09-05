@@ -1,9 +1,9 @@
 # DA-2 · Synthetic review generator for tests and the performance gate
 
-- **Order:** 20
 - **Scope:** 11-perf (see [reference](../../reference/README.md))
 - **Created:** 2026-09-05
 - **Dependencies:** DA-1
+- **Taken:** 2026-09-05
 
 ## Context
 

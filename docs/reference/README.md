@@ -2,7 +2,7 @@
 
 How diffalanche works today — from the code, not intention. Intent and rationale are in [ADRs](../README.md); this reference describes only the behaviour of the running version. It is organised by subsystem so each file can be edited independently. The “Scope” field of tasks links here.
 
-There is no code yet. The table names the subsystems the task cut expects; each section file is written by the task that creates the subsystem (see DA-30 for the pass that fills them in).
+There is no product code yet. The table names the subsystems the task cut expects; each section file is written by the task that creates the subsystem (see DA-30 for the pass that fills them in).
 
 | Section | About | Planned path |
 |---|---|---|
