@@ -1,5 +1,14 @@
 import { execFileSync } from "node:child_process";
-import { mkdirSync, mkdtempSync, rmSync, symlinkSync, unlinkSync, writeFileSync } from "node:fs";
+import {
+  chmodSync,
+  existsSync,
+  mkdirSync,
+  mkdtempSync,
+  rmSync,
+  symlinkSync,
+  unlinkSync,
+  writeFileSync,
+} from "node:fs";
 import { tmpdir } from "node:os";
 import { join } from "node:path";
 import { afterAll, beforeAll, describe, expect, it } from "vitest";
@@ -83,6 +92,39 @@ beforeAll(() => {
   writeFileSync(join(solo, "src/app.ts"), `${BASE_LINES.join("\n")}\nconst extra = 1;\n`);
   writeFileSync(join(solo, "untracked.ts"), "export const loose = 1;\n");
 
+  // Every shape git does not write a path literally in: an unquoted name with a
+  // space, which git pads with a tab, and a name outside ASCII, which it quotes.
+  const names = join(root, "repos/g/names");
+  mkdirSync(names, { recursive: true });
+  git(names, ["init", "--quiet", "-b", "main"]);
+  writeFileSync(join(names, "old name.ts"), `${BASE_LINES.join("\n")}\n`);
+  writeFileSync(join(names, "sp ace.ts"), "one\n");
+  writeFileSync(join(names, "файл.ts"), "one\n");
+  writeFileSync(join(names, "gone file.ts"), "bye\n");
+  writeFileSync(join(names, "mode me.sh"), "echo hi\n");
+  // A directory whose name ends in ` b`, so that ` b/` appears inside the paths
+  // themselves and the `diff --git` line cannot be split at the last one.
+  mkdirSync(join(names, "x b"), { recursive: true });
+  writeFileSync(join(names, "x b/z.sh"), "echo deep\n");
+  // Content of its own: identical to `old name.ts` it would be interchangeable
+  // with it, and git's rename detection would be free to pair them either way.
+  writeFileSync(
+    join(names, "moved.ts"),
+    `${BASE_LINES.map((line) => line.replace("const", "export const")).join("\n")}\n`,
+  );
+  commit(names, "base");
+  git(names, ["mv", "old name.ts", "new name.ts"]);
+  git(names, ["mv", "moved.ts", "x b/y.ts"]);
+  chmodSync(join(names, "x b/z.sh"), 0o755);
+  // Untracked, and named the two ways `ls-files -z` can hand over but a patch
+  // header cannot hold literally.
+  writeFileSync(join(names, "tab\there.ts"), "tabbed\n");
+  writeFileSync(join(names, "line\nbreak.ts"), "broken\n");
+  writeFileSync(join(names, "sp ace.ts"), "two\n");
+  writeFileSync(join(names, "файл.ts"), "two\n");
+  rmSync(join(names, "gone file.ts"));
+  chmodSync(join(names, "mode me.sh"), 0o755);
+
   statusBefore = statuses();
 }, 120_000);
 
@@ -92,7 +134,7 @@ afterAll(() => {
 
 function statuses(): Map<string, string> {
   return new Map(
-    ["repos/g/api", "repos/g/solo"].map((path) => [
+    ["repos/g/api", "repos/g/names", "repos/g/solo"].map((path) => [
       path,
       git(join(root, path), ["status", "--porcelain"]),
     ]),
@@ -323,6 +365,60 @@ describe("an untracked entry that cannot be read", () => {
       // it and a dangling one leaves it in place.
       unlinkSync(join(solo, "dangling.ts"));
     }
+  });
+});
+
+describe("paths git does not write literally", () => {
+  // In the order the reader sorts them: by code point.
+  const expected = [
+    // A deletion: `--- a/gone file.ts<TAB>` with `+++ /dev/null` on the other side.
+    { path: "gone file.ts", oldPath: null, status: "deleted", onDisk: false },
+    // Untracked and holding a newline, which unquoted would tear the patch in two.
+    { path: "line\nbreak.ts", oldPath: null, status: "added", onDisk: true },
+    // Only a mode change, so the `diff --git` line is the only place the path is.
+    { path: "mode me.sh", oldPath: null, status: "modified", onDisk: true },
+    // A pure rename: no `---` or `+++` at all, only `rename from` and `rename to`.
+    { path: "new name.ts", oldPath: "old name.ts", status: "renamed", onDisk: true },
+    // A space on both sides, tab-padded by git.
+    { path: "sp ace.ts", oldPath: null, status: "modified", onDisk: true },
+    // Untracked and holding a tab: git quotes such a name, and so does the patch
+    // the reader builds for it, or reading it back would cut it at the tab.
+    { path: "tab\there.ts", oldPath: null, status: "added", onDisk: true },
+    // Renamed into a directory ending in ` b`, so `diff --git a/moved.ts b/x b/y.ts`
+    // cannot be split at its last ` b/`: only `rename to` says where it went.
+    { path: "x b/y.ts", oldPath: "moved.ts", status: "renamed", onDisk: true },
+    // Only a mode change, and ` b/` inside the path on both sides of the line.
+    { path: "x b/z.sh", oldPath: null, status: "modified", onDisk: true },
+    // Outside ASCII, so git C-quotes it with octal escapes for its UTF-8 bytes.
+    { path: "файл.ts", oldPath: null, status: "modified", onDisk: true },
+  ];
+
+  it("reports the name the file has on disk", async () => {
+    const change = await read("repos/g/names", { mode: "head" });
+    expect(change.files.map((file) => file.path)).toEqual(expected.map((one) => one.path));
+    for (const one of expected) {
+      const file = change.files.find((each) => each.path === one.path);
+      expect(file).toMatchObject({ oldPath: one.oldPath, status: one.status });
+      expect(existsSync(join(root, "repos/g/names", one.path))).toBe(one.onDisk);
+    }
+    // The renamed file's old name is the name it had, not an escaped form of it.
+    expect(existsSync(join(root, "repos/g/names", "old name.ts"))).toBe(false);
+  });
+
+  it("unquotes what git escapes, byte by byte", () => {
+    const patch = [
+      'diff --git "a/tab\\there.ts" "b/quote\\".ts"',
+      "index 1111111..2222222 100644",
+      '--- "a/tab\\there.ts"',
+      '+++ "b/quote\\".ts"',
+      "@@ -1 +1 @@",
+      "-one",
+      "+two",
+      "",
+    ].join("\n");
+    const [file] = parseDiff(patch);
+    expect(file?.path).toBe('quote".ts');
+    expect(file?.status).toBe("modified");
   });
 });
 

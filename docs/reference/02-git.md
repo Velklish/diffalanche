@@ -129,6 +129,46 @@ Statuses are `added`, `deleted`, `modified`, and `renamed`. Copy detection is
 not enabled — `git diff` runs without `-C` — and a copy, were one to appear,
 would be reported as a rename.
 
+## Paths
+
+`path` is the name the file has on disk, which is not the name git writes. A
+name needing an escape — anything outside ASCII, a quote, a control character —
+is written C-quoted with octal escapes for its bytes, and an unquoted name
+holding a space is padded with a tab on the `---` and `+++` lines:
+
+```
+diff --git a/sp ace.ts b/sp ace.ts
+--- a/sp ace.ts<TAB>
++++ b/sp ace.ts<TAB>
+diff --git "a/\321\204\320\260\320\271\320\273.ts" "b/\321\204\320\260\320\271\320\273.ts"
+```
+
+Read literally, both come out as a path no file has. That is not a display
+problem: `path` is the id a comment anchors to (`docs/SPEC.md` section 7), the
+argument of `diff --repo` and `comment --path` (section 8), and what an agent
+opens at `<root>/<repo>/<path>`. So the reader takes the paths from the header
+itself rather than from the parser, in this order:
+
+| Source | When it is used |
+|---|---|
+| `---` and `+++` | whenever they are there: one path per line, unambiguous |
+| `rename from` and `rename to` | a pure rename, which has no `---` or `+++` |
+| the `diff --git` line | a mode change and a binary file, which have neither |
+
+The `diff --git` line is last because `a/P b/P` cannot be split at a ` b/` that
+the path itself may contain. It is only reached where both sides are the same
+path, so it is split down the middle and the two halves are checked against each
+other.
+
+Quoting is undone the way git writes it, `quote_c_style`: `\a \b \f \n \r \t \v \"
+\\` and octal escapes, collected as **bytes** and decoded as UTF-8 at the end,
+because the escapes are the bytes of the name and not its characters.
+
+`-c core.quotePath=false` is deliberately not used. It would drop the quoting of
+non-ASCII names and nothing else: the tab padding stays, a name holding a quote
+or a control character is still quoted, and the unquoting code would still have
+to be there — one fewer case for it to handle, and one more thing to explain.
+
 ## Files listed without content
 
 `omitted` says why a file has no `patch` and no `hunks`:
@@ -152,7 +192,11 @@ header put on it would drop a file that passed.
 An untracked file is an addition. Git itself never reports one in a diff — only
 `git add --intent-to-add` would, and that writes to the index — so the reader
 builds the patch git would have printed, `new file mode` header and one hunk of
-`+` lines, and runs it through the same parser as everything else. A file
+`+` lines, and runs it through the same parser as everything else. Its path is
+quoted by the same rule git quotes one — a control character, a quote, a
+backslash, `DEL`, or any byte of a non-ASCII character — because `ls-files -z`
+hands over names a header cannot hold literally: a tab would be cut short when
+the patch is read back, and a newline would tear the patch in two. A file
 holding a zero byte is binary and is listed without content; an empty file is an
 addition of nothing, with its patch.
 
@@ -174,5 +218,3 @@ reason for having no content is unknown, having none is the part that is true.
 - Full-file content for browsing is Phase 2, and the cache on disk is DA-8.
 - The whole diff of a repository is read into memory as one string before it is
   split, so `maxFileBytes` bounds what is carried, not what is read.
-- Quoted paths — git writes `"a/sp ace.ts"` for a path needing escapes — reach
-  the consumer with the quoting the parser leaves on them.

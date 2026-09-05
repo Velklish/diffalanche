@@ -7,6 +7,11 @@ the project follows [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
 ### Added
 
+- A file whose name git does not write literally keeps the name it has on disk:
+  a name outside ASCII, which git C-quotes with octal escapes, and a name with a
+  space, which git pads with a tab. The path is the id a comment anchors to and
+  the file an agent opens, so a mangled one could be commented on and then never
+  found again.
 - Git diff reader: `src/core/git` resolves the base of a review session in each
   repository for all three modes — `head`, `branch` against the merge base with
   the named or the remote default branch, and an explicit `ref` — and reads the

@@ -2,7 +2,7 @@ import { readFile, stat } from "node:fs/promises";
 import { join } from "node:path";
 import { byCodePoint } from "../order.ts";
 import type { BaseSpec, FileChange, RepositoryChange, ResolvedBase } from "../types.ts";
-import { DEFAULT_MAX_FILE_BYTES, type PatchOptions, parseDiff } from "./patch.ts";
+import { DEFAULT_MAX_FILE_BYTES, type PatchOptions, parseDiff, quotePath } from "./patch.ts";
 import {
   currentBranch,
   defaultRemote,
@@ -168,14 +168,21 @@ async function readUntracked(
   }
 }
 
-/** The patch git would print for the file if it were tracked and wholly new. */
+/**
+ * The patch git would print for the file if it were tracked and wholly new. The
+ * path is quoted the way git quotes one, so a name holding a tab is not cut
+ * short when the patch is read back and a name holding a newline does not tear
+ * the patch in two — `ls-files -z` hands over both.
+ */
 function untrackedPatch(path: string, text: string): string {
   const lines = text.split("\n");
   if (lines.at(-1) === "") lines.pop();
   const body = lines.map((line) => `+${line}`).join("\n");
   const tail = text.endsWith("\n") || text === "" ? "" : "\n\\ No newline at end of file";
+  const before = quotePath(`a/${path}`);
+  const after = quotePath(`b/${path}`);
   return (
-    `diff --git a/${path} b/${path}\nnew file mode 100644\n--- /dev/null\n+++ b/${path}\n` +
+    `diff --git ${before} ${after}\nnew file mode 100644\n--- /dev/null\n+++ ${after}\n` +
     `@@ -0,0 +1,${lines.length} @@\n${body}${tail}\n`
   );
 }
