@@ -102,6 +102,7 @@ describe("synthetic review", () => {
     expect(version).toBe(1);
     expect(comments).toHaveLength(SMALL.comments);
     expect(readdirSync(dir).sort()).toEqual(["comments.json", "review.json"]);
+    expect(readFileSync(join(first, ".diffalanche/current"), "utf8")).toBe("synth\n");
   });
 
   it("anchors every line comment on the line it names", () => {

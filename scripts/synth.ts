@@ -758,6 +758,7 @@ export function generate(options: SynthOptions): SynthReport {
     }),
   );
   write(join(data, "reviews", SESSION_NAME, "comments.json"), json({ version: 1, comments }));
+  write(join(data, "current"), `${SESSION_NAME}\n`);
 
   return result;
 }

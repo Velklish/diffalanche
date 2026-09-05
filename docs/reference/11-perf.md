@@ -76,13 +76,11 @@ must not be listed at all. The worktree carries no changes, so the review shows
 
 The data directory holds `config.json` — `roots: ["repos"]`, `depth: 2`, without
 which the default `roots: ["."]` and `depth: 2` would not reach
-`repos/<group>/<repo>` — and one review session `reviews/synth/` with
-`review.json` and `comments.json` in the format of `docs/SPEC.md` section 7.
-There is no `diff.json`: git is the source of truth and the scanner writes that
-cache itself. There is no `current` pointer either — `docs/SPEC.md` section 7
-names that file but does not fix its content, and the storage subsystem is what
-defines it, so until then a consumer of the fixture names the session with
-`--review synth`.
+`repos/<group>/<repo>` — one review session `reviews/synth/` with `review.json`
+and `comments.json` in the format of `docs/SPEC.md` section 7, and a `current`
+pointer naming `synth`, so the fixture opens without `--review`
+([03-storage.md](03-storage.md)). There is no `diff.json`: git is the source of
+truth and the scanner writes that cache itself.
 
 Comments are spread over all four anchor levels (review, repository, file, line)
 and all four severities; a line comment's anchor names a line inside the block

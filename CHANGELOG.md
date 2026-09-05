@@ -34,6 +34,14 @@ the project follows [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
   Linux, and Windows on x64 and arm64 — each carrying the UI inside itself. The
   runtime switch between Bun's server and `@hono/node-server` is the only place
   in `src/` that knows which runtime it runs on.
+- `src/core/storage`, the data directory: session directories, the `current`
+  pointer — one line naming the session — and reading and writing `review.json`,
+  `comments.json`, and `diff.json` as JSON with `version: 1` and two-space
+  indentation. Every write is a temporary file, `fsync`, and a rename over the
+  target; every write to a session goes through `withLock`, a `.lock` directory
+  with a bounded wait and takeover of a lock past the deadline recorded in it.
+  A broken file is refused with the file and the field named. The synthetic
+  review now writes the `current` pointer too.
 - Performance gate: `bun run perf` measures the page on the synthetic review
   three times in headless Chromium and fails when the median of any line of the
   budget table is over budget. It runs in CI as the `perf` job, prints the table

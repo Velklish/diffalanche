@@ -1,0 +1,86 @@
+/**
+ * The on-disk shapes of `docs/SPEC.md` section 7. Storage owns them because it
+ * is the only module that reads and writes these files; every other module
+ * takes the parsed value and never touches the JSON.
+ */
+import type { ReviewBundle } from "../types.ts";
+
+/** The version every file of the data directory carries. Migrations are a task of their own. */
+export const SCHEMA_VERSION = 1;
+
+export type BaseMode = "head" | "branch" | "ref";
+
+/** The base of a review session: `docs/SPEC.md` section 3, decision 4. */
+export type Base =
+  | { mode: "head" }
+  | { mode: "branch"; branch?: string }
+  | { mode: "ref"; ref: string };
+
+export type Severity = "critical" | "warning" | "nit" | "question";
+export type CommentStatus = "open" | "resolved";
+export type Role = "human" | "agent";
+export type Side = "new" | "old";
+
+/** Where a line comment sits in the change set; the input for Phase 3 re-anchoring. */
+export type Anchor = {
+  lineContent: string;
+  hunk: string;
+  before: string[];
+  after: string[];
+};
+
+export type Reply = {
+  id: string;
+  author: string;
+  role: Role;
+  body: string;
+  createdAt: string;
+};
+
+/**
+ * A comment with its thread. The anchor level is read from the nulls: `repo`
+ * null is the whole review, `path` null a repository, `line` null a file.
+ */
+export type Comment = {
+  id: string;
+  repo: string | null;
+  path: string | null;
+  side: Side | null;
+  line: number | null;
+  endLine: number | null;
+  anchor: Anchor | null;
+  severity: Severity;
+  status: CommentStatus;
+  author: string;
+  role: Role;
+  body: string;
+  createdAt: string;
+  resolvedAt: string | null;
+  resolvedBy: string | null;
+  replies: Reply[];
+};
+
+/** `review.json`: the metadata of one review session. */
+export type Review = {
+  version: number;
+  name: string;
+  title: string | null;
+  base: Base;
+  createdAt: string;
+  updatedAt: string;
+};
+
+/** `comments.json`: the threads of one review session. */
+export type CommentsFile = {
+  version: number;
+  comments: Comment[];
+};
+
+/** `diff.json`: the change set of the last scan, the set `diff --json` prints. */
+export type DiffCache = { version: number } & ReviewBundle;
+
+/** What `reviews/` holds: the session names, and why a directory was left out. */
+export type SessionListing = {
+  names: string[];
+  warnings: string[];
+};
