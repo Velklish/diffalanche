@@ -14,7 +14,9 @@ const server = await startReviewServer({ config, ui, verbose });
 
 `config` is the loaded `Config` ([03-storage.md](03-storage.md)); `ui` is where
 the built page comes from, and without it the page is a 404 naming the command
-that builds it; `verbose` turns on request logging. `close()` stops the watcher
+that builds it; `verbose` turns on request logging; `recursive: false` makes the
+watcher walk the reviewed trees instead of watching them, for a filesystem whose
+notifications cannot be trusted ([05-watcher.md](05-watcher.md)). `close()` stops the watcher
 and the socket.
 
 Starting does four things before the socket opens: it creates the data directory
@@ -42,6 +44,11 @@ duration. Without it the server writes nothing but its own failures.
 | `GET /api/sessions` | every review session with its counters, most recently updated first |
 | `GET /api/config` | `{ user, port }` — what the UI signs comments with, and where it is |
 | `GET /api/scan` | every repository under the root, with whether it has changes |
+| `GET /api/events` | the live stream: what the watcher noticed, as it happens |
+| `GET /api/repos/:repo/diff` | one repository of the change set |
+| `GET /api/comments/:id` | one thread |
+| `GET /api/warnings` | the warnings of the change set |
+| `GET /api/activity` | the feed of what the server noticed while it has been running |
 | `GET /api/export?status=&format=` | the export of the current session |
 | `POST /api/comments` | a new comment; the updated comment comes back |
 | `POST /api/comments/:id/replies` | a reply in a thread |
@@ -150,6 +157,56 @@ first-run screen reads that 404 and offers to create a session, while
 repositories it found.
 
 
+## The live stream
+
+`GET /api/events` is Server-Sent Events
+([ADR-005](../adr/adr-005-live-update.md)): updates flow one way, and the
+browser fetches what an event names rather than being sent it.
+
+| Event | Data |
+|---|---|
+| `diff-changed` | `{ type, repo, files }` — `files` are the paths that woke the watcher |
+| `comment-added` | `{ type, id }` |
+| `reply-added` | `{ type, id, commentId }` — `id` is the reply |
+| `comment-status` | `{ type, id }` |
+| `session-changed` | `{ type, name }` |
+| `warnings` | `{ type, list }` |
+| `activity` | `{ id, verb, author, repo, path, at }` — one line of the feed |
+| `reload` | `{ type, reason }` — read the review again; see below |
+
+Every frame carries the name, an id that counts up from one, and the whole event
+as its JSON, `type` included, so a client can listen by name or read them all
+off one handler. A frame is kept in a ring of the last two hundred: a client
+that reconnects sends `Last-Event-ID` and gets what it missed instead of
+reloading the review. A client that is new gets the live frames only — the
+review it just loaded is the state everything before that id led to.
+
+A client the ring can no longer reach back to gets one `reload` frame and
+nothing else. Half a replay is worse than none: the events that would have
+brought it up to date are gone, so what it holds cannot be repaired event by
+event, and the only honest answer is to read `GET /api/review` again. The frame
+carries the newest id, so the stream continues from there. A `Last-Event-ID`
+ahead of every id the server has is the same answer — that is what a browser
+holding the ids of a server that has since restarted looks like.
+
+A comment line every fifteen seconds keeps a silent stream open. Stopping the
+server ends every open stream before the socket closes, rather than leaving the
+browser to notice. Under Bun that needs `idleTimeout: 0` on the server, which is
+in [runtime.ts](../../src/server/runtime.ts): Bun closes a connection that has
+said nothing for ten seconds, and a stream between events is exactly that.
+
+What the UI fetches once an event names it: `GET /api/repos/:repo/diff` — the
+repository as the review document carries it, hunks dropped, 404
+`no-such-repository` when it has no changes — `GET /api/comments/:id`, and
+`GET /api/warnings`. The repository path goes in the URL as it is, slashes and
+all.
+
+`GET /api/activity` is what the feed shows before anything happens: the lines
+the server noticed while it has been running, oldest first, in the same shape
+the `activity` frames carry. A page that has just connected reads it once and
+then follows the stream. The lines live in memory and are gone when the server
+stops ([05-watcher.md](05-watcher.md)).
+
 ## Writing
 
 The HTTP API is the UI's, not the agents' — that is the CLI
@@ -194,14 +251,25 @@ own refusal with its own code.
 ### Who may write
 
 The server has no authentication and never will (`docs/SPEC.md` section 11), so
-where a write came from is the whole check, and it is two checks over the same
-question. Hono's `csrf()` refuses the writes a page on another origin can send
-without asking this server first — a form post, a `text/plain` post, a request
-with no content type — unless `Sec-Fetch-Site` or `Origin` says the page is this
-one. On top of that, any unsafe method carrying an `Origin` that is not this
-server's is a `403` `error: "forbidden"`, which is what a JSON write from such a
-page would carry if a browser ever let one through without a preflight. A
-request with no `Origin` at all is not from a page.
+where a write came from is the whole check. It is **two checks, and neither is
+the other's duplicate** — they cover different requests:
+
+- Hono's `csrf()` looks only at writes whose content type is one a form can
+  send: its `isRequestedByFormElementRe` matches
+  `application/x-www-form-urlencoded`, `multipart/form-data`, and `text/plain`,
+  and it reads a **missing or empty content type as `text/plain`**, so those are
+  checked too. Such a write needs no permission from this server before a
+  browser sends it, and `csrf()` refuses it unless `Sec-Fetch-Site` or `Origin`
+  says the page is this one.
+- What `csrf()` therefore never looks at is `application/json`, which is every
+  write this API takes. A browser will not send one cross-site without asking
+  this server first, and this server answers no such question — but that is the
+  browser's guarantee, not ours. So any unsafe method carrying an `Origin` that
+  is not this server's is a `403` `error: "forbidden"` of our own.
+
+A request with no `Origin` at all is not from a page. Removing either check
+leaves a hole: without `csrf()` a form post from any page writes here, and
+without the origin check the API rests on nothing but the browser's preflight.
 
 A body has to arrive as `application/json`; a body of another type is a `400`.
 No body at all is an empty object, which is how `resolve` and `reopen` are

@@ -23,12 +23,23 @@ const watcher = await startWatcher({ config, scan, bus, activity });
 | `debounceMs` | how long a repository stays quiet before it is rescanned; 100 ms |
 | `pollIntervalMs` | how often a tree is walked where there is no recursive watch; 250 ms |
 | `onRescan` | the change set as the rescan left it on disk, for a caller that keeps it in memory |
+| `recursive` | `false` walks every tree instead of watching it; the default asks the runtime |
 | `onError` | a rescan that failed; without it the failure is silent |
 
 The session it works on is the current one, read from the `current` pointer. It
 follows that pointer: a session created from the UI or switched to with
 `review use` needs no restart, and until there is a current session the watcher
 watches without writing anything.
+
+`startWatcher` resolves once every tree is being watched for real. **The
+guarantee is the walk's**: it takes its baseline before it reports anything, and
+a change made before that baseline exists would be part of it rather than a
+change. The recursive watch has nothing to prepare and its `ready` is already
+resolved — where a runtime arms its watch a moment after `watch` returns, as Bun
+does, that moment is not covered, and it cannot be: arming a repository's watch
+would mean writing into a repository, which the tool never does
+(`docs/SPEC.md` section 11). What the probe arms is the data directory, which is
+the tool's own.
 
 `watcher.close()` stops every watch and drops the pending rescans. Neither the
 recursive watch nor the polling timer keeps the process alive on its own — the
@@ -46,10 +57,17 @@ where it does not, the same interface walks the tree on a timer and compares
 modification time and size. `watcher.polling()` says which of the two is
 running.
 
+`recursive: false` skips the question and walks: a filesystem whose
+notifications cannot be trusted — a network mount — is what it is for, and so is
+a runtime whose watch goes quiet.
+
 Accepting `recursive: true` is not the same as honouring it, so the answer comes
 from a probe rather than from a version table: `supportsRecursiveWatch(dataDir)`
-creates a temporary directory inside the data directory, watches it, writes a
-file one level down, and waits half a second for the event. It runs once per
+creates a temporary directory inside the data directory, watches it, and writes
+a file one level down every fifty milliseconds until it is reported back or half
+a second has passed. Writing once is not enough — Bun's watch arms a moment
+after `watch` returns, and a single write lands before it does, which would
+answer "this runtime cannot recurse" for the rest of the run. It runs once per
 process — the answer is a property of the runtime, not of a directory — and no
 reviewed repository is touched by it. Measured with that probe: Node 25.2 and
 Bun 1.3 on macOS both recurse and both report the path relative to the watched
@@ -57,11 +75,25 @@ directory. A watch that fails after it started — an error from inotify or
 FSEvents — closes itself and the walk takes over, rather than ending the process
 with an unhandled event.
 
+**Bun's own test runner is the one place where the recursive watch is not used
+here.** Under `bun run test:bun` a watch goes quiet after its first events, so
+`tests/watcher.test.ts` passes `recursive: false` there and exercises the walk
+instead; under Node the same tests exercise the watch. A server under Bun is not
+affected — four consecutive edits against `bun src/cli/index.ts serve` on the
+synthetic review each produced their event — and every other test in the suite
+runs the same on both runtimes.
+
+macOS coalesces the changes of one directory into a single notification, and a
+runtime is free to report any of the names involved: Node reports the file, Bun
+reports one of them and sometimes only the directory. That is why a change in
+the data directory is one signal rather than a name to match — see below — and
+why `.git` itself counts, not only `.git/HEAD`.
+
 Inside a repository these are left out:
 
 | Left out | Why |
 |---|---|
-| everything under `.git` except `HEAD` and `index` | those two move when the base of the change set does; the rest is git's own bookkeeping |
+| everything under `.git` except `HEAD` and `index` | those two move when the base of the change set does; the rest is git's own bookkeeping. `.git` itself is not left out: a runtime that reports the directory rather than the file inside it would otherwise never say that HEAD moved |
 | any `node_modules` | not part of a review, and large enough to make the walk of the polling fallback cost real time |
 | the `exclude` globs of `config.json` | matched against the path inside the repository and against the file's own name, the way the scanner matches them ([01-scanner.md](01-scanner.md)) |
 | the data directory | on a root that is itself a repository the tool's own `diff.json` sits inside the watched tree, and without this writing it would wake the watcher that wrote it |
@@ -72,9 +104,13 @@ becoming a stream of events is the other end — a rescan whose result is the sa
 as what the cache held announces nothing. Asking git which of the paths it
 ignores, before the rescan rather than after, is DA-12.1.
 
-In the data directory only `current`, `review.json`, and `comments.json` are
-read. `diff.json` is left out because the watcher writes it, and the `.lock`
-directory because it is a lock and not data.
+In the data directory every change is one signal: the reload reads `current`,
+`comments.json`, and `review.json` and compares each with the last read, so a
+name that turns out to be the lock, or a temporary file, or the directory itself
+costs three small reads and says nothing. Only `diff.json` is left out, because
+the watcher writes it. Matching on the file name instead would drop the write:
+`writeFileAtomic` renames a temporary file over the target, and a runtime may
+report the temporary name, the target, or neither.
 
 A repository found after the server started is not watched: the set of
 repositories is the one the scan handed over. A linked worktree keeps its `HEAD`
@@ -119,6 +155,11 @@ were all just added.
 
 ## The change-set cache
 
+The new change set is handed over the moment it exists and before it is written:
+`diff.json` of a real review is megabytes, and writing it is the slowest step of
+a rescan, so the update the person is waiting for does not wait for it. The file
+follows a moment later, and a write that fails is repaired by the next rescan.
+
 A rescan replaces one repository's entry in `diff.json` and leaves the rest
 alone. A repository left with no changes drops out of the cache, the way a scan
 leaves it out. The cache carries the hunks: it is the only place they live, and
@@ -159,16 +200,21 @@ the next two minutes; past that the diff change is a plain `changed` again.
 ## Budget
 
 `docs/SPEC.md` section 6 gives 300 ms from an edit in one repository to the
-update. The line of the performance gate that measures it stays pending until
-the harness can drive it (DA-25); what `tests/watcher.test.ts` measures is the
+update. The performance gate measures that path now — an edit of one file to the
+page holding that repository's new diff — and prints it with DA-25 named
+instead of a verdict, because the render of the patched diff belongs in the same
+number and is DA-25's ([11-perf.md](11-perf.md)). What `tests/watcher.test.ts`
+measures is the
 part that belongs here — the file write, the debounce, the rescan, and the
 event — over three edits, and it asserts the median against **300 ms plus one
-rescan of the same repository timed in the same conditions**. That is the
-watcher's own share, because the rescan itself costs what the machine charges
-for four git processes and a rewrite of the cache: about 190 ms all together on
-a quiet machine, of which 100 ms is the debounce, and two to three times that
-while the rest of the test suite runs in parallel. The flat number belongs to
-the performance gate, which measures a machine that is doing nothing else.
+rescan of the same repository timed in the same conditions**, and only where the
+tree is watched: on the walk the number is the interval and the cost of the walk
+itself. That is the watcher's own share, because the rescan costs what the
+machine charges for four git processes and a rewrite of the cache: about 190 ms
+all together on a quiet machine, of which 100 ms is the debounce, and two to
+three times that while the rest of the test suite runs in parallel. The flat
+number belongs to the performance gate, which measures a machine that is doing
+nothing else — 220 ms there.
 
 A platform without a recursive watch cannot meet the budget at all: there the
 interval of the walk is added to every measurement.

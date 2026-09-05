@@ -3,6 +3,9 @@
  * Chromium over the synthetic review and reports the numbers of the budget
  * table.
  */
+import { appendFile, readFile, writeFile } from "node:fs/promises";
+import { join } from "node:path";
+import type { Page } from "@playwright/test";
 import { chromium } from "@playwright/test";
 import { loadConfig } from "../src/core/config/index.ts";
 import { directoryAssets, startReviewServer } from "../src/server/index.ts";
@@ -28,6 +31,8 @@ export type Measurement = {
   composerOpenMs: number;
   fileJumpMs: number;
   loadLongTaskMs: number;
+  /** From the edit of one file to the page holding that repository's new diff. */
+  updateMs: number;
 };
 
 /** How many frames one pass over the whole review is given. */
@@ -43,7 +48,14 @@ type ScrollOutcome = {
   longTasks: LongTaskEntry[];
 };
 
-export async function measure(baseUrl: string, variant: VariantSpec): Promise<Measurement> {
+/** The line the update probe appends and then takes back out. */
+const PROBE_LINE = "\n// diffalanche measured the update after an edit here\n";
+
+export async function measure(
+  baseUrl: string,
+  variant: VariantSpec,
+  fixture: string,
+): Promise<Measurement> {
   const browser = await chromium.launch();
   try {
     const context = await browser.newContext({ viewport: { width: 1600, height: 1000 } });
@@ -83,6 +95,7 @@ export async function measure(baseUrl: string, variant: VariantSpec): Promise<Me
       );
     }
 
+    const updateMs = await measureUpdate(page, baseUrl, fixture);
     await context.close();
 
     const scrollLongTaskMs = scroll.longTasks.reduce((sum, task) => sum + task.duration, 0);
@@ -97,9 +110,71 @@ export async function measure(baseUrl: string, variant: VariantSpec): Promise<Me
       composerOpenMs: round(composerOpenMs),
       fileJumpMs: round(median(jumps)),
       loadLongTaskMs: round(loaded.longTasks.reduce((sum, task) => sum + task.duration, 0)),
+      updateMs: round(updateMs),
     };
   } finally {
     await browser.close();
+  }
+}
+
+/**
+ * The budget of `docs/SPEC.md` section 6 for a change in one repository: a file
+ * is edited here, and the page — listening on `/api/events` the way the UI does
+ * — says when it has that repository's new diff in hand. That is the watcher,
+ * the rescan, the stream, and the fetch; the render of the patched diff is what
+ * DA-25 adds to the same number.
+ *
+ * The edit is taken back out afterwards, so the fixture is what it was.
+ */
+async function measureUpdate(page: Page, baseUrl: string, fixture: string): Promise<number> {
+  const scan = (await (await fetch(`${baseUrl}/api/scan`)).json()) as {
+    repositories: { path: string; hasChanges: boolean }[];
+  };
+  const repo = scan.repositories.find((one) => one.hasChanges)?.path;
+  if (repo === undefined) throw new Error(`${fixture}: no repository with changes to edit`);
+  const diff = (await (await fetch(`${baseUrl}/api/repos/${repo}/diff`)).json()) as {
+    files: { path: string; status: string; omitted: string | null }[];
+  };
+  const file = diff.files.find((one) => one.omitted === null && one.status !== "deleted")?.path;
+  if (file === undefined) throw new Error(`${repo}: no file with content to edit`);
+
+  await page.evaluate((watched: string) => {
+    const held = window as unknown as { __update?: number | null };
+    held.__update = null;
+    const source = new EventSource("/api/events");
+    source.addEventListener("diff-changed", (event) => {
+      const data = JSON.parse((event as MessageEvent<string>).data) as { repo: string };
+      if (data.repo !== watched) return;
+      void fetch(`/api/repos/${watched}/diff`)
+        .then((response) => response.json())
+        .then(() => {
+          held.__update = Date.now();
+          source.close();
+        });
+    });
+  }, repo);
+
+  const target = join(fixture, repo, file);
+  const original = await readFile(target, "utf8");
+  const started = Date.now();
+  try {
+    await appendFile(target, PROBE_LINE);
+    await page.waitForFunction(
+      () => (window as unknown as { __update?: number | null }).__update !== null,
+      undefined,
+      { timeout: 60_000 },
+    );
+    return (
+      ((await page.evaluate(
+        () => (window as unknown as { __update: number }).__update,
+      )) as number) - started
+    );
+  } finally {
+    // Whatever happened, the fixture is what it was: a run that ended in the
+    // middle would otherwise leave the line behind for every run after it.
+    await writeFile(target, original);
+    // The rescan of the restored file lands before the next run starts.
+    await new Promise((done) => setTimeout(done, 500));
   }
 }
 

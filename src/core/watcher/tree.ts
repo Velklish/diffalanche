@@ -31,6 +31,13 @@ export type TreeWatcherOptions = {
 export type TreeWatcher = {
   /** `true` when the tree is walked on a timer instead of watched. */
   polling: () => boolean;
+  /**
+   * Resolves once the tree is being watched for real. The walk of the fallback
+   * takes its baseline first, and a change made before that baseline exists is
+   * part of it rather than a change — so a caller that is about to say "the
+   * server is up" waits for this.
+   */
+  ready: Promise<void>;
   close: () => void;
 };
 
@@ -39,7 +46,10 @@ export const DEFAULT_POLL_INTERVAL_MS = 250;
 /** How long the runtime probe waits for the event that proves the watch recurses. */
 export const PROBE_TIMEOUT_MS = 500;
 
-type Inner = { polling: boolean; close: () => void };
+/** How often the probe writes while it waits. */
+const PROBE_WRITE_MS = 50;
+
+type Inner = { polling: boolean; ready: Promise<void>; close: () => void };
 
 /**
  * Neither the recursive watch nor the timer keeps the process alive on its own:
@@ -60,9 +70,11 @@ export function watchTree(options: TreeWatcherOptions): TreeWatcher {
 
   if (options.recursive !== false) current = native(options, fallBack);
   current ??= polling(options);
+  const ready = current.ready;
 
   return {
     polling: () => current?.polling ?? true,
+    ready,
     close: () => {
       closed = true;
       current?.close();
@@ -90,7 +102,7 @@ function native(options: TreeWatcherOptions, onFailure: () => void): Inner | nul
     });
     // A platform without recursive watch refuses at `watch` — Node raises
     // ERR_FEATURE_UNAVAILABLE_ON_PLATFORM — and the walk takes over.
-    return { polling: false, close: () => watcher.close() };
+    return { polling: false, ready: Promise.resolve(), close: () => watcher.close() };
   } catch {
     return null;
   }
@@ -122,11 +134,12 @@ function polling(options: TreeWatcherOptions): Inner {
   };
 
   // The first walk is the baseline: what is already on disk is not a change.
-  void tick(false);
+  const ready = tick(false);
   const timer = setInterval(() => void tick(true), interval);
   timer.unref?.();
   return {
     polling: true,
+    ready,
     close: () => {
       closed = true;
       clearInterval(timer);
@@ -198,6 +211,7 @@ async function probeRecursiveWatch(dir: string): Promise<boolean> {
       let watcher: ReturnType<typeof watch>;
       const done = (answer: boolean): void => {
         clearTimeout(timer);
+        clearInterval(writing);
         watcher.close();
         resolve(answer);
       };
@@ -205,12 +219,19 @@ async function probeRecursiveWatch(dir: string): Promise<boolean> {
       // the probe waits, and a process that exits here would exit before the
       // server it is starting ever listened.
       const timer = setTimeout(() => done(false), PROBE_TIMEOUT_MS);
+      // Written again and again rather than once: a watch that arms a moment
+      // after `watch` returns — Bun's does — would miss a single write, and the
+      // answer would be "this runtime cannot recurse" for the rest of the run.
+      const writing = setInterval(() => {
+        void writeFile(join(nested, "deep"), `probe ${Date.now()}`).catch(() => undefined);
+      }, PROBE_WRITE_MS);
       try {
         watcher = watch(probe as string, { recursive: true, persistent: false }, (_e, name) => {
           if (name !== null && String(name).includes("deep")) done(true);
         });
       } catch {
         clearTimeout(timer);
+        clearInterval(writing);
         resolve(false);
         return;
       }

@@ -6,6 +6,7 @@ type BunGlobal = {
   serve: (options: {
     port: number;
     hostname: string;
+    idleTimeout: number;
     fetch: (request: Request) => Response | Promise<Response>;
   }) => { port: number; stop: (closeActiveConnections?: boolean) => void };
 };
@@ -25,7 +26,10 @@ export async function startServer(
 ): Promise<RunningServer> {
   const bun = (globalThis as { Bun?: BunGlobal }).Bun;
   if (bun) {
-    const server = bun.serve({ port, hostname, fetch: app.fetch });
+    // A stream that says nothing for fifteen seconds is what SSE looks like
+    // between events, and Bun closes an idle connection after ten. `0` turns
+    // that off; Node has no such timeout on a response it is still writing.
+    const server = bun.serve({ port, hostname, idleTimeout: 0, fetch: app.fetch });
     return {
       port: server.port,
       close: async () => {

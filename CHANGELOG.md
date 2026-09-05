@@ -7,6 +7,23 @@ the project follows [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
 ### Added
 
+- The live stream: `GET /api/events` sends what the watcher noticed as named
+  Server-Sent Events with an id that counts up — `diff-changed`,
+  `comment-added`, `reply-added`, `comment-status`, `session-changed`,
+  `warnings`, and `activity` — with a heartbeat every fifteen seconds and a ring
+  of the last two hundred frames, so a client that reconnects with
+  `Last-Event-ID` is caught up rather than reloading the review — and one the
+  ring can no longer reach back to is told to read the review again, in a
+  `reload` frame, rather than given half of what it missed. What an event
+  names is one fetch away: `GET /api/repos/:repo/diff`, `GET /api/comments/:id`,
+  `GET /api/warnings`, and `GET /api/activity` for the feed a page that has just
+  connected would otherwise start empty. Stopping the server ends every open stream. The change
+  set is announced before `diff.json` is written, because the file is megabytes
+  and the update the person waits for must not wait for it; the performance
+  harness now measures that path — an edit of one file to the page holding the
+  new diff — and prints it as the live-update line of the budget table. See
+  [07-server.md](docs/reference/07-server.md).
+
 - Agent skills: `skills/diffalanche-apply` reads the unanswered threads, groups
   them by repository, stops for the human's confirmation, edits
   `<root>/<repo>/<path>`, and replies to every comment;

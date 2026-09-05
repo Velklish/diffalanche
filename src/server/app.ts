@@ -7,6 +7,7 @@ import {
   addComment,
   createSession,
   exportMarkdown,
+  get as getComment,
   list,
   listSessions,
   parseBaseArgument,
@@ -19,8 +20,12 @@ import {
   useSession,
 } from "../core/domain/index.ts";
 import type { Comment, Role } from "../core/storage/index.ts";
+import type { ActivityLog } from "../core/watcher/index.ts";
 import type { UiAssets } from "./assets.ts";
+import type { ErrorBody } from "./errors.ts";
 import { errorResponse, ForbiddenError, RequestError } from "./errors.ts";
+import type { EventStream } from "./events.ts";
+import { streamEvents } from "./events.ts";
 import {
   choice,
   nullableLine,
@@ -37,6 +42,10 @@ export type AppOptions = {
   config: Config;
   review: ReviewService;
   ui: UiAssets;
+  /** The live stream; without one the server serves no `/api/events`. */
+  events: EventStream;
+  /** The feed the stream's `activity` frames are recorded in. */
+  activity: ActivityLog;
   /** Request logging to stderr. Off unless `serve` was given `--verbose`. */
   verbose?: boolean | undefined;
 };
@@ -52,7 +61,7 @@ export type ClientConfig = { user: string; port: number };
  * sessions, the settings, and the built UI. Every refusal comes from the domain
  * and keeps its message ([errors.ts](errors.ts)).
  */
-export function createApp({ config, review, ui, verbose }: AppOptions): Hono {
+export function createApp({ activity, config, events, review, ui, verbose }: AppOptions): Hono {
   const app = new Hono();
   /** What the UI signs with: the configured name, and never an agent's role. */
   const author = { author: config.user, role: "human" as Role };
@@ -92,6 +101,35 @@ export function createApp({ config, review, ui, verbose }: AppOptions): Hono {
   app.get("/api/sessions", async (c) => c.json(await listSessions(config.dataDir)));
 
   app.get("/api/config", (c) => c.json<ClientConfig>({ user: config.user, port: config.port }));
+
+  // What the UI fetches after an event names it, and the stream that names it.
+  app.get("/api/events", streamEvents(events));
+
+  app.get("/api/repos/:repo{.+}/diff", async (c) => {
+    const repo = c.req.param("repo");
+    const change = await review.repository(repo);
+    if (change === null) {
+      return c.json<ErrorBody>(
+        { error: "no-such-repository", message: `no repository ${repo} in this change set` },
+        404,
+      );
+    }
+    return c.json(change);
+  });
+
+  app.get("/api/comments/:id", async (c) =>
+    c.json(
+      await getComment(config.dataDir, await resolveSessionName(config.dataDir), c.req.param("id")),
+    ),
+  );
+
+  app.get("/api/warnings", async (c) => c.json((await review.document()).warnings));
+
+  // What the feed shows before anything happens: the lines the server noticed
+  // while it has been running, oldest first, the same shape the `activity`
+  // frames of the stream carry. They live in memory and are gone with the
+  // server ([ADR-005](../../docs/adr/adr-005-live-update.md)).
+  app.get("/api/activity", (c) => c.json(activity.recent()));
 
   // Every repository under the root, with whether it has anything to review.
   // This is the one route that reads git per request: it exists for the screen

@@ -10,6 +10,7 @@ import { ensureDataDir } from "../core/storage/index.ts";
 import { createActivityLog, createEventBus, startWatcher } from "../core/watcher/index.ts";
 import { createApp } from "./app.ts";
 import type { UiAssets } from "./assets.ts";
+import { createEventStream, forwardActivity, forwardEvents } from "./events.ts";
 import type { ReviewService } from "./review.ts";
 import { createReviewService } from "./review.ts";
 import { startServer } from "./runtime.ts";
@@ -24,6 +25,11 @@ export type ReviewServerOptions = {
    * is a 404 naming the command that builds it.
    */
   ui?: UiAssets | undefined;
+  /**
+   * `false` walks the reviewed trees instead of watching them, for a filesystem
+   * whose notifications cannot be trusted ([05-watcher.md](../../docs/reference/05-watcher.md)).
+   */
+  recursive?: boolean | undefined;
 };
 
 export type ReviewServer = {
@@ -52,7 +58,9 @@ export async function startReviewServer(options: ReviewServerOptions): Promise<R
 
   const review = createReviewService(config);
   const bus = createEventBus();
-  const activity = createActivityLog();
+  const events = createEventStream();
+  const activity = createActivityLog({ onRecord: forwardActivity(events) });
+  forwardEvents(bus, events);
 
   // The change set is read and `diff.json` written before the socket opens, so
   // the review opens from the cache and a rescan has something to replace one
@@ -73,6 +81,7 @@ export async function startReviewServer(options: ReviewServerOptions): Promise<R
   const watcher = await startWatcher({
     config,
     scan: found,
+    ...(options.recursive === undefined ? {} : { recursive: options.recursive }),
     bus,
     activity,
     onRescan: review.adopt,
@@ -92,7 +101,9 @@ export async function startReviewServer(options: ReviewServerOptions): Promise<R
   });
 
   const app = createApp({
+    activity,
     config,
+    events,
     review,
     ui: options.ui ?? NO_UI,
     verbose: options.verbose,
@@ -111,6 +122,9 @@ export async function startReviewServer(options: ReviewServerOptions): Promise<R
     port: server.port,
     review,
     close: async () => {
+      // The streams end first: a socket that waits for an open connection to
+      // finish would wait for one that never does.
+      events.close();
       watcher.close();
       await server.close();
     },

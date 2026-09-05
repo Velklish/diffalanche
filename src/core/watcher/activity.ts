@@ -57,6 +57,8 @@ export type ActivityOptions = {
   editingWindowMs?: number;
   /** The clock, so a test does not have to wait two minutes. */
   now?: () => number;
+  /** Called with every line as it is recorded; the SSE stream listens here. */
+  onRecord?: (event: ActivityEvent) => void;
 };
 
 export function createActivityLog(options: ActivityOptions = {}): ActivityLog {
@@ -73,6 +75,7 @@ export function createActivityLog(options: ActivityOptions = {}): ActivityLog {
     nextId += 1;
     events.push(recorded);
     if (events.length > capacity) events.splice(0, events.length - capacity);
+    options.onRecord?.(recorded);
     return recorded;
   }
 

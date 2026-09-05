@@ -5,14 +5,23 @@
  *   bun perf/gate.ts [--fixture <dir>] [--runs <n>]
  */
 import { execFileSync } from "node:child_process";
-import { appendFileSync, existsSync } from "node:fs";
+import { appendFileSync, existsSync, rmSync } from "node:fs";
+import { join } from "node:path";
 import { evaluate, formatTable, GATE_VARIANT } from "./budgets.ts";
 import type { Measurement } from "./harness.ts";
 import { measure, parseArgs, withServer } from "./harness.ts";
 
-/** The fixture and the built UI are what the harness needs; make them if they are missing. */
+/**
+ * The fixture and the built UI are what the harness needs; make them if they
+ * are missing. A fixture left by an older generator counts as missing: one
+ * without the `current` pointer has no review session, and the server would
+ * refuse the review — which reads as a broken server rather than as a stale
+ * directory. The check is the newest file the generator learned to write.
+ */
 function prepare(fixture: string): void {
-  if (!existsSync(fixture)) {
+  const current = join(fixture, ".diffalanche", "current");
+  if (!existsSync(fixture) || !existsSync(current)) {
+    rmSync(fixture, { recursive: true, force: true });
     execFileSync("bun", ["run", "synth", "--", "--out", fixture], { stdio: "inherit" });
   }
   execFileSync("bun", ["run", "build:ui"], { stdio: "inherit" });
@@ -26,7 +35,7 @@ async function main(): Promise<void> {
   const measurements: Measurement[] = [];
   await withServer(options.fixture, async (baseUrl) => {
     for (let run = 0; run < runs; run += 1) {
-      const measurement = await measure(baseUrl, GATE_VARIANT);
+      const measurement = await measure(baseUrl, GATE_VARIANT, options.fixture);
       measurements.push(measurement);
       process.stderr.write(`run ${run + 1}/${runs}: ${JSON.stringify(measurement)}\n`);
     }
@@ -47,6 +56,10 @@ async function main(): Promise<void> {
 }
 
 main().catch((error: unknown) => {
-  process.stderr.write(`${String(error)}\n`);
+  // The stack, not just the message: a gate that fails in the harness is read
+  // from its output alone.
+  process.stderr.write(
+    `${error instanceof Error ? (error.stack ?? error.message) : String(error)}\n`,
+  );
   process.exit(1);
 });

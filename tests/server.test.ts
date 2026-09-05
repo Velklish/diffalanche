@@ -13,8 +13,10 @@ import { loadConfig } from "../src/core/config/index.ts";
 import { addComment } from "../src/core/domain/index.ts";
 import { readDiffCache } from "../src/core/storage/index.ts";
 import type { ReviewDocument } from "../src/core/types.ts";
+import { createActivityLog } from "../src/core/watcher/index.ts";
 import { createApp } from "../src/server/app.ts";
 import type { UiAssets } from "../src/server/assets.ts";
+import { createEventStream } from "../src/server/events.ts";
 import { createReviewService } from "../src/server/review.ts";
 import { startReviewServer } from "../src/server/serve.ts";
 
@@ -39,7 +41,13 @@ beforeAll(async () => {
   root = mkdtempSync(join(tmpdir(), "diffalanche-server-"));
   generate({ out: root, seed: 11, profile: SMALL });
   config = await loadConfig({ root });
-  app = createApp({ config, review: createReviewService(config), ui });
+  app = createApp({
+    activity: createActivityLog(),
+    config,
+    events: createEventStream(),
+    review: createReviewService(config),
+    ui,
+  });
 }, 120_000);
 
 afterAll(() => {
@@ -92,6 +100,28 @@ describe("the review document", () => {
 });
 
 describe("what a write costs the next reader", () => {
+  it("does not lose a write that landed while it was reading", async () => {
+    const service = createReviewService(config);
+    await service.document();
+
+    service.invalidateComments();
+    const reading = service.document();
+    // While that read is in flight — the write itself is what follows it.
+    service.invalidateComments();
+    await reading;
+
+    const written = await addComment(config.dataDir, SESSION, {
+      severity: "nit",
+      body: "written while the comments were being read",
+      author: "kim.p",
+      role: "human",
+    });
+    // The second invalidation was not covered by the read that was running, so
+    // it still stands and this read is a real one.
+    const after = await service.document();
+    expect(after.comments.map((one) => one.id)).toContain(written.id);
+  });
+
   it("re-reads the comments alone, keeping the change set it already has", async () => {
     const service = createReviewService(config);
     const before = await service.document();
@@ -154,7 +184,13 @@ describe("the other routes", () => {
   });
 
   it("says how to build the UI when there is none", async () => {
-    const bare = createApp({ config, review: createReviewService(config), ui: noUi });
+    const bare = createApp({
+      activity: createActivityLog(),
+      config,
+      events: createEventStream(),
+      review: createReviewService(config),
+      ui: noUi,
+    });
     const response = await bare.request("/");
     expect(response.status).toBe(404);
     expect(await response.text()).toContain("UI is not built");
@@ -168,7 +204,13 @@ describe("a root with no current review session", () => {
   beforeAll(async () => {
     empty = mkdtempSync(join(tmpdir(), "diffalanche-empty-"));
     const emptyConfig = await loadConfig({ root: empty });
-    bare = createApp({ config: emptyConfig, review: createReviewService(emptyConfig), ui });
+    bare = createApp({
+      activity: createActivityLog(),
+      config: emptyConfig,
+      events: createEventStream(),
+      review: createReviewService(emptyConfig),
+      ui,
+    });
   });
 
   afterAll(() => {
@@ -244,7 +286,9 @@ describe("a session that cannot be read", () => {
   it("refuses a current pointer that is a path rather than a name", async () => {
     writeFileSync(join(broken, ".diffalanche", "current"), "../reviews/half\n");
     const app = createApp({
+      activity: createActivityLog(),
       config: brokenConfig,
+      events: createEventStream(),
       review: createReviewService(brokenConfig),
       ui,
     });

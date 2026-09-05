@@ -58,6 +58,13 @@ export type WatcherOptions = {
   activity: ActivityLog;
   debounceMs?: number;
   pollIntervalMs?: number;
+  /**
+   * `false` walks every tree instead of watching it. The default asks the
+   * runtime, which is right on a local disk; a filesystem whose notifications
+   * cannot be trusted — a network mount, or a runtime whose watch goes quiet —
+   * is what this is for.
+   */
+  recursive?: boolean;
   /** The change set as it now stands, for a caller that keeps it in memory. */
   onRescan?: (cache: DiffCache) => void;
   /** A rescan that failed. Without this the failure is silent. */
@@ -85,8 +92,9 @@ export async function startWatcher(options: WatcherOptions): Promise<Watcher> {
   const pending = new Map<string, Set<string>>();
   const watchers: TreeWatcher[] = [];
   // Asked once: whether the watch recurses is a property of the runtime, not of
-  // a directory, and the answer decides for every tree below.
-  const recursive = await supportsRecursiveWatch(config.dataDir);
+  // a directory, and the answer decides for every tree below. A caller that
+  // already knows the answer is not asked to prove it.
+  const recursive = options.recursive ?? (await supportsRecursiveWatch(config.dataDir));
   let session = await readCurrent(config.dataDir);
   let comments: Map<string, CommentState> | null = await snapshotComments(config, session);
   let metadata = await readMetadata(config, session);
@@ -137,14 +145,23 @@ export async function startWatcher(options: WatcherOptions): Promise<Watcher> {
     const files = [...(pending.get(repo) ?? [])].sort(byCodePoint);
     pending.delete(repo);
     if (session === null) return;
-    const outcome = await rescanRepository(config, session, repo, scan);
-    // A file that was touched without its content changing — a build output, a
-    // saved file with the same bytes — is not a change of the review.
-    if (!outcome.changed) return;
-    options.onRescan?.(outcome.cache);
-    bus.emit({ type: "diff-changed", repo, files });
-    activity.diffChanged(repo);
-    if (outcome.warningsChanged) bus.emit({ type: "warnings", list: outcome.cache.warnings });
+    // Announced from inside the rescan, before `diff.json` is written: what the
+    // person sees must not wait for a file of megabytes. A file that was
+    // touched without its content changing — a build output, a save with the
+    // same bytes — is not a change of the review and says nothing at all.
+    await rescanRepository(config, session, repo, scan, (outcome) => {
+      options.onRescan?.(outcome.cache);
+      bus.emit({ type: "diff-changed", repo, files });
+      activity.diffChanged(repo);
+      if (outcome.warningsChanged) bus.emit({ type: "warnings", list: outcome.cache.warnings });
+    });
+  }
+
+  /** The three files of the data directory, in the order a change of one affects the others. */
+  async function reloadData(): Promise<void> {
+    await reloadCurrent();
+    await reloadComments();
+    await reloadMetadata();
   }
 
   async function reloadCurrent(): Promise<void> {
@@ -222,23 +239,25 @@ export async function startWatcher(options: WatcherOptions): Promise<Watcher> {
       dir: config.dataDir,
       ignore: dataIgnore,
       recursive,
-      onChange: (path) => {
-        if (path === "current") {
-          schedule("data:current", () => enqueue(reloadCurrent));
-          return;
-        }
-        if (session === null) return;
-        if (path === `reviews/${session}/comments.json`) {
-          schedule("data:comments", () => enqueue(reloadComments));
-          return;
-        }
-        if (path === `reviews/${session}/review.json`) {
-          schedule("data:review", () => enqueue(reloadMetadata));
-        }
+      // One handler for the whole data directory rather than one per file. A
+      // whole-file write is a temporary file and a rename over the target, and
+      // a runtime is free to report any of the three names — Node reports the
+      // file, Bun reports the temporary one, and Bun under a test runner
+      // reports only the directory the change was under. So anything that is
+      // not the change-set cache or the lock means "read the three files
+      // again"; each read is compared with the last, so a read that finds
+      // nothing new says nothing.
+      onChange: () => {
+        schedule("data", () => enqueue(reloadData));
       },
       ...(options.pollIntervalMs === undefined ? {} : { pollIntervalMs: options.pollIntervalMs }),
     }),
   );
+
+  // Nothing is watched until every tree says it is: a change made in the
+  // moment between starting and being watched would otherwise be absorbed into
+  // the baseline of the walk and never reported.
+  await Promise.all(watchers.map((watcher) => watcher.ready));
 
   return {
     session: () => session,
@@ -262,6 +281,15 @@ export type Rescan = {
 };
 
 /**
+ * The new change set, handed over the moment it exists and before it is
+ * written. `diff.json` of a real review is megabytes, and writing it is the
+ * slowest step of a rescan: an update the person is waiting for must not wait
+ * for that too (`docs/SPEC.md` section 6). The file follows a moment later, and
+ * a write that fails is repaired by the next rescan.
+ */
+export type Ready = (rescan: Rescan) => void;
+
+/**
  * Recomputes one repository and puts it in place of its entry in `diff.json`,
  * under the session's lock: the CLI writes the same directory, and a rescan
  * that read outside the lock would overwrite what it wrote. A repository left
@@ -278,6 +306,7 @@ export async function rescanRepository(
   session: string,
   repo: string,
   scan: ScanResult,
+  ready?: Ready,
 ): Promise<Rescan> {
   const review = await readReview(config.dataDir, session);
   // `diff.json` is the only place the hunks live: anchor capture reads them
@@ -315,18 +344,26 @@ export async function rescanRepository(
       totals: totalsOf(repositories),
       warnings,
     };
+    const outcome: Rescan = {
+      cache,
+      changed: true,
+      warningsChanged: !sameWarnings(cached.warnings, warnings),
+    };
+    ready?.(outcome);
     await held.assertHeld();
     await writeDiffCache(config.dataDir, session, cache);
-    return { cache, changed: true, warningsChanged: !sameWarnings(cached.warnings, warnings) };
+    return outcome;
   });
   if (patched !== null) return patched;
 
   const { cache } = await scanReview(config, review.base);
+  const outcome: Rescan = { cache, changed: true, warningsChanged: true };
+  ready?.(outcome);
   await withLock(sessionDir(config.dataDir, session), async (held) => {
     await held.assertHeld();
     await writeDiffCache(config.dataDir, session, cache);
   });
-  return { cache, changed: true, warningsChanged: true };
+  return outcome;
 }
 
 /**
@@ -425,8 +462,10 @@ function recordWrite(
 }
 
 /**
- * What a repository's watch reports. Everything inside `.git` is noise except
- * `HEAD` and `index`, which move when the base of the change set does;
+ * What a repository's watch reports. Inside `.git` everything is noise except
+ * `HEAD` and `index`, which move when the base of the change set does — but
+ * `.git` itself is not, because a runtime that reports the directory rather
+ * than the file inside it (Bun does) would otherwise never say that HEAD moved;
  * `node_modules` and the `exclude` globs of the configuration are out; and so
  * is the data directory, on the one root that is a repository itself — without
  * that, writing `diff.json` would wake the watcher that wrote it.
@@ -440,7 +479,10 @@ export function repositoryIgnore(config: Config, repository: Repository): Ignore
     const segments = path.split("/");
     if (segments.includes("node_modules")) return true;
     if (segments[0] === ".git") {
-      return kind === "dir" ? segments.length > 1 : path !== ".git/HEAD" && path !== ".git/index";
+      // The directory itself is walked into, for the two files at its top, and
+      // it is a signal in its own right when that is all a runtime reports.
+      if (segments.length === 1) return false;
+      return kind === "dir" || (path !== ".git/HEAD" && path !== ".git/index");
     }
     if (dataDir !== null && (path === dataDir || path.startsWith(`${dataDir}/`))) return true;
     const name = segments.at(-1) as string;
@@ -449,14 +491,26 @@ export function repositoryIgnore(config: Config, repository: Repository): Ignore
 }
 
 /**
- * What the data directory's watch reports: the three files that carry a change
- * somebody else made. `diff.json` is left out because the watcher writes it,
- * and the `.lock` directory because it is a lock and not data.
+ * What the data directory's watch reports: everything except the change-set
+ * cache, which the watcher writes itself. The lock is in — it is not data, but
+ * a runtime that coalesces the changes of one directory into a single event
+ * (macOS does, and Bun reports what is left) can hand back the lock as the only
+ * name for a write that changed a session's files. Every one of them is the
+ * same signal anyway, since the reload reads the three files and compares them
+ * with the last read.
  */
-const dataIgnore: Ignore = (path, kind) => {
-  const segments = path.split("/");
-  if (segments.includes(".lock")) return true;
-  if (kind === "dir") return false;
-  const name = segments.at(-1) as string;
-  return name !== "current" && name !== "comments.json" && name !== "review.json";
-};
+export const dataIgnore: Ignore = (path) =>
+  writtenFile(path.split("/").at(-1) as string) === "diff.json";
+
+/**
+ * The file a change is about: `comments.json.tmp-<uuid>` is `comments.json`,
+ * because that is what `writeFileAtomic` is in the middle of writing. Only the
+ * last segment is read, so a directory whose own name holds `.tmp-` is left
+ * alone.
+ */
+function writtenFile(path: string): string {
+  const slash = path.lastIndexOf("/");
+  const name = path.slice(slash + 1);
+  const cut = name.indexOf(".tmp-");
+  return cut === -1 ? path : path.slice(0, slash + 1) + name.slice(0, cut);
+}

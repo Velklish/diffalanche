@@ -18,8 +18,10 @@ import { list, readSession } from "../src/core/domain/index.ts";
 import type { Comment, Review } from "../src/core/storage/index.ts";
 import { readCurrent, readDiffCache } from "../src/core/storage/index.ts";
 import type { ReviewDocument } from "../src/core/types.ts";
+import { createActivityLog } from "../src/core/watcher/index.ts";
 import { createApp } from "../src/server/app.ts";
 import type { UiAssets } from "../src/server/assets.ts";
+import { createEventStream } from "../src/server/events.ts";
 import { createReviewService } from "../src/server/review.ts";
 import { startReviewServer } from "../src/server/serve.ts";
 
@@ -66,7 +68,13 @@ beforeAll(async () => {
   root = mkdtempSync(join(tmpdir(), "diffalanche-write-"));
   generate({ out: root, seed: 13, profile: PROFILES.small });
   config = await loadConfig({ root });
-  app = createApp({ config, review: createReviewService(config), ui: noUi });
+  app = createApp({
+    activity: createActivityLog(),
+    config,
+    events: createEventStream(),
+    review: createReviewService(config),
+    ui: noUi,
+  });
   // The first read of the review is what writes `diff.json`, and a line anchor
   // is captured from it.
   await app.request("/api/review");
@@ -320,19 +328,22 @@ describe("a write from another process", () => {
     try {
       const before = (await (await fetch(`${server.url}/api/review`)).json()) as ReviewDocument;
       const target = before.comments[0] as Comment;
+      const had = target.replies.length;
       await run(process.execPath, [appendReply, config.dataDir, SESSION, target.id, "claude"]);
 
       // The watcher notices the file, the document is dropped, and the next
       // read is the new state; the CLI writes the same way this helper does.
-      const deadline = Date.now() + 5_000;
-      let replies = 0;
+      // The thread is read until it has the one reply more, rather than after a
+      // length of time that a loaded machine makes wrong.
+      const deadline = Date.now() + 10_000;
+      let replies = had;
       while (Date.now() < deadline) {
         const document = (await (await fetch(`${server.url}/api/review`)).json()) as ReviewDocument;
-        replies = document.comments.find((one) => one.id === target.id)?.replies.length ?? 0;
-        if (replies > 0) break;
+        replies = document.comments.find((one) => one.id === target.id)?.replies.length ?? had;
+        if (replies > had) break;
         await new Promise((done) => setTimeout(done, 25));
       }
-      expect(replies).toBe(1);
+      expect(replies).toBe(had + 1);
     } finally {
       await server.close();
     }

@@ -19,7 +19,7 @@ async function main(): Promise<void> {
   await withServer(options.fixture, async (baseUrl) => {
     for (const variant of chosen) {
       for (let run = 0; run < options.runs; run += 1) {
-        const measurement = await measure(baseUrl, variant);
+        const measurement = await measure(baseUrl, variant, options.fixture);
         results.push(measurement);
         process.stderr.write(`${variant.name} run ${run + 1}: ${JSON.stringify(measurement)}\n`);
       }
@@ -29,6 +29,10 @@ async function main(): Promise<void> {
 }
 
 main().catch((error: unknown) => {
-  process.stderr.write(`${String(error)}\n`);
+  // The stack, not just the message: a gate that fails in the harness is read
+  // from its output alone.
+  process.stderr.write(
+    `${error instanceof Error ? (error.stack ?? error.message) : String(error)}\n`,
+  );
   process.exit(1);
 });

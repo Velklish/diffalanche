@@ -14,10 +14,16 @@ export type MetricField = {
 export type Budget = {
   /** The metric as the specification words it. */
   label: string;
-  /** The field of a measurement this line reads, or `null` while pending. */
+  /** The field of a measurement this line reads, or `null` while nothing measures it. */
   field: MetricField | null;
   budget: number;
   unit: "ms" | "tasks";
+  /**
+   * The task that finishes this line. A line with no field is printed as
+   * pending; a line that has one and is still waiting for that task is
+   * measured and printed with the task named, and does not fail the build —
+   * the number does not yet cover everything the budget is about.
+   */
   pendingUntil?: string;
 };
 
@@ -41,7 +47,7 @@ export const BUDGETS: Budget[] = [
   },
   {
     label: "Update after an edit in one repository",
-    field: null,
+    field: "updateMs",
     budget: 300,
     unit: "ms",
     pendingUntil: "DA-25",
@@ -70,7 +76,10 @@ export function evaluate(measurements: Measurement[]): GateRow[] {
     const field = budget.field;
     if (field === null) return { budget, measured: null, failed: false };
     const measured = median(measurements.map((one) => one[field]));
-    return { budget, measured, failed: measured > budget.budget };
+    // A line still waiting for the task that completes it is printed, not
+    // failed: what it measures is a part of what the budget is about.
+    const failed = budget.pendingUntil === undefined && measured > budget.budget;
+    return { budget, measured, failed };
   });
 }
 
@@ -83,7 +92,7 @@ export function formatTable(rows: GateRow[], runs: number): string {
       if (row.measured === null) {
         return `| ${row.budget.label} | ${budget} | pending | ${row.budget.pendingUntil} |`;
       }
-      const verdict = row.failed ? "FAIL" : "ok";
+      const verdict = row.failed ? "FAIL" : (row.budget.pendingUntil ?? "ok");
       return `| ${row.budget.label} | ${budget} | ${row.measured} ${row.budget.unit} | ${verdict} |`;
     }),
   ];

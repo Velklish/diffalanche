@@ -71,14 +71,19 @@ export function createReviewService(config: Config): ReviewService {
   let pending: Promise<State> | null = null;
   /** Bumped by every invalidation, so a build that started before one is dropped. */
   let version = 0;
-  let staleComments = false;
+  /** Bumped by every write of the comments, so a read cannot clear a newer one. */
+  let commentsWritten = 0;
+  let staleComments = 0;
 
   async function current(): Promise<State> {
     const cached = state;
     if (cached !== null) {
-      if (staleComments) {
+      if (staleComments !== commentsWritten) {
+        const reading = commentsWritten;
         const comments = await list(config.dataDir, cached.session);
-        staleComments = false;
+        // A write that landed while the file was being read is not covered by
+        // what was read, so the flag it set stays set.
+        staleComments = reading;
         cached.document = { ...cached.document, comments, counters: countReview(comments) };
         cached.payload = null;
       }
@@ -125,7 +130,7 @@ export function createReviewService(config: Config): ReviewService {
       state = null;
     },
     invalidateComments: () => {
-      staleComments = true;
+      commentsWritten += 1;
       if (state !== null) state.payload = null;
     },
     summary: async () => summarise(config),

@@ -15,6 +15,7 @@ function measurement(over: Partial<Measurement> = {}): Measurement {
     composerOpenMs: 14,
     fileJumpMs: 8,
     loadLongTaskMs: 0,
+    updateMs: 210,
     ...over,
   };
 }
@@ -54,6 +55,15 @@ describe("perf gate", () => {
     expect(pending.length).toBeGreaterThan(0);
     expect(pending.every((row) => !row.failed)).toBe(true);
     expect(formatTable(rows, 1)).toContain("| pending | DA-24 |");
+  });
+
+  it("prints a line that is measured but still waiting for its task, and does not fail it", () => {
+    const rows = evaluate([measurement({ updateMs: 900 }), measurement({ updateMs: 900 })]);
+    const waiting = rows.find((row) => row.budget.pendingUntil === "DA-25");
+    expect(waiting?.measured).toBe(900);
+    // The number is a part of what the budget is about; the rest is DA-25's.
+    expect(waiting?.failed).toBe(false);
+    expect(formatTable(rows, 2)).toContain("| 900 ms | DA-25 |");
   });
 
   it("marks the line that is over budget and only that one", () => {

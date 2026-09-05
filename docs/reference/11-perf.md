@@ -154,7 +154,17 @@ stderr.
 | `scrollLongTasks`, `scrollLongTaskMs` | Long tasks while scrolling the whole review, and their total |
 | `cpuPerFrameMs` | Chromium's own `TaskDuration` over the scroll, divided by the frames of that scroll |
 | `composerOpenMs`, `fileJumpMs` | Opening the composer placeholder, and the median of three jumps to a file |
+| `updateMs` | From an edit of one file to the page holding that repository's new diff |
 | `frames`, `scrollDistancePx` | How many frames the scroll took and how far it went |
+
+`updateMs` is the live-update path of `docs/SPEC.md` section 6, measured the way
+it happens: the page listens on `/api/events` the way the UI does, the harness
+appends a line to a file of one repository, and the page reports the moment it
+has that repository's new diff in hand. That is the watcher, the debounce, the
+rescan, the stream, and the fetch. The edit is taken back out afterwards, so the
+fixture is what it was. What is not in the number yet is the render of the
+patched diff, which is DA-25's; until then the line is measured and printed but
+does not fail the build.
 
 The scroll is one pass over the whole review at up to 600 frames, so the step is
 `scrollHeight / 600` — far faster than a person scrolls, which is the point: it
@@ -181,9 +191,12 @@ bun run perf -- --runs 5           # more runs
 bun run perf -- --fixture /tmp/x   # another fixture
 ```
 
-The gate makes the synthetic review if `.perf/fixture` is missing, always
-rebuilds the UI — a gate that measures a stale build measures nothing — and then
-runs the harness three times on the page as it ships.
+The gate makes the synthetic review if `.perf/fixture` is missing **or was made
+by an older generator** — a fixture without the `current` pointer has no review
+session, and the server refusing the review reads as a broken server rather than
+as a stale directory — always rebuilds the UI, since a gate that measures a
+stale build measures nothing, and then runs the harness three times on the page
+as it ships.
 It prints one row per budget line and exits 1 when the **median** of any line is
 over budget. One slow run does not fail the build; two do.
 
@@ -196,13 +209,18 @@ over budget. One slow run does not fail the build; two do.
 | Opening the comment form | 50 ms | 13.9 ms | ok |
 | Jumping to a file from the navigation | 50 ms | 7.7 ms | ok |
 | Switching review sessions | 100 ms | pending | DA-24 |
-| Update after an edit in one repository | 300 ms | pending | DA-25 |
+| Update after an edit in one repository | 300 ms | 254 ms | DA-25 |
 ```
 
-Two lines are **pending**: nothing in the code can switch a session or change a
-file under an open review yet. A pending line is printed and never fails; the
-task named in the last column — DA-24 for sessions, DA-25 for live update — makes
-it measurable and gives its budget line a field to read.
+The last column names the task a line is still waiting for. **Switching review
+sessions** is pending outright: nothing in the code can switch a session under
+an open review yet, so there is nothing to measure, and a pending line is
+printed and never fails. **Update after an edit** is measured — the server's
+share of it, from the edit to the page holding the new diff — and printed with
+the task named instead of a verdict: the render of the patched diff is DA-25's
+and belongs in the same number, so the line does not fail the build until it
+covers the whole path. On the machine this was written on the server's share is
+about 250 ms of the 300, of which 100 ms is the watcher's debounce.
 
 `8.3 ms` is the frame of 120 fps. The specification asks for 120 fps and a
 headless runner cannot measure frame rate, so the gate checks the two things it

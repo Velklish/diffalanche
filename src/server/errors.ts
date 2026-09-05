@@ -23,6 +23,11 @@ export type ErrorBody = { error: string; message: string };
  * The server serves one person on `127.0.0.1` and has no authentication
  * (`docs/SPEC.md` section 11), so the origin of a write is the whole check.
  */
+/**
+ * A request that may not write here at all: one a page on another origin sent.
+ * The server serves one person on `127.0.0.1` and has no authentication
+ * (`docs/SPEC.md` section 11), so the origin of a write is the whole check.
+ */
 export class ForbiddenError extends Error {
   readonly code = "forbidden";
 
