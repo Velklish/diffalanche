@@ -31,9 +31,10 @@ permissions:
 #     smoke bun on macos-latest
 #     smoke binary on ubuntu-latest
 #     smoke binary on macos-latest
-#     e2e                        <- once DA-28's job is on `main`
+#     acceptance on ubuntu-latest   <- the job id is `e2e`
+#     acceptance on macos-latest
 #
-# There is no check called `test-bun` and none called `smoke`: a rule asking for
+# There is no check called `test-bun`, none called `smoke` and none called `e2e`: a rule asking for
 # those waits for a report that never comes, and every pull request sits at
 # "Expected — waiting for status to be reported" instead. `smoke node on
 # windows-latest` is deliberately not in the list until DA-45 has run that cell

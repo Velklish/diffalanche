@@ -30,6 +30,26 @@ FAIL |`, with eight and ten long tasks in two of the three runs. So this is not
 a hypothesis about a slow runner — a machine that is merely busy already turns
 the gate red, and a shared CI runner is busy by construction.
 
+## The first run on a GitHub runner
+
+`ci` run 33983377225 on `main` at `b490494`, 2026-09-05, `ubuntu-latest`, the
+gate as it is after DA-25.2 (one process per repetition), against the
+development machine's quiet run of the same commit:
+
+| Metric | Budget | Runner, median of 3 | Runner runs | M1 Pro |
+|---|---|---|---|---|
+| First render | 500 ms | 160.7 ms | 165 / 161 / 156 | 86.6 ms |
+| Scrolling: long tasks | 0 | 0 | 0 / 0 / 0 | 0 |
+| Scrolling: CPU per frame | 8.3 ms | **17.3 ms — FAIL** | 18.2 / 16.7 / 17.3 | 7.8 ms |
+| Opening the comment form | 50 ms | **50.5 ms — FAIL** | 58.3 / 50.5 / 49.6 | 22.6 ms |
+| Jumping to a file | 50 ms | 20.8 ms | 20.8 / 23.8 / 18.8 | 11.1 ms |
+| Switching review sessions | 100 ms | 180.5 ms (DA-24.1) | 438 / 181 / 180 | 107.8 ms |
+| Update after an edit | 300 ms | 249 ms | — | 273 ms |
+
+The runner is a little over twice as slow on the CPU line and holds zero long
+tasks; the composer sits on the budget's edge. One run of the three the return
+condition asks for.
+
 ## Work to do
 
 - Run the `perf` job on a GitHub-hosted runner and record the medians it
