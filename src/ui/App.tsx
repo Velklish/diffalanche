@@ -106,7 +106,7 @@ export function App({ variant }: { variant: Variant }) {
             <h2 className="repo-head">
               {repo.path}
               <span>
-                {repo.branch} ← {repo.base} · {repo.files.length} files
+                {repo.branch} ← {repo.base?.ref ?? "—"} · {repo.files.length} files
               </span>
             </h2>
             {repo.files.map((file) => {

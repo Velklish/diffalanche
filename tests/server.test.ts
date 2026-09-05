@@ -8,6 +8,7 @@ const bundle: ReviewBundle = {
   root: "/tmp/root",
   repositories: [],
   totals: { repositories: 0, files: 0, lines: 0 },
+  warnings: [],
 };
 
 const noUi: UiAssets = { read: async () => null };

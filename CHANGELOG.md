@@ -7,6 +7,14 @@ the project follows [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
 ### Added
 
+- Git diff reader: `src/core/git` resolves the base of a review session in each
+  repository for all three modes — `head`, `branch` against the merge base with
+  the named or the remote default branch, and an explicit `ref` — and reads the
+  change set against it, untracked files included. Every fallback is a warning,
+  a repository whose base does not resolve is skipped with one, and each file
+  carries both the raw patch the renderer needs and the hunks `diff.json` stores.
+  Binary files and files over a size limit are listed without content. See
+  [02-git.md](docs/reference/02-git.md).
 - Repository scanner: `scan(root, config)` in `src/core/scanner` walks the
   `roots` of `config.json` to `depth` levels, reports every repository by its
   path relative to the root with its kind — an ordinary repository or a linked

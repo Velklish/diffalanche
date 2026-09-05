@@ -100,6 +100,15 @@ describe("change set", () => {
     expect(edited?.patch).toContain(STAGED_MARK);
   });
 
+  it("leaves the structured hunks out of the review response", () => {
+    // The renderer reads `patch`; carrying the hunks too costs more CPU per
+    // scrolled frame than the budget of `docs/SPEC.md` section 6 has.
+    const files = bundle.repositories.flatMap((repo) => repo.files);
+    expect(files.every((file) => file.hunks.length === 0)).toBe(true);
+    // The counts still come out, and they are what the totals are built from.
+    expect(files.some((file) => file.additions + file.deletions > 0)).toBe(true);
+  });
+
   it("leaves the repository untouched: the tool only reads git", () => {
     expect(statusAfterScan).toBe(statusBefore);
     expect(statusAfterStagedScan).toBe(statusStaged);
@@ -143,7 +152,10 @@ describe("parseDiff", () => {
       status: "renamed",
       additions: 0,
       deletions: 0,
+      // Having no hunks is not the same as having no content to show.
+      omitted: null,
     });
+    expect(files[0]?.patch).toContain("rename to src/new.ts");
   });
 
   it("splits the output into one patch per file and counts the changed lines", () => {

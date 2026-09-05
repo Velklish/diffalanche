@@ -75,13 +75,17 @@ The subtree below it is lost; the rest of the scan carries on.
 
 ## The root itself
 
-A root that is a repository is **not** reported as one. The rule that a found
-repository is never descended into would otherwise stop the walk at the root and
-find nothing at all, so the walk goes through it into its children and says what
-it did:
+A root that is a repository yields an empty review. It is not reported as a
+repository — its path relative to itself is empty, and that is no id — and it is
+not descended into either, because a found repository is never scanned inside
+(`docs/SPEC.md` section 3, decision 3) and the root is not an exception. The
+warning says what to do instead:
 
 ```json
-{ "path": ".", "message": "root is itself a repository; it is not reviewed" }
+{
+  "path": ".",
+  "message": "root is itself a repository; it is not reviewed — put it under a subdirectory or set roots"
+}
 ```
 
 ## Warnings

@@ -1,6 +1,7 @@
 import type { Dirent } from "node:fs";
 import { readdir, readFile, realpath, stat } from "node:fs/promises";
 import { isAbsolute, join, relative, resolve, sep } from "node:path";
+import { byCodePoint } from "../order.ts";
 import type { Repository, ScanConfig, ScanResult, ScanWarning } from "../types.ts";
 
 /**
@@ -48,14 +49,21 @@ type Walk = {
 
 async function walk(dir: string, depth: number, ctx: Walk): Promise<void> {
   const repository = await read(dir, ctx.root);
-  if (repository && repository.repository.path !== "") {
+  if (repository) {
+    // A found repository is never scanned inside (`docs/SPEC.md` section 3,
+    // decision 3), and the root is not an exception. It cannot be reviewed
+    // either — its path relative to itself is empty, and that is no id — so the
+    // review is empty and the warning says what to do about it.
+    if (repository.repository.path === "") {
+      ctx.warnings.push({
+        path: ".",
+        message:
+          "root is itself a repository; it is not reviewed — put it under a subdirectory or set roots",
+      });
+      return;
+    }
     ctx.found.push(repository);
     return;
-  }
-  if (repository) {
-    // Listing the root itself would stop the walk right there and find nothing
-    // else, so the root is walked through rather than reviewed.
-    ctx.warnings.push({ path: ".", message: "root is itself a repository; it is not reviewed" });
   }
   if (depth <= 0) return;
   let entries: Dirent[];
@@ -146,11 +154,6 @@ async function worktreeWarnings(found: Found[]): Promise<ScanWarning[]> {
     warnings.push({ path: one.repository.path, message: `worktree of ${main.path}` });
   }
   return warnings;
-}
-
-/** Ordering by code point, so the same root comes out in the same order on every runtime. */
-function byCodePoint(a: string, b: string): number {
-  return a < b ? -1 : a > b ? 1 : 0;
 }
 
 function toRelative(dir: string, root: string): string {

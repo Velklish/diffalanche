@@ -12,12 +12,14 @@ The “Term” column gives the spelling for prose; EN is the name in code and E
 | repository | `repo` | A git working tree found under the root, identified by its path relative to the root, for example `group/service-api`. Sibling worktrees count; nested submodules and worktrees do not. | SPEC.md §3.3, §4 |
 | base mode | `base.mode` | How a repository's change set is computed: `head`, `branch`, or `ref`. Set per review session, resolved per repository. | SPEC.md §3.4, §7 |
 | merge-base branch | `base.branch` | The branch used for the merge base in `branch` mode; the remote default branch when not set. | SPEC.md §3.4, §7 |
+| resolved base | `base` | The base one repository's change set was computed against: the mode the resolution ended at, the ref it came from, and the sha. `null` when it did not resolve and the repository is out of the review. | SPEC.md §7, reference/02-git.md |
 | review session | `review` | A named unit of review work: base mode plus all comments. Lives in `reviews/<name>/`. | SPEC.md §4, §7 |
 | current session | `current` | The pointer file naming the session the UI and the CLI use without `--review`. | SPEC.md §4, §7 |
 | data directory | `dataDir` | `<root>/.diffalanche/` with `config.json`, `reviews/`, `current`, and the embedding index; overridden by `--data-dir`. | SPEC.md §3.5, §7 |
 | change set | `diff` | The changes of every repository that has changes, computed against the base mode; untracked files included. Cached in `diff.json`. | SPEC.md §5, §7 |
 | scan | `scan` | One pass that finds repositories and computes the change set; rewrites `diff.json` and produces scanner warnings. | SPEC.md §7, ADR-003 |
 | warning | `warning` | A message from a subsystem about something it skipped and why. Two sources: the scan, about one repository or one directory it walked — ref does not resolve, no remote, worktree of a listed repository, root is itself a repository, directory cannot be read — shown in the warnings bar and spelled *scanner warning* in prose; and storage — a directory under `reviews/` without a `review.json`. | SPEC.md §3.4, HANDOFF.md §1.2, reference/01-scanner.md, reference/03-storage.md |
+| omitted | `omitted` | Why a file of the change set is listed without content: `binary` or `too-large`; its patch is empty and it has no hunks. | reference/02-git.md |
 | comment | `comment` | A finding with severity, status, author, role, body, and an anchor. | SPEC.md §4, §7 |
 | thread | `thread` | A comment with its replies. | SPEC.md §4 |
 | reply | `reply` | A message inside a thread, with author and role. | SPEC.md §7 |

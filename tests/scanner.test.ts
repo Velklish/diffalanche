@@ -212,23 +212,24 @@ describe("scan of a hand-made root", () => {
     expect(trailing.repositories.map((repo) => repo.path)).not.toContain("repos/vendor/tool");
   });
 
-  it("walks through a root that is itself a repository instead of reviewing it", async () => {
-    const result = await scan(join(root, "repos/group"), {
-      roots: ["."],
-      depth: 2,
-      exclude: [],
-    });
+  it("reviews nothing under a root that is itself a repository", async () => {
+    const result = await scan(join(root, "repos/group"), { roots: ["."], depth: 2, exclude: [] });
     expect(result.repositories.map((repo) => repo.path)).not.toContain("");
+
+    // `repos/group/api` holds `vendor/lib`, which a walk would otherwise find.
     const inside = await scan(join(root, "repos/group/api"), {
       roots: ["."],
       depth: 2,
       exclude: [],
     });
-    expect(inside.repositories.map((repo) => repo.path)).toEqual(["vendor/lib"]);
-    expect(inside.warnings).toContainEqual({
-      path: ".",
-      message: "root is itself a repository; it is not reviewed",
-    });
+    expect(inside.repositories).toEqual([]);
+    expect(inside.warnings).toEqual([
+      {
+        path: ".",
+        message:
+          "root is itself a repository; it is not reviewed — put it under a subdirectory or set roots",
+      },
+    ]);
   });
 
   // Root reads a directory whatever its mode, so the case cannot be staged there.

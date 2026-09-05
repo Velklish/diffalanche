@@ -174,6 +174,7 @@ describe("reading", () => {
       root,
       repositories: [],
       totals: { repositories: 0, files: 0, lines: 0 },
+      warnings: [],
     };
     await writeDiffCache(dataDir, "one", cache);
     expect(await readDiffCache(dataDir, "one")).toEqual(cache);
