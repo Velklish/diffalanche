@@ -7,6 +7,14 @@ the project follows [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
 ### Added
 
+- Repository scanner: `scan(root, config)` in `src/core/scanner` walks the
+  `roots` of `config.json` to `depth` levels, reports every repository by its
+  path relative to the root with its kind — an ordinary repository or a linked
+  worktree — and never descends into one, so nested submodules and worktrees
+  stay out of the review. `exclude` globs skip directories, symbolic links are
+  not followed, and a scan warns about a worktree whose main repository is also
+  under the root and about a directory it cannot read. See
+  [01-scanner.md](docs/reference/01-scanner.md).
 - Package skeleton: `package.json`, strict `tsconfig.json`, Biome, Vitest, the
   `src/core`, `src/cli`, `src/server`, `src/ui`, `scripts`, and `skills`
   directories, and a GitHub Actions workflow running lint, typecheck, and tests.

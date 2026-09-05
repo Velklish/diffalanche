@@ -4,7 +4,7 @@ import { tmpdir } from "node:os";
 import { join } from "node:path";
 import { afterAll, beforeAll, describe, expect, it } from "vitest";
 import { generate, PROFILES } from "../scripts/synth.ts";
-import { findRepositories, parseDiff } from "../src/core/index.ts";
+import { parseDiff, scan } from "../src/core/index.ts";
 import type { ReviewBundle } from "../src/core/types.ts";
 import { buildReviewBundle } from "../src/server/index.ts";
 
@@ -68,9 +68,10 @@ describe("change set", () => {
   });
 
   it("lists the sibling worktree but not the nested submodule", async () => {
-    const found = await findRepositories(root, ["repos"], 2);
-    expect(found).toContain("repos/core/cargos-api-worktree");
-    expect(found.some((path) => path.includes("vendor/lib"))).toBe(false);
+    const found = await scan(root, { roots: ["repos"], depth: 2, exclude: [] });
+    const paths = found.repositories.map((repo) => repo.path);
+    expect(paths).toContain("repos/core/cargos-api-worktree");
+    expect(paths.some((path) => path.includes("vendor/lib"))).toBe(false);
     // The worktree is clean, so it carries no changes and the review omits it.
     expect(bundle.repositories.map((repo) => repo.path)).not.toContain(
       "repos/core/cargos-api-worktree",

@@ -1,18 +1,18 @@
 import { readFile } from "node:fs/promises";
 import { join, resolve } from "node:path";
-import { findRepositories, readRepositoryChange } from "../core/index.ts";
-import type { ReviewBundle } from "../core/types.ts";
+import { readRepositoryChange, scan } from "../core/index.ts";
+import type { ReviewBundle, ScanConfig } from "../core/types.ts";
 
-type Config = { roots: string[]; depth: number };
-
-const DEFAULT_CONFIG: Config = { roots: ["."], depth: 2 };
+const DEFAULT_CONFIG: ScanConfig = { roots: ["."], depth: 2, exclude: [] };
 
 /** Scans the root once and returns the whole change set: the UI loads nothing lazily. */
 export async function buildReviewBundle(root: string): Promise<ReviewBundle> {
   const absoluteRoot = resolve(root);
   const config = await readConfig(absoluteRoot);
-  const paths = await findRepositories(absoluteRoot, config.roots, config.depth);
-  const scanned = await Promise.all(paths.map((path) => readRepositoryChange(absoluteRoot, path)));
+  const found = await scan(absoluteRoot, config);
+  const scanned = await Promise.all(
+    found.repositories.map((repo) => readRepositoryChange(absoluteRoot, repo.path)),
+  );
   const repositories = scanned.filter((repo) => repo.files.length > 0);
   const files = repositories.reduce((sum, repo) => sum + repo.files.length, 0);
   const lines = repositories.reduce(
@@ -27,13 +27,14 @@ export async function buildReviewBundle(root: string): Promise<ReviewBundle> {
   };
 }
 
-async function readConfig(root: string): Promise<Config> {
+async function readConfig(root: string): Promise<ScanConfig> {
   try {
     const raw = await readFile(join(root, ".diffalanche", "config.json"), "utf8");
-    const parsed = JSON.parse(raw) as Partial<Config>;
+    const parsed = JSON.parse(raw) as Partial<ScanConfig>;
     return {
       roots: parsed.roots ?? DEFAULT_CONFIG.roots,
       depth: parsed.depth ?? DEFAULT_CONFIG.depth,
+      exclude: parsed.exclude ?? DEFAULT_CONFIG.exclude,
     };
   } catch {
     return DEFAULT_CONFIG;

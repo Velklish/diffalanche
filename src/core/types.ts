@@ -38,3 +38,36 @@ export type FileChange = {
 };
 
 export type FileStatus = "added" | "modified" | "deleted" | "renamed";
+
+/** What a scan is told to look at, from `config.json` (`docs/SPEC.md` section 7). */
+export type ScanConfig = {
+  /** Directories to walk, relative to the root. */
+  roots: string[];
+  /** How many levels below a `roots` entry a repository may sit. */
+  depth: number;
+  /** Globs of directories the walk does not enter. */
+  exclude: string[];
+};
+
+/** A git working tree found under the root. Sibling worktrees count as repositories. */
+export type Repository = {
+  /** Path relative to the root, with forward slashes: `repos/group/service-api`. */
+  path: string;
+  absolutePath: string;
+  kind: RepositoryKind;
+};
+
+/** `worktree` is a linked worktree, whose `.git` is a file; `repo` is everything else. */
+export type RepositoryKind = "repo" | "worktree";
+
+/** A message a scan produces about one repository or one directory it walked. */
+export type ScanWarning = {
+  /** Path relative to the root of the repository or directory the warning is about. */
+  path: string;
+  message: string;
+};
+
+export type ScanResult = {
+  repositories: Repository[];
+  warnings: ScanWarning[];
+};
