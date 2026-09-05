@@ -1,8 +1,8 @@
 /** `serve`: the review and the UI on `127.0.0.1` (`docs/SPEC.md` section 8). */
 import { spawn } from "node:child_process";
-import { createApp } from "../../server/app.ts";
-import { buildReviewBundle } from "../../server/review.ts";
-import { startServer } from "../../server/runtime.ts";
+import { DomainError } from "../../core/domain/index.ts";
+import type { ReviewTotals } from "../../core/types.ts";
+import { startReviewServer } from "../../server/serve.ts";
 import { flag, noExtra } from "../args.ts";
 import type { Command } from "../command.ts";
 import type { Output } from "../output.ts";
@@ -28,34 +28,47 @@ function openBrowser(url: string, io: Output): void {
   child.unref();
 }
 
+/**
+ * The line under the address. A root with no current review session is not a
+ * failure — the server serves the screen that offers to create one — so it says
+ * that instead of the counters.
+ */
+async function summary(server: { review: { document: () => Promise<{ totals: ReviewTotals }> } }) {
+  try {
+    const { totals } = await server.review.document();
+    return (
+      `  ${totals.repositories} repositories, ${totals.files} files, ` +
+      `${totals.lines} changed lines\n`
+    );
+  } catch (error) {
+    if (error instanceof DomainError) {
+      return "  no current review session: create one with `diffalanche review new <name>`\n";
+    }
+    throw error;
+  }
+}
+
 export const serve: Command = {
   spec: {
     name: "serve",
-    about:
-      "serve the review and the UI on 127.0.0.1; until the server of DA-16 it scans " +
-      "against HEAD and reads no review session",
+    about: "serve the review and the UI on 127.0.0.1",
     options: {
       port: { type: "string", value: "<n>", about: "the port to listen on; default: 4880" },
       open: { type: "boolean", about: "open the review in the browser" },
+      verbose: { type: "boolean", about: "log every request to stderr" },
     },
   },
   run: async (context, args) => {
     noExtra(args, 0);
     const config = await context.config();
-    // DA-16 replaces these three lines with `startReviewServer({ config, verbose })`
-    // from `src/server/index.ts`: the server then reads the session's base and
-    // owns its own scan. Until it is on `main` this is the Phase 0 spike server,
-    // which always reads the working tree against HEAD.
-    const bundle = await buildReviewBundle(config.root);
-    const server = await startServer(createApp({ bundle, ui: context.ui }), config.port);
+    const server = await startReviewServer({
+      config,
+      ui: context.ui,
+      verbose: flag(args, "verbose"),
+    });
 
-    const url = `http://127.0.0.1:${server.port}`;
-    context.io.out(
-      `diffalanche ${VERSION} on ${url}\n` +
-        `  ${bundle.totals.repositories} repositories, ${bundle.totals.files} files, ` +
-        `${bundle.totals.lines} changed lines\n`,
-    );
-    if (flag(args, "open")) openBrowser(url, context.io);
+    context.io.out(`diffalanche ${VERSION} on ${server.url}\n${await summary(server)}`);
+    if (flag(args, "open")) openBrowser(server.url, context.io);
     return 0;
   },
 };

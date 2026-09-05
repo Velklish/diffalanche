@@ -15,7 +15,7 @@ import type { Repository, ScanConfig, ScanResult, ScanWarning } from "../types.t
  */
 export async function scan(root: string, config: ScanConfig): Promise<ScanResult> {
   const absoluteRoot = resolve(root);
-  const exclude = config.exclude.map(toRegExp);
+  const exclude = config.exclude.map(globToRegExp);
   const found: Found[] = [];
   const warnings: ScanWarning[] = [];
   for (const entry of config.roots) {
@@ -171,7 +171,7 @@ function excluded(name: string, path: string, exclude: RegExp[]): boolean {
  * and `repos/legacy/**` do what they look like they do. A trailing `/`, the way
  * `.gitignore` writes a directory, is dropped.
  */
-function toRegExp(glob: string): RegExp {
+export function globToRegExp(glob: string): RegExp {
   const pattern = glob.endsWith("/") ? glob.slice(0, -1) : glob;
   let out = "";
   for (let i = 0; i < pattern.length; i += 1) {

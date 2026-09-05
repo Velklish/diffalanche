@@ -10,7 +10,7 @@ are not written yet.
 
 | Command | What it does |
 |---|---|
-| `diffalanche serve [--port <n>] [--open]` | scans the root and serves the review and the UI on `127.0.0.1`; `--open` opens the browser |
+| `diffalanche serve [--port <n>] [--open] [--verbose]` | scans the root and serves the review and the UI on `127.0.0.1`; `--open` opens the browser, `--verbose` logs every request |
 | `diffalanche review new <name> [--base <base>] [--title <text>]` | creates a review session and makes it current |
 | `diffalanche review use <name>` | makes an existing session the current one |
 | `diffalanche review list [--json]` | the sessions, most recently updated first; `--json` prints `{"sessions": […], "warnings": […]}` |
@@ -54,11 +54,12 @@ find the review. A `--root` that is not a directory that exists is exit code 1,
 and so is a `--data-dir` that names a file; a `--data-dir` that does not exist
 yet is not, because the data directory is the one place the tool creates.
 
-**`serve` is the exception until DA-16.** It still runs the Phase 0 spike
-server, which scans the root against HEAD and reads the scanner settings
-straight from `<root>/.diffalanche/config.json`: it accepts `--review` and
-`--data-dir` and does nothing with them, and it ignores the base of the review
-session. The note goes away when `startReviewServer` lands.
+`serve` starts the review server of [07-server.md](07-server.md): it scans the
+root, reads the change set of the current session against that session's base
+into `diff.json`, watches for changes, and listens on `127.0.0.1`. It prints the
+address and the counters under it, or, on a root with no current session, the
+line that says how to make one — the server serves the screen that offers it.
+`--verbose` logs every request to stderr.
 
 ## Exit codes and where output goes
 
@@ -106,8 +107,7 @@ patched one repository at a time — the next `comment` on a line rescans the
 whole root instead. A `diff.json` written before that field existed has no base
 to compare and counts as never scanned.
 
-The scan asks for the structured hunks, which the server's own bundle leaves
-out. They are what the anchor of a line comment is captured from, and
+The scan asks for the structured hunks, which the review response leaves out. They are what the anchor of a line comment is captured from, and
 `diff.json` is the only place they are kept.
 
 ## Comments

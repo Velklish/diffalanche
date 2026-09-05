@@ -7,6 +7,47 @@ the project follows [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
 ### Added
 
+- The write API: `POST /api/comments`, `/api/comments/:id/replies`,
+  `/api/comments/:id/resolve` and `/reopen`, `POST /api/sessions`,
+  `POST /api/sessions/:name/use`, `PUT /api/sessions/:name/base`, and
+  `GET /api/export`. Every write goes through the same domain and the same lock
+  as the CLI, signed with `user` from `config.json` and `role: human`, and
+  answers with the comment or the session it changed. A request that is wrong
+  about itself — a body that is not an object, a severity that is not one of the
+  four — is a 400 naming the field; a request the domain refuses keeps the
+  domain's code and message. A session whose base changed is served from a fresh
+  scan rather than from the cache that was computed against the old one. A write
+  has to come from the review's own page — the server has no authentication, so
+  the origin of a write is the whole check — and a body has to arrive as
+  `application/json`. See [07-server.md](docs/reference/07-server.md).
+- The review server: `startReviewServer({ config, ui, verbose })` scans the
+  root, reads the change set into `diff.json`, starts the watcher, and serves
+  `GET /api/review` — the change set of the current session with the session,
+  its comments and its counters in one document — plus `GET /api/sessions`,
+  `GET /api/config`, `GET /api/scan`, and the built UI with an `index.html`
+  fallback. The wire shape is `ReviewDocument` in `src/core/types.ts`, which the
+  UI imports; the response carries no hunks, and the document is built and
+  serialised once per change rather than once per request. Refusals are the
+  domain's own code and message, and a root with no current review session
+  answers `GET /api/review` with 404 `no-current-session` instead of refusing to
+  start. The server listens on `127.0.0.1` only and says so in one sentence when
+  the port is taken. See [07-server.md](docs/reference/07-server.md).
+- Watcher and activity events: `src/core/watcher` watches every reviewed
+  repository and the data directory, rescans one repository about 100 ms after
+  its last change — and at most a second after the first change of a burst —
+  replaces that repository's entry in `diff.json` under the session lock, and
+  puts `diff-changed`, `comment-added`, `reply-added`, `comment-status`,
+  `session-changed`, and `warnings` on an in-process event bus. A rescan whose
+  result is what the cache already held announces nothing, and without a cache
+  the whole change set is read rather than one repository. Comment events come
+  from comparing `comments.json` with the last read, so a write from the UI and
+  a write from `diffalanche reply` are one event each. Recursive `fs.watch`
+  where the runtime honours it — asked with a probe rather than assumed, and
+  dropped for the walk on a timer when the watch fails; `.git` internals except
+  `HEAD` and `index`, `node_modules`, the `exclude` globs, and the data
+  directory are left out. The activity feed keeps the last 200 lines in memory
+  and names the agent that is editing a repository. See
+  [05-watcher.md](docs/reference/05-watcher.md).
 - CLI comments: `list`, `show`, `reply`, `comment`, `resolve`, `reopen`, and
   `export`, the commands an agent works a review through. Defaults are
   `--author agent` and `--role agent`; `resolve` and `reopen` refuse anything but

@@ -1,3 +1,6 @@
+import type { ReviewCounters } from "./domain/counters.ts";
+import type { Comment, Review } from "./storage/types.ts";
+
 /** The change set of one review, as the server hands it to the UI in one response. */
 export type ReviewBundle = {
   /** Absolute path of the root the repositories were found under. */
@@ -13,6 +16,22 @@ export type ReviewTotals = {
   files: number;
   /** Insertions plus deletions over every file, as `git diff --numstat` counts them. */
   lines: number;
+};
+
+/**
+ * What `GET /api/review` answers with: the change set of the current review
+ * session together with everything the review needs to open — the session
+ * itself, its comments, and the counters over them. Nothing is loaded lazily
+ * afterwards (`docs/SPEC.md` section 6), so this is one document and one
+ * response. The repositories carry no hunks: the renderer reads `patch`, and
+ * carrying the structured lines as well costs more CPU per scrolled frame than
+ * the budget has ([ADR-008](../../docs/adr/adr-008-diff-rendering-verdict.md)).
+ */
+export type ReviewDocument = ReviewBundle & {
+  /** `review.json` of the current session. */
+  session: Review;
+  comments: Comment[];
+  counters: ReviewCounters;
 };
 
 /** One repository with changes, identified by its path relative to the root. */

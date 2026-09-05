@@ -4,7 +4,8 @@
  * table.
  */
 import { chromium } from "@playwright/test";
-import { buildReviewBundle, createApp, directoryAssets, startServer } from "../src/server/index.ts";
+import { loadConfig } from "../src/core/config/index.ts";
+import { directoryAssets, startReviewServer } from "../src/server/index.ts";
 
 export type VariantSpec = { name: string; query: string };
 
@@ -126,15 +127,17 @@ export async function withServer<T>(
   fixture: string,
   body: (baseUrl: string) => Promise<T>,
 ): Promise<T> {
-  const bundle = await buildReviewBundle(fixture);
-  process.stderr.write(
-    `fixture ${fixture}: ${bundle.totals.repositories} repositories, ` +
-      `${bundle.totals.files} files, ${bundle.totals.lines} lines\n`,
-  );
-  const app = createApp({ bundle, ui: directoryAssets("dist/ui") });
-  const server = await startServer(app, 0);
+  // Port 0 is not a port a configuration may name, so it is set here rather
+  // than through `loadConfig`: the harness takes whatever is free.
+  const config = { ...(await loadConfig({ root: fixture })), port: 0 };
+  const server = await startReviewServer({ config, ui: directoryAssets("dist/ui") });
   try {
-    return await body(`http://127.0.0.1:${server.port}`);
+    const { totals } = await server.review.document();
+    process.stderr.write(
+      `fixture ${fixture}: ${totals.repositories} repositories, ` +
+        `${totals.files} files, ${totals.lines} lines\n`,
+    );
+    return await body(server.url);
   } finally {
     await server.close();
   }

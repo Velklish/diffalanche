@@ -4,7 +4,7 @@
  * sections 1.1 and 3).
  */
 import { byCodePoint } from "../order.ts";
-import type { Comment, Severity } from "../storage/index.ts";
+import type { Comment, Severity } from "../storage/types.ts";
 
 /** Worst first. `docs/SPEC.md` section 3, decision 7. */
 const SEVERITY_ORDER: readonly Severity[] = ["critical", "warning", "nit", "question"];

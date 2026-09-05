@@ -64,7 +64,10 @@ paths that name the same repository would otherwise never match.
   `node_modules` and `repos/legacy/**` do what they look like they do. `**/`
   stands for any number of whole segments, so `**/group` is `group` and
   `a/group` but never `subgroup`; `*` and `?` stay inside one path segment. A
-  trailing `/`, the way `.gitignore` spells a directory, is dropped.
+  trailing `/`, the way `.gitignore` spells a directory, is dropped. The
+  compiler of those globs, `globToRegExp`, is exported: the watcher applies the
+  same patterns to the files inside a repository, so one `exclude` means one
+  thing in both places ([05-watcher.md](05-watcher.md)).
 - **A directory that cannot be read**, which produces a warning instead:
 
 ```json
@@ -98,4 +101,5 @@ two above; the base modes of [02-git.md](02-git.md) produce the rest.
 
 - `exclude` is applied to directories only. The walk never looks at files, so a
   glob such as the spec's `**/*.lock` excludes a directory named that way and
-  nothing else.
+  nothing else. Inside a repository the same glob does exclude the file: that is
+  the watcher, not the scan ([05-watcher.md](05-watcher.md)).

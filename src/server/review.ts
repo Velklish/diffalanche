@@ -1,102 +1,221 @@
-import { readdir, readFile } from "node:fs/promises";
-import { join, resolve } from "node:path";
-import { readRepositoryChange, scan } from "../core/index.ts";
-import type { ReviewBundle, ScanConfig, ScanWarning } from "../core/types.ts";
-
-const DEFAULT_CONFIG: ScanConfig = { roots: ["."], depth: 2, exclude: [] };
-
 /**
- * The current session as it lies on disk. The two files pass through unparsed:
- * their shapes are `docs/SPEC.md` section 7, and the domain of DA-10 will own
- * them. Reading them here is a stopgap that DA-16 replaces with the real
- * server, together with the routes for comments, sessions, and the SSE stream.
+ * The review the server hands out: the change set of the current session with
+ * its comments and counters. It is built once, kept in memory, and rebuilt when
+ * something says it changed — the whole document arrives in one response and
+ * nothing is loaded lazily afterwards (`docs/SPEC.md` section 6).
  */
-export type SessionFiles = {
-  /** `review.json` of the current session, or `null` when there is none. */
-  session: unknown;
-  /** The `comments` array of `comments.json`. */
-  comments: unknown[];
+import { sameBase, scanReview } from "../core/change-set.ts";
+import type { Config } from "../core/config/index.ts";
+import { countReview, list, resolveSessionName } from "../core/domain/index.ts";
+import { readRepositoryChange, scan } from "../core/index.ts";
+import type { Base, DiffCache } from "../core/storage/index.ts";
+import {
+  readDiffCache,
+  readReview,
+  sessionDir,
+  withLock,
+  writeDiffCache,
+} from "../core/storage/index.ts";
+import type {
+  FileChange,
+  RepositoryChange,
+  RepositoryKind,
+  ReviewDocument,
+  ScanWarning,
+} from "../core/types.ts";
+
+/** One repository as `GET /api/scan` reports it, before any session exists. */
+export type ScannedRepository = {
+  path: string;
+  kind: RepositoryKind;
+  branch: string;
+  /** Whether it has anything to review against the base. */
+  hasChanges: boolean;
+  files: number;
 };
 
-const NO_SESSION: SessionFiles = { session: null, comments: [] };
+export type ScanSummary = {
+  root: string;
+  repositories: ScannedRepository[];
+  warnings: ScanWarning[];
+};
 
-/** Scans the root once and returns the whole change set: the UI loads nothing lazily. */
-export async function buildReviewBundle(root: string): Promise<ReviewBundle & SessionFiles> {
-  const absoluteRoot = resolve(root);
-  const config = await readConfig(absoluteRoot);
-  const found = await scan(absoluteRoot, config);
-  const scanned = await Promise.all(
-    // The renderer reads `patch`; carrying the structured hunks as well costs
-    // more CPU per scrolled frame than the budget of `docs/SPEC.md` section 6 has.
-    found.repositories.map((repo) =>
-      readRepositoryChange(absoluteRoot, repo.path, { mode: "head" }, { hunks: false }),
-    ),
-  );
-  const repositories = scanned.filter((repo) => repo.files.length > 0);
-  const warnings: ScanWarning[] = [
-    ...found.warnings,
-    ...scanned.flatMap((repo) => repo.warnings.map((message) => ({ path: repo.path, message }))),
-  ];
-  const files = repositories.reduce((sum, repo) => sum + repo.files.length, 0);
-  const lines = repositories.reduce(
-    (sum, repo) =>
-      sum + repo.files.reduce((inner, file) => inner + file.additions + file.deletions, 0),
-    0,
-  );
+export type ReviewService = {
+  /**
+   * The current session's document. Refuses with the domain's own
+   * `no-current-session` or `no-such-session` when there is none.
+   */
+  document: () => Promise<ReviewDocument>;
+  /** The same document serialised; built once per change, not once per request. */
+  payload: () => Promise<string>;
+  /** One repository of the change set, or `null` when it has no changes. */
+  repository: (repo: string) => Promise<RepositoryChange | null>;
+  /** The change set as a rescan left it on disk, taken as the document's own. */
+  adopt: (cache: DiffCache) => void;
+  /** Something changed underneath: the document is built again when next asked for. */
+  invalidate: () => void;
+  /**
+   * Only the comments changed. Re-reading them costs a small file; rebuilding
+   * the document would cost `diff.json`, which every comment write would then
+   * charge the next reader for.
+   */
+  invalidateComments: () => void;
+  /** Every repository under the root with whether it has changes: the first-run screen. */
+  summary: () => Promise<ScanSummary>;
+};
+
+type State = { session: string; document: ReviewDocument; payload: string | null };
+
+export function createReviewService(config: Config): ReviewService {
+  let state: State | null = null;
+  let pending: Promise<State> | null = null;
+  /** Bumped by every invalidation, so a build that started before one is dropped. */
+  let version = 0;
+  let staleComments = false;
+
+  async function current(): Promise<State> {
+    const cached = state;
+    if (cached !== null) {
+      if (staleComments) {
+        const comments = await list(config.dataDir, cached.session);
+        staleComments = false;
+        cached.document = { ...cached.document, comments, counters: countReview(comments) };
+        cached.payload = null;
+      }
+      return cached;
+    }
+    if (pending === null) {
+      const started = version;
+      pending = build(config).then(
+        (built) => {
+          pending = null;
+          if (version === started) state = built;
+          return built;
+        },
+        (error: unknown) => {
+          pending = null;
+          throw error;
+        },
+      );
+    }
+    return pending;
+  }
+
   return {
-    root: absoluteRoot,
-    repositories,
-    totals: { repositories: repositories.length, files, lines },
-    warnings,
-    ...(await readSession(join(absoluteRoot, ".diffalanche"))),
+    document: async () => (await current()).document,
+    payload: async () => {
+      const held = await current();
+      held.payload ??= JSON.stringify(held.document);
+      return held.payload;
+    },
+    repository: async (repo) =>
+      (await current()).document.repositories.find((one) => one.path === repo) ?? null,
+    adopt: (cache) => {
+      if (state === null) return;
+      state.document = {
+        ...state.document,
+        repositories: cache.repositories.map(withoutHunks),
+        totals: cache.totals,
+        warnings: cache.warnings,
+      };
+      state.payload = null;
+    },
+    invalidate: () => {
+      version += 1;
+      state = null;
+    },
+    invalidateComments: () => {
+      staleComments = true;
+      if (state !== null) state.payload = null;
+    },
+    summary: async () => summarise(config),
   };
 }
 
-/** The session named by the `current` pointer, or the only one on disk. */
-async function readSession(dataDir: string): Promise<SessionFiles> {
-  const name = await currentSession(dataDir);
-  if (name === null) return NO_SESSION;
-  const dir = join(dataDir, "reviews", name);
-  const session = await readJson(join(dir, "review.json"));
-  const comments = await readJson(join(dir, "comments.json"));
-  const list = (comments as { comments?: unknown })?.comments;
-  return { session: session ?? null, comments: Array.isArray(list) ? list : [] };
+async function build(config: Config): Promise<State> {
+  const session = await resolveSessionName(config.dataDir);
+  const review = await readReview(config.dataDir, session);
+  // The cache is the change set of the last scan. One computed against another
+  // base answers a different question — `review base` is what puts it there —
+  // so it is read again rather than trusted.
+  const cached = await readDiffCache(config.dataDir, session);
+  const cache =
+    cached !== null && sameBase(cached.base, review.base) ? cached : await rebuild(config, session);
+  const comments = await list(config.dataDir, session);
+  return {
+    session,
+    payload: null,
+    document: {
+      root: config.root,
+      repositories: cache.repositories.map(withoutHunks),
+      totals: cache.totals,
+      warnings: cache.warnings,
+      session: review,
+      comments,
+      counters: countReview(comments),
+    },
+  };
 }
 
-async function currentSession(dataDir: string): Promise<string | null> {
-  const pointer = (await readFile(join(dataDir, "current"), "utf8").catch(() => null))?.trim();
-  if (pointer) return isSessionName(pointer) ? pointer : null;
-  const entries = await readdir(join(dataDir, "reviews"), { withFileTypes: true }).catch(() => []);
-  const directories = entries.filter((entry) => entry.isDirectory());
-  const only = directories.length === 1 ? directories[0] : undefined;
-  return only?.name ?? null;
+/**
+ * Reads every repository and writes `diff.json`. The hunks are read here and
+ * kept only in the file: anchor capture is the one reader that needs them, and
+ * the response drops them.
+ */
+async function rebuild(config: Config, session: string): Promise<DiffCache> {
+  const review = await readReview(config.dataDir, session);
+  const { cache } = await scanReview(config, review.base);
+  await withLock(sessionDir(config.dataDir, session), async (held) => {
+    await held.assertHeld();
+    await writeDiffCache(config.dataDir, session, cache);
+  });
+  return cache;
 }
 
-/** A session name, never a path: the pointer must not lead out of the data directory. */
-function isSessionName(name: string): boolean {
-  return name !== "." && name !== ".." && !/[/\\]/.test(name);
+/**
+ * Every repository under the root, with whether it has anything to review. This
+ * is the one answer that reads git per request: it is what the screen before
+ * the first session shows, and there is no cache to answer it from.
+ */
+async function summarise(config: Config): Promise<ScanSummary> {
+  const found = await scan(config.root, {
+    roots: config.roots,
+    depth: config.depth,
+    exclude: config.exclude,
+  });
+  const base = await sessionBase(config);
+  const repositories = await Promise.all(
+    found.repositories.map(async (repository) => {
+      const change = await readRepositoryChange(config.root, repository.path, base, {
+        hunks: false,
+      });
+      return {
+        path: repository.path,
+        kind: repository.kind,
+        branch: change.branch,
+        hasChanges: change.files.length > 0,
+        files: change.files.length,
+      };
+    }),
+  );
+  return { root: config.root, repositories, warnings: found.warnings };
 }
 
-async function readJson(path: string): Promise<unknown> {
-  const raw = await readFile(path, "utf8").catch(() => null);
-  if (raw === null) return null;
+/** Without a session there is no base to read against; the default one is HEAD. */
+async function sessionBase(config: Config): Promise<Base> {
   try {
-    return JSON.parse(raw) as unknown;
+    const session = await resolveSessionName(config.dataDir);
+    return (await readReview(config.dataDir, session)).base;
   } catch {
-    return null;
+    return { mode: "head" };
   }
 }
 
-async function readConfig(root: string): Promise<ScanConfig> {
-  try {
-    const raw = await readFile(join(root, ".diffalanche", "config.json"), "utf8");
-    const parsed = JSON.parse(raw) as Partial<ScanConfig>;
-    return {
-      roots: parsed.roots ?? DEFAULT_CONFIG.roots,
-      depth: parsed.depth ?? DEFAULT_CONFIG.depth,
-      exclude: parsed.exclude ?? DEFAULT_CONFIG.exclude,
-    };
-  } catch {
-    return DEFAULT_CONFIG;
-  }
+/** The same repository with the structured lines dropped; the patch is what the UI renders. */
+function withoutHunks(repository: RepositoryChange): RepositoryChange {
+  if (repository.files.every((file) => file.hunks.length === 0)) return repository;
+  const files: FileChange[] = repository.files.map((file) =>
+    file.hunks.length === 0 ? file : { ...file, hunks: [] },
+  );
+  return { ...repository, files };
 }

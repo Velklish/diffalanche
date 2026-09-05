@@ -1,12 +1,22 @@
 import { execFileSync } from "node:child_process";
-import { appendFileSync, mkdtempSync, rmSync, writeFileSync } from "node:fs";
+import { appendFileSync, existsSync, mkdtempSync, rmSync, writeFileSync } from "node:fs";
 import { tmpdir } from "node:os";
 import { join } from "node:path";
 import { afterAll, beforeAll, describe, expect, it } from "vitest";
 import { generate, PROFILES } from "../scripts/synth.ts";
+import { findRepositories, refreshRepository, scanReview } from "../src/core/change-set.ts";
+import { loadConfig } from "../src/core/config/index.ts";
 import { parseDiff, scan } from "../src/core/index.ts";
-import type { ReviewBundle } from "../src/core/types.ts";
-import { buildReviewBundle } from "../src/server/index.ts";
+import type { DiffCache } from "../src/core/storage/index.ts";
+import { readDiffCache, writeDiffCache } from "../src/core/storage/index.ts";
+import type { BaseSpec } from "../src/core/types.ts";
+
+/** The change set of a root, the way the server reads it before it caches it. */
+async function changeSet(root: string): Promise<DiffCache> {
+  const config = await loadConfig({ root });
+  const { cache } = await scanReview(config, { mode: "head" });
+  return cache;
+}
 
 const SMALL = PROFILES.small;
 
@@ -14,8 +24,8 @@ const REPO = "repos/core/cargos-api";
 const STAGED_MARK = "// staged edit, added by the test";
 
 let root: string;
-let bundle: ReviewBundle;
-let stagedBundle: ReviewBundle;
+let bundle: DiffCache;
+let stagedBundle: DiffCache;
 let statusBefore: string;
 let statusAfterScan: string;
 let statusStaged: string;
@@ -36,7 +46,7 @@ beforeAll(async () => {
   const repo = join(root, REPO);
 
   statusBefore = status(repo);
-  bundle = await buildReviewBundle(root);
+  bundle = await changeSet(root);
   statusAfterScan = status(repo);
 
   // The change set is the working tree against HEAD, so a staged change belongs
@@ -52,7 +62,7 @@ beforeAll(async () => {
   git(repo, ["add", stagedEditPath]);
 
   statusStaged = status(repo);
-  stagedBundle = await buildReviewBundle(root);
+  stagedBundle = await changeSet(root);
   statusAfterStagedScan = status(repo);
 }, 120_000);
 
@@ -100,11 +110,11 @@ describe("change set", () => {
     expect(edited?.patch).toContain(STAGED_MARK);
   });
 
-  it("leaves the structured hunks out of the review response", () => {
-    // The renderer reads `patch`; carrying the hunks too costs more CPU per
-    // scrolled frame than the budget of `docs/SPEC.md` section 6 has.
+  it("carries the structured hunks, which is what diff.json stores", () => {
+    // The cache is the only source that has them: anchor capture reads them
+    // there, and the review response drops them (`tests/server.test.ts`).
     const files = bundle.repositories.flatMap((repo) => repo.files);
-    expect(files.every((file) => file.hunks.length === 0)).toBe(true);
+    expect(files.some((file) => file.hunks.length > 0)).toBe(true);
     // The counts still come out, and they are what the totals are built from.
     expect(files.some((file) => file.additions + file.deletions > 0)).toBe(true);
   });
@@ -113,6 +123,40 @@ describe("change set", () => {
     expect(statusAfterScan).toBe(statusBefore);
     expect(statusAfterStagedScan).toBe(statusStaged);
   });
+});
+
+describe("refreshing one repository", () => {
+  it("does not lose the patch of another one written at the same moment", async () => {
+    const fixture = mkdtempSync(join(tmpdir(), "diffalanche-refresh-"));
+    try {
+      generate({ out: fixture, seed: 3, profile: SMALL });
+      const config = await loadConfig({ root: fixture });
+      const base: BaseSpec = { mode: "head" };
+      await writeDiffCache(config.dataDir, "synth", (await scanReview(config, base)).cache);
+
+      const repos = (await findRepositories(config)).filter((path) =>
+        existsSync(join(fixture, path, ".git")),
+      );
+      const [first, second] = [repos[0] as string, repos[1] as string];
+      writeFileSync(join(fixture, first, "one.ts"), "export const one = 1;\n");
+      writeFileSync(join(fixture, second, "two.ts"), "export const two = 2;\n");
+
+      // Both patch the same file. Without the session lock the second read
+      // starts before the first write lands, and one of the two is overwritten.
+      await Promise.all([
+        refreshRepository(config, "synth", base, first),
+        refreshRepository(config, "synth", base, second),
+      ]);
+
+      const cache = await readDiffCache(config.dataDir, "synth");
+      const files = (path: string) =>
+        cache?.repositories.find((one) => one.path === path)?.files.map((one) => one.path) ?? [];
+      expect(files(first)).toContain("one.ts");
+      expect(files(second)).toContain("two.ts");
+    } finally {
+      rmSync(fixture, { recursive: true, force: true });
+    }
+  }, 120_000);
 });
 
 describe("parseDiff", () => {

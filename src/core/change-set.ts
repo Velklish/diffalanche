@@ -12,7 +12,13 @@ import { readRepositoryChange } from "./git/index.ts";
 import { byCodePoint } from "./order.ts";
 import { scan } from "./scanner/index.ts";
 import type { DiffCache } from "./storage/index.ts";
-import { readDiffCache, SCHEMA_VERSION, writeDiffCache } from "./storage/index.ts";
+import {
+  readDiffCache,
+  SCHEMA_VERSION,
+  sessionDir,
+  withLock,
+  writeDiffCache,
+} from "./storage/index.ts";
 import type { BaseSpec, RepositoryChange, ReviewTotals, ScanWarning } from "./types.ts";
 
 /** The counters of a set of repositories, as the header of the review shows them. */
@@ -50,7 +56,7 @@ function cache(
  * `head` mode — and `review.json` is edited by hand, so nothing keeps such a
  * base out of it.
  */
-function sameBase(left: BaseSpec, right: BaseSpec): boolean {
+export function sameBase(left: BaseSpec, right: BaseSpec): boolean {
   if (left.mode === "head") return right.mode === "head";
   if (left.mode === "ref") return right.mode === "ref" && left.ref === right.ref;
   return right.mode === "branch" && (left.branch ?? null) === (right.branch ?? null);
@@ -121,6 +127,10 @@ export async function scanReview(config: Config, base: BaseSpec): Promise<Review
  *
  * Without a cache at all there is nothing to patch, so the whole root is
  * scanned once, which is also what the reader of the review needs next.
+ *
+ * The read and the write are one step under the session's lock: the watcher of
+ * a running server patches the same file, and two read-modify-writes without a
+ * lock overwrite each other's repositories.
  */
 export async function refreshRepository(
   config: Config,
@@ -128,20 +138,33 @@ export async function refreshRepository(
   base: BaseSpec,
   repo: string,
 ): Promise<void> {
-  const previous = await readDiffCache(config.dataDir, session);
-  // A cache computed against another base answers a different question, so
-  // patching one repository into it would leave the review reading half of
-  // each. `review base` is what puts it there, and one full scan repairs it.
-  if (previous === null || !sameBase(previous.base, base)) {
-    await writeDiffCache(config.dataDir, session, (await scanReview(config, base)).cache);
-    return;
-  }
   const change = await readRepositoryChange(config.root, repo, base, { hunks: true });
-  const repositories = previous.repositories.filter((one) => one.path !== repo);
-  if (change.files.length > 0) repositories.push(change);
-  const warnings: ScanWarning[] = [
-    ...previous.warnings.filter((one) => one.path !== repo),
-    ...change.warnings.map((message) => ({ path: repo, message })),
-  ];
-  await writeDiffCache(config.dataDir, session, cache(previous.root, base, repositories, warnings));
+  const full = await withLock(sessionDir(config.dataDir, session), async (held) => {
+    const previous = await readDiffCache(config.dataDir, session);
+    // A cache computed against another base answers a different question, so
+    // patching one repository into it would leave the review reading half of
+    // each. `review base` is what puts it there, and one full scan repairs it —
+    // outside the lock, because it takes as long as every repository takes.
+    if (previous === null || !sameBase(previous.base, base)) return true;
+    const repositories = previous.repositories.filter((one) => one.path !== repo);
+    if (change.files.length > 0) repositories.push(change);
+    const warnings: ScanWarning[] = [
+      ...previous.warnings.filter((one) => one.path !== repo),
+      ...change.warnings.map((message) => ({ path: repo, message })),
+    ];
+    await held.assertHeld();
+    await writeDiffCache(
+      config.dataDir,
+      session,
+      cache(previous.root, base, repositories, warnings),
+    );
+    return false;
+  });
+  if (!full) return;
+
+  const scanned = (await scanReview(config, base)).cache;
+  await withLock(sessionDir(config.dataDir, session), async (held) => {
+    await held.assertHeld();
+    await writeDiffCache(config.dataDir, session, scanned);
+  });
 }
