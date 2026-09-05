@@ -7,4 +7,5 @@ runs under Node, so `synth.ts` uses `node:` modules only.
 
 | Script | What it does |
 |---|---|
+| `build.ts` | Builds both delivery channels: `dist/cli.js` for npm and six binaries with the UI embedded; see [reference/06-cli.md](../docs/reference/06-cli.md) |
 | `synth.ts` | Generates the synthetic review; see [reference/11-perf.md](../docs/reference/11-perf.md) |

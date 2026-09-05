@@ -1,0 +1,156 @@
+:root {
+  --bg: #16181c;
+  --panel: #1a1d22;
+  --panel2: #1d2025;
+  --panel3: #22262c;
+  --bd: #2b3039;
+  --tx: #d7dbe0;
+  --tx3: #7d858f;
+  --acc: #6ea8fe;
+  --addTx: #6cc38a;
+  --delTx: #d97a7a;
+}
+
+* {
+  box-sizing: border-box;
+}
+
+body {
+  margin: 0;
+  background: var(--bg);
+  color: var(--tx);
+  font:
+    13px / 1.5 "Instrument Sans",
+    system-ui,
+    sans-serif;
+}
+
+.shell {
+  display: flex;
+  align-items: flex-start;
+  min-width: 1560px;
+}
+
+.sidebar {
+  position: sticky;
+  top: 0;
+  width: 308px;
+  flex: 0 0 308px;
+  height: 100vh;
+  overflow: auto;
+  background: var(--panel);
+  border-right: 1px solid var(--bd);
+  padding: 12px;
+}
+
+.sidebar-repo {
+  margin: 10px 0 4px;
+  color: var(--tx3);
+  font:
+    500 12px / 1.4 "JetBrains Mono",
+    ui-monospace,
+    monospace;
+}
+
+.sidebar-file {
+  display: block;
+  width: 100%;
+  padding: 2px 6px;
+  border: 0;
+  border-radius: 6px;
+  background: none;
+  color: var(--tx);
+  font:
+    11px / 1.6 "JetBrains Mono",
+    ui-monospace,
+    monospace;
+  text-align: left;
+  cursor: pointer;
+}
+
+.sidebar-file:hover {
+  background: var(--panel3);
+}
+
+.main {
+  flex: 1;
+  min-width: 0;
+  padding: 12px 16px 240px;
+}
+
+.repo-head {
+  margin: 18px 0 8px;
+  font:
+    600 14.5px / 1.4 "JetBrains Mono",
+    ui-monospace,
+    monospace;
+}
+
+.repo-head span {
+  margin-left: 10px;
+  color: var(--tx3);
+  font-size: 11px;
+  font-weight: 400;
+}
+
+.file-card {
+  margin-bottom: 10px;
+  border: 1px solid var(--bd);
+  border-radius: 10px;
+  overflow: hidden;
+}
+
+.file-head {
+  display: flex;
+  gap: 12px;
+  padding: 7px 11px;
+  background: var(--panel3);
+  font:
+    500 12px / 1.4 "JetBrains Mono",
+    ui-monospace,
+    monospace;
+}
+
+.file-head .add {
+  color: var(--addTx);
+}
+
+.file-head .del {
+  color: var(--delTx);
+}
+
+.composer {
+  padding: 10px 14px;
+  border-top: 1px solid var(--bd);
+  border-bottom: 1px solid var(--bd);
+  border-left: 2px solid var(--acc);
+  background: var(--panel2);
+  font:
+    11px / 1.5 "JetBrains Mono",
+    ui-monospace,
+    monospace;
+}
+
+.composer textarea {
+  display: block;
+  width: 100%;
+  max-width: 560px;
+  height: 72px;
+  margin-top: 6px;
+  border: 1px solid var(--acc);
+  border-radius: 9px;
+  background: var(--panel);
+  color: var(--tx);
+  font-size: 13px;
+  line-height: 1.6;
+  font-family: inherit;
+}
+
+.skeleton {
+  padding: 40px;
+  color: var(--tx3);
+}
+
+.diff-tailwind-wrapper {
+  font-size: 12px;
+}

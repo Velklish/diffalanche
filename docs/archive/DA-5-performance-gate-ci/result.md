@@ -1,0 +1,9 @@
+# DA-5 · Result
+
+**Closed 2026-09-05.** Completed. `perf/budgets.ts` holds the budget table of `docs/SPEC.md` section 6 in code, typed against the harness fields, with the two lines Phase 0 cannot measure (session switch, update after an edit) marked pending until DA-9 and DA-25; `perf/gate.ts` generates the fixture when absent, always rebuilds the UI, runs the harness three times on the page as served, prints the table, appends it to `GITHUB_STEP_SUMMARY`, and exits 1 when the median of any line is over budget. `--runs` is validated once in `perf/harness.ts` (whole number ≥ 1; default 1 for `perf/run.ts`, 3 for the gate). The `perf` job in `.github/workflows/ci.yml` runs synth and the gate; `bun run perf` is a gate in `backslop.json` (about 33 s per run).
+
+Finding DA-5.1 (the gate has never run on a GitHub runner; a busy development machine fails the CPU line on the same commit) is deferred until the first push produces runner numbers; the gate keeps the specification's numbers everywhere until then.
+
+**Verification.** Gate on the integrated tree: first render 32.6 ms / 500, long tasks 0, CPU per frame 6.9 ms / 8.3, composer 12.3 ms / 50, file jump 7.8 ms / 50, two lines pending. Deliberate regression on a throwaway branch: a 600 ms synchronous loop in the render path → exit 1 with first render 630 ms and composer 601 ms marked FAIL; 60 ms only on the composer path → exit 1 with exactly that line FAIL. `tests/perf.test.ts` (6 cases): `--runs` parsing and refusal, median semantics (one slow run of three passes, two fail), pending lines never fail, exactly one line marked on one overrun. Mutation probe: `parseRuns` accepting anything → its test fails. Not verified: the job on a GitHub-hosted runner (DA-5.1).
+
+**Documentation in the same pass.** `docs/reference/11-perf.md` (harness, gate, pending, the 8.3 ms ceiling, reading the summary), `README.md`, `CHANGELOG.md`, `backslop.json`.

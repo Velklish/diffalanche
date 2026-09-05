@@ -1,6 +1,7 @@
 # ADR-002: TypeScript on Bun, Node-neutral server, npm and binaries
 
 **Status:** Accepted
+**Revised by [ADR-008](adr-008-diff-rendering-verdict.md):** the diff library is `react-diff-view`, and the rule "no `Bun.*` outside build scripts" has one exception, `src/server/runtime.ts`.
 **Date:** 2026-09-05
 **Deciders:** Velklish
 

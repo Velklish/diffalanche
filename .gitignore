@@ -3,3 +3,7 @@ dist/
 .diffalanche/
 .DS_Store
 .claude/worktrees/
+
+.perf/
+.build/
+*.bun-build

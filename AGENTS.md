@@ -5,7 +5,7 @@ diffalanche is a local code-review tool for a folder that holds many independent
 Rules for every change:
 
 - **The tool never writes to a reviewed repository.** No commits, index changes, resets, or file edits; git is read through the `git` binary only. The only writable location is the data directory.
-- **Server and CLI code use only APIs shared by Node and Bun.** Runtime-specific calls (`Bun.*`, Node-only modules without a Bun counterpart) are not allowed outside build scripts.
+- **Server and CLI code use only APIs shared by Node and Bun.** Runtime-specific calls (`Bun.*`, Node-only modules without a Bun counterpart) are not allowed outside build scripts and `src/server/runtime.ts` — the single module that chooses between Bun's server and the Node adapter ([ADR-008](docs/adr/adr-008-diff-rendering-verdict.md)). A second such module is a new decision, not a convenience.
 - **The UI follows the handoff, not the prototype line by line.** Tokens, layout, and behaviour come from `docs/design/HANDOFF.md`; the diff itself is rendered by the chosen library, and the prototype's hand-drawn diff is only a layout reference.
 - **Performance budgets are a gate.** Section 6 of the spec is checked in CI on the synthetic review; a change that regresses it is not done.
 

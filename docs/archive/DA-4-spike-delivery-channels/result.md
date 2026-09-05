@@ -1,0 +1,9 @@
+# DA-4 · Result
+
+**Closed 2026-09-05.** Completed. Both delivery channels work on a trivial CLI: `version` and `serve [--root] [--port]` in `src/cli/run.ts` behind one entry point; `dist/cli.js` for npm (`bun build --target node`, which inlines `hono` and `@hono/node-server`, so the package has no runtime dependencies — `node dist/cli.js version` runs from a copy of `dist/` alone) and six `bun build --compile` binaries (darwin, linux, windows × x64, arm64) with the Vite output embedded as base64, produced by `scripts/build.ts`, which also removes the `*.bun-build` leftovers the compiler drops in the repository root. `bun run build` builds everything, `bun run build:cli` the npm bundle only. Measured on the development machine: npm on Node cold start 110 ms, on Bun 31 ms, binary darwin-arm64 60.6 MiB and 33 ms; the other five binaries build (67.8 to 95.8 MiB) but were not executed. Numbers are in the “Delivery channels” section of ADR-008.
+
+Review: a 59 MiB compiler artifact had been committed at the repository root; the worker rewrote its branch so the blob exists in no commit (`git rev-list --all --objects | grep -c bun-build` → 0) and moved every UI and server package to `devDependencies` (`b577c2d`, `1d28ba8`, and the rewritten `a833c2e`).
+
+**Verification.** `node dist/cli.js version`, `bun src/cli/index.ts version`, `./dist/diffalanche-darwin-arm64 version` print `0.0.0`; the darwin-arm64 binary serves the UI on `127.0.0.1:4880` (`GET /`, `/assets/index-*.js`, `/api/review` all 200) with no files beside it. Gates as for DA-3 (29 tests). Mutation probes: `run()` returning 0 on an unknown command → exit-code test fails; a literal version → version test fails. Not verified: Windows execution (DA-45); publishing (DA-31).
+
+**Documentation in the same pass.** `docs/reference/06-cli.md` (new), ADR-008 section, `README.md` (build, binaries), `scripts/README.md`, `CHANGELOG.md`, `.gitignore`.

@@ -2,7 +2,7 @@
 
 `scripts/synth.ts` builds the synthetic review: the fixture the performance
 gate, the diff rendering spike, and the scanner and storage tests all measure
-against. The performance gate itself does not exist yet.
+against. `perf/` measures the UI on it.
 
 ## Running it
 
@@ -127,3 +127,89 @@ checks the same properties: the profile counts, the tracked and untracked split,
 the sibling worktree and the nested submodule, the on-disk format, that every
 line comment sits on the line it names, that a foreign directory is refused
 untouched, and that the two trees are byte-identical.
+
+## The measurement harness
+
+`perf/harness.ts` holds the measurement, `perf/run.ts` the command around it.
+One run starts the server on the fixture, opens the page in headless Chromium
+through Playwright ([ADR-006](../adr/adr-006-verification.md)), and reports one
+row per variant and repetition:
+
+```sh
+bun run build:ui                                   # the harness measures the built UI
+bun perf/run.ts --fixture .perf/fixture            # every variant, one run each
+bun perf/run.ts --variant react-diff-view-virtual --runs 3
+```
+
+| Option | Meaning |
+|---|---|
+| `--fixture <dir>` | Root of a synthetic review made by `bun run synth`. Default `.perf/fixture` |
+| `--variant <name>` | Measure only this variant; repeatable. Default: all of them |
+| `--runs <n>` | Repetitions per variant: a whole number of at least 1, anything else is an error. Default 1 for `perf/run.ts`, 3 for the gate |
+
+The numbers come out as JSON on stdout, one object per run, with progress on
+stderr.
+
+| Field | What it is |
+|---|---|
+| `firstRenderMs` | From the review response being parsed to the frame that showed the review |
+| `scrollLongTasks`, `scrollLongTaskMs` | Long tasks while scrolling the whole review, and their total |
+| `cpuPerFrameMs` | Chromium's own `TaskDuration` over the scroll, divided by the frames of that scroll |
+| `composerOpenMs`, `fileJumpMs` | Opening the composer placeholder, and the median of three jumps to a file |
+| `frames`, `scrollDistancePx` | How many frames the scroll took and how far it went |
+
+The scroll is one pass over the whole review at up to 600 frames, so the step is
+`scrollHeight / 600` — far faster than a person scrolls, which is the point: it
+is the stress case, not the typical one. Frame rate is not measured, because a
+headless runner cannot measure it (`docs/SPEC.md` section 6); the long-task
+count and the CPU time per frame stand in for it, and 120 fps stays a manual
+check on a 120 Hz display.
+
+The variants exist for the Phase 0 spike; which combination the product uses is
+[ADR-008](../adr/adr-008-diff-rendering-verdict.md), and the reference of the UI
+side is [08-ui.md](08-ui.md).
+
+## The gate
+
+`perf/budgets.ts` holds the budget table of `docs/SPEC.md` section 6 as code and
+`perf/gate.ts` is the gate around it:
+
+```sh
+bun run perf                       # three runs, medians against the budgets
+bun run perf -- --runs 5           # more runs
+bun run perf -- --fixture /tmp/x   # another fixture
+```
+
+The gate makes the synthetic review if `.perf/fixture` is missing, always
+rebuilds the UI — a gate that measures a stale build measures nothing — and then
+runs the harness three times on the page as it ships, without a variant query.
+It prints one row per budget line and exits 1 when the **median** of any line is
+over budget. One slow run does not fail the build; two do.
+
+```
+| Metric | Budget | Median of 3 | |
+|---|---|---|---|
+| First render of the review after the server responds | 500 ms | 32.3 ms | ok |
+| Scrolling the diff: long tasks | 0 tasks | 0 tasks | ok |
+| Scrolling the diff: CPU per frame | 8.3 ms | 6.4 ms | ok |
+| Opening the comment form | 50 ms | 13.9 ms | ok |
+| Jumping to a file from the navigation | 50 ms | 7.7 ms | ok |
+| Switching review sessions | 100 ms | pending | DA-9 |
+| Update after an edit in one repository | 300 ms | pending | DA-25 |
+```
+
+Two lines are **pending**: nothing in the code can switch a session or change a
+file under an open review yet. A pending line is printed and never fails; the
+task named in the last column — DA-9 for sessions, DA-25 for live update — makes
+it measurable and gives its budget line a field to read.
+
+`8.3 ms` is the frame of 120 fps. The specification asks for 120 fps and a
+headless runner cannot measure frame rate, so the gate checks the two things it
+can: no long task at all, and CPU time per frame under one frame.
+
+The gate is one of the `gates` of `backslop.json`, so it runs before any task is
+reported, and it is the `perf` job of `.github/workflows/ci.yml`, which
+installs Chromium, generates the fixture, and runs the gate — the gate builds
+the UI itself, so the job does not; the table lands in the run summary through
+`GITHUB_STEP_SUMMARY`. One local run takes about 33 seconds on
+an M1 Pro, plus 4 seconds when the fixture has to be generated first.
