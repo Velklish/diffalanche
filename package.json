@@ -29,7 +29,8 @@
     "build:ui": "vite build",
     "build:cli": "bun build src/cli/index.ts --target node --outfile dist/cli.js",
     "perf": "bun perf/gate.ts",
-    "test:ui": "playwright test --config e2e/playwright.config.ts"
+    "test:ui": "playwright test --config e2e/playwright.config.ts",
+    "test:e2e": "playwright test --config e2e/acceptance.config.ts"
   },
   "devDependencies": {
     "@biomejs/biome": "^2.5.12",

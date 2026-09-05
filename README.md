@@ -272,6 +272,7 @@ bun run typecheck  # tsc over the three TypeScript projects
 bun run test       # Vitest on Node
 bun run test:bun   # the same suite on Bun's runtime
 bun run test:ui    # Playwright: the UI against its screenshot baselines
+bun run test:e2e   # Playwright: the acceptance list, against the built binary
 bun run build      # both delivery channels: dist/cli.js and six binaries
 bun run build -- --target current   # one binary, for this machine
 bun run build:cli  # the npm bundle alone
@@ -297,7 +298,18 @@ specification is over budget. It takes about half a minute.
 tests run against that fixture, and only the shell tests stub an empty review to
 measure the shell on its own. It needs Chromium, the same one the performance
 harness uses. The baselines are per platform and the ones in the repository were
-taken on macOS.
+taken on macOS, which is why it is not run in CI.
+
+`bun run test:e2e` is the other Playwright suite: the acceptance criteria of the
+specification, one named test each, run against the binary rather than the
+sources. It builds the target of the machine it is on, generates a fixture of
+its own, serves it with `diffalanche serve` on a free port and stops it again,
+and the `diffalanche` the tests read back with is that same binary. It takes
+about seventy seconds from cold, most of it the build, and it is what CI runs on
+Linux and macOS. The two suites share `dist/`, so run them one after the other
+rather than at once. See
+[reference/08-ui.md](docs/reference/08-ui.md#the-acceptance-suite) for the
+criterion-to-test table and how to debug a single one.
 
 `scripts/smoke.sh <command>` runs one review from `review new` to `export`
 through one delivery channel, whichever CLI it is given, under a temporary root

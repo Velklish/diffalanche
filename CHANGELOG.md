@@ -31,6 +31,29 @@ the project follows [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
 ### Added
 
+- The acceptance list of specification section 10 as a suite (DA-28). Every
+  line of it that involves the UI is one named test in `e2e/acceptance.spec.ts`
+  — the repositories with changes, the sibling worktree that is a repository of
+  its own, the submodule and the worktree nested inside one that are not, the
+  untracked file in the diff, the scan that leaves `git status` alone, `branch`
+  mode on a feature branch ahead of the remote default branch, the comment
+  written in the UI that `list --json` reads back without a restart, the reply
+  from `reply` that reaches the page without a refresh, `resolve` in the UI
+  taking a comment out of `list --status open`, the reply in the activity feed
+  under its `--author`, and `review use` switching both sides at once.
+  `bun run test:e2e` runs it against the binary: the suite builds the target of
+  the machine it is on, makes its own fixture, serves it on a free port and
+  stops it again, and the CLI the tests read back with is that same file.
+  `bun run test:ui` keeps the fast path over the sources; the two have their own
+  fixture and their own port but share `dist/`, so they run one after the other.
+  The fixture adds what the generator does not make — a clone with a remote, a
+  feature branch one commit ahead, a clean working tree, and a worktree checked
+  out inside it — in `e2e/fixture.ts` rather than in `scripts/synth.ts`, whose
+  profiles are what the performance gate measures. The `e2e` job of
+  `.github/workflows/ci.yml` runs it on ubuntu and macOS and puts one row per
+  criterion in the run summary. See [08-ui.md](docs/reference/08-ui.md) and
+  [11-perf.md](docs/reference/11-perf.md).
+
 - An open overlay holds the focus (DA-26.1). `Tab` and `Shift+Tab` cycle inside
   the panel instead of walking the page behind the scrim, the scrim itself is no
   longer a tab stop, and closing an overlay puts the focus back on the control

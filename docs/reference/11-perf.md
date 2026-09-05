@@ -384,3 +384,34 @@ installs Chromium, generates the fixture, and runs the gate — the gate builds
 the UI itself, so the job does not; the table lands in the run summary through
 `GITHUB_STEP_SUMMARY`. One local run takes about 33 seconds on
 an M1 Pro, plus 4 seconds when the fixture has to be generated first.
+
+## The CI jobs
+
+`.github/workflows/ci.yml` holds five jobs, and each of them is described in
+full where its subject is:
+
+| Job | What it runs | Runners | Where it is described |
+|---|---|---|---|
+| `check` | `lint`, `typecheck`, and the unit suite on Node | ubuntu | [the runtime the unit suite runs on](#the-runtime-the-unit-suite-runs-on) |
+| `test-bun` | the same unit suite on Bun's own runtime | ubuntu | [the runtime the unit suite runs on](#the-runtime-the-unit-suite-runs-on) |
+| `perf` | the budget table on the synthetic review | ubuntu | [the gate](#the-gate) |
+| `smoke` | one review end to end through one delivery channel | ubuntu, macOS, Windows | [the job](#the-job) |
+| `e2e` | the acceptance list of specification section 10, against the binary | ubuntu, macOS | [08-ui.md](08-ui.md#the-acceptance-suite) |
+
+`e2e` installs Chromium and runs `bun run test:e2e`, which is the one command a
+developer runs: building the binary of the runner and generating the fixture are
+the first steps of that suite's own web server command, so there is no second
+place where the build could drift from it. Each criterion lands in the run
+summary as a row, passed or failed, through `GITHUB_STEP_SUMMARY`, and a failed
+run uploads `e2e/test-results/` as an artifact.
+
+`bun run test:e2e` is not one of the `gates` of `backslop.json`, and the
+absence is deliberate: a cold run builds the binary, which is about seventy
+seconds, and the same criteria are checked in CI on two platforms rather than on
+whichever one the author happened to have. Run it before a change to the server,
+the CLI, or the scanner; the gates stay the fast ones.
+
+`bun run test:ui` is not a job. Its screenshot baselines are per platform and
+the ones in the repository were taken on macOS, so a Linux runner would compare
+against pixels it never draws; the acceptance suite, which takes no screenshots,
+is what CI runs instead ([08-ui.md](08-ui.md#ui-tests)).

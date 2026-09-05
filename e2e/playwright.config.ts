@@ -10,6 +10,11 @@ const PORT = 4881;
  */
 export default defineConfig({
   testDir: ".",
+  // The acceptance list has its own configuration, its own fixture and its own
+  // server — the binary (`e2e/acceptance.config.ts`). Without this line the
+  // directory scan would collect it here too and run it against the dev server
+  // over the wrong fixture.
+  testIgnore: /acceptance\.spec\.ts$/,
   fullyParallel: false,
   workers: 1,
   use: {
