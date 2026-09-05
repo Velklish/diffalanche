@@ -1,9 +1,9 @@
 # DA-3 · Spike: diff rendering against the performance budgets
 
-- **Order:** 30
 - **Scope:** 08-ui, 11-perf (see [reference](../../reference/README.md))
 - **Created:** 2026-09-05
 - **Dependencies:** DA-2
+- **Taken:** 2026-09-05
 
 ## Context
 

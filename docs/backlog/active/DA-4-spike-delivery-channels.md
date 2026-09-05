@@ -1,9 +1,9 @@
 # DA-4 · Spike: delivery channels — binaries and npm on Node
 
-- **Order:** 40
 - **Scope:** 06-cli (see [reference](../../reference/README.md))
 - **Created:** 2026-09-05
 - **Dependencies:** DA-1
+- **Taken:** 2026-09-05
 
 ## Context
 

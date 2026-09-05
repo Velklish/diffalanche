@@ -1,9 +1,9 @@
 # DA-5 · Performance gate in CI
 
-- **Order:** 50
 - **Scope:** 11-perf (see [reference](../../reference/README.md))
 - **Created:** 2026-09-05
 - **Dependencies:** DA-3
+- **Taken:** 2026-09-05
 
 ## Context
 
