@@ -15,7 +15,6 @@ export type ScrollResult = {
 };
 
 export type PerfApi = {
-  variant: string;
   ready: boolean;
   files: number;
   /** `performance.now()` when the review response was parsed. */
@@ -31,7 +30,6 @@ export type PerfApi = {
 const notReady = () => Promise.reject(new Error("the review has not rendered yet"));
 
 export const perf: PerfApi = {
-  variant: "",
   ready: false,
   files: 0,
   responseAt: null,

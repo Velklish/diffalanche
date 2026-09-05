@@ -7,3 +7,5 @@ dist/
 .perf/
 .build/
 *.bun-build
+test-results/
+playwright-report/

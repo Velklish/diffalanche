@@ -1,0 +1,99 @@
+/*
+ * Every design token of `docs/design/HANDOFF.md`, both themes, on the root
+ * element. Dark is the default; the light theme is a `data-theme` override the
+ * header toggle writes and `localStorage` remembers.
+ */
+
+:root {
+  color-scheme: dark;
+
+  --bg: #1d2025;
+  --panel: #212429;
+  --panel2: #22262c;
+  --panel3: #282d34;
+  --bd: #333941;
+  --bd2: #2c313a;
+  --tx: #dde1e7;
+  --tx2: #9ba3ae;
+  --tx3: #828a95;
+  --acc: #8b9ae0;
+  --accBg: #26293a;
+  --accBd: #3f4a80;
+  --accTx: #a8b3e6;
+  --add: rgba(110, 190, 145, 0.15);
+  --addTx: #a9dcc0;
+  --del: rgba(214, 110, 100, 0.15);
+  --delTx: #eeb4ad;
+  --crit: #e0837a;
+  --warn: #dfa85c;
+  --nit: #7ec49c;
+  --q: #8b9ae0;
+  --ok: #5ba37c;
+  --onAcc: #1c1f2b;
+  --sel: #333c66;
+  --code: #bcc2cb;
+  --ln: #767e89;
+  --gap: #22262c;
+  --scrim: rgba(10, 11, 13, 0.5);
+  --shadow: 0 24px 64px rgba(0, 0, 0, 0.5);
+  --shadowSm: 0 12px 32px rgba(0, 0, 0, 0.4);
+
+  --sans: "Instrument Sans", system-ui, sans-serif;
+  --mono: "JetBrains Mono", ui-monospace, monospace;
+}
+
+:root[data-theme="light"] {
+  color-scheme: light;
+
+  --bg: #f2f0eb;
+  --panel: #fbfaf7;
+  --panel2: #efece5;
+  --panel3: #e7e3da;
+  --bd: #d8d2c7;
+  --bd2: #e6e1d8;
+  --tx: #2e2d29;
+  --tx2: #57544d;
+  --tx3: #736f66;
+  --acc: #4d5793;
+  --accBg: #e6e9f5;
+  --accBd: #aab2d8;
+  --accTx: #3a4478;
+  --add: rgba(58, 122, 84, 0.17);
+  --addTx: #26603c;
+  --del: rgba(174, 70, 60, 0.15);
+  --delTx: #8a352d;
+  --crit: #a94a41;
+  --warn: #8a5f18;
+  --nit: #376f4e;
+  --q: #4d5793;
+  --ok: #3f6b4f;
+  --onAcc: #fbfaf7;
+  --sel: #dbe0f2;
+  --code: #403d38;
+  --ln: #8a857a;
+  --gap: #efece5;
+  --scrim: rgba(70, 64, 54, 0.26);
+  --shadow: 0 20px 48px rgba(70, 64, 54, 0.2);
+  --shadowSm: 0 10px 26px rgba(70, 64, 54, 0.16);
+}
+
+@keyframes dcin {
+  from {
+    opacity: 0;
+    transform: translateY(4px);
+  }
+  to {
+    opacity: 1;
+    transform: translateY(0);
+  }
+}
+
+@keyframes dcpulse {
+  0%,
+  100% {
+    opacity: 1;
+  }
+  50% {
+    opacity: 0.35;
+  }
+}

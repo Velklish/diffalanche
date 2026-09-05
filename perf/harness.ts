@@ -1,29 +1,20 @@
 /**
  * The performance harness of `docs/SPEC.md` section 6: it drives headless
  * Chromium over the synthetic review and reports the numbers of the budget
- * table. Variants exist so the Phase 0 spike can compare diff libraries.
+ * table.
  */
 import { chromium } from "@playwright/test";
 import { buildReviewBundle, createApp, directoryAssets, startServer } from "../src/server/index.ts";
 
 export type VariantSpec = { name: string; query: string };
 
-export const VARIANTS: VariantSpec[] = [
-  { name: "git-diff-view", query: "renderer=git-diff-view&virtual=0" },
-  { name: "git-diff-view-plain", query: "renderer=git-diff-view&highlight=0&virtual=0" },
-  { name: "react-diff-view", query: "renderer=react-diff-view&virtual=0" },
-  { name: "react-diff-view-plain", query: "renderer=react-diff-view&highlight=0&virtual=0" },
-  { name: "git-diff-view-virtual", query: "renderer=git-diff-view&virtual=1" },
-  {
-    name: "git-diff-view-plain-virtual",
-    query: "renderer=git-diff-view&highlight=0&virtual=1",
-  },
-  { name: "react-diff-view-virtual", query: "renderer=react-diff-view&virtual=1" },
-  {
-    name: "react-diff-view-plain-virtual",
-    query: "renderer=react-diff-view&highlight=0&virtual=1",
-  },
-];
+/**
+ * The page as it ships. The Phase 0 spike carried both diff libraries and
+ * measured eight combinations of library, highlighting, and virtualisation from
+ * one build; ADR-008 chose one and DA-21 removed the switches, so there is one
+ * page left to measure.
+ */
+export const VARIANTS: VariantSpec[] = [{ name: "default", query: "" }];
 
 export type Measurement = {
   variant: string;

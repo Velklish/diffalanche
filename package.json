@@ -22,15 +22,15 @@
     "build": "bun run scripts/build.ts",
     "test": "vitest run",
     "lint": "biome check .",
-    "typecheck": "tsc --noEmit",
+    "typecheck": "tsc -p tsconfig.json && tsc -p src/ui/tsconfig.json && tsc -p tsconfig.tools.json",
     "synth": "bun run scripts/synth.ts",
     "build:ui": "vite build",
     "build:cli": "bun build src/cli/index.ts --target node --outfile dist/cli.js",
-    "perf": "bun perf/gate.ts"
+    "perf": "bun perf/gate.ts",
+    "test:ui": "playwright test --config e2e/playwright.config.ts"
   },
   "devDependencies": {
     "@biomejs/biome": "^2.5.12",
-    "@git-diff-view/react": "^0.1.7",
     "@hono/node-server": "^2.1.1",
     "@playwright/test": "^1.63.0",
     "@types/node": "^22.20.1",
@@ -45,6 +45,7 @@
     "refractor": "^5.0.0",
     "typescript": "^7.0.2",
     "vite": "^8.2.2",
-    "vitest": "^5.0.0"
+    "vitest": "^5.0.0",
+    "zustand": "^5.0.15"
   }
 }

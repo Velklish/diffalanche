@@ -36,6 +36,28 @@ requires the whole review to arrive when it opens.
 
 Repositories without changes are left out. `status` is `added`, `modified`,
 `deleted`, or `renamed`; `patch` is described in [02-git.md](02-git.md).
+`warnings` is everything the scan had to say — `ScanWarning[]`, the directories
+it could not read and the bases that did not resolve, flattened from the scan
+and from every repository it read ([01-scanner.md](01-scanner.md),
+[02-git.md](02-git.md)).
+
+Beside the change set the document carries the current review session, so the UI
+gets everything it needs from one request:
+
+```json
+{
+  "session": { "version": 1, "name": "ls-240372", "base": { "mode": "head" }, "…": "…" },
+  "comments": []
+}
+```
+
+`session` is the `review.json` of the session the `current` pointer names, or of
+the only session on disk when there is no pointer, and `null` when there is
+neither; `comments` is the `comments` array of that session's `comments.json`.
+The pointer is accepted only as a session name, never a path. Both files are
+read as they lie and passed through unparsed — the shapes are `docs/SPEC.md`
+section 7. This is a stopgap that gives the UI something to render; DA-16
+replaces it with the storage and the domain behind it.
 
 ## Where the UI comes from
 

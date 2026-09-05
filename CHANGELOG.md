@@ -83,3 +83,35 @@ the project follows [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
   into the run summary, and is one of the `gates` of `backslop.json`. The two
   budget lines Phase 0 cannot measure — switching sessions and updating after an
   edit — are printed as pending until DA-9 and DA-25.
+- UI shell: the review workspace of the handoff — header, sidebar, centre panel,
+  right column, and status bar with their fixed widths and the 1560 px threshold
+  below which the window scrolls sideways; every design token of both themes,
+  the theme toggle remembered in `localStorage`, Instrument Sans and JetBrains
+  Mono as local assets so the page needs no network, the logo and the favicon
+  built from markup, the overlay and toast primitives, and the loading skeleton
+  that keeps the panels at their final widths. State moved into a zustand store
+  split into the handoff's slices, typed on the on-disk shapes of the
+  specification. `GET /api/review` now also returns the current session and its
+  comments, read straight off disk until DA-16. The TypeScript configuration is
+  split so `src/server` and `src/cli` no longer see `DOM` and `src/ui` no longer
+  sees Node, and `bun run test:ui` runs the Playwright screenshot tests of the
+  shell in both themes.
+- Diff view: one `react-diff-view` per file card in the handoff's tokens — card
+  header with the caret, the path, the comment badge, the state chip and the
+  `split` / `unified` segments remembered per file; hunk headers that hide and
+  restore the context lines the bundle carries; the slots the composer, the
+  range highlight, and the inline threads of DA-22 and DA-23 plug into; and
+  binary or oversized files listed with a chip instead of an empty diff. The
+  height of an unseen card is counted from its patch against fixed row heights,
+  so the scrollbar does not drift, and the table is given an explicit width so
+  unwrapped code costs no intrinsic measurement — 2.5 ms of CPU per frame on the
+  synthetic review. `@git-diff-view/react` and the renderer query switches are
+  gone with the dependency, and the performance harness measures the one page
+  that ships.
+- Sidebar navigation: the tree of repositories with changes and their files,
+  with open-comment counters in the colour of the worst severity, `+N` / `−N`,
+  collapse per repository, and a keyboard order that walks the filter, a
+  repository, then its files. The filter is a substring over repository and file
+  paths with the number of matches inside the field and a line when nothing
+  matches. Choosing a file scrolls its card into view, and the current file
+  follows the reading position once the scroll has stopped.

@@ -131,18 +131,18 @@ untouched, and that the two trees are byte-identical.
 `perf/harness.ts` holds the measurement, `perf/run.ts` the command around it.
 One run starts the server on the fixture, opens the page in headless Chromium
 through Playwright ([ADR-006](../adr/adr-006-verification.md)), and reports one
-row per variant and repetition:
+row per repetition:
 
 ```sh
-bun run build:ui                                   # the harness measures the built UI
-bun perf/run.ts --fixture .perf/fixture            # every variant, one run each
-bun perf/run.ts --variant react-diff-view-virtual --runs 3
+bun run build:ui                          # the harness measures the built UI
+bun perf/run.ts --fixture .perf/fixture   # one run, raw numbers
+bun perf/run.ts --runs 3
 ```
 
 | Option | Meaning |
 |---|---|
 | `--fixture <dir>` | Root of a synthetic review made by `bun run synth`. Default `.perf/fixture` |
-| `--variant <name>` | Measure only this variant; repeatable. Default: all of them |
+| `--variant <name>` | Measure only this variant; repeatable. Default: all of them. There is one, `default` |
 | `--runs <n>` | Repetitions per variant: a whole number of at least 1, anything else is an error. Default 1 for `perf/run.ts`, 3 for the gate |
 
 The numbers come out as JSON on stdout, one object per run, with progress on
@@ -163,8 +163,11 @@ headless runner cannot measure it (`docs/SPEC.md` section 6); the long-task
 count and the CPU time per frame stand in for it, and 120 fps stays a manual
 check on a 120 Hz display.
 
-The variants exist for the Phase 0 spike; which combination the product uses is
-[ADR-008](../adr/adr-008-diff-rendering-verdict.md), and the reference of the UI
+The Phase 0 spike carried both candidate diff libraries and measured eight
+combinations of library, highlighting, and virtualisation from one build. The
+verdict is [ADR-008](../adr/adr-008-diff-rendering-verdict.md); DA-21 removed
+the losing library and the query switches, so `VARIANTS` now holds the one page
+that ships and the `--variant` option has one value. The reference of the UI
 side is [08-ui.md](08-ui.md).
 
 ## The gate
@@ -180,7 +183,7 @@ bun run perf -- --fixture /tmp/x   # another fixture
 
 The gate makes the synthetic review if `.perf/fixture` is missing, always
 rebuilds the UI — a gate that measures a stale build measures nothing — and then
-runs the harness three times on the page as it ships, without a variant query.
+runs the harness three times on the page as it ships.
 It prints one row per budget line and exits 1 when the **median** of any line is
 over budget. One slow run does not fail the build; two do.
 
