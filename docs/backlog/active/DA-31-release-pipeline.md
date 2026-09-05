@@ -1,9 +1,9 @@
 # DA-31 · Release pipeline: CI matrix, binaries, npm publish
 
-- **Order:** 310
 - **Scope:** 11-perf, 06-cli (see [reference](../../reference/README.md))
 - **Created:** 2026-09-05
 - **Dependencies:** DA-5, DA-15
+- **Taken:** 2026-09-05
 
 ## Context
 
