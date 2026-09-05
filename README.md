@@ -1,47 +1,189 @@
 # diffalanche
 
-A local code-review tool for a folder that holds many independent git repositories. It shows the changes of every repository under one root as a single merge-request-style review, stores review comments on disk as plain JSON, and gives coding agents a CLI to read comments, reply to them, and open their own.
+A local code-review tool for a folder that holds many independent git
+repositories. It shows the changes of every repository under one root as a
+single merge-request-style review, stores the comments on disk as plain JSON,
+and gives coding agents a CLI to read those comments, reply to them, and open
+their own.
 
-**Status:** in development. Requirements are approved, the UI is designed, and the work is cut into tasks; the package builds and tests but has no product code yet.
+It is one person's tool on one machine: no server to deploy, no account, no
+database, nothing leaves `127.0.0.1`. And it never writes to a repository you
+are reviewing — git is read through the `git` binary, and the only directory
+diffalanche creates is its own.
 
-| Document | What it is |
-|---|---|
-| [docs/SPEC.md](docs/SPEC.md) | Product specification: base modes, on-disk format, CLI, agent protocol, performance budgets |
-| [docs/design/HANDOFF.md](docs/design/HANDOFF.md) | UI design handoff: tokens, screens, interactions, keyboard map (Russian) |
-| [docs/design/prototype.dc.html](docs/design/prototype.dc.html) | Working HTML prototype of every screen and state |
-| [docs/README.md](docs/README.md) | Documentation index: reference, glossary, roadmap, decisions, backlog |
-| [PRODUCT.md](PRODUCT.md) | Durable product truth for design work: users, purpose, positioning, constraints |
-| [DESIGN.md](DESIGN.md) | The visual system as `src/ui/tokens.css` implements it, both themes |
+**Status:** Phase 1, in development. The CLI, the storage, the scanner, the git
+reader, the review server and the UI are in; the UI is still being finished, and
+nothing is published to npm yet. Phase 2 (suggestions from an embedding index)
+and later are in [docs/SPEC.md](docs/SPEC.md) section 10.
 
+## Install
 
-## Commands
+From the first release on (see the release task DA-31 — **the package is not on
+npm yet**), the npm channel needs no install of its own:
+
+```sh
+npx diffalanche serve --open
+```
+
+It runs on Node 22 or newer. A binary, one per platform, is the other channel:
+`darwin-x64`, `darwin-arm64`, `linux-x64`, `linux-arm64`, `windows-x64`, and
+`windows-arm64`, each with the UI inside it and no runtime to install. Windows
+binaries build but have never been run on Windows.
+
+Until the first release, run it from a clone. Bun is the toolchain:
+
+```sh
+git clone https://github.com/Velklish/diffalanche
+cd diffalanche
+bun install
+bun run build:ui                 # the UI the server serves
+bun run src/cli/index.ts --help  # the CLI from source; `bun run dev` is the same thing
+```
+
+## First run
+
+Stand in the directory that holds your repositories — that directory is the
+**root**, and everything is relative to it. They may sit directly under it or
+nested a couple of levels deep, `repos/<group>/<name>` and the like.
+
+```sh
+cd ~/work
+diffalanche review new cargo-flags --base branch --title "Cargo flags across services"
+diffalanche serve --open
+```
+
+`review new` creates a **review session** and makes it current; `--base branch`
+says the change set of each repository is its branch against the merge base with
+that repository's remote default branch. `--base head` — the default — is the
+working tree against `HEAD` and needs neither a remote nor a branch. `serve`
+scans the root, reads the change set, and prints where it is:
+
+```
+diffalanche 0.0.0 on http://127.0.0.1:4880
+  3 repositories, 20 files, 2000 changed lines
+```
+
+Then the review is in the browser: every repository with changes, its files, its
+diff. Select lines and write a comment; the comment lands in
+`.diffalanche/reviews/cargo-flags/comments.json` and an agent reads it from
+there through the CLI a moment later, with no restart on either side.
+
+A root with no session is not an error — the server says so and the UI offers to
+create one:
+
+```
+diffalanche 0.0.0 on http://127.0.0.1:4880
+  no current review session: create one with `diffalanche review new <name>`
+```
+
+Sessions are history: `review list` shows them, `review use <name>` switches both
+the UI and the CLI, and each keeps its own base and its own comments.
+
+## Where the data lives
+
+Everything is under `.diffalanche/` in the root — the only place the tool
+writes:
+
+```
+.diffalanche/
+  config.json              settings; missing means the defaults
+  current                  the name of the current session
+  reviews/<name>/
+    review.json            the session: base, title, timestamps
+    comments.json          every comment and reply of that session
+    diff.json              the change set as it was last scanned
+```
+
+It is plain JSON, documented in [docs/SPEC.md](docs/SPEC.md) section 7 and in
+[docs/reference/03-storage.md](docs/reference/03-storage.md). Reading it with
+`jq` is supported; the CLI is what writes it, because writes take the session's
+lock.
+
+## Configuration
+
+`.diffalanche/config.json`, all of it optional — with no file at all, the
+defaults below are the configuration:
+
+```json
+{
+  "roots": ["."],
+  "depth": 2,
+  "exclude": [],
+  "user": "kim.p",
+  "port": 4880,
+  "lsp": {}
+}
+```
+
+| Field | Default | What it does |
+|---|---|---|
+| `roots` | `["."]` | Where to look for repositories, relative to the root. `["repos"]` for a `repos/<group>/<name>` layout |
+| `depth` | `2` | How many levels below each `roots` entry a repository may sit |
+| `exclude` | `[]` | Glob patterns of files kept out of the change set |
+| `user` | git's `user.name` in the root, else the OS user | The name the UI signs comments with |
+| `port` | `4880` | What `serve` listens on; `--port` overrides it |
+| `lsp` | `{}` | `language → server command`; unused until Phase 3 |
+
+A broken value is refused by name — `config.json: port: expected a port between
+1 and 65535` — rather than silently replaced by a default.
+
+## The CLI
 
 The CLI is the contract coding agents work through: its flags, its output, and
-its exit codes ([ADR-004](docs/adr/adr-004-agent-contract.md)). The full table,
-the global flags, and the exit codes are in
-[docs/reference/06-cli.md](docs/reference/06-cli.md).
+its exit codes ([ADR-004](docs/adr/adr-004-agent-contract.md)). The table below
+is every command that exists today; `--help` on any of them prints the same
+flags, and `tests/readme-cli.test.ts` fails if the two ever disagree.
+
+| Command | What it does |
+|---|---|
+| `serve [--port <n>] [--open] [--verbose]` | serve the review and the UI on `127.0.0.1`; `--open` opens the browser, `--verbose` logs every request |
+| `review new <name> [--base <head\|branch\|branch:<name>\|<ref>>] [--title <text>]` | create a review session and make it current |
+| `review use <name>` | make a review session the current one |
+| `review list [--json]` | the review sessions, most recently updated first |
+| `review base <head\|branch\|branch:<name>\|<ref>>` | change what the change set of a review session is read against |
+| `diff [--repo <path>] [--json] [--patch]` | the change set of the review session; rewrites `diff.json` |
+| `list [--status <open\|resolved\|all>] [--repo <path>] [--severity <critical\|warning\|nit\|question>] [--unanswered] [--json]` | the comments of the review session |
+| `show <id> [--json]` | one comment with its thread and its anchor |
+| `reply <id> --body <text\|-> [--author <name>] [--role <human\|agent>]` | reply in a thread |
+| `comment [--repo <path>] [--path <path>] [--line <n>] [--end-line <n>] [--side <new\|old>] --severity <critical\|warning\|nit\|question> --body <text\|-> [--author <name>] [--role <human\|agent>]` | open a comment on a line, a file, a repository, or the review |
+| `resolve <id> --role human [--note <text>] [--author <name>]` | close a thread; `--role human` is required |
+| `reopen <id> --role human [--note <text>] [--author <name>]` | open a thread again; `--role human` is required |
+| `export [--status <open\|all>] [--format <md\|json>]` | the review as markdown grouped by repository |
+| `version` | print the version of diffalanche; also `--version` |
+
+Every command also takes these, **after** the command name — `diffalanche diff
+--root ~/work`, not `diffalanche --root ~/work diff`:
+
+| Global flag | Default |
+|---|---|
+| `--review <name>` | the review session to work on; the current one |
+| `--data-dir <dir>` | the data directory; `<root>/.diffalanche` |
+| `--root <dir>` | the directory under review; the current directory |
+| `--help`, `-h` | the options of that command, and nothing else |
+
+A day of it:
 
 ```sh
 diffalanche review new ls-240372 --base branch:origin/develop --title "Cargo flags"
-diffalanche diff --json          # the change set of every repository; rewrites diff.json
+diffalanche diff --json                       # the change set; rewrites diff.json
 diffalanche diff --repo repos/group/service-api
-diffalanche review list          # the sessions, most recently updated first
-diffalanche serve --open         # the review and the UI on 127.0.0.1
-
 diffalanche list --unanswered --json          # what no agent has answered yet
 diffalanche show c_7f3k2q
 diffalanche reply c_7f3k2q --body "Fixed: the fallback is gone." --author claude
 diffalanche comment --repo repos/group/service-api --path src/CargoService.cs --line 42 \
   --severity warning --body -                 # - reads standard input
+diffalanche resolve c_7f3k2q --role human --author kim.p
 diffalanche export --format md > review.md
 ```
 
-Every command takes `--review <name>`, `--data-dir <dir>`, and `--root <dir>`
-after the command name; without `--review` it works on the current session.
 Comments are signed `--author agent` and `--role agent` unless told otherwise,
 and only `--role human` may `resolve` or `reopen` a thread. Exit code 0 is
 success, 1 is a user error with one line on stderr, and 2 is anything the tool
-did not expect, with its stack trace.
+did not expect, with its stack trace. JSON goes to stdout and nothing else does,
+so `diffalanche diff --json | jq` never has a warning mixed into it.
+
+Every flag, every refusal, and what each command writes is in
+[docs/reference/06-cli.md](docs/reference/06-cli.md).
 
 ## Agent skills
 
@@ -262,5 +404,24 @@ Without a hook the check is manual, once, on the files a change touched:
 ```sh
 node ~/.claude/skills/impeccable/scripts/detect.mjs --json src/ui/App.tsx src/ui/styles.css
 ```
+
+## Documentation
+
+| Document | What it is |
+|---|---|
+| [docs/SPEC.md](docs/SPEC.md) | Product specification: decisions, requirements, on-disk format, CLI, agent protocol, performance budgets, phases |
+| [docs/reference/](docs/reference/README.md) | Subsystem reference: how the code works today, one page per subsystem |
+| [docs/GLOSSARY.md](docs/GLOSSARY.md) | Normative vocabulary: one concept, one name |
+| [docs/README.md](docs/README.md) | Documentation index and the decision log (ADRs) |
+| [docs/design/HANDOFF.md](docs/design/HANDOFF.md) | UI design handoff: tokens, screens, interactions, keyboard map (Russian) |
+| [docs/design/prototype.dc.html](docs/design/prototype.dc.html) | Working HTML prototype of every screen and state |
+| [PRODUCT.md](PRODUCT.md) | Durable product truth for design work: users, purpose, positioning, constraints |
+| [DESIGN.md](DESIGN.md) | The visual system as `src/ui/tokens.css` implements it, both themes |
+| [CHANGELOG.md](CHANGELOG.md) | What changed, per release |
+
+Tasks and decisions are tracked with [backslop](https://github.com/Velklish/backslop):
+`npx github:Velklish/backslop#v0.3.1 status` prints the queue, the active work,
+and the triage. The rules for working in this repository are in
+[AGENTS.md](AGENTS.md).
 
 License: MIT.

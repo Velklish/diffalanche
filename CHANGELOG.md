@@ -7,6 +7,18 @@ the project follows [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
 ### Added
 
+- Documentation for a first reader: `README.md` rewritten end to end — what the
+  tool is, the two delivery channels and what is not published yet, a first run
+  with the output it really prints, where the data lives, every field of
+  `config.json` with its default, the whole CLI with its flags, the agent
+  skills, development and testing, and an index of the rest. The CLI table is
+  guarded by `tests/readme-cli.test.ts`, which renders `--help` for every
+  command through `run()` and fails when the README and the CLI disagree in
+  either direction. `docs/reference/09-ml.md` fills the last gap in the
+  reference as a stub that says what Phase 2 will build there and what is
+  already decided. The glossary gains *review document*, *activity feed*, and
+  *delivery channel*, and retires *review bundle* as a second spelling of the
+  first.
 - The unit suite runs on both runtimes. `bun run test` starts Vitest through Bun
   and Vitest runs the tests on Node; `bun run test:bun` runs the same suite on
   Bun's own runtime, and the `test-bun` job of `.github/workflows/ci.yml` is

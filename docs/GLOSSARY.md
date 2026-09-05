@@ -30,6 +30,9 @@ The “Term” column gives the spelling for prose; EN is the name in code and E
 | author | `author` | The name on a message: `config.user` from the UI, `--author` from the CLI. | SPEC.md §8 |
 | unanswered | `--unanswered` | An open comment whose last message is from a human: an agent has not replied yet. | SPEC.md §8 |
 | awaiting | `awaiting` | An open comment whose last message is from an agent: the human has not verified it yet. Counted in the header. | SPEC.md §5, HANDOFF.md §1.1 |
+| review document | `document` | What `GET /api/review` answers with: the change set of the current session, the session itself, its comments, and the counters, in one response. The UI loads a review by loading this. | reference/07-server.md, src/server/review.ts |
+| activity feed | `activity` | The activity events the running server has seen, in the order they happened and capped at the last 200; `GET /api/activity` reads it. In memory only, gone when the server stops. | SPEC.md §5, §10, ADR-005, reference/05-watcher.md, src/core/watcher/activity.ts |
+| delivery channel | `channel` | One of the two ways diffalanche is shipped and run: the npm bundle on Node, and the compiled binary with the UI inside it. | ADR-002, ADR-008, reference/06-cli.md |
 | activity event | `event` | Something the server noticed while a review is open: a diff changed, a comment or reply was written. In memory only. | SPEC.md §4, ADR-005 |
 | composer | `composer` | The inline form under the selected lines where a comment is written. | HANDOFF.md §2 |
 | thread rail | `rail` | The right column that lists threads for the open file or the whole review. | HANDOFF.md §3 |
@@ -47,3 +50,4 @@ The “Term” column gives the spelling for prose; EN is the name in code and E
 |---|---|---|
 | session file | review session directory | Since ADR-003 a session is a directory with three files, not one file |
 | MR, merge request | review session | diffalanche has no server-side merge requests; “merge-request-style” describes the look only |
+| review bundle | review document | One response, one name; the code calls it `review.document()`. The spelling survives in the title of the archived DA-16 |

@@ -9,9 +9,9 @@ comment means and when a session is current is the domain
 
 `config.json` sits in the same directory but belongs to `src/core/config`,
 described under [Config](#config) below; it shares storage's field readers and
-its error type, and nothing else. The Phase 0 spike server still reads the
-configuration through a private reader of its own in `src/server/review.ts`;
-DA-16 rewires the server onto `loadConfig`.
+its error type, and nothing else. `loadConfig` is the only reader of it:
+`src/cli/context.ts` calls it once per command and hands the result to the
+server, which takes a `Config` and never opens the file itself.
 
 ## The data directory
 
@@ -242,8 +242,6 @@ next one, so the shape inside it is the git reader's contract
 - Keeping unknown keys. Parsing is strict against the version 1 schema: a key
   the schema does not name is dropped on the next write, so a note added by hand
   to a comment does not survive the next reply to it.
-- Watching the data directory for changes made underneath a running server
-  (DA-12).
 - The lock covers one session directory. `current` and `config.json` sit outside
   every session and are written atomically but unlocked; two processes switching
   sessions at the same instant leave one of the two names, never a mixture.

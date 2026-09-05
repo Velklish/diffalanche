@@ -215,9 +215,9 @@ reason for having no content is unknown, having none is the part that is true.
 
 ## The whole review in one call
 
-`src/core/change-set.ts` puts the scanner and the reader above together. The CLI
-calls it; the server switches to it in DA-16 and walks the root its own way
-until then.
+`src/core/change-set.ts` puts the scanner and the reader above together, and
+everything that needs a whole review goes through it: `diff` in the CLI, the
+review service of [07-server.md](07-server.md), and the watcher's rescan.
 
 ```ts
 const cache = await scanReview(config, review.base);
@@ -250,6 +250,6 @@ await refreshRepository(config, session, review.base, "repos/group/service-api")
 
 ## What it does not do yet
 
-- Full-file content for browsing is Phase 2, and the cache on disk is DA-8.
+- Full-file content for browsing is Phase 2.
 - The whole diff of a repository is read into memory as one string before it is
   split, so `maxFileBytes` bounds what is carried, not what is read.

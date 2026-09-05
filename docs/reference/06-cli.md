@@ -26,6 +26,12 @@ are not written yet.
 | `diffalanche version` | the version of the package; also `--version` |
 | `diffalanche --help` | the command list; also `-h`, `help`, and no arguments at all |
 
+The same table is in the [README](../../README.md#the-cli), and
+`tests/readme-cli.test.ts` fails when the two disagree: it renders `--help` for
+every command through `run()` and compares the commands and flags it prints with
+the ones the README documents, in both directions. A flag added here without a
+README row is a red suite, not a stale page.
+
 `<base>` is the four forms of `docs/SPEC.md` section 8: `head`, `branch`,
 `branch:<name>`, or a ref. `review new` without `--base` creates a `head`
 session — the working tree against HEAD, which needs neither a remote nor a
