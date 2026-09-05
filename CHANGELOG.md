@@ -7,6 +7,17 @@ the project follows [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
 ### Added
 
+- Agent skills: `skills/diffalanche-apply` reads the unanswered threads, groups
+  them by repository, stops for the human's confirmation, edits
+  `<root>/<repo>/<path>`, and replies to every comment;
+  `skills/diffalanche-review` reads `diff --json` and opens findings anchored to
+  the lines that carry them. Each is a `SKILL.md` beside a `references/cli.md`
+  whose commands and JSON shapes are captured from a run on the small synthetic
+  review. Neither calls `resolve` or `reopen`, and both say not to reach for
+  `--role human` when the CLI refuses. `package.json` now lists `skills` in
+  `files`, so the published package carries them beside `dist`. See
+  [10-skills.md](docs/reference/10-skills.md) and the README's agent skills
+  section.
 - The write API: `POST /api/comments`, `/api/comments/:id/replies`,
   `/api/comments/:id/resolve` and `/reopen`, `POST /api/sessions`,
   `POST /api/sessions/:name/use`, `PUT /api/sessions/:name/base`, and

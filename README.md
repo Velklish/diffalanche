@@ -43,6 +43,56 @@ and only `--role human` may `resolve` or `reopen` a thread. Exit code 0 is
 success, 1 is a user error with one line on stderr, and 2 is anything the tool
 did not expect, with its stack trace.
 
+## Agent skills
+
+Two skills ship with the tool, in `skills/`. They are the written half of the
+agent protocol; the enforced half is the CLI itself.
+
+| Skill | What it does |
+|---|---|
+| [diffalanche-apply](skills/diffalanche-apply/SKILL.md) | Reads the unanswered threads, groups them by repository, gets your confirmation, edits the code, and replies to every comment |
+| [diffalanche-review](skills/diffalanche-review/SKILL.md) | Reads the change set and opens findings as comments anchored to the lines that carry them |
+
+Neither closes a thread. `resolve` and `reopen` need `--role human`, and the
+refusal is in the CLI rather than in the skills, so an agent that never read one
+cannot close a thread either ([ADR-004](docs/adr/adr-004-agent-contract.md)).
+
+**Claude Code** loads a skill from a directory named after it under
+`.claude/skills/`, in the project or in `~/.claude/`. Copy both skills into the
+root you are reviewing. From a clone of this repository they are in `skills/`
+beside you:
+
+```sh
+mkdir -p .claude/skills
+cp -R /path/to/diffalanche/skills/diffalanche-apply  .claude/skills/
+cp -R /path/to/diffalanche/skills/diffalanche-review .claude/skills/
+```
+
+From the first release on (DA-31; the package is not on npm yet), `npm install
+diffalanche` puts them under `node_modules/diffalanche/skills/`, and `npm
+install -g` under `$(npm root -g)/diffalanche/skills/`. Bare `npx diffalanche`
+never gives you a path to copy from: it runs the CLI out of a cache directory
+whose name is npm's business, so a clone or an install is what puts the files
+somewhere you can reach.
+
+Each skill is one directory — `SKILL.md` and `references/` together — and
+copying only the `SKILL.md` leaves its command examples unreachable. Then
+`/diffalanche-apply` runs one by name, and Claude Code reaches for it on its own
+when what you asked for matches the `description`.
+
+**Any other harness** is pointed at the files where they lie. The skills are
+plain markdown with no harness-specific frontmatter and no tool permissions in
+them, so a rule file, a system prompt, or a manifest that reads
+`skills/diffalanche-apply/SKILL.md` gets the whole procedure. What each one
+assumes of a harness is a place to put skill directories and an agent that can
+run shell commands and edit files; there are no hooks and no configuration.
+Adapters that repackage them as Cursor rules and Codex prompts are a separate,
+deferred task.
+
+The published package will carry `skills/` beside `dist/`, so every install
+has them. What they promise and how they are shipped is in
+[docs/reference/10-skills.md](docs/reference/10-skills.md).
+
 ## Development
 
 Bun is the toolchain; the server and the CLI run on Node >= 22 as well and use

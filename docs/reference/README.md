@@ -15,5 +15,5 @@ The table names the subsystems the task cut expects; each section file is writte
 | [07-server.md](07-server.md) | HTTP routes, the review bundle, SSE stream, static UI | `src/server` |
 | [08-ui.md](08-ui.md) | Screens, store, keyboard map, live patching | `src/ui` |
 | 09-ml.md | Embedding model, index, suggestions, generative model (Phase 2 and later) | `src/core/ml` |
-| 10-skills.md | Shipped agent skills and the reply protocol | `skills/` |
+| [10-skills.md](10-skills.md) | Shipped agent skills and the reply protocol | `skills/` |
 | [11-perf.md](11-perf.md) | Synthetic review generator and the performance gate | `scripts/`, `perf/` |

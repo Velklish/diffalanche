@@ -15,7 +15,8 @@
     "node": ">=22"
   },
   "files": [
-    "dist"
+    "dist",
+    "skills"
   ],
   "scripts": {
     "dev": "bun run src/cli/index.ts",
