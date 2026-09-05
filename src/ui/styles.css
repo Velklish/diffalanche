@@ -146,12 +146,33 @@ button:disabled {
   background: var(--acc);
 }
 
+.dot.warn {
+  background: var(--warn);
+}
+
 .dot.ok {
   background: var(--ok);
 }
 
+/* A change with nobody's name on it: the feed's quietest line. */
+.dot.diff {
+  background: var(--bd);
+}
+
 .dot.pulse {
   animation: dcpulse 2.4s ease-in-out infinite;
+}
+
+/*
+ * A heartbeat that is not beating still has to say the stream is alive, so the
+ * dot stops lit rather than caught mid-fade. `dcin` keeps its fade and loses
+ * its travel through `--dcin-shift` in `tokens.css`.
+ */
+@media (prefers-reduced-motion: reduce) {
+  .dot.pulse {
+    animation: none;
+    opacity: 1;
+  }
 }
 
 .ghost {
@@ -435,15 +456,70 @@ button:disabled {
   overflow: auto;
 }
 
+/* the activity panel */
+
 .feed {
+  border-top: 1px solid var(--bd);
+}
+
+.feed-head {
   display: flex;
   align-items: center;
   gap: 8px;
+  width: 100%;
   padding: 9px 12px;
-  border-top: 1px solid var(--bd);
+  border: 0;
+  background: none;
   color: var(--tx2);
   font: 11px / 1 var(--mono);
   letter-spacing: 0.04em;
+}
+
+.feed-head:focus-visible {
+  outline: 1px solid var(--accBd);
+  outline-offset: -1px;
+}
+
+.feed-live {
+  color: var(--tx3);
+  letter-spacing: normal;
+}
+
+.feed-list {
+  max-height: 210px;
+  margin: 0;
+  padding: 0 12px 10px;
+  overflow: auto;
+  list-style: none;
+}
+
+.feed-row {
+  display: grid;
+  grid-template-columns: 7px 1fr;
+  gap: 3px 8px;
+  padding: 5px 0;
+  animation: dcin 160ms ease-out;
+}
+
+.feed-row .dot {
+  margin-top: 5px;
+}
+
+.feed-what {
+  color: var(--tx2);
+  font: 11px / 1.5 var(--mono);
+}
+
+.feed-where {
+  grid-column: 2;
+  color: var(--tx3);
+  font: 11px / 1.5 var(--mono);
+}
+
+.feed-empty {
+  padding: 4px 0 8px;
+  color: var(--tx3);
+  font-size: 12px;
 }
 
 /* status bar */
@@ -582,6 +658,342 @@ button:disabled {
   animation: dcin 160ms ease-out;
 }
 
+/* empty states */
+
+.first-run {
+  display: flex;
+  flex: 1;
+  align-items: flex-start;
+  justify-content: center;
+  padding: 96px 24px;
+  background: var(--bg);
+}
+
+.first-run-panel {
+  width: 560px;
+  animation: dcin 160ms ease-out;
+}
+
+.first-run-title {
+  margin: 18px 0 0;
+  color: var(--tx);
+  font: 600 19px / 1.25 var(--sans);
+  letter-spacing: -0.01em;
+}
+
+.first-run-note,
+.no-changes-note {
+  margin: 9px 0 0;
+  max-width: 46em;
+  color: var(--tx2);
+  font: 13px / 1.5 var(--sans);
+}
+
+.metrics {
+  display: flex;
+  gap: 10px;
+  padding: 22px 0 18px;
+}
+
+.metric {
+  display: flex;
+  flex: 1;
+  flex-direction: column;
+  gap: 4px;
+  padding: 11px 12px;
+  border: 1px solid var(--bd);
+  border-radius: 9px;
+  background: var(--panel);
+}
+
+.metric-value {
+  color: var(--tx);
+  font: 600 17px / 1 var(--mono);
+}
+
+.metric-label {
+  color: var(--tx3);
+  font: 11px / 1.4 var(--mono);
+}
+
+.first-run-form {
+  display: flex;
+  align-items: center;
+  gap: 10px;
+  flex-wrap: wrap;
+}
+
+.first-run-name,
+.base-draft-field {
+  height: 28px;
+  padding: 0 9px;
+  border: 1px solid var(--bd);
+  border-radius: 8px;
+  background: var(--panel2);
+  color: var(--tx);
+  font: 12px / 1 var(--mono);
+}
+
+.first-run-name {
+  width: 168px;
+}
+
+.base-draft-field {
+  width: 190px;
+}
+
+.first-run-name:focus-visible,
+.base-draft-field:focus-visible {
+  outline: none;
+  border-color: var(--accBd);
+}
+
+.base-draft {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+}
+
+.base-draft .segment {
+  width: auto;
+  padding: 0 8px;
+  font: 10.5px / 1 var(--mono);
+}
+
+.first-run-cli {
+  margin: 18px 0 0;
+  padding: 10px 12px;
+  border: 1px dashed var(--bd);
+  border-radius: 8px;
+  color: var(--tx3);
+  font: 11px / 1.6 var(--mono);
+}
+
+.first-run-cli code {
+  color: var(--tx2);
+  font: inherit;
+}
+
+.no-changes {
+  padding: 72px 0 0;
+  text-align: center;
+  animation: dcin 160ms ease-out;
+}
+
+.no-changes-title {
+  margin: 0;
+  color: var(--tx);
+  font: 600 17px / 1.25 var(--sans);
+}
+
+.no-changes-note {
+  margin: 9px auto 0;
+  max-width: 40em;
+}
+
+.no-changes-actions {
+  display: flex;
+  gap: 10px;
+  justify-content: center;
+  padding-top: 16px;
+}
+
+.ghost.accent {
+  border-color: var(--accBd);
+  color: var(--accTx);
+}
+
+/* global search */
+
+.palette {
+  display: flex;
+  flex-direction: column;
+  height: 60vh;
+  border-color: var(--accBd);
+  overflow: hidden;
+}
+
+.palette-field {
+  display: flex;
+  align-items: center;
+  gap: 9px;
+  padding: 0 12px;
+  height: 46px;
+  border-bottom: 1px solid var(--bd);
+}
+
+.palette-glyph {
+  color: var(--tx3);
+}
+
+.palette-field input {
+  flex: 1;
+  min-width: 0;
+  height: 28px;
+  border: 0;
+  background: none;
+  color: var(--tx);
+  font: 13px / 1 var(--sans);
+}
+
+.palette-field input:focus-visible {
+  outline: none;
+}
+
+.palette-body {
+  display: flex;
+  flex: 1;
+  min-height: 0;
+}
+
+.palette-hits {
+  width: 380px;
+  flex: 0 0 380px;
+  margin: 0;
+  padding: 8px;
+  border-right: 1px solid var(--bd);
+  overflow: auto;
+  list-style: none;
+}
+
+.palette-hit {
+  display: flex;
+  align-items: center;
+  gap: 9px;
+  width: 100%;
+  padding: 5px 8px;
+  border: 1px solid transparent;
+  border-radius: 7px;
+  background: none;
+  text-align: left;
+}
+
+.palette-hit.on {
+  border-color: var(--accBd);
+  background: var(--accBg);
+}
+
+.palette-hit:focus-visible {
+  outline: 1px solid var(--accBd);
+  outline-offset: -1px;
+}
+
+.palette-name {
+  flex: 1;
+  min-width: 0;
+  overflow: hidden;
+  color: var(--tx);
+  font: 12px / 1.4 var(--mono);
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+.palette-tag {
+  font: 10px / 1.4 var(--mono);
+  letter-spacing: 0.07em;
+  white-space: nowrap;
+}
+
+.palette-tag.file {
+  color: var(--accTx);
+}
+
+.palette-tag.comment {
+  color: var(--nit);
+}
+
+.palette-empty {
+  padding: 8px;
+  color: var(--tx3);
+  font-size: 12.5px;
+}
+
+.palette-preview {
+  flex: 1;
+  min-width: 0;
+  padding: 12px 14px;
+  overflow: auto;
+}
+
+.palette-where {
+  display: flex;
+  align-items: baseline;
+  gap: 10px;
+  padding-bottom: 9px;
+}
+
+.palette-path {
+  overflow: hidden;
+  color: var(--tx);
+  font: 12.5px / 1.4 var(--mono);
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+.palette-meta {
+  color: var(--tx3);
+  font: 11px / 1.5 var(--mono);
+  white-space: nowrap;
+}
+
+.palette-code {
+  border: 1px solid var(--bd2);
+  border-radius: 7px;
+  overflow: hidden;
+}
+
+.palette-line {
+  display: flex;
+  gap: 11px;
+  font: 11.5px / 20px var(--mono);
+  white-space: pre;
+}
+
+.palette-line.add {
+  background: var(--add);
+  color: var(--addTx);
+}
+
+.palette-line.del {
+  background: var(--del);
+  color: var(--delTx);
+}
+
+.palette-line.on {
+  background: var(--accBg);
+  box-shadow: inset 3px 0 0 var(--acc);
+}
+
+.palette-ln {
+  width: 42px;
+  flex: 0 0 42px;
+  padding-right: 8px;
+  color: var(--ln);
+  text-align: right;
+}
+
+.palette-text {
+  overflow: hidden;
+  color: var(--code);
+  text-overflow: ellipsis;
+}
+
+.palette-line.add .palette-text {
+  color: var(--addTx);
+}
+
+.palette-line.del .palette-text {
+  color: var(--delTx);
+}
+
+.palette-note,
+.palette-body-text {
+  padding-top: 10px;
+  color: var(--tx2);
+  font-size: 12.5px;
+  line-height: 1.5;
+}
+
 .toast {
   position: fixed;
   bottom: 46px;
@@ -675,8 +1087,15 @@ button:disabled {
   background: var(--accBg);
 }
 
+/*
+ * The number of a line in the range takes the accent text colour, the way an
+ * added line's number takes `--addTx`: `--ln` is a grey chosen against a file
+ * card, and on the selection wash it falls to 4.23:1 — under AA, in exactly the
+ * state a reviewer is in while dragging a range (DA-22.1).
+ */
 .diff-gutter-selected {
   box-shadow: inset 3px 0 0 var(--acc);
+  color: var(--accTx);
 }
 
 .diff-widget-content {
@@ -707,6 +1126,21 @@ button:disabled {
   padding: 0 11px;
   color: var(--tx3);
   font: 11px / 26px var(--mono);
+}
+
+/*
+ * A hunk that changed while the review has been open. The border is the
+ * handoff's accent one and the label says how long ago — the card itself is not
+ * repainted, which is the whole point of the rule ("Мигание запрещено").
+ */
+.diff-decoration.changed td {
+  background: var(--accBg);
+  box-shadow: inset 0 0 0 1px var(--accBd);
+}
+
+.hunk-updated {
+  color: var(--accTx);
+  white-space: nowrap;
 }
 
 .hunk-at {
@@ -1031,6 +1465,12 @@ button.chip {
  * brings with it costs more CPU per scrolled frame than the budget of
  * `docs/SPEC.md` section 6 has.
  */
+/* Anything that appears, appears the same way (DESIGN.md, The Two-Keyframe Rule). */
+.rail-list .thread,
+.thread-widget .thread {
+  animation: dcin 160ms ease-out;
+}
+
 .rail-list .thread {
   animation: dcin 160ms ease-out;
 }
@@ -1041,8 +1481,16 @@ button.chip {
 }
 
 /* A closed thread stays on the list, one step back from the open ones. */
+/*
+ * Closed, not faded. `opacity` multiplied the contrast of everything on the
+ * card — a body at 10.9:1 fell to about 4.4 — and a resolved thread is still a
+ * control with text a reader has to be able to read. It steps back by tone
+ * instead: the quiet ground of the workspace, the internal border, and the
+ * secondary text colour, with the `RESOLVED` state chip saying the rest.
+ */
 .thread.resolved {
-  opacity: 0.55;
+  border-color: var(--bd2);
+  background: var(--panel2);
 }
 
 .thread-head {
@@ -1117,6 +1565,12 @@ button.chip {
   font-size: 12.5px;
   line-height: 1.55;
   white-space: pre-wrap;
+}
+
+/* After the body it quietens, so the cascade does not need a tie-break. */
+.thread.resolved .thread-body,
+.thread.resolved .reply-body {
+  color: var(--tx2);
 }
 
 .reply {

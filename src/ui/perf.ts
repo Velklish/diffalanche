@@ -27,6 +27,13 @@ export type PerfApi = {
   jumpToFile: (index: number) => Promise<number>;
   /** Makes a session current and reports the milliseconds to the frame that showed it. */
   switchSession: (name: string) => Promise<number>;
+  /**
+   * The repository whose new diff the page last painted, and the wall clock of
+   * the frame that showed it. `Date.now` and not `performance.now`, because the
+   * harness edits the file from another process and the two ends of the 300 ms
+   * budget have to be on one clock ([11-perf.md](../../docs/reference/11-perf.md)).
+   */
+  liveUpdate: { repo: string; at: number } | null;
 };
 
 const notReady = () => Promise.reject(new Error("the review has not rendered yet"));
@@ -41,6 +48,7 @@ export const perf: PerfApi = {
   openComposer: notReady,
   jumpToFile: notReady,
   switchSession: notReady,
+  liveUpdate: null,
 };
 
 /** Resolves after the browser has painted the frame the caller's work produced. */

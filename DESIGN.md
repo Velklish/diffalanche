@@ -10,7 +10,7 @@ colors:
   bd2: "#2c313a"
   tx: "#dde1e7"
   tx2: "#9ba3ae"
-  tx3: "#828a95"
+  tx3: "#8f97a2"
   acc: "#8b9ae0"
   accBg: "#26293a"
   accBd: "#3f4a80"
@@ -27,7 +27,7 @@ colors:
   onAcc: "#1c1f2b"
   sel: "#333c66"
   code: "#bcc2cb"
-  ln: "#767e89"
+  ln: "#848c97"
   gap: "#22262c"
   scrim: "rgba(10, 11, 13, 0.5)"
   bg-light: "#f2f0eb"
@@ -38,7 +38,7 @@ colors:
   bd2-light: "#e6e1d8"
   tx-light: "#2e2d29"
   tx2-light: "#57544d"
-  tx3-light: "#736f66"
+  tx3-light: "#656158"
   acc-light: "#4d5793"
   accBg-light: "#e6e9f5"
   accBd-light: "#aab2d8"
@@ -55,7 +55,7 @@ colors:
   onAcc-light: "#fbfaf7"
   sel-light: "#dbe0f2"
   code-light: "#403d38"
-  ln-light: "#8a857a"
+  ln-light: "#767165"
   gap-light: "#efece5"
   scrim-light: "rgba(70, 64, 54, 0.26)"
 typography:
@@ -236,6 +236,7 @@ components:
   diff-gutter:
     backgroundColor: "transparent"
     textColor: "{colors.ln}"
+    textColorSelected: "{colors.accTx}"
     typography: "{typography.code}"
     padding: "0 11px 0 0"
     width: "42px"
@@ -489,12 +490,18 @@ sized to its content and aligned to its neighbours. There are no cut corners, no
 clipping masks, no decorative geometry, and no gradients anywhere in the system.
 
 **Motion** is two keyframes and no more. `dcin` — `opacity 0→1` with
-`translateY(4px)→0` over 140–160 ms ease-out — is how anything appears: an
-overlay, the composer, a new thread, the model's proposal. `dcpulse` —
-`opacity 1→0.35→1` over 2.4 s ease-in-out, infinite — marks something alive: the
-`watching` dot and the live agent indicators, at 1.1 s while the model is
-searching. Nothing else animates; a data update repaints the affected lines and
-threads, never the card.
+`translateY(var(--dcin-shift))→0` over 140–160 ms ease-out — is how anything
+appears: an overlay, the composer, a new thread, the model's proposal.
+`dcpulse` — `opacity 1→0.35→1` over 2.4 s ease-in-out, infinite — marks
+something alive: the `watching` dot and the live agent indicators, at 1.1 s
+while the model is searching. Nothing else animates; a data update repaints the
+affected lines and threads, never the card.
+
+`prefers-reduced-motion: reduce` keeps both meanings and drops the movement:
+`--dcin-shift` becomes `0px`, so an arrival still fades in without travelling,
+and `dcpulse` stops with the dot lit rather than caught mid-fade — a heartbeat
+that is not beating still has to say the stream is alive. It is a token and a
+media query, not a third keyframe.
 
 ### Named Rules
 
@@ -539,7 +546,9 @@ adjustment.
   hidden`, 10 px below it. Its header is `panel3` with a `bd` bottom border and
   `7px 11px` of padding.
 - **Thread card:** 9 px radius, 1 px `bd` border on `panel3`. Focused: `accBd`
-  border on `accBg`. Resolved: `opacity 0.55`. Orphaned: `warn` border. Replies
+  border on `accBg`. Resolved: the quieter ground `panel2` with a `bd2` border
+  and a `tx2` body — a closed thread steps back by tone, and never by opacity,
+  which would take its text below AA with it. Orphaned: `warn` border. Replies
   nest inside — an agent's on `accBg` inside an `accBd` border with `accTx`
   authorship, a human's on `panel2`.
 - **Overlay:** 12 px radius, 1 px `bd` border, `panel` background, the modal
@@ -574,8 +583,10 @@ a `bd2` seam, a 42 px right-aligned gutter in `ln` with 11 px of clearance, code
 in `code` at 12 px / 22 px with `white-space: pre`. An added row is `addTx` on
 `add`, a removed row `delTx` on `del`, an empty split half is `gap`. A hunk
 header is `panel2`, 26 px tall, mono 11 px in `tx3`. A selected range is `accBg`
-with `inset 3px 0 0 var(--acc)`; a commented line carries the same bar in its
-severity colour.
+with `inset 3px 0 0 var(--acc)`, and its line numbers turn `accTx` — a wash
+carries its own text colour here, the way `add` carries `addTx`, and `ln` is a
+grey chosen against a file card that falls under AA on this one. A commented
+line carries the same bar in its severity colour.
 
 ### The mark
 

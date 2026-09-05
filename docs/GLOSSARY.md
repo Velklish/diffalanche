@@ -33,6 +33,7 @@ The “Term” column gives the spelling for prose; EN is the name in code and E
 | review document | `document` | What `GET /api/review` answers with: the change set of the current session, the session itself, its comments, and the counters, in one response. The UI loads a review by loading this. | reference/07-server.md, src/server/review.ts |
 | activity feed | `activity` | The activity events the running server has seen, in the order they happened and capped at the last 200; `GET /api/activity` reads it. In memory only, gone when the server stops. | SPEC.md §5, §10, ADR-005, reference/05-watcher.md, src/core/watcher/activity.ts |
 | delivery channel | `channel` | One of the two ways diffalanche is shipped and run: the npm bundle on Node, and the compiled binary with the UI inside it. | ADR-002, ADR-008, reference/06-cli.md |
+| live stream | `stream` | The SSE connection the page keeps open on `GET /api/events` for as long as it is open; the server names what changed and the page fetches it. Its state is `connecting`, `watching`, or `reconnecting`, and the sidebar footer says which. | ADR-005, reference/07-server.md, HANDOFF.md §1.3 |
 | activity event | `event` | Something the server noticed while a review is open: a diff changed, a comment or reply was written. In memory only. | SPEC.md §4, ADR-005 |
 | composer | `composer` | The inline form under the selected lines where a comment is written. | HANDOFF.md §2 |
 | thread rail | `rail` | The right column that lists threads for the open file or the whole review. | HANDOFF.md §3 |

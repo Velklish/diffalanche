@@ -3,12 +3,16 @@ import { firstAddedLine } from "./anchor.ts";
 import { BasePicker } from "./components/BasePicker.tsx";
 import { CentrePanel } from "./components/CentrePanel.tsx";
 import { ExportModal } from "./components/ExportModal.tsx";
+import { FirstRun } from "./components/FirstRun.tsx";
+import { GlobalSearch } from "./components/GlobalSearch.tsx";
 import { Header } from "./components/Header.tsx";
 import { Sidebar } from "./components/Sidebar.tsx";
 import { StatusBar } from "./components/StatusBar.tsx";
 import { ThreadRail } from "./components/ThreadRail.tsx";
 import { Toast } from "./components/Toast.tsx";
 import { WarningsBar } from "./components/WarningsBar.tsx";
+import { useKeys } from "./keys.ts";
+import { startLive } from "./live.ts";
 import { afterPaint, perf } from "./perf.ts";
 import { useStore } from "./store.ts";
 
@@ -28,6 +32,13 @@ export function App() {
   useEffect(() => {
     void loadReview();
   }, [loadReview]);
+
+  // The stream is opened after the first read is asked for and stays open for
+  // the life of the page: what it carries is what keeps the review current
+  // without a reload ([ADR-005](../../docs/adr/adr-005-live-update.md)).
+  useEffect(() => startLive(), []);
+
+  useClock();
 
   // The drag ends wherever the button is let go, which is often outside the
   // card it started in — and, on a long file, outside the diff altogether.
@@ -63,20 +74,21 @@ export function App() {
   }, [files, openComposerAt]);
 
   /**
-   * The swap of a review session, measured the way the first render is: from
-   * the moment the new review was parsed to the frame that showed it. The
-   * request itself is the server reading a change set, which is not what
-   * `docs/SPEC.md` section 6 budgets a session switch at 100 ms for — what the
-   * reader waits on there is the whole set of threads, counters and badges
-   * changing at once.
+   * The swap of a review session: from the press to the frame that shows the
+   * other review — the `POST` that makes it current, the read of the review
+   * that follows, and the render. `docs/SPEC.md` section 6 qualifies only the
+   * first-render row with "after the server responds"; this row has no such
+   * qualifier, so the window is the whole wait, and a session whose change set
+   * has to be computed is part of what the reader waits for.
    */
   const switchSession = useCallback(async (name: string) => {
+    const start = performance.now();
     await useStore.getState().switchSession(name);
     if (useStore.getState().session?.name !== name) {
       throw new Error(`the session did not switch to ${name}`);
     }
     const painted = await afterPaint();
-    return perf.responseAt === null ? Number.NaN : painted - perf.responseAt;
+    return painted - start;
   }, []);
 
   const jumpToFile = useCallback(async (index: number) => {
@@ -104,11 +116,17 @@ export function App() {
     <div className={dragging ? "app dragging" : "app"}>
       <Header />
       <WarningsBar />
-      <div className="workspace">
-        <Sidebar />
-        <CentrePanel />
-        <ThreadRail />
-      </div>
+      {/* A root with no session has no review to lay out: the screen that
+          offers to make one takes the whole body (handoff section 10). */}
+      {status === "no-session" ? (
+        <FirstRun />
+      ) : (
+        <div className="workspace">
+          <Sidebar />
+          <CentrePanel />
+          <ThreadRail />
+        </div>
+      )}
       <StatusBar />
       <Overlays />
       <Toast />
@@ -116,7 +134,7 @@ export function App() {
   );
 }
 
-/** The two of handoff sections 5 and 9; global search is DA-26. */
+/** The three of handoff sections 5, 6 and 9, each opening over the same scrim. */
 function Overlays() {
   const baseOpen = useStore((store) => store.baseOpen);
   const exportOpen = useStore((store) => store.exportOpen);
@@ -124,49 +142,21 @@ function Overlays() {
     <>
       {baseOpen ? <BasePicker /> : null}
       {exportOpen ? <ExportModal /> : null}
+      <GlobalSearch />
     </>
   );
 }
 
 /**
- * The three keys the composer owns: `C` opens it on the first added line of the
- * file being read, `⌘⏎` sends it, `esc` closes it and every menu over it. The
- * rest of the map of the handoff is DA-26. A letter pressed inside a field is
- * text and not a command, but `⌘⏎` and `esc` are commands wherever they are
- * pressed — the field is exactly where the reviewer is when they send.
+ * How often the relative times on screen are recounted, as the handoff's
+ * activity panel requires. One timer for the page, in the store, rather than
+ * one per row.
  */
-function useKeys(): void {
+const TICK_MS = 5_000;
+
+function useClock(): void {
   useEffect(() => {
-    const onKey = (event: KeyboardEvent) => {
-      const store = useStore.getState();
-      if (event.key === "Escape") {
-        store.closeComposer();
-        store.setSessionMenu(false);
-        store.openBase(false);
-        store.openExport(false);
-        return;
-      }
-      if (event.key === "Enter" && (event.metaKey || event.ctrlKey) && store.composer !== null) {
-        event.preventDefault();
-        void store.submitComment();
-        return;
-      }
-      if (event.metaKey || event.ctrlKey || event.altKey) return;
-      // A letter under an overlay belongs to the overlay, not to the diff
-      // behind it; `esc` above is what closes one.
-      if (store.baseOpen || store.exportOpen || store.paletteOpen) return;
-      const target = event.target;
-      if (target instanceof HTMLElement && target.closest("input, textarea, [contenteditable]")) {
-        return;
-      }
-      if (event.key === "c" || event.key === "C") {
-        event.preventDefault();
-        // A second `C` would reopen the form on the same line and throw away
-        // what has been typed into it; `esc` is how it is closed.
-        if (store.composer === null) store.commentOnCurrentFile();
-      }
-    };
-    document.addEventListener("keydown", onKey);
-    return () => document.removeEventListener("keydown", onKey);
+    const timer = setInterval(() => useStore.getState().bumpTick(), TICK_MS);
+    return () => clearInterval(timer);
   }, []);
 }

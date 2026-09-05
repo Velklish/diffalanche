@@ -103,6 +103,11 @@ export function createApp({ activity, config, events, review, ui, verbose }: App
 
   app.get("/api/config", (c) => c.json<ClientConfig>({ user: config.user, port: config.port }));
 
+  // Every branch the base picker may choose from, over the whole root. Like
+  // the scan, it reads git per request: there is no cache of refs, and the
+  // picker is opened by hand rather than on every reload.
+  app.get("/api/repos/branches", async (c) => c.json(await listBranches(config)));
+
   // What the UI fetches after an event names it, and the stream that names it.
   app.get("/api/events", streamEvents(events));
 

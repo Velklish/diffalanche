@@ -7,7 +7,7 @@ import { SessionMenu } from "./SessionMenu.tsx";
 /**
  * The 52 px bar of handoff section 1.1: the session pill and its menu, the base
  * picker, the two counters that filter the rail, search, the theme toggle, and
- * the export. Search is DA-26 and stays disabled.
+ * the export, and the search that opens the modal of DA-26.
  */
 export function Header() {
   const session = useStore((store) => store.session);
@@ -78,7 +78,12 @@ export function Header() {
         <b className="acc">{counters.awaiting}</b> awaiting you
       </button>
 
-      <button type="button" className="ghost" disabled>
+      <button
+        type="button"
+        className="ghost"
+        aria-label="search"
+        onClick={() => useStore.getState().setPalette(true)}
+      >
         ⌕<span className="key">⌘K</span>
       </button>
 

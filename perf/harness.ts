@@ -49,9 +49,10 @@ export type Measurement = {
   scrollDistancePx: number;
   composerOpenMs: number;
   fileJumpMs: number;
+  /** From the press to the frame that showed the other review: the whole wait. */
   sessionSwitchMs: number;
   loadLongTaskMs: number;
-  /** From the edit of one file to the page holding that repository's new diff. */
+  /** From the edit of one file to the frame that showed it in that file's card. */
   updateMs: number;
 };
 
@@ -69,7 +70,8 @@ type ScrollOutcome = {
 };
 
 /** The line the update probe appends and then takes back out. */
-const PROBE_LINE = "\n// diffalanche measured the update after an edit here\n";
+const PROBE_MARK = "diffalanche measured the update after an edit here";
+const PROBE_LINE = `\n// ${PROBE_MARK}\n`;
 
 export async function measure(
   baseUrl: string,
@@ -116,8 +118,6 @@ export async function measure(
       );
     }
 
-    const updateMs = await measureUpdate(page, baseUrl, fixture);
-
     // Both ways, and the slower of them counts: the run has to leave the
     // fixture on the session it found it on, so the switch back happens either
     // way and there is no reason to measure only one of the two.
@@ -130,6 +130,9 @@ export async function measure(
       sessions.current,
     )) as number;
 
+    // Last, and on the session the fixture came in on: the edit is measured
+    // against the change set the page is actually showing.
+    const updateMs = await measureUpdate(page, baseUrl, fixture);
     await context.close();
 
     const scrollLongTaskMs = scroll.longTasks.reduce((sum, task) => sum + task.duration, 0);
@@ -154,10 +157,15 @@ export async function measure(
 
 /**
  * The budget of `docs/SPEC.md` section 6 for a change in one repository: a file
- * is edited here, and the page — listening on `/api/events` the way the UI does
- * — says when it has that repository's new diff in hand. That is the watcher,
- * the rescan, the stream, and the fetch; the render of the patched diff is what
- * DA-25 adds to the same number.
+ * of the fixture is edited here, and the page — the shipped one, listening on
+ * `/api/events` because that is what it does — says when the card of that file
+ * has the new diff in it. That is the watcher, the rescan, the stream, the
+ * fetch, the patch, and the paint: the whole of what the person waits for.
+ *
+ * The card is scrolled to first, so it is mounted and the measurement is of a
+ * diff that is on the screen rather than of one held in the store; the probe
+ * line is looked for in the card afterwards, so a number that came from an
+ * event about something else cannot pass for this one.
  *
  * The edit is taken back out afterwards, so the fixture is what it was.
  */
@@ -172,22 +180,18 @@ async function measureUpdate(page: Page, baseUrl: string, fixture: string): Prom
   };
   const file = diff.files.find((one) => one.omitted === null && one.status !== "deleted")?.path;
   if (file === undefined) throw new Error(`${repo}: no file with content to edit`);
+  const card = `${repo}/${file}`;
 
-  await page.evaluate((watched: string) => {
-    const held = window as unknown as { __update?: number | null };
-    held.__update = null;
-    const source = new EventSource("/api/events");
-    source.addEventListener("diff-changed", (event) => {
-      const data = JSON.parse((event as MessageEvent<string>).data) as { repo: string };
-      if (data.repo !== watched) return;
-      void fetch(`/api/repos/${watched}/diff`)
-        .then((response) => response.json())
-        .then(() => {
-          held.__update = Date.now();
-          source.close();
-        });
-    });
-  }, repo);
+  await page.evaluate((id: string) => {
+    document.querySelector(`[data-file="${CSS.escape(id)}"]`)?.scrollIntoView();
+    window.__perf.liveUpdate = null;
+  }, card);
+  await page.waitForFunction(
+    (id: string) =>
+      document.querySelector(`[data-file="${CSS.escape(id)}"] .file-body.mounted`) !== null,
+    card,
+    { timeout: 60_000 },
+  );
 
   const target = join(fixture, repo, file);
   const original = await readFile(target, "utf8");
@@ -195,15 +199,19 @@ async function measureUpdate(page: Page, baseUrl: string, fixture: string): Prom
   try {
     await appendFile(target, PROBE_LINE);
     await page.waitForFunction(
-      () => (window as unknown as { __update?: number | null }).__update !== null,
-      undefined,
+      (watched: string) => window.__perf.liveUpdate?.repo === watched,
+      repo,
       { timeout: 60_000 },
     );
-    return (
-      ((await page.evaluate(
-        () => (window as unknown as { __update: number }).__update,
-      )) as number) - started
-    );
+    const painted = (await page.evaluate(() => window.__perf.liveUpdate?.at ?? 0)) as number;
+    const shown = (await page.evaluate(
+      ({ id, mark }: { id: string; mark: string }) =>
+        document.querySelector(`[data-file="${CSS.escape(id)}"]`)?.textContent?.includes(mark) ===
+        true,
+      { id: card, mark: PROBE_MARK },
+    )) as boolean;
+    if (!shown) throw new Error(`${card}: the edit was measured but the card does not show it`);
+    return painted - started;
   } finally {
     // Whatever happened, the fixture is what it was: a run that ended in the
     // middle would otherwise leave the line behind for every run after it.

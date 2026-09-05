@@ -11,11 +11,15 @@
  */
 import { create } from "zustand";
 import { countReview } from "../core/domain/counters.ts";
+import { byCodePoint } from "../core/order.ts";
 import type { FileChange, RepositoryChange } from "../core/types.ts";
 import { firstAddedLine } from "./anchor.ts";
 import { baseArgument } from "./base.ts";
+import type { ChangedHunks } from "./patch.ts";
+import { changedHunks, hasNewLine, mergeRepository } from "./patch.ts";
 import { perf } from "./perf.ts";
 import type {
+  ActivityEvent,
   BaseMode,
   BranchCandidate,
   BranchList,
@@ -38,7 +42,12 @@ export type SidebarTab = "changes" | "all";
 export type DiffView = "split" | "unified";
 export type RailScope = "file" | "all";
 export type ExportView = "rendered" | "raw";
-export type LoadStatus = "loading" | "ready" | "failed";
+/**
+ * `no-session` is the root the tool has never been used in: `GET /api/review`
+ * refuses with `no-current-session` and the first-run screen is what that means
+ * on the screen ([07-server.md](../../docs/reference/07-server.md)).
+ */
+export type LoadStatus = "loading" | "ready" | "no-session" | "failed";
 
 /** One file of the change set with the repository it belongs to. */
 export type FileEntry = {
@@ -70,15 +79,14 @@ export type ComposerTarget = {
  */
 export type Selection = { repo: string; path: string; side: Side; a: number; b: number };
 
-/** An event of the activity feed; the server sends them from DA-25 on. */
-export type ActivityEvent = {
-  who: string;
-  verb: string;
-  target: string;
-  sub: string;
-  at: number;
-  kind: "working" | "replied" | "diff";
-};
+/** What the sidebar footer says about the live stream ([08-ui.md]). */
+export type Connection = "connecting" | "watching" | "reconnecting";
+
+/** How long a write keeps its author counted as live in the feed's header. */
+export const LIVE_WINDOW_MS = 120_000;
+
+/** How many feed lines the page keeps; the server's own ring is the same size. */
+const ACTIVITY_KEPT = 200;
 
 const THEME_KEY = "diffalanche.theme";
 /** Which session's warnings were put away; kept for the tab, not for ever. */
@@ -130,6 +138,29 @@ type ThemeAndBaseSlice = {
 };
 
 type SessionsSlice = {
+  /**
+   * The sessions this page has just written — through `use`, `new`, or a change
+   * of base — with the moment of each write. The watcher sees such a write like
+   * any other and sends `session-changed` back; the page has already read the
+   * review it names, so the frame it caused is skipped rather than costing a
+   * second read of megabytes ([live.ts](live.ts)).
+   *
+   * A map and not one slot: two switches in a row are two writes in flight, and
+   * the frame for the first can land after the second was made. And every entry
+   * carries its moment, because a write does not always produce a frame — a
+   * switch away and back inside the watcher's debounce leaves `current` where
+   * it was, and nothing is emitted at all. Without the moment that entry would
+   * sit there for the life of the page and swallow the next real event for that
+   * session.
+   */
+  selfSessions: Map<string, number>;
+  /** Remembers a session write of this page's own, and forgets the stale ones. */
+  markSelfSession: (name: string) => void;
+  /**
+   * Whether this frame is the page's own write coming back. The entry is taken
+   * when it matches: one write, one frame.
+   */
+  claimSelfSession: (name: string) => boolean;
   session: Review | null;
   /** The history: every session with its counters, most recently updated first. */
   sessions: SessionSummary[];
@@ -233,6 +264,15 @@ type ThreadsSlice = {
   sendReply: (id: string) => Promise<void>;
   /** `resolve` and `reopen`: only a human ever calls them ([ADR-004]). */
   setStatus: (id: string, status: CommentStatus) => Promise<void>;
+  /**
+   * `J` and `K`: the next or previous open thread in reading order — by
+   * repository, then file, then line, across the whole review — wrapping at
+   * both ends. It focuses the thread and answers with its id, so the caller can
+   * bring the diff to it as well.
+   */
+  stepThread: (delta: 1 | -1) => string | null;
+  /** `R`: resolves the focused thread, and nothing when it is already closed. */
+  resolveFocused: () => Promise<void>;
 };
 
 type SearchAndOverlaysSlice = {
@@ -247,20 +287,67 @@ type SearchAndOverlaysSlice = {
   exportStatus: LoadStatus;
   toast: string | null;
   setToast: (toast: string | null) => void;
+  /** `⌘K` and `⇧⇧`. Opening starts from an empty field, as the handoff's does. */
+  setPalette: (open: boolean) => void;
+  setPaletteQuery: (query: string) => void;
+  /** The selected row: `↑` / `↓` move it, and the pointer sets it directly. */
+  setPalIdx: (index: number) => void;
   openExport: (open: boolean) => void;
   setExportView: (view: ExportView) => void;
   copyExport: () => Promise<void>;
 };
 
 type FeedSlice = {
+  /** The feed as the server has it, oldest first ([05-watcher.md]). */
   events: ActivityEvent[];
   feedOpen: boolean;
-  /** Bumped every five seconds so relative times in the feed redraw. */
+  /**
+   * The clock the relative times on screen are counted from, moved every five
+   * seconds. A number rather than a counter, so a component that shows `12s
+   * ago` reads the moment and the redraw from one subscription.
+   */
   tick: number;
+  toggleFeed: () => void;
+  /** Lines from the stream or from the ring read on connect, merged by id. */
+  pushActivity: (events: ActivityEvent[]) => void;
+  bumpTick: () => void;
+};
+
+/**
+ * What `GET /api/scan` answers, as the first-run screen reads it. The server
+ * declares the same shape as `ScanSummary` in `src/server/review.ts`; the UI
+ * cannot import it, because that module reaches the Node API and the browser
+ * bundle is compiled with `"types": []`.
+ */
+export type ScannedRepository = {
+  path: string;
+  kind: "repo" | "worktree";
+  branch: string;
+  hasChanges: boolean;
+  files: number;
+};
+
+export type ScanSummary = {
+  root: string;
+  repositories: ScannedRepository[];
+  warnings: ScanWarning[];
+};
+
+/**
+ * The first-run screen (DA-27): the scan behind its three metrics. The form on
+ * it is the sessions slice's own — `newName`, `newBase`, `createSession` — so a
+ * session is created one way whichever screen asks for it.
+ */
+type FirstRunSlice = {
+  /** `null` until `GET /api/scan` has answered; the screen shows dashes until then. */
+  scan: ScanSummary | null;
+  loadScan: () => Promise<void>;
 };
 
 type ScannerSlice = {
   warnings: ScanWarning[];
+  /** What the stream's `warnings` frame brings: the list as the scan now has it. */
+  setWarnings: (warnings: ScanWarning[]) => void;
   /**
    * The session whose warnings have been dismissed. Per session, because a
    * warning is about the base that session resolves, and the next one resolves
@@ -268,6 +355,25 @@ type ScannerSlice = {
    */
   warningsDismissedFor: string | null;
   dismissWarnings: () => void;
+};
+
+/**
+ * What the live stream does to the review the page already holds (DA-25). The
+ * events name; this patches ([live.ts](live.ts)).
+ */
+type LiveSlice = {
+  connection: Connection;
+  /** The hunks that changed while the review was open, by `FileEntry.id`. */
+  changed: Map<string, ChangedHunks>;
+  setConnection: (connection: Connection) => void;
+  /**
+   * One repository's change set as it now stands, or `null` when it has left
+   * the review. Every file that says the same thing keeps the object it was
+   * rendered from, so its card is not re-rendered and its DOM survives.
+   */
+  applyRepositoryDiff: (path: string, next: RepositoryChange | null) => void;
+  /** One thread as the server now has it: added when it is new, replaced when it is not. */
+  patchThread: (comment: Comment) => void;
 };
 
 export type Store = ReviewSlice &
@@ -278,7 +384,9 @@ export type Store = ReviewSlice &
   ThreadsSlice &
   SearchAndOverlaysSlice &
   FeedSlice &
-  ScannerSlice;
+  ScannerSlice &
+  LiveSlice &
+  FirstRunSlice;
 
 export const useStore = create<Store>()((set, get) => ({
   // review
@@ -296,12 +404,22 @@ export const useStore = create<Store>()((set, get) => ({
   loadReview: async () => {
     try {
       const response = await fetch("/api/review");
-      if (!response.ok) throw new Error(await refusal(response));
+      if (!response.ok) {
+        const refused = await refusal(response);
+        // A root nobody has opened a session in is not a failure: it is the
+        // first-run screen, and the scan behind its metrics is asked for here.
+        if (refused.code === "no-current-session") {
+          set({ status: "no-session", failure: null });
+          await get().loadScan();
+          return;
+        }
+        throw new Error(refused.message);
+      }
       const document = (await response.json()) as ReviewDocument;
       // Stamped here, not after the render: the harness measures from the moment
       // the response was parsed to the frame that showed it.
       perf.responseAt = performance.now();
-      set(fromDocument(document, get().diffView));
+      set(fromDocument(document, get().diffView, get().session?.name ?? null));
     } catch (error) {
       set({ status: "failed", failure: reason(error) });
       return;
@@ -362,8 +480,9 @@ export const useStore = create<Store>()((set, get) => ({
         headers: { "content-type": "application/json" },
         body: JSON.stringify({ base }),
       });
-      if (!response.ok) throw new Error(await refusal(response));
+      if (!response.ok) throw new Error((await refusal(response)).message);
       set({ baseOpen: false });
+      get().markSelfSession(session.name);
       // The change set is computed against the base, so the whole review is
       // read again rather than patched ([03-storage.md]).
       await get().loadReview();
@@ -375,6 +494,18 @@ export const useStore = create<Store>()((set, get) => ({
 
   // sessions
   session: null,
+  selfSessions: new Map(),
+  markSelfSession: (name) => {
+    const held = fresh(get().selfSessions);
+    held.set(name, Date.now());
+    set({ selfSessions: held });
+  },
+  claimSelfSession: (name) => {
+    const held = fresh(get().selfSessions);
+    const mine = held.delete(name);
+    set({ selfSessions: held });
+    return mine;
+  },
   sessions: [],
   sessionMenuOpen: false,
   newName: "",
@@ -397,10 +528,11 @@ export const useStore = create<Store>()((set, get) => ({
         headers: { "content-type": "application/json" },
         body: JSON.stringify({ name, base: newBase }),
       });
-      if (!response.ok) throw new Error(await refusal(response));
+      if (!response.ok) throw new Error((await refusal(response)).message);
       // Creating a session makes it current, so the review that comes next is
       // already the new one's ([04-domain.md]).
       set({ sessionMenuOpen: false, newName: "" });
+      get().markSelfSession(name);
       await get().loadReview();
       set({ switching: false, toast: `review new ${name}` });
       void loadSessions(set);
@@ -419,8 +551,9 @@ export const useStore = create<Store>()((set, get) => ({
         method: "POST",
         headers: { "content-type": "application/json" },
       });
-      if (!response.ok) throw new Error(await refusal(response));
+      if (!response.ok) throw new Error((await refusal(response)).message);
       set({ sessionMenuOpen: false });
+      get().markSelfSession(name);
       await get().loadReview();
       set({ switching: false, toast: `review use ${name}` });
       void loadSessions(set);
@@ -562,7 +695,7 @@ export const useStore = create<Store>()((set, get) => ({
           body: text,
         }),
       });
-      if (!response.ok) throw new Error(await refusal(response));
+      if (!response.ok) throw new Error((await refusal(response)).message);
       const comment = (await response.json()) as Comment;
       set({
         ...withComments([...get().comments, comment], get().threadsByFile),
@@ -634,6 +767,29 @@ export const useStore = create<Store>()((set, get) => ({
     );
     if (sent) set({ replyId: null, replyText: "" });
   },
+  stepThread: (delta) => {
+    const focusId = get().focusId;
+    const order = readingOrder(get());
+    if (order.length === 0) return null;
+    const at = order.findIndex((thread) => thread.id === focusId);
+    // Nothing focused yet: `J` starts at the first thread of the review and `K`
+    // at the last, rather than at whichever end the arithmetic would land on.
+    const next =
+      at < 0 ? (delta === 1 ? 0 : order.length - 1) : (at + delta + order.length) % order.length;
+    const thread = order[next];
+    if (thread === undefined) return null;
+    get().focusThread(thread.id);
+    return thread.id;
+  },
+  resolveFocused: async () => {
+    const { focusId, comments } = get();
+    if (focusId === null) return;
+    const thread = comments.find((comment) => comment.id === focusId);
+    // The key of the handoff's map is `resolve`, not a toggle: `Reopen` is a
+    // press on the card, so a thread cannot be reopened by a stray keystroke.
+    if (thread === undefined || thread.status === "resolved") return;
+    await get().setStatus(focusId, "resolved");
+  },
   setStatus: async (id, status) => {
     if (get().busy[id] === true) return;
     const verb = status === "resolved" ? "resolve" : "reopen";
@@ -656,6 +812,9 @@ export const useStore = create<Store>()((set, get) => ({
   exportStatus: "loading",
   toast: null,
   setToast: (toast) => set({ toast }),
+  setPalette: (paletteOpen) => set({ paletteOpen, paletteQuery: "", palIdx: 0 }),
+  setPaletteQuery: (paletteQuery) => set({ paletteQuery, palIdx: 0 }),
+  setPalIdx: (palIdx) => set({ palIdx }),
   openExport: (exportOpen) => {
     set({ exportOpen });
     // Read again every time: the export is of the open comments, and they
@@ -677,7 +836,13 @@ export const useStore = create<Store>()((set, get) => ({
   // feed
   events: [],
   feedOpen: false,
-  tick: 0,
+  tick: Date.now(),
+  toggleFeed: () => set({ feedOpen: !get().feedOpen }),
+  pushActivity: (arriving) => {
+    const events = merge(get().events, arriving);
+    if (events !== get().events) set({ events });
+  },
+  bumpTick: () => set({ tick: Date.now() }),
 
   // scanner
   warnings: [],
@@ -686,6 +851,83 @@ export const useStore = create<Store>()((set, get) => ({
     const name = get().session?.name ?? null;
     writeDismissed(name);
     set({ warningsDismissedFor: name });
+  },
+  setWarnings: (warnings) => {
+    const before = get().warnings;
+    if (before.length === warnings.length && before.every(sameWarning(warnings))) return;
+    // A warning the scan has just found is news even to a reader who put the
+    // bar away: what was dismissed was the list before it (`docs/SPEC.md`
+    // section 5 — nothing is silently dropped). The remembered dismiss goes
+    // with it, or a reload would hide a bar the reader has never seen.
+    writeDismissed(null);
+    set({ warnings, warningsDismissedFor: null });
+  },
+
+  // live
+  connection: "connecting",
+  changed: new Map(),
+  setConnection: (connection) => set({ connection }),
+  applyRepositoryDiff: (path, next) => {
+    const repositories = get().repositories;
+    const at = repositories.findIndex((one) => one.path === path);
+    if (next === null) {
+      if (at < 0) return;
+      const left = fromRepositories([...repositories.slice(0, at), ...repositories.slice(at + 1)]);
+      set(left);
+      // The cards of that repository are gone, and so is everything that
+      // pointed at one. A form left open on a file that is no longer on the
+      // screen is a form the reader cannot see, cannot send and cannot reopen;
+      // there is no anchor left to move it to either — the repository itself
+      // has no card any more — so it is closed and said out loud.
+      if (get().composer?.repo === path) {
+        set({
+          composer: null,
+          composerEnd: null,
+          sel: null,
+          toast: `${path} больше нечего ревьюить — форма закрыта`,
+        });
+      }
+      if (get().repo === path) {
+        const first = left.files?.[0];
+        set({ repo: first?.repo ?? null, path: first?.file.path ?? null });
+      }
+      return;
+    }
+    const before = at < 0 ? null : (repositories[at] as RepositoryChange);
+    const merged = before === null ? next : mergeRepository(before, next);
+    // Nothing in this repository says anything new: the watcher woke on a file
+    // the change set does not carry, and the review must not re-render for it.
+    if (merged === before) return;
+    const list =
+      at < 0
+        ? [...repositories, merged].sort((a, b) => byCodePoint(a.path, b.path))
+        : [...repositories.slice(0, at), merged, ...repositories.slice(at + 1)];
+    set({ ...fromRepositories(list), changed: marked(get().changed, before, merged) });
+    revalidate(set, get, merged);
+  },
+  // first run
+  scan: null,
+  loadScan: async () => {
+    try {
+      const response = await fetch("/api/scan");
+      if (!response.ok) return;
+      set({ scan: (await response.json()) as ScanSummary });
+    } catch {
+      // The screen says what it knows: without the scan its metrics are dashes.
+    }
+  },
+
+  patchThread: (comment) => {
+    const comments = get().comments;
+    const held = comments.some((one) => one.id === comment.id);
+    set(
+      withComments(
+        held
+          ? comments.map((one) => (one.id === comment.id ? comment : one))
+          : [...comments, comment],
+        get().threadsByFile,
+      ),
+    );
   },
 }));
 
@@ -706,7 +948,7 @@ async function loadBranches(set: (partial: Partial<Store>) => void): Promise<voi
   set({ branchesStatus: "loading" });
   try {
     const response = await fetch("/api/repos/branches");
-    if (!response.ok) throw new Error(await refusal(response));
+    if (!response.ok) throw new Error((await refusal(response)).message);
     const list = (await response.json()) as BranchList;
     set({ branches: list.branches, branchesStatus: "ready" });
   } catch {
@@ -738,9 +980,144 @@ async function loadExport(set: (partial: Partial<Store>) => void): Promise<void>
 }
 
 async function readExport(response: Response): Promise<unknown> {
-  if (!response.ok) throw new Error(await refusal(response));
+  if (!response.ok) throw new Error((await refusal(response)).message);
   const type = response.headers.get("content-type") ?? "";
   return type.includes("json") ? await response.json() : await response.text();
+}
+
+/**
+ * How long a write of this page's own may still be waiting for the frame it
+ * caused. The watcher debounces a change for 100 ms and walks a tree it cannot
+ * watch every 250 ms ([05-watcher.md](../../docs/reference/05-watcher.md)), so
+ * a frame that is coming has arrived long before this; anything older was
+ * caused by a write that produced no frame at all, and must not be allowed to
+ * swallow somebody else's.
+ */
+const SELF_WRITE_WINDOW_MS = 5_000;
+
+/** The marks of writes that could still have a frame coming, in a copy. */
+function fresh(held: Map<string, number>): Map<string, number> {
+  const since = Date.now() - SELF_WRITE_WINDOW_MS;
+  return new Map([...held].filter(([, at]) => at >= since));
+}
+
+/**
+ * The open threads of the whole review in reading order: by repository as the
+ * centre panel lists them, then by file inside it, then by line. The anchors
+ * that have no line come first in their scope — a thread on the review before
+ * every repository, one on a repository before its files — because that is the
+ * order the page reads in ([08-ui.md](../../docs/reference/08-ui.md)).
+ */
+function readingOrder(store: Store): Comment[] {
+  const repoAt = new Map(store.repositories.map((repo, index) => [repo.path, index]));
+  const fileAt = new Map(store.files.map((entry) => [entry.id, entry.index]));
+  const place = (comment: Comment): [number, number, number] => [
+    comment.repo === null ? -1 : (repoAt.get(comment.repo) ?? Number.MAX_SAFE_INTEGER),
+    comment.path === null || comment.repo === null
+      ? -1
+      : (fileAt.get(`${comment.repo}/${comment.path}`) ?? Number.MAX_SAFE_INTEGER),
+    comment.line ?? -1,
+  ];
+  return store.comments
+    .filter((comment) => comment.status === "open")
+    .map((comment) => ({ comment, at: place(comment) }))
+    .sort(
+      (a, b) =>
+        a.at[0] - b.at[0] ||
+        a.at[1] - b.at[1] ||
+        a.at[2] - b.at[2] ||
+        byCodePoint(a.comment.id, b.comment.id),
+    )
+    .map((one) => one.comment);
+}
+
+/**
+ * The feed with what arrived merged into it, by id and oldest first. A
+ * reconnect replays the frames the page missed and reads the ring as well, so
+ * the same line arrives twice; and the list only changes when something in it
+ * did, so a re-read of the ring alone re-renders nothing.
+ */
+function merge(held: ActivityEvent[], arriving: ActivityEvent[]): ActivityEvent[] {
+  const known = new Set(held.map((event) => event.id));
+  const fresh = arriving.filter((event) => !known.has(event.id));
+  if (fresh.length === 0) return held;
+  const events = [...held, ...fresh].sort((a, b) => a.id - b.id);
+  return events.length > ACTIVITY_KEPT ? events.slice(events.length - ACTIVITY_KEPT) : events;
+}
+
+function sameWarning(list: ScanWarning[]): (warning: ScanWarning, index: number) => boolean {
+  return (warning, index) =>
+    warning.path === list[index]?.path && warning.message === list[index]?.message;
+}
+
+/**
+ * The hunks of a repository that have just changed, added to the marks the page
+ * already carries. A file the patch left alone keeps the mark it had: the
+ * accent border says what changed while the review has been open, not what
+ * changed in the last event.
+ */
+function marked(
+  before: Map<string, ChangedHunks>,
+  was: RepositoryChange | null,
+  now: RepositoryChange,
+): Map<string, ChangedHunks> {
+  if (was === null) return before;
+  const held = new Map(was.files.map((file) => [file.path, file]));
+  let marks: Map<string, ChangedHunks> | null = null;
+  const at = Date.now();
+  for (const file of now.files) {
+    const old = held.get(file.path);
+    if (old === undefined || old.patch === file.patch) continue;
+    const hunks = changedHunks(old.patch, file.patch);
+    if (hunks.size === 0) continue;
+    marks ??= new Map(before);
+    marks.set(`${now.path}/${file.path}`, { hunks, at });
+  }
+  return marks ?? before;
+}
+
+/**
+ * The open composer against the file it is on. Its line is a row of the diff,
+ * and an edit can take that row away — the renderer would then have nothing to
+ * key the form to and it would leave the screen without a word. What is written
+ * in it is kept: the form drops to the file anchor, which every file has.
+ */
+function revalidate(
+  set: (partial: Partial<Store>) => void,
+  get: () => Store,
+  repository: RepositoryChange,
+): void {
+  const { composer, composerEnd } = get();
+  if (composer === null || composer.line === null) return;
+  if (composer.repo !== repository.path) return;
+  const file = repository.files.find((one) => one.path === composer.path);
+  const gone =
+    file === undefined ||
+    !hasNewLine(file.patch, composer.line) ||
+    (composerEnd !== null && !hasNewLine(file.patch, composerEnd));
+  if (!gone) return;
+  set({
+    composer: { ...composer, side: null, line: null },
+    composerEnd: null,
+    sel: null,
+    toast: "Строка изменилась — комментарий теперь на файле",
+  });
+}
+
+/** The change set after a repository was patched: the files and the tree again. */
+function fromRepositories(repositories: RepositoryChange[]): Partial<Store> {
+  let index = 0;
+  return {
+    repositories,
+    files: repositories.flatMap((repo) =>
+      repo.files.map((file) => ({
+        id: `${repo.path}/${file.path}`,
+        index: index++,
+        repo: repo.path,
+        file,
+      })),
+    ),
+  };
 }
 
 /**
@@ -770,7 +1147,7 @@ async function write(
       headers: { "content-type": "application/json" },
       body: JSON.stringify(body),
     });
-    if (!response.ok) throw new Error(await refusal(response));
+    if (!response.ok) throw new Error((await refusal(response)).message);
     const answered = (await response.json()) as Comment;
     set({ busy: without(get().busy, id), ...replace(get, id, answered) });
     return true;
@@ -804,10 +1181,19 @@ function composerOver(sel: Selection): Pick<Store, "composer" | "composerEnd" | 
   };
 }
 
-/** The whole review in one response: everything derived from it is derived once. */
+/**
+ * The whole review in one response: everything derived from it is derived once.
+ *
+ * `held` is the session the page had before this answer. A *different* session
+ * is a different review and takes the working state with it; the *same* session
+ * read again — which the stream asks for whenever anything under `reviews/`
+ * changes — must not, or a draft would disappear from under the reader because
+ * a watcher woke.
+ */
 function fromDocument(
   document: ReviewDocument,
   previous: Record<string, DiffView>,
+  held: string | null,
 ): Partial<Store> {
   let index = 0;
   const files = document.repositories.flatMap((repo) =>
@@ -819,6 +1205,7 @@ function fromDocument(
     })),
   );
   const first = files[0];
+  const switched = document.session?.name !== held;
   return {
     status: "ready",
     root: document.root,
@@ -829,25 +1216,32 @@ function fromDocument(
     threadsByFile: byFile(document.comments),
     session: document.session,
     warnings: document.warnings,
-    repo: first?.repo ?? null,
-    path: first?.file.path ?? null,
-    // A whole review arriving is a different review: switching sessions,
-    // creating one, and changing the base all come through here. A draft, a
-    // selection, an open reply and a focused thread all point at comments and
-    // lines that are no longer on the screen, so none of them survives.
-    composer: null,
-    composerEnd: null,
-    sel: null,
-    dragging: false,
-    sev: "warning",
-    body: "",
-    sending: false,
-    focusId: null,
-    replyId: null,
-    replyText: "",
-    busy: {},
-    collapsedHunks: {},
-    collapsedFiles: {},
+    ...(switched
+      ? {
+          repo: first?.repo ?? null,
+          path: first?.file.path ?? null,
+          // Another session is another review: a draft, a selection, an open
+          // reply and a focused thread all point at comments and lines that are
+          // no longer on the screen, so none of them survives.
+          composer: null,
+          composerEnd: null,
+          sel: null,
+          dragging: false,
+          sev: "warning",
+          body: "",
+          sending: false,
+          focusId: null,
+          replyId: null,
+          replyText: "",
+          busy: {},
+          collapsedHunks: {},
+          collapsedFiles: {},
+          // The marks are about edits made while *this* review was open; the
+          // next one has its own, and a hunk of it whose header happens to
+          // match would otherwise be shown as freshly changed.
+          changed: new Map(),
+        }
+      : {}),
     // Split or unified is about a file and not about a review, so it is kept
     // for the files that are still in one.
     diffView: keptFor(files, previous),
@@ -925,14 +1319,18 @@ function indexCounters(
 }
 
 /** The server's own refusal — `{ error, message }` — rather than the status code. */
-async function refusal(response: Response): Promise<string> {
+async function refusal(response: Response): Promise<{ code: string | null; message: string }> {
   try {
-    const body = (await response.json()) as { message?: unknown };
-    if (typeof body.message === "string" && body.message !== "") return body.message;
+    const body = (await response.json()) as { error?: unknown; message?: unknown };
+    const code = typeof body.error === "string" ? body.error : null;
+    if (typeof body.message === "string" && body.message !== "") {
+      return { code, message: body.message };
+    }
+    return { code, message: `the server answered ${response.status}` };
   } catch {
     // A body that is not the refusal shape leaves the status to say it.
+    return { code: null, message: `the server answered ${response.status}` };
   }
-  return `the server answered ${response.status}`;
 }
 
 function reason(error: unknown): string {
@@ -970,7 +1368,14 @@ function writeTheme(theme: Theme): void {
  * as the tab is open and no longer — a reload of the same review should not
  * bring the bar back, and tomorrow's run should not still be hiding it.
  */
-function readDismissed(): string | null {
+/**
+ * What a page opened now would find: the dismissed session, or `null`. Exported
+ * because it is the only way to ask that question without reaching for the
+ * global — which the store guards for a reason, since `sessionStorage` is a
+ * browser's and the unit suite runs on two runtimes, one of which does not
+ * declare it ([11-perf.md](../../docs/reference/11-perf.md)).
+ */
+export function readDismissed(): string | null {
   return storage("session")?.getItem(DISMISSED_KEY) ?? null;
 }
 

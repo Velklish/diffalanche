@@ -1,14 +1,15 @@
 import { useMemo } from "react";
 import type { FileChange, RepositoryChange } from "../../core/types.ts";
 import { revealCard } from "../reveal.ts";
+import type { Connection } from "../store.ts";
 import { useStore } from "../store.ts";
 import type { Counters } from "../types.ts";
 import { SidebarSkeleton } from "./Skeleton.tsx";
 
 /**
  * The 308 px navigation of handoff section 1.3: the tree of repositories with
- * changes, the filter over their names, and the watching footer. The `all
- * files` tab is Phase 2 (DA-37) and stays hidden.
+ * changes, the filter over their names, and the footer that says what the live
+ * stream is doing. The `all files` tab is Phase 2 (DA-37) and stays hidden.
  */
 export function Sidebar() {
   const status = useStore((store) => store.status);
@@ -38,7 +39,8 @@ export function Sidebar() {
         <SidebarSkeleton />
       ) : (
         <div className="tree">
-          {/* A review with no changes at all is an empty state of its own (DA-27). */}
+          {/* A review with no changes at all is the centre panel's own screen
+              (components/NoChanges.tsx); the tree only speaks about the filter. */}
           {tree.length === 0 && query.trim() !== "" ? (
             <p className="tree-empty">Nothing matches “{query}”.</p>
           ) : (
@@ -48,11 +50,31 @@ export function Sidebar() {
           )}
         </div>
       )}
-      <div className="sidebar-foot">
-        <span className="dot ok pulse" />
-        watching · 127.0.0.1:{location.port || "4880"}
-      </div>
+      <Watching />
     </nav>
+  );
+}
+
+/** The dot beside the state: alive while the stream is, and quiet before it. */
+const DOT: Record<Connection, string> = {
+  watching: "ok pulse",
+  reconnecting: "warn pulse",
+  connecting: "",
+};
+
+/**
+ * The footer of handoff section 1.3, saying what the live stream is doing. The
+ * dot pulses while the page is being told about changes and while it is getting
+ * that back; it stops only before the first frame has ever arrived
+ * ([live.ts](../live.ts)).
+ */
+function Watching() {
+  const connection = useStore((store) => store.connection);
+  return (
+    <div className="sidebar-foot">
+      <span className={`dot ${DOT[connection]}`} />
+      {connection} · 127.0.0.1:{location.port || "4880"}
+    </div>
   );
 }
 

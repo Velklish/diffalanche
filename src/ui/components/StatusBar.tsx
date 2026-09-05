@@ -1,9 +1,13 @@
 import { baseSummary } from "../base.ts";
 import { useStore } from "../store.ts";
 
-/** The hotkeys of the handoff's keyboard map; DA-26 is what makes them all work. */
+/**
+ * The hotkeys of the handoff's keyboard map, in the order it lists them. Every
+ * one of them does something — `B` says that browsing is Phase 2 and does
+ * nothing else ([keys.ts](../keys.ts)).
+ */
 const HINTS: [string, string][] = [
-  ["⌘K", "search"],
+  ["⌘K ⇧⇧", "search"],
   ["J K", "threads"],
   ["C", "comment"],
   ["R", "resolve"],

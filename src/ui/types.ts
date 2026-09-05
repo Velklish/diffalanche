@@ -45,6 +45,7 @@ export type {
   ReviewDocument,
   ScanWarning,
 } from "../core/types.ts";
+export type { ActivityEvent, ActivityVerb } from "../core/watcher/activity.ts";
 
 /**
  * What `GET /api/repos/branches` answers with (DA-24): every branch of the

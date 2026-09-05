@@ -79,6 +79,7 @@ export const FileCard = memo(function FileCard({ id, repo, file, index }: FileCa
       store.composer.line === null,
   );
   const threads = useStore((store) => store.threadsByFile.get(id) ?? NO_THREADS);
+  const changed = useStore((store) => store.changed.get(id) ?? null);
   const collapsedHunks = useStore((store) => store.collapsedHunks[id]);
   const setDiffView = useStore((store) => store.setDiffView);
   const toggleFile = useStore((store) => store.toggleFile);
@@ -112,8 +113,8 @@ export const FileCard = memo(function FileCard({ id, repo, file, index }: FileCa
   );
 
   const markers = useMemo<LineMarkers>(
-    () => ({ severityByLine: severityByLine(anchored) }),
-    [anchored],
+    () => ({ severityByLine: severityByLine(anchored), changed }),
+    [anchored, changed],
   );
 
   const lines = useMemo<LineEvents>(

@@ -17,7 +17,12 @@ export default defineConfig({
     viewport: { width: 1560, height: 900 },
   },
   webServer: {
-    command: "bun run build:ui && bun run synth -- --out .perf/e2e --small && bun e2e/server.ts",
+    // The fixture is made from scratch every run: the specs write comments and
+    // replies into it, the generator does not clear what it finds, and a suite
+    // that reads what the last run left is a suite that fails on its own
+    // residue.
+    command:
+      "bun run build:ui && rm -rf .perf/e2e && bun run synth -- --out .perf/e2e --small && bun e2e/server.ts",
     cwd: "..",
     url: `http://127.0.0.1:${PORT}/api/review`,
     reuseExistingServer: false,

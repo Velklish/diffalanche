@@ -31,6 +31,17 @@ export const RELOAD_EVENT = "reload";
  */
 export const HEARTBEAT_MS = 15_000;
 
+/**
+ * The first thing a stream says, before it has anything to report. A response
+ * head is not on the wire until something is written into the body, so without
+ * this a client learns that its stream is up only when the first heartbeat
+ * arrives — fifteen seconds of a page that is connected and cannot say so
+ * ([08-ui.md](../../docs/reference/08-ui.md)). The subscription is made when
+ * the request is handled, so nothing is missed in that window; it is the
+ * silence that is invisible.
+ */
+export const HELLO = ": connected\n\n";
+
 /** One open stream. `end` is the server stopping, not the client leaving. */
 export type Client = {
   send: (frame: EventFrame) => void;
@@ -180,6 +191,9 @@ export function streamEvents(events: EventStream, heartbeatMs: number = HEARTBEA
         wake?.();
         unsubscribe();
       });
+      // Before the replay, so the head is flushed the moment the stream opens
+      // rather than after however much the client had missed.
+      void write(() => stream.write(HELLO));
       if (missed.reload) client.send(missed.reload);
       for (const frame of missed.frames) client.send(frame);
 

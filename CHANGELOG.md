@@ -5,7 +5,45 @@ the project follows [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
 ## [Unreleased]
 
+### Changed
+
+- The session-switch budget is measured over the whole wait — the press, the
+  `POST` that makes the session current, the read of the review that follows,
+  and the render — where it used to start after that review had already been
+  parsed and so left the server's share outside the number. Only the
+  first-render row of `docs/SPEC.md` section 6 is qualified with "after the
+  server responds". The line is printed with DA-24.1 named rather than failing
+  the build: it says a warm switch is just over the budget and a cold one about
+  five times over, which is a question about where the built document is cached.
+  See [11-perf.md](docs/reference/11-perf.md).
+
+- Small text clears WCAG AA, and motion has an alternative (DA-22.1). `--tx3`
+  and `--ln` are raised in both themes until every token pair the interface
+  actually sets text in is at least 4.5:1 — the gutter's line numbers were the
+  worst of them at 2.87:1 in the light theme, and they are the one thing on the
+  screen a reviewer types back. `prefers-reduced-motion: reduce` takes the
+  travel out of `dcin` through a token rather than a second keyframe, so an
+  arrival still fades, and stops `dcpulse` with the dot lit rather than caught
+  mid-fade. A resolved thread steps back by tone instead of `opacity: 0.55`,
+  which had been multiplying the contrast of everything on the card down to
+  about 4.4:1. `tokens.css`, `DESIGN.md` and `.impeccable/design.json` change
+  together, and `tests/design-contrast.test.ts` is what holds the ratios.
+
 ### Added
+
+- An open overlay holds the focus (DA-26.1). `Tab` and `Shift+Tab` cycle inside
+  the panel instead of walking the page behind the scrim, the scrim itself is no
+  longer a tab stop, and closing an overlay puts the focus back on the control
+  that opened it. It is one treatment in `components/Overlay.tsx`, which global
+  search now uses like the base picker and the export do. See
+  [08-ui.md](docs/reference/08-ui.md).
+
+- The live stream answers as soon as it is subscribed, with a `: connected`
+  comment line (DA-25.1). A response head is not on the wire until something is
+  written into the body, so a quiet review used to leave `EventSource.onopen` —
+  and with it the sidebar footer — waiting fifteen seconds for the first
+  heartbeat. Nothing was ever missed in that window; the silence was what could
+  not be seen. See [07-server.md](docs/reference/07-server.md).
 
 - The header (DA-24): the session menu of handoff section 7 with the history
   from `GET /api/sessions`, its metrics, a `CURRENT` chip and a create form that
@@ -28,6 +66,57 @@ the project follows [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
   `HEAD` at it. One `git for-each-ref` per repository, read-only; `name` is what
   `branch:<name>` takes, so the picker and the CLI have one grammar for a base.
   See [07-server.md](docs/reference/07-server.md).
+
+
+- The empty states (DA-27). A root nobody has opened a session in is no longer a
+  review that failed: `GET /api/review` refuses it with `no-current-session`,
+  the store reads that by its code, and the first-run screen of handoff section
+  10 takes the body — the mark, the three metrics counted from `GET /api/scan`
+  (repositories found, with changes, worktrees), a name with its base, `Create`,
+  and the line that does the same from a terminal. Creating a session there
+  posts it and opens the review it made; a refusal keeps the screen and says
+  why. A session whose base resolves to what the working trees already hold gets
+  the no-changes screen in the centre panel, naming the session and offering the
+  two things that would change the answer — the base and the session. See
+  [08-ui.md](docs/reference/08-ui.md).
+
+- The keyboard map and global search (DA-26). Every row of the handoff's table
+  is wired — `⌘K` and `⇧⇧` for search, `J` / `K` between the open threads of the
+  whole review, `C`, `R`, `B`, `⌘⏎`, `esc` — as one listener over actions of the
+  store (`keys.ts`), with the hints in the status bar naming them. Three rows
+  wait for what they act on rather than for a key: `↑` / `↓` and `TAB` in the
+  composer move through Phase 2's suggestions, and `⏎` in the base picker
+  belongs to DA-24's picker. `esc` closes in one order and stops at the first
+  thing it found, so it never throws away a comment being written under a modal.
+  `J` and `K` order the open threads by repository, file, and line, wrap at both
+  ends, and bring the rail and the diff with them. Global search is the modal of
+  handoff section 6 over the files of the change set and the comments of the
+  session: ranking by substring and word overlap, a twelve-line preview with the
+  target line marked and the deletions kept beside what replaced them, the
+  pointer selecting as well as opening. See
+  [08-ui.md](docs/reference/08-ui.md).
+
+- Live update in the UI (DA-25). The page holds one `EventSource` on
+  `GET /api/events` and patches what an event names instead of reading the
+  review again: a repository's new diff is merged into the one on screen file by
+  file and hunk by hunk, so a file that says the same thing keeps the object it
+  was rendered from and its card is not re-rendered at all — asserted with a
+  `MutationObserver` over both cards, the edited one and its neighbour. A hunk
+  that did change takes the accent border and `updated 12s ago`. Every patch is
+  bracketed by the scroll anchoring, so content that grows above the reader does
+  not move what is under their eyes; an open composer on another file is left
+  alone, and one on the edited file is re-validated — when the edit took its
+  line away the form drops to the file anchor with what was typed still in it
+  rather than disappearing when the renderer can no longer key it to a row.
+  Threads are patched from `GET /api/comments/:id`, and an agent's reply also
+  raises a toast. The AGENT ACTIVITY panel of the rail is fed by the `activity`
+  frames over the ring read from `GET /api/activity` on every open, merged by
+  id; the sidebar footer says whether the stream is `watching`, `reconnecting`,
+  or still `connecting`. The live-update budget line is now a gate: the harness
+  measures from the edit of a fixture file to the frame that showed it in that
+  file's card. See [08-ui.md](docs/reference/08-ui.md) and
+  [11-perf.md](docs/reference/11-perf.md).
+
 
 - The thread rail and the threads in the diff (DA-23). One card, drawn the same
   in the rail and as a widget under the line it is anchored to: severity chip,
@@ -118,6 +207,7 @@ the project follows [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
   `files`, so the published package carries them beside `dist`. See
   [10-skills.md](docs/reference/10-skills.md) and the README's agent skills
   section.
+
 - The write API: `POST /api/comments`, `/api/comments/:id/replies`,
   `/api/comments/:id/resolve` and `/reopen`, `POST /api/sessions`,
   `POST /api/sessions/:name/use`, `PUT /api/sessions/:name/base`, and

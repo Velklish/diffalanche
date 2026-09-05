@@ -1,0 +1,7 @@
+# DA-26.1 · Result
+
+**Closed 2026-09-05.** Completed. The trap is in the primitive: `components/Overlay.tsx` holds the tab ring while open (`Tab` and `Shift+Tab` cycle inside the panel, `aria-modal="true"`), and on close — `esc`, the scrim, or finishing what it was for — the focus goes back to the control that opened it. Global search goes through the primitive like the base picker and the export do, instead of its own scrim. The scrim is not a tab stop; a child that autofocuses on mount keeps the focus and the panel claims it only when nothing inside has; the listener is on the document, because a click on the page behind the scrim takes the ring out of a panel that could then no longer catch it. The opener is read during the render into a ref (`826ff91`): read inside the effect, it was the autofocused field inside the overlay itself, and `esc` restored focus to a node that had just unmounted. The sessions menu is a popover on its pill, not a modal, and deliberately does not trap (`08-ui.md`).
+
+**Verification.** `e2e/keyboard.spec.ts`: with search open, `Tab` pressed once more than the panel has stops stays inside; `esc` puts the focus back on the header's search button — the assertion that caught the opener bug. Two locators in the suite fixed with it (`exact: true` on the search button; `role="region"` for the sessions menu after DA-24's review fixes).
+
+**Documentation in the same pass.** `docs/reference/08-ui.md`, `.impeccable/surfaces/src-ui-app-tsx.md`, `CHANGELOG.md`.

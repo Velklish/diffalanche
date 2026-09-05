@@ -22,7 +22,10 @@ import python from "refractor/python";
 import tsx from "refractor/tsx";
 import typescript from "refractor/typescript";
 import type { FileChange } from "../../core/types.ts";
+import type { ChangedHunks } from "../patch.ts";
 import type { DiffView } from "../store.ts";
+import { useStore } from "../store.ts";
+import { elapsed } from "../time.ts";
 import type { Severity } from "../types.ts";
 
 /**
@@ -95,6 +98,13 @@ export type LineEvents = {
  */
 export type LineMarkers = {
   severityByLine: Map<number, Severity>;
+  /**
+   * The hunks of this file that changed while the review has been open, by
+   * their `@@` header, and when they did. The header of such a hunk takes the
+   * accent border and says how long ago, which is what the handoff's live
+   * update asks for instead of a repainted card (DA-25).
+   */
+  changed: ChangedHunks | null;
 };
 
 export type ReactDiffFileProps = {
@@ -197,9 +207,15 @@ export function ReactDiffFile({
     >
       {(hunks) =>
         hunks.flatMap((hunk, index) => [
-          <Decoration key={`head-${hunk.content}`} className="hunk-head">
+          <Decoration
+            key={`head-${hunk.content}`}
+            className={markers.changed?.hunks.has(hunk.content) ? "hunk-head changed" : "hunk-head"}
+          >
             <div className="hunk-head-row">
               <span className="hunk-at">{hunk.content}</span>
+              {markers.changed?.hunks.has(hunk.content) ? (
+                <HunkUpdated at={markers.changed.at} />
+              ) : null}
               <HunkContextButton
                 hidden={shown[index]?.hidden ?? 0}
                 collapsed={collapsed[index] === true}
@@ -212,6 +228,16 @@ export function ReactDiffFile({
       }
     </Diff>
   );
+}
+
+/**
+ * How long ago this hunk changed, recounted from the store's clock every five
+ * seconds. Only a hunk that has changed mounts one, so the review's other three
+ * hundred cards subscribe to nothing.
+ */
+function HunkUpdated({ at }: { at: number }) {
+  const now = useStore((store) => store.tick);
+  return <span className="hunk-updated">updated {elapsed(at, now)}</span>;
 }
 
 /**

@@ -224,7 +224,16 @@ carries the newest id, so the stream continues from there. A `Last-Event-ID`
 ahead of every id the server has is the same answer — that is what a browser
 holding the ids of a server that has since restarted looks like.
 
-A comment line every fifteen seconds keeps a silent stream open. Stopping the
+The stream opens with a comment line of its own, `: connected`, before the
+replay and before anything else. A response head is not on the wire until
+something is written into the body, so without it a client cannot tell a stream
+that is up from one that is still being made: `EventSource` fires `onopen` when
+the head arrives, and the first thing a quiet review would have written is the
+heartbeat fifteen seconds later. Nothing is missed in that window either way —
+the client is subscribed while the request is handled, before anything is
+written — but the silence is invisible, and the page has a state that says so.
+
+A comment line every fifteen seconds then keeps a silent stream open. Stopping the
 server ends every open stream before the socket closes, rather than leaving the
 browser to notice. Under Bun that needs `idleTimeout: 0` on the server, which is
 in [runtime.ts](../../src/server/runtime.ts): Bun closes a connection that has

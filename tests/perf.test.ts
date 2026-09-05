@@ -1,4 +1,5 @@
 import { describe, expect, it } from "vitest";
+import type { Budget } from "../perf/budgets.ts";
 import { BUDGETS, evaluate, formatTable } from "../perf/budgets.ts";
 import type { Measurement } from "../perf/harness.ts";
 import { parseArgs } from "../perf/harness.ts";
@@ -50,20 +51,70 @@ describe("perf gate", () => {
     expect(evaluate([slow, slow, measurement()]).some((row) => row.failed)).toBe(true);
   });
 
-  it("measures the session switch now that the harness can drive one", () => {
+  it("has nothing unmeasured left: every budget of the specification has a number", () => {
+    expect(evaluate([measurement()]).filter((row) => row.measured === null)).toEqual([]);
+  });
+
+  it("prints a line nothing measures yet as pending, without failing it", () => {
+    // DA-24 and DA-25 turned the last two on, so the rule is checked against a
+    // table of its own rather than against a line of the real one.
+    const nothing: Budget[] = [
+      {
+        label: "something no harness drives yet",
+        field: null,
+        budget: 100,
+        unit: "ms",
+        pendingUntil: "DA-99",
+      },
+    ];
+    const rows = evaluate([measurement()], nothing);
+    expect(rows[0]?.measured).toBeNull();
+    expect(rows[0]?.failed).toBe(false);
+    expect(formatTable(rows, 1)).toContain("| pending | DA-99 |");
+  });
+
+  it("measures the session switch, and waits for DA-24.1 before failing on it", () => {
     const rows = evaluate([measurement({ sessionSwitchMs: 140 })]);
     const switching = rows.find((row) => row.budget.label === "Switching review sessions");
     expect(switching?.measured).toBe(140);
-    expect(switching?.failed).toBe(true);
+    // Measured over the whole wait since DA-25's review round, and over budget
+    // on the cold path; where the built document is cached is DA-24.1's
+    // question and the owner's call, so the number is printed with the task
+    // named rather than failing the build.
+    expect(switching?.failed).toBe(false);
+    expect(formatTable(rows, 1)).toContain("| 140 ms | DA-24.1 |");
   });
 
   it("prints a line that is measured but still waiting for its task, and does not fail it", () => {
+    // The real table has one such line — the session switch, waiting for
+    // DA-24.1 — but the rule is checked against a table of its own so that it
+    // stays covered when that one is turned on.
+    const waiting: Budget[] = [
+      {
+        label: "something a later task finishes",
+        field: "updateMs",
+        budget: 300,
+        unit: "ms",
+        pendingUntil: "DA-99",
+      },
+    ];
+    const rows = evaluate(
+      [measurement({ updateMs: 900 }), measurement({ updateMs: 900 })],
+      waiting,
+    );
+    expect(rows[0]?.measured).toBe(900);
+    expect(rows[0]?.failed).toBe(false);
+    expect(formatTable(rows, 2)).toContain("| 900 ms | DA-99 |");
+  });
+
+  it("gates the live update now that the harness measures it to the painted card", () => {
     const rows = evaluate([measurement({ updateMs: 900 }), measurement({ updateMs: 900 })]);
-    const waiting = rows.find((row) => row.budget.pendingUntil === "DA-25");
-    expect(waiting?.measured).toBe(900);
-    // The number is a part of what the budget is about; the rest is DA-25's.
-    expect(waiting?.failed).toBe(false);
-    expect(formatTable(rows, 2)).toContain("| 900 ms | DA-25 |");
+    const update = rows.find((row) => row.budget.field === "updateMs");
+    expect(update?.measured).toBe(900);
+    // DA-25 turned this line on: it measures the whole of what the person waits
+    // for — the watcher, the stream, the fetch, the patch, and the paint.
+    expect(update?.failed).toBe(true);
+    expect(formatTable(rows, 2)).toContain("| 900 ms | FAIL |");
   });
 
   it("marks the line that is over budget and only that one", () => {

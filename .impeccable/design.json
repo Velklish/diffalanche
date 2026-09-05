@@ -83,7 +83,7 @@
       "ln": {
         "role": "tertiary",
         "displayName": "Gutter Grey",
-        "canonical": "#767e89"
+        "canonical": "#848c97"
       },
       "gap": {
         "role": "tertiary",
@@ -143,7 +143,7 @@
       "tx3": {
         "role": "neutral",
         "displayName": "Tertiary Text",
-        "canonical": "#828a95"
+        "canonical": "#8f97a2"
       },
       "sel": {
         "role": "neutral",
@@ -239,7 +239,7 @@
       "ln-light": {
         "role": "tertiary",
         "displayName": "Gutter Grey",
-        "canonical": "#8a857a"
+        "canonical": "#767165"
       },
       "gap-light": {
         "role": "tertiary",
@@ -299,7 +299,7 @@
       "tx3-light": {
         "role": "neutral",
         "displayName": "Tertiary Text",
-        "canonical": "#736f66"
+        "canonical": "#656158"
       },
       "sel-light": {
         "role": "neutral",
@@ -372,13 +372,13 @@
     "motion": [
       {
         "name": "dcin",
-        "value": "opacity 0 -> 1 with translateY(4px) -> 0, 140-160ms ease-out",
-        "purpose": "Everything that appears: overlays, the composer, a new thread, the model's re-anchoring proposal. Defined as a keyframe in src/ui/tokens.css."
+        "value": "opacity 0 -> 1 with translateY(var(--dcin-shift)) -> 0, 140-160ms ease-out",
+        "purpose": "Everything that appears: overlays, the composer, a new thread, a card the stream brought in. Defined as a keyframe in src/ui/tokens.css; the travel is the --dcin-shift token, which prefers-reduced-motion takes to 0 so the fade stays and the movement goes."
       },
       {
         "name": "dcpulse",
         "value": "opacity 1 -> 0.35 -> 1, 2.4s ease-in-out infinite",
-        "purpose": "Everything alive: the watching dot and live agent indicators. 1.1s while the model is searching for an anchor. Defined as a keyframe in src/ui/tokens.css."
+        "purpose": "Everything alive: the watching dot and live agent indicators. 1.1s while the model is searching for an anchor. Defined as a keyframe in src/ui/tokens.css; prefers-reduced-motion stops it with the dot lit rather than caught mid-fade."
       }
     ],
     "focusRings": [

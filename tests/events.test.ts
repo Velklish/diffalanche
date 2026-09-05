@@ -134,6 +134,27 @@ afterAll(async () => {
 });
 
 describe("the live stream", () => {
+  /**
+   * The head of a response is not on the wire until something is written into
+   * the body, so a stream that says nothing until its first heartbeat leaves a
+   * client unable to tell a connection that is up from one that is still being
+   * made — fifteen seconds of it (DA-25.1). This is measured over a socket and
+   * not through `app.request`, because it is the socket that buffers.
+   */
+  it("answers as soon as it is subscribed, without waiting for a heartbeat", async () => {
+    const started = Date.now();
+    const response = await fetch(`${server.url}/api/events`);
+    const head = Date.now() - started;
+    const reader = (response.body as ReadableStream<Uint8Array>).getReader();
+    try {
+      const first = new TextDecoder().decode((await reader.read()).value);
+      expect(head).toBeLessThan(1_000);
+      expect(first).toContain("connected");
+    } finally {
+      await reader.cancel();
+    }
+  }, 30_000);
+
   it("names the repository an edit changed, inside the budget", async () => {
     const stream = read(await fetch(`${server.url}/api/events`));
     try {
@@ -263,11 +284,14 @@ describe("the stream itself", () => {
     const stream = read(await app.request("/api/events"));
     try {
       const deadline = Date.now() + 2_000;
-      while (stream.comments.length < 2 && Date.now() < deadline) {
+      while (stream.comments.length < 3 && Date.now() < deadline) {
         await new Promise((done) => setTimeout(done, 10));
       }
-      expect(stream.comments.length).toBeGreaterThanOrEqual(2);
-      expect(stream.comments[0]).toContain("keep-alive");
+      // The first comment is the one the stream opens with; the heartbeats
+      // follow it.
+      expect(stream.comments[0]).toContain("connected");
+      expect(stream.comments.slice(1).every((one) => one.includes("keep-alive"))).toBe(true);
+      expect(stream.comments.length).toBeGreaterThanOrEqual(3);
     } finally {
       await stream.close();
     }

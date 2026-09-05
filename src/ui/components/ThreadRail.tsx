@@ -1,17 +1,16 @@
 import { useEffect, useMemo } from "react";
 import { isAwaiting, isUnanswered } from "../../core/domain/counters.ts";
-import { afterPaint } from "../perf.ts";
-import { revealCard } from "../reveal.ts";
+import { revealThread } from "../reveal.ts";
 import type { RailScope } from "../store.ts";
 import { useStore } from "../store.ts";
 import type { Comment } from "../types.ts";
+import { ActivityPanel } from "./ActivityPanel.tsx";
 import { ThreadCard } from "./ThreadCard.tsx";
 
 /**
  * The 392 px right column of handoff section 1.5: the two tabs with their
  * counts, the `unanswered` chip, the thread cards, and the collapsed activity
- * panel. A card here and the widget under its line are the same component; the
- * events of the panel are DA-25.
+ * panel. A card here and the widget under its line are the same component.
  */
 export function ThreadRail() {
   const comments = useStore((store) => store.comments);
@@ -75,19 +74,16 @@ export function ThreadRail() {
       </div>
       <div className="rail-list">
         {visible.length === 0 ? (
-          <p className="rail-empty">{nothing(scope, unansweredOnly, awaitingOnly)}</p>
+          <p className="rail-empty">
+            {nothing(scope, unansweredOnly, awaitingOnly, path !== null)}
+          </p>
         ) : (
           visible.map((thread) => (
-            <ThreadCard key={thread.id} thread={thread} scope={scope} onFocus={reveal} />
+            <ThreadCard key={thread.id} thread={thread} scope={scope} onFocus={revealThread} />
           ))
         )}
       </div>
-      <div className="feed">
-        <span className="dot ok pulse" />
-        AGENT ACTIVITY
-        <span className="spacer" />
-        <span className="caret">▸</span>
-      </div>
+      <ActivityPanel />
     </aside>
   );
 }
@@ -135,60 +131,20 @@ function useFocusInView(): void {
   }, [focusId]);
 }
 
-/** DA-27 owns the empty states of the screen; the rail says its own in one line. */
-function nothing(scope: RailScope, unansweredOnly: boolean, awaitingOnly: boolean): string {
+/**
+ * The centre panel owns the empty states of the screen; the rail says its own in
+ * one line. A change set with nothing in it has no current file either, and a
+ * rail that spoke about "this file" there would be speaking about nothing.
+ */
+function nothing(
+  scope: RailScope,
+  unansweredOnly: boolean,
+  awaitingOnly: boolean,
+  onFile: boolean,
+): string {
   if (unansweredOnly) return "No thread is waiting for an agent.";
   if (awaitingOnly) return "No agent has answered and left it to you.";
-  return scope === "file"
+  return scope === "file" && onFile
     ? "Nothing has been said about this file yet."
     : "This review session has no comments.";
-}
-
-/**
- * Focusing a card from the rail also brings its anchor into view. The card is
- * scrolled to first, because a file whose diff is not mounted has no line to
- * scroll to yet; the widget is reached on the next painted frame, once the
- * intersection observer has mounted it
- * ([ADR-008](../../../docs/adr/adr-008-diff-rendering-verdict.md)).
- */
-async function reveal(id: string): Promise<void> {
-  const store = useStore.getState();
-  store.focusThread(id);
-  const thread = store.comments.find((comment) => comment.id === id);
-  if (thread === undefined || thread.repo === null) return;
-
-  const file = thread.path === null ? null : `${thread.repo}/${thread.path}`;
-  const card =
-    file === null
-      ? `[data-repo-section="${CSS.escape(thread.repo)}"]`
-      : `[data-file="${CSS.escape(file)}"]`;
-  await revealCard(card);
-  if (thread.line === null) return;
-
-  if (await scrollToWidget(id)) return;
-  // The anchor is on a line a collapsed hunk hides: the reader put it away, and
-  // the thread they just asked for is behind it. Show the context again and
-  // look once more, rather than leaving the click with no answer.
-  if (file === null) return;
-  store.expandHunks(file);
-  await scrollToWidget(id);
-}
-
-/**
- * The page scrolls to the widget, and nothing else: `scrollIntoView` would also
- * scroll the card sideways, and the reader would come back to a diff whose left
- * column has slid out of it. The card may still be mounting, so it is looked
- * for over a few frames.
- */
-async function scrollToWidget(id: string): Promise<boolean> {
-  for (let frame = 0; frame < 3; frame += 1) {
-    await afterPaint();
-    const widget = document.querySelector(`[data-thread-anchor="${CSS.escape(id)}"]`);
-    if (widget) {
-      const box = widget.getBoundingClientRect();
-      window.scrollBy({ top: box.top + box.height / 2 - window.innerHeight / 2 });
-      return true;
-    }
-  }
-  return false;
 }

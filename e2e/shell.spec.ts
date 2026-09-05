@@ -29,6 +29,10 @@ const THRESHOLD = 1560;
 
 async function open(page: Page) {
   await page.route("**/api/review", (route) => route.fulfill({ json: EMPTY_REVIEW }));
+  // The feed is the server's own and carries whatever the other specs wrote a
+  // moment ago, so `N live` in the activity panel would vary from run to run
+  // and the baselines with it (DA-25).
+  await page.route("**/api/activity", (route) => route.fulfill({ json: [] }));
   await page.goto("/");
   await page.waitForFunction(() => window.__perf?.ready === true);
   await page.evaluate(() => document.fonts.ready);
@@ -44,6 +48,30 @@ test("the empty shell in the light theme", async ({ page }) => {
   await page.getByRole("button", { name: "light theme" }).click();
   await expect(page.locator(":root")).toHaveAttribute("data-theme", "light");
   await expect(page).toHaveScreenshot("shell-light.png", { fullPage: true });
+});
+
+test("nothing pulses for a reader who asked for less motion", async ({ page }) => {
+  await page.emulateMedia({ reducedMotion: "reduce" });
+  await open(page);
+  // The footer's dot is the element that pulses, and it is a plain dot until
+  // the stream has answered: without this the test would pass on a page that
+  // has nothing to animate.
+  await expect(page.locator(".sidebar-foot")).toContainText("watching");
+
+  const moving = await page.evaluate(() =>
+    [...document.querySelectorAll("*")]
+      .map((one) => getComputedStyle(one).animationName)
+      .filter((name) => name !== "none" && name !== ""),
+  );
+  // `dcpulse` runs for as long as the review is open, so it is the one that
+  // matters; `dcin` is an entrance that has already finished by now, and what
+  // reduced motion takes from it is the travel, not the fade (DA-22.1).
+  expect(moving).not.toContain("dcpulse");
+  expect(
+    await page.evaluate(() =>
+      getComputedStyle(document.documentElement).getPropertyValue("--dcin-shift").trim(),
+    ),
+  ).toBe("0px");
 });
 
 test("the theme survives a reload", async ({ page }) => {

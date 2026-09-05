@@ -68,6 +68,28 @@ diff. Select lines and write a comment; the comment lands in
 `.diffalanche/reviews/cargo-flags/comments.json` and an agent reads it from
 there through the CLI a moment later, with no restart on either side.
 
+The review keeps itself current: when an agent edits a file, replies, or
+resolves a thread, the page hears it from the server and patches only what
+changed — a hunk that moved takes an accent border and says how long ago, the
+rail and the counters move, and a reply raises a toast — with no reload and
+with the reading position where it was. The **agent activity** panel under the
+file tree, collapsed by default, is the feed of what the server noticed while
+it has been running. The sidebar footer says `watching` while the stream is
+open and `reconnecting` while it is not.
+
+The keyboard follows the design handoff:
+
+| Key | What it does |
+|---|---|
+| `⌘K` / `Ctrl+K`, `⇧⇧` | global search over the files and comments of the review |
+| `J` / `K` | the next and previous open thread of the whole review |
+| `C` | a comment on the first added line of the file being read |
+| `R` | resolves the focused thread |
+| `⌘⏎` | sends the comment being written |
+| `esc` | closes the topmost thing that is open |
+
+Search covers file paths and comment bodies; symbols and file text are Phase 2.
+
 A root with no session is not an error — the server says so and the UI offers to
 create one:
 

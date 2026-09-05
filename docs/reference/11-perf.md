@@ -283,17 +283,19 @@ stderr.
 | `scrollLongTasks`, `scrollLongTaskMs` | Long tasks while scrolling the whole review, and their total |
 | `cpuPerFrameMs` | Chromium's own `TaskDuration` over the scroll, divided by the frames of that scroll |
 | `composerOpenMs`, `fileJumpMs` | Opening the composer placeholder, and the median of three jumps to a file |
-| `updateMs` | From an edit of one file to the page holding that repository's new diff |
+| `updateMs` | From an edit of one file to the frame that showed it in that file's card |
 | `frames`, `scrollDistancePx` | How many frames the scroll took and how far it went |
 
 `updateMs` is the live-update path of `docs/SPEC.md` section 6, measured the way
-it happens: the page listens on `/api/events` the way the UI does, the harness
-appends a line to a file of one repository, and the page reports the moment it
-has that repository's new diff in hand. That is the watcher, the debounce, the
-rescan, the stream, and the fetch. The edit is taken back out afterwards, so the
-fixture is what it was. What is not in the number yet is the render of the
-patched diff, which is DA-25's; until then the line is measured and printed but
-does not fail the build.
+it happens: the shipped page listens on `/api/events` because that is what it
+does, the harness appends a line to a file of one repository, and the page
+stamps the frame that showed the patched card. That is the watcher, the
+debounce, the rescan, the stream, the fetch, the patch, and the paint — the
+whole of what the person waits for. The card is scrolled into view before the
+edit, so the diff being measured is on the screen and not only in the store, and
+the appended line is looked for in the card afterwards, so a number produced by
+some other event cannot pass for this one. The edit is taken back out
+afterwards, so the fixture is what it was.
 
 The scroll is one pass over the whole review at up to 600 frames, so the step is
 `scrollHeight / 600` — far faster than a person scrolls, which is the point: it
@@ -337,17 +339,26 @@ over budget. One slow run does not fail the build; two do.
 | Scrolling the diff: CPU per frame | 8.3 ms | 6.4 ms | ok |
 | Opening the comment form | 50 ms | 13.9 ms | ok |
 | Jumping to a file from the navigation | 50 ms | 7.7 ms | ok |
-| Switching review sessions | 100 ms | 35.6 ms | ok |
-| Update after an edit in one repository | 300 ms | 254 ms | DA-25 |
+| Switching review sessions | 100 ms | 104.2 ms | DA-24.1 |
+| Update after an edit in one repository | 300 ms | 221 ms | ok |
 ```
 
-The last column names the task a line is still waiting for. **Update after an
-edit** is measured — the server's share of it, from the edit to the page holding
-the new diff — and printed with the task named instead of a verdict: the render
-of the patched diff is DA-25's and belongs in the same number, so the line does
-not fail the build until it covers the whole path. On the machine this was
-written on the server's share is about 250 ms of the 300, of which 100 ms is the
-watcher's debounce.
+**Switching review sessions** is measured and printed with the task named
+instead of a verdict: the number covers the whole wait, and what it says is that
+a warm switch is just over the budget and a cold one — the first switch to a
+session whose document the server has never built — is about five times over.
+That is a question about where the built document is cached, not about the page,
+and it is DA-24.1; until it is settled the line does not fail the build, which
+is what `pendingUntil` is for.
+**Update after an edit** covers the whole path — the watcher, the debounce, the
+rescan, the stream, the fetch, the patch, and the paint — and fails the build
+like any other line; on the machine this was written on it lands around 221 ms
+of the 300, of which 100 ms is the watcher's own debounce.
+
+Both of those windows are the whole wait on purpose. Only the first-render row
+of `docs/SPEC.md` section 6 is qualified with "after the server responds"; a row
+without that qualifier is measured from the moment the person acts, because that
+is when their wait starts.
 
 The session switch became measurable with DA-24. The fixture the generator
 writes carries one review session and switching needs two, so the harness makes
@@ -356,9 +367,12 @@ one's change set copied into its `diff.json` — the same base is the same answe
 and copying it spares the run a rescan — and forty comments of its own, so the
 swap really is a different set of threads. A run switches to it and back and
 reports the slower of the two, which also leaves the fixture on the session it
-found it on. What is timed is the swap: from the moment the new review was
-parsed to the frame that showed it, the same window the first-render line
-measures over.
+found it on. What is timed is the whole swap: from the press to the frame that
+shows the other review — the `POST` that makes it current, the read of the
+review that follows it, and the render. Only the first-render row of
+`docs/SPEC.md` section 6 is qualified with "after the server responds"; this one
+is not, and a session whose change set still has to be computed is part of what
+the reader waits for.
 
 `8.3 ms` is the frame of 120 fps. The specification asks for 120 fps and a
 headless runner cannot measure frame rate, so the gate checks the two things it

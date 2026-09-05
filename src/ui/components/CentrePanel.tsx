@@ -3,6 +3,7 @@ import type { RepositoryChange, ResolvedBase } from "../../core/types.ts";
 import { Composer } from "../Composer.tsx";
 import { useStore } from "../store.ts";
 import { FileCard } from "./FileCard.tsx";
+import { NoChanges } from "./NoChanges.tsx";
 import { FileCardSkeleton } from "./Skeleton.tsx";
 
 /**
@@ -37,6 +38,16 @@ export function CentrePanel() {
     return (
       <main className="centre">
         <FileCardSkeleton />
+      </main>
+    );
+  }
+
+  // A session whose base resolves to what the working trees already hold: the
+  // review is there and has nothing in it (DA-27).
+  if (repositories.length === 0) {
+    return (
+      <main className="centre">
+        <NoChanges />
       </main>
     );
   }

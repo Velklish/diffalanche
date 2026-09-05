@@ -15,7 +15,7 @@
   --bd2: #2c313a;
   --tx: #dde1e7;
   --tx2: #9ba3ae;
-  --tx3: #828a95;
+  --tx3: #8f97a2;
   --acc: #8b9ae0;
   --accBg: #26293a;
   --accBd: #3f4a80;
@@ -32,7 +32,7 @@
   --onAcc: #1c1f2b;
   --sel: #333c66;
   --code: #bcc2cb;
-  --ln: #767e89;
+  --ln: #848c97;
   --gap: #22262c;
   --scrim: rgba(10, 11, 13, 0.5);
   --shadow: 0 24px 64px rgba(0, 0, 0, 0.5);
@@ -53,7 +53,7 @@
   --bd2: #e6e1d8;
   --tx: #2e2d29;
   --tx2: #57544d;
-  --tx3: #736f66;
+  --tx3: #656158;
   --acc: #4d5793;
   --accBg: #e6e9f5;
   --accBd: #aab2d8;
@@ -70,17 +70,27 @@
   --onAcc: #fbfaf7;
   --sel: #dbe0f2;
   --code: #403d38;
-  --ln: #8a857a;
+  --ln: #767165;
   --gap: #efece5;
   --scrim: rgba(70, 64, 54, 0.26);
   --shadow: 0 20px 48px rgba(70, 64, 54, 0.2);
   --shadowSm: 0 10px 26px rgba(70, 64, 54, 0.16);
 }
 
+/*
+ * How far `dcin` moves what it brings in. It is a token rather than a literal
+ * so that `prefers-reduced-motion` can take it to zero: the arrival keeps its
+ * fade — which is what says something appeared — and loses the travel, without
+ * a second keyframe (`DESIGN.md`, The Two-Keyframe Rule).
+ */
+:root {
+  --dcin-shift: 4px;
+}
+
 @keyframes dcin {
   from {
     opacity: 0;
-    transform: translateY(4px);
+    transform: translateY(var(--dcin-shift));
   }
   to {
     opacity: 1;
@@ -95,5 +105,18 @@
   }
   50% {
     opacity: 0.35;
+  }
+}
+
+/*
+ * A reader who has asked their system for less motion gets the state changes
+ * and not the movement: `dcin` fades without travelling. The travel is a token
+ * so that this is a value and not a second keyframe; `dcpulse` is stopped in
+ * `styles.css`, where the rule that starts it lives — that file is loaded after
+ * this one, and an override has to sit where it can win.
+ */
+@media (prefers-reduced-motion: reduce) {
+  :root {
+    --dcin-shift: 0px;
   }
 }

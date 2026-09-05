@@ -38,14 +38,14 @@ export const BUDGETS: Budget[] = [
   { label: "Scrolling the diff: CPU per frame", field: "cpuPerFrameMs", budget: 8.3, unit: "ms" },
   { label: "Opening the comment form", field: "composerOpenMs", budget: 50, unit: "ms" },
   { label: "Jumping to a file from the navigation", field: "fileJumpMs", budget: 50, unit: "ms" },
-  { label: "Switching review sessions", field: "sessionSwitchMs", budget: 100, unit: "ms" },
   {
-    label: "Update after an edit in one repository",
-    field: "updateMs",
-    budget: 300,
+    label: "Switching review sessions",
+    field: "sessionSwitchMs",
+    budget: 100,
     unit: "ms",
-    pendingUntil: "DA-25",
+    pendingUntil: "DA-24.1",
   },
+  { label: "Update after an edit in one repository", field: "updateMs", budget: 300, unit: "ms" },
 ];
 
 /**
@@ -64,9 +64,13 @@ export type GateRow = {
   failed: boolean;
 };
 
-/** A line fails when the median is over budget: one slow run does not fail a build. */
-export function evaluate(measurements: Measurement[]): GateRow[] {
-  return BUDGETS.map((budget) => {
+/**
+ * A line fails when the median is over budget: one slow run does not fail a
+ * build. `budgets` is the table above unless a caller brings its own, which is
+ * how the rules here are tested without a pending line having to exist in it.
+ */
+export function evaluate(measurements: Measurement[], budgets: Budget[] = BUDGETS): GateRow[] {
+  return budgets.map((budget) => {
     const field = budget.field;
     if (field === null) return { budget, measured: null, failed: false };
     const measured = median(measurements.map((one) => one[field]));
