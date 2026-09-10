@@ -88,6 +88,44 @@ function changesOf(mark: number, repo: string): { event: WatcherEvent; at: numbe
 let settled = 0;
 
 /**
+ * Proves the watch of one repository is delivering before anything is measured
+ * against it.
+ *
+ * `fs.watch` with `recursive: true` arms asynchronously: it returns before the
+ * platform is delivering, and a write made in that window is **lost outright**
+ * rather than delayed. Measured on this fixture — the watcher started and
+ * stopped thirty times, a file written the moment `startWatcher` returned —
+ * four writes of the thirty produced no event at all inside five seconds, while
+ * the other twenty-six produced one in about 190 ms. That is what a
+ * `no diff-changed within 20000 ms` here has always been: not a slow machine,
+ * but a write nobody was listening for.
+ *
+ * The write is **repeated** rather than waited on for longer: what is being
+ * waited out is a lost write, and no ceiling brings one back. It is done per
+ * repository, because each tree is its own watch.
+ */
+async function arm(repo: string): Promise<void> {
+  const deadline = performance.now() + 30_000;
+  for (let attempt = 0; ; attempt += 1) {
+    const mark = performance.now();
+    const file = join(root, repo, `armed-${attempt}.ts`);
+    await writeFile(file, `export const armed = ${attempt};\n`);
+    const until = performance.now() + 2_000;
+    while (performance.now() < until) {
+      if (changesOf(mark, repo).length > 0) {
+        // The file goes again, and its removal is a change of its own: the
+        // tests that follow start from a watcher with nothing in flight.
+        await rm(file, { force: true });
+        await new Promise((done) => setTimeout(done, 300));
+        return;
+      }
+      await new Promise((done) => setTimeout(done, 5));
+    }
+    if (performance.now() > deadline) throw new Error(`the watch of ${repo} never armed`);
+  }
+}
+
+/**
  * A change in another repository, waited for. Rescans run in one queue, so the
  * event of a change made after another one proves the earlier one has been
  * through — which is what a test that expects *no* event needs, rather than a
@@ -205,6 +243,10 @@ beforeAll(async () => {
       throw error;
     },
   });
+
+  // Both trees the tests below write into, and before any of them measures.
+  await arm(REPO);
+  await arm(OTHER_REPO);
 }, 120_000);
 
 afterAll(() => {
@@ -266,6 +308,9 @@ describe("watcher", () => {
     if (NATIVE_WATCH) expect(median(elapsed)).toBeLessThan(BUDGET_MS + (await baseline()));
   }, 30_000);
 
+  // The two below read what the test above produced — its activity line and the
+  // file it wrote — so one failure there is three here. That is a dependency
+  // between tests and not three defects.
   it("leaves the diff change unattributed while no agent has written", () => {
     const lines = activity.filter((event) => event.repo === REPO);
     expect(lines.at(-1)).toMatchObject({ verb: "changed", author: null });

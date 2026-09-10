@@ -18,11 +18,25 @@ import { baseArgument } from "./base.ts";
 import type { ChangedHunks } from "./patch.ts";
 import { changedHunks, hasNewLine, mergeRepository } from "./patch.ts";
 import { perf } from "./perf.ts";
+import type { ScopeDraft } from "./scope.ts";
+import {
+  confirmQuestion,
+  countScope,
+  draftFromScope,
+  draftToScope,
+  isEmptyDraft,
+  removedFrom,
+  scopeLabel,
+  togglePath as togglePathInDraft,
+  toggleRepo as toggleRepoInDraft,
+} from "./scope.ts";
 import type {
   ActivityEvent,
   BaseMode,
   BranchCandidate,
   BranchList,
+  CandidateRepository,
+  CandidateSet,
   Comment,
   CommentStatus,
   Counters,
@@ -31,6 +45,7 @@ import type {
   ReviewCounters,
   ReviewDocument,
   ScanWarning,
+  Scope,
   SessionList,
   SessionSummary,
   Severity,
@@ -38,7 +53,12 @@ import type {
 } from "./types.ts";
 
 export type Theme = "dark" | "light";
-export type SidebarTab = "changes" | "all";
+/**
+ * The tabs of the sidebar. `changes` is the tree of handoff section 1.3;
+ * `select` turns it into the picking surface a new review task is built on
+ * (DA-55); `all files` is Phase 2 (DA-37) and is not rendered.
+ */
+export type SidebarTab = "changes" | "all" | "select";
 export type DiffView = "split" | "unified";
 export type RailScope = "file" | "all";
 export type ExportView = "rendered" | "raw";
@@ -102,6 +122,15 @@ type ReviewSlice = {
   status: LoadStatus;
   /** Why the review could not be loaded; `null` while it can still arrive. */
   failure: string | null;
+  /**
+   * The review task this window is on: `?review=<name>` of the address bar, and
+   * `null` for the current session. It is what every request of this page
+   * carries, reads and writes alike, so a window opened on a task both shows it
+   * and writes into it. Switching a task moves this window's URL and never
+   * `current`, which stays the default for a human typing a command by hand
+   * ([ADR-010](../../docs/adr/adr-010-review-task-scope.md), decision 7).
+   */
+  reviewName: string | null;
   root: string;
   repositories: RepositoryChange[];
   /** Every file of the change set, flattened in the order the centre panel renders. */
@@ -117,6 +146,8 @@ type ReviewSlice = {
   /** `user` of `config.json`: what a comment written here is signed with. */
   user: string;
   loadReview: () => Promise<void>;
+  /** The address bar changed under the page — `Back` — so the window follows it. */
+  syncTaskFromUrl: () => Promise<void>;
 };
 
 type ThemeAndBaseSlice = {
@@ -173,13 +204,73 @@ type SessionsSlice = {
   setSessionMenu: (open: boolean) => void;
   setNewName: (name: string) => void;
   setNewBase: (base: string) => void;
-  createSession: () => Promise<void>;
   /**
-   * `use` and then the whole review again: a session is a different set of
-   * everything, not a filter over the same set. Not named after the CLI's own
-   * `review use`, because a `use…` in a React file is read as a hook.
+   * A session, or — with a scope — a review task. It is written with
+   * `use: false` and this window is moved onto it: the UI never moves `current`
+   * ([ADR-010](../../docs/adr/adr-010-review-task-scope.md), decision 7).
    */
+  createSession: (scope?: Scope) => Promise<void>;
+  /**
+   * The task this window shows, by name or `null` for the current session: the
+   * URL is written and the whole review read again, because a task is a
+   * different set of everything and not a filter over the same set. Not named
+   * after the CLI's own `review use`, because a `use…` in a React file is read
+   * as a hook — and because it is no longer that: `current` does not move.
+   */
+  showTask: (name: string | null) => Promise<void>;
+  /** The menu's own gesture: the same move, with the menu closed and a toast. */
   switchSession: (name: string) => Promise<void>;
+};
+
+/**
+ * The question asked before a scope edit deletes the comments anchored under
+ * what it removes: what is going, how many comments there are, and how many of
+ * those are still open. Cancelling writes nothing at all — the refusal that
+ * raised it wrote nothing either ([ADR-010], decision 6).
+ */
+export type ScopeConfirm = {
+  /** The scope the reader is applying, held while they answer. */
+  scope: Scope;
+  question: string;
+};
+
+/**
+ * The scope editor (DA-55): an overlay over the **whole root**, because a scope
+ * cannot be widened from a tree that already hides what is missing. It is the
+ * one place that offers what the task is not about, and it is opened by hand.
+ */
+type ScopeSlice = {
+  scopeOpen: boolean;
+  /** The change set of the whole root; asked for when the editor opens. */
+  candidates: CandidateRepository[];
+  candidatesStatus: LoadStatus;
+  /** What the editor holds while it is open; applied in one write. */
+  scopeDraft: ScopeDraft;
+  scopeConfirm: ScopeConfirm | null;
+  /** True from `Apply` until the server has answered. */
+  applying: boolean;
+  openScope: (open: boolean) => void;
+  pickScopeRepo: (repo: string, files: string[]) => void;
+  pickScopePath: (repo: string, path: string, files: string[]) => void;
+  /** `PUT /api/sessions/:name/scope`; the consent comes from the confirmation. */
+  applyScope: (dropComments?: boolean) => Promise<void>;
+  cancelScopeConfirm: () => void;
+};
+
+/**
+ * Select mode (DA-55): the tree becomes a picking surface, and what is picked
+ * becomes a new review task. It picks from the tree — the task this window is
+ * on — rather than from the whole root: widening is the editor's job.
+ */
+type SelectSlice = {
+  /** What select mode has picked so far; kept while the mode is left and entered. */
+  selectDraft: ScopeDraft;
+  /** The form `New task…` opens: a name and a base for the task being made. */
+  newTaskOpen: boolean;
+  pickTreeRepo: (repo: string, files: string[]) => void;
+  pickTreePath: (repo: string, path: string, files: string[]) => void;
+  clearSelection: () => void;
+  openNewTask: (open: boolean) => void;
 };
 
 type NavigationSlice = {
@@ -188,6 +279,7 @@ type NavigationSlice = {
   /** Repositories the sidebar tree has collapsed; `true` means collapsed. */
   collapsedRepos: Record<string, boolean>;
   sidebarTab: SidebarTab;
+  setSidebarTab: (tab: SidebarTab) => void;
   query: string;
   browse: boolean;
   plainPath: string | null;
@@ -379,6 +471,8 @@ type LiveSlice = {
 export type Store = ReviewSlice &
   ThemeAndBaseSlice &
   SessionsSlice &
+  ScopeSlice &
+  SelectSlice &
   NavigationSlice &
   CommentingSlice &
   ThreadsSlice &
@@ -392,6 +486,7 @@ export const useStore = create<Store>()((set, get) => ({
   // review
   status: "loading",
   failure: null,
+  reviewName: taskInUrl(),
   root: "",
   repositories: [],
   files: [],
@@ -403,7 +498,7 @@ export const useStore = create<Store>()((set, get) => ({
   user: "",
   loadReview: async () => {
     try {
-      const response = await fetch("/api/review");
+      const response = await fetch(onTask("/api/review"));
       if (!response.ok) {
         const refused = await refusal(response);
         // A root nobody has opened a session in is not a failure: it is the
@@ -435,6 +530,12 @@ export const useStore = create<Store>()((set, get) => ({
     } catch {
       // The page works unsigned; the server signs what it writes anyway.
     }
+  },
+  syncTaskFromUrl: async () => {
+    const name = taskInUrl();
+    if (name === get().reviewName) return;
+    set({ reviewName: name });
+    await get().loadReview();
   },
 
   // theme and base
@@ -517,24 +618,38 @@ export const useStore = create<Store>()((set, get) => ({
   },
   setNewName: (newName) => set({ newName }),
   setNewBase: (newBase) => set({ newBase }),
-  createSession: async () => {
+  createSession: async (scope) => {
     const { newName, newBase, switching } = get();
     const name = newName.trim();
     if (name === "" || switching) return;
+    // The UI does not move `current`: only `review use` does (ADR-010, decision
+    // 7), and a session created here would otherwise take the pointer from
+    // whatever a terminal beside this window is on — the window opens what it
+    // made instead. **The first session of a root is the exception**: the
+    // first-run screen is exactly the state in which there is no `current` to
+    // leave alone, and a root whose only session the CLI cannot name without
+    // `--review` is a root the tool half works in.
+    const use = get().status === "no-session";
     set({ switching: true });
     try {
       const response = await fetch("/api/sessions", {
         method: "POST",
         headers: { "content-type": "application/json" },
-        body: JSON.stringify({ name, base: newBase }),
+        body: JSON.stringify({
+          name,
+          base: newBase,
+          use,
+          ...(scope === undefined || scope === null ? {} : { scope }),
+        }),
       });
       if (!response.ok) throw new Error((await refusal(response)).message);
-      // Creating a session makes it current, so the review that comes next is
-      // already the new one's ([04-domain.md]).
-      set({ sessionMenuOpen: false, newName: "" });
-      get().markSelfSession(name);
-      await get().loadReview();
-      set({ switching: false, toast: `review new ${name}` });
+      set({ sessionMenuOpen: false, scopeOpen: false, newTaskOpen: false, newName: "" });
+      // Only the branch that moves `current`: without `use` the watcher sees a
+      // session appear and sends `sessions-changed`, which this page does not
+      // read the review for.
+      if (use) get().markSelfSession(name);
+      await get().showTask(use ? null : name);
+      set({ switching: false, toast: use ? `review new ${name}` : `review new ${name} --no-use` });
       void loadSessions(set);
     } catch (error) {
       set({ switching: false, toast: reason(error) });
@@ -545,28 +660,116 @@ export const useStore = create<Store>()((set, get) => ({
       set({ sessionMenuOpen: false });
       return;
     }
-    set({ switching: true });
+    set({ switching: true, sessionMenuOpen: false });
+    await get().showTask(name);
+    set({ switching: false, toast: `?review=${name}` });
+    void loadSessions(set);
+  },
+  showTask: async (name) => {
+    // The address bar is what says which task this window is on, so it is
+    // written before the review is read: a reload, a copied link and `Back` all
+    // land on the same task afterwards.
+    writeTaskInUrl(name);
+    // The status is left alone: dropping to `loading` would put the skeleton up
+    // between the two reviews, which unmounts every file card of the one on
+    // screen and mounts every card of the next — measured as 40 ms on the
+    // synthetic review, against a switching budget of 100
+    // ([11-perf.md](../../docs/reference/11-perf.md)). The review that arrives
+    // replaces the one that is there, as it always did; `switching` is what
+    // says a switch is in flight.
+    set({ reviewName: name });
+    await get().loadReview();
+  },
+
+  // the scope editor
+  scopeOpen: false,
+  candidates: [],
+  candidatesStatus: "loading",
+  scopeDraft: {},
+  scopeConfirm: null,
+  applying: false,
+  openScope: (scopeOpen) => {
+    // The draft opens on the scope the task has, so `Apply` on an untouched
+    // editor writes back what is already written.
+    set({
+      scopeOpen,
+      scopeConfirm: null,
+      ...(scopeOpen ? { scopeDraft: draftFromScope(get().session?.scope ?? null) } : {}),
+    });
+    // Read every time: the whole root is what the editor offers, and a
+    // repository that started changing while the page was open belongs in it.
+    if (scopeOpen) void loadCandidates(set);
+  },
+  pickScopeRepo: (repo, files) =>
+    set({ scopeDraft: toggleRepoInDraft(get().scopeDraft, repo, files) }),
+  pickScopePath: (repo, path, files) =>
+    set({ scopeDraft: togglePathInDraft(get().scopeDraft, repo, path, files) }),
+  cancelScopeConfirm: () => set({ scopeConfirm: null }),
+  applyScope: async (dropComments) => {
+    const { session, scopeDraft, scopeConfirm, applying } = get();
+    if (session === null || applying) return;
+    // Answering the confirmation applies **the scope the question was asked
+    // about**, not the draft as it now stands: the consent was given for that
+    // list, and a draft that moved between the question and the answer would
+    // delete comments nobody was told about.
+    const confirmed = dropComments === true && scopeConfirm !== null;
+    // `Apply` is disabled on an empty draft, and this stands behind it because
+    // the value an empty draft produces is not "nothing" but `null`, which is
+    // the whole root: a slip here would widen the task instead of refusing.
+    if (!confirmed && isEmptyDraft(scopeDraft)) {
+      set({ toast: "Задача ни о чём — отметьте хотя бы один репозиторий" });
+      return;
+    }
+    const scope = confirmed ? scopeConfirm.scope : draftToScope(scopeDraft);
+    set({ applying: true });
     try {
-      const response = await fetch(`/api/sessions/${encodeURIComponent(name)}/use`, {
-        method: "POST",
+      const response = await fetch(`/api/sessions/${encodeURIComponent(session.name)}/scope`, {
+        method: "PUT",
         headers: { "content-type": "application/json" },
+        body: JSON.stringify({ scope, dropComments: dropComments === true }),
       });
-      if (!response.ok) throw new Error((await refusal(response)).message);
-      set({ sessionMenuOpen: false });
-      get().markSelfSession(name);
+      if (!response.ok) {
+        // The one refusal that is a question rather than a mistake: comments
+        // hang under what this removes, and the server has written nothing.
+        const conflict = await refusal(response);
+        if (conflict.code === "scope-has-comments") {
+          set({ applying: false, scopeConfirm: asQuestion(get(), scope, conflict.comments) });
+          return;
+        }
+        throw new Error(conflict.message);
+      }
+      set({ scopeOpen: false, scopeConfirm: null });
+      // The scope is part of the session's metadata, so the watcher sees this
+      // write and sends `session-changed` back. The review it names is read
+      // here, on the next line, and reading it twice costs megabytes for
+      // nothing ([live.ts](live.ts)).
+      get().markSelfSession(session.name);
+      // The change set is computed for the scope, so the review is read again
+      // rather than patched ([03-storage.md]).
       await get().loadReview();
-      set({ switching: false, toast: `review use ${name}` });
+      set({ applying: false, toast: `Состав задачи: ${scopeLabel(countScope(scope))}` });
       void loadSessions(set);
     } catch (error) {
-      set({ switching: false, toast: reason(error) });
+      set({ applying: false, toast: reason(error) });
     }
   },
+
+  // select mode
+  selectDraft: {},
+  newTaskOpen: false,
+  pickTreeRepo: (repo, files) =>
+    set({ selectDraft: toggleRepoInDraft(get().selectDraft, repo, files) }),
+  pickTreePath: (repo, path, files) =>
+    set({ selectDraft: togglePathInDraft(get().selectDraft, repo, path, files) }),
+  clearSelection: () => set({ selectDraft: {}, newTaskOpen: false }),
+  openNewTask: (newTaskOpen) => set({ newTaskOpen, ...(newTaskOpen ? { newName: "" } : {}) }),
 
   // navigation
   repo: null,
   path: null,
   collapsedRepos: {},
   sidebarTab: "changes",
+  setSidebarTab: (sidebarTab) => set({ sidebarTab }),
   query: "",
   browse: false,
   plainPath: null,
@@ -677,7 +880,7 @@ export const useStore = create<Store>()((set, get) => ({
     if (text === "") return;
     set({ sending: true });
     try {
-      const response = await fetch("/api/comments", {
+      const response = await fetch(onTask("/api/comments"), {
         method: "POST",
         headers: { "content-type": "application/json" },
         body: JSON.stringify({
@@ -966,8 +1169,8 @@ async function loadExport(set: (partial: Partial<Store>) => void): Promise<void>
   set({ exportStatus: "loading" });
   try {
     const [raw, comments] = await Promise.all([
-      fetch("/api/export?status=open&format=md").then(readExport),
-      fetch("/api/export?status=open&format=json").then(readExport),
+      fetch(onTask("/api/export?status=open&format=md")).then(readExport),
+      fetch(onTask("/api/export?status=open&format=json")).then(readExport),
     ]);
     set({
       exportRaw: typeof raw === "string" ? raw : "",
@@ -1142,7 +1345,7 @@ async function write(
   if (before === undefined) return false;
   set({ busy: { ...get().busy, [id]: true }, ...replace(get, id, optimistic(before)) });
   try {
-    const response = await fetch(route, {
+    const response = await fetch(onTask(route), {
       method: "POST",
       headers: { "content-type": "application/json" },
       body: JSON.stringify(body),
@@ -1240,6 +1443,10 @@ function fromDocument(
           // next one has its own, and a hunk of it whose header happens to
           // match would otherwise be shown as freshly changed.
           changed: new Map(),
+          // What select mode had picked was files of the task that has just
+          // left the screen; the tree of the next one does not carry them.
+          selectDraft: {},
+          newTaskOpen: false,
         }
       : {}),
     // Split or unified is about a file and not about a review, so it is kept
@@ -1318,19 +1525,95 @@ function indexCounters(
   return { counters, fileCounts, repoCounts };
 }
 
-/** The server's own refusal — `{ error, message }` — rather than the status code. */
-async function refusal(response: Response): Promise<{ code: string | null; message: string }> {
+/**
+ * The server's own refusal — `{ error, message }` — rather than the status
+ * code. A `scope-has-comments` carries the ids of the comments a narrowing
+ * would delete as well, so the editor can word its own question instead of
+ * showing a sentence written for the CLI
+ * ([07-server.md](../../docs/reference/07-server.md)).
+ */
+type Refusal = { code: string | null; message: string; comments: string[] };
+
+async function refusal(response: Response): Promise<Refusal> {
   try {
-    const body = (await response.json()) as { error?: unknown; message?: unknown };
+    const body = (await response.json()) as {
+      error?: unknown;
+      message?: unknown;
+      comments?: unknown;
+    };
     const code = typeof body.error === "string" ? body.error : null;
+    const comments = Array.isArray(body.comments) ? (body.comments as string[]) : [];
     if (typeof body.message === "string" && body.message !== "") {
-      return { code, message: body.message };
+      return { code, message: body.message, comments };
     }
-    return { code, message: `the server answered ${response.status}` };
+    return { code, message: `the server answered ${response.status}`, comments };
   } catch {
     // A body that is not the refusal shape leaves the status to say it.
-    return { code: null, message: `the server answered ${response.status}` };
+    return { code: null, message: `the server answered ${response.status}`, comments: [] };
   }
+}
+
+/**
+ * The 409 worded for the person about to answer it: what the edit removes, how
+ * many comments hang under it, and how many of those are still open. The count
+ * is the server's; whether each is open is read from the threads this page is
+ * already holding, which are the very comments the ids name.
+ */
+function asQuestion(store: Store, scope: Scope, ids: string[]): ScopeConfirm {
+  const held = new Map(store.comments.map((comment) => [comment.id, comment]));
+  const open = ids.filter((id) => held.get(id)?.status === "open").length;
+  return {
+    scope,
+    question: confirmQuestion(removedFrom(store.session?.scope ?? null, scope), ids.length, open),
+  };
+}
+
+/** The whole root, for the editor to pick a task out of. Read every time it opens. */
+async function loadCandidates(set: (partial: Partial<Store>) => void): Promise<void> {
+  set({ candidatesStatus: "loading" });
+  try {
+    const response = await fetch("/api/sessions/candidates");
+    if (!response.ok) throw new Error((await refusal(response)).message);
+    const list = (await response.json()) as CandidateSet;
+    set({ candidates: list.repositories, candidatesStatus: "ready" });
+  } catch {
+    set({ candidatesStatus: "failed" });
+  }
+}
+
+/**
+ * The name of the task this window is on, from `?review=`. The store is also
+ * created by the unit suite under Node, where there is no address bar.
+ */
+function taskInUrl(): string | null {
+  if (typeof location === "undefined" || typeof location.search !== "string") return null;
+  const name = new URLSearchParams(location.search).get("review");
+  return name === null || name === "" ? null : name;
+}
+
+/**
+ * The address bar, so a reload and a copied link land on the same task. It is
+ * pushed rather than replaced: `Back` is how a reader returns to the task they
+ * came from, and `App` listens for that.
+ */
+function writeTaskInUrl(name: string | null): void {
+  if (typeof location === "undefined" || typeof history?.pushState !== "function") return;
+  const url = new URL(location.href);
+  if (name === null) url.searchParams.delete("review");
+  else url.searchParams.set("review", name);
+  if (url.href !== location.href) history.pushState(null, "", url);
+}
+
+/**
+ * One request of this window, on the task this window is on. Every route the
+ * page reads *and writes* through carries it, so a window opened on a task
+ * writes into that task and not into whatever `current` happens to name
+ * ([ADR-010](../../docs/adr/adr-010-review-task-scope.md)).
+ */
+export function onTask(path: string): string {
+  const name = useStore.getState().reviewName;
+  if (name === null) return path;
+  return `${path}${path.includes("?") ? "&" : "?"}review=${encodeURIComponent(name)}`;
 }
 
 function reason(error: unknown): string {

@@ -26,6 +26,14 @@ function currentComments(): { id: string }[] {
   return JSON.parse(cli("list", "--json", "--status", "all")) as { id: string }[];
 }
 
+/** What `current` names, which nothing the UI does may move (DA-55). */
+function currentSession(): string | undefined {
+  const listed = JSON.parse(cli("review", "list", "--json")) as {
+    sessions: { name: string; current: boolean }[];
+  };
+  return listed.sessions.find((session) => session.current)?.name;
+}
+
 async function open(page: Page) {
   await page.goto("/");
   await page.waitForFunction(() => window.__perf?.ready === true);
@@ -55,7 +63,12 @@ test.afterEach(async ({ request }) => {
   expect(based.ok(), await based.text()).toBe(true);
 });
 
-/** The same, plus the reload that shows it, for a test that goes on afterwards. */
+/**
+ * The same, plus the navigation that shows it, for a test that goes on
+ * afterwards. `goto("/")` and not a reload: switching a task writes
+ * `?review=<name>` into this window's address, so a reload would come back on
+ * the task the test just moved to (DA-55).
+ */
 async function restore(page: Page) {
   await page.evaluate(async (name: string) => {
     const json = { "content-type": "application/json" };
@@ -66,12 +79,14 @@ async function restore(page: Page) {
       body: JSON.stringify({ base: "head" }),
     });
   }, SESSION);
-  await page.reload();
+  await page.goto("/");
   await page.waitForFunction(() => window.__perf?.ready === true);
   await expect(page.locator(".pill-name").first()).toHaveText(SESSION);
 }
 
-test("the menu creates a session and makes it current for the CLI", async ({ page }) => {
+test("the menu creates a session, opens it here, and leaves current where it was", async ({
+  page,
+}) => {
   await open(page);
   const name = `ui-${Date.now().toString(36)}`;
 
@@ -79,10 +94,16 @@ test("the menu creates a session and makes it current for the CLI", async ({ pag
   await page.getByRole("textbox", { name: "name" }).fill(name);
   await page.getByRole("button", { name: "Create" }).click();
 
+  // This window is on the session it made, and says so in its own address.
   await expect(page.locator(".pill-name").first()).toHaveText(name);
+  expect(new URL(page.url()).searchParams.get("review")).toBe(name);
   expect(cli("review", "list")).toContain(name);
-  // A session of its own is a set of comments of its own, and a new one has none.
-  expect(currentComments()).toHaveLength(0);
+  // `current` is what a human typing a command by hand gets, and only
+  // `review use` moves it (ADR-010, decision 7): the CLI still answers for the
+  // session it was on, which is the one with the fixture's comments in it.
+  expect(currentSession()).toBe(SESSION);
+  expect(currentComments().length).toBeGreaterThan(0);
+  expect(JSON.parse(cli("list", "--json", "--status", "all", "--review", name))).toHaveLength(0);
 
   await restore(page);
 });
@@ -100,6 +121,10 @@ test("switching sessions swaps the whole set of threads", async ({ page }) => {
 
   await expect(page.locator(".pill-name").first()).toHaveText(name);
   await expect(page.locator(".rail-tabs .tab").nth(1)).toHaveText("Review 0");
+  // The switch is this window's own: the address carries it and `current` does
+  // not move, so the CLI beside it still answers for the session it was on.
+  expect(new URL(page.url()).searchParams.get("review")).toBe(name);
+  expect(currentSession()).toBe(SESSION);
 
   await restore(page);
 });

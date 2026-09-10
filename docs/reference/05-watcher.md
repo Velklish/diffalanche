@@ -75,6 +75,20 @@ directory. A watch that fails after it started — an error from inotify or
 FSEvents — closes itself and the walk takes over, rather than ending the process
 with an unhandled event.
 
+**A watch is not delivering when `watch` returns, and that holds for every
+runtime here, not only for the probe above.** A write made in the window
+between the call and the first delivery is lost outright rather than delayed, so
+anything that measures a watch has to prove it is live first — by writing until
+an event comes back, not by waiting longer for one write. Measured with the
+watcher started and stopped thirty times on the small synthetic fixture, a file
+written the moment `startWatcher` returned: **four of the thirty writes produced
+no event at all** inside five seconds, while the other twenty-six produced one
+in about 190 ms; with the same probe repeating the write until the watch
+answered, thirty of thirty. That is why `tests/watcher.test.ts` arms the watch of
+every repository it writes into before it measures anything: a
+`no diff-changed within 20000 ms` there was never a slow machine, it was a write
+nobody was listening for.
+
 **Bun's own test runner is the one place where the recursive watch is not used
 here.** Under `bun run test:bun` a watch goes quiet after its first events, so
 `tests/watcher.test.ts` passes `recursive: false` there and exercises the walk

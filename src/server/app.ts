@@ -5,6 +5,7 @@ import { findRepositories } from "../core/change-set.ts";
 import type { Config } from "../core/config/index.ts";
 import {
   addComment,
+  assertScope,
   closeSession,
   createSession,
   exportMarkdown,
@@ -59,6 +60,21 @@ export type AppOptions = {
 /** The methods that change nothing, and so need no guard on where they came from. */
 const SAFE_METHODS = new Set(["GET", "HEAD", "OPTIONS"]);
 
+/**
+ * The review task a request is about: `?review=<name>`, and the current session
+ * without it. **Every route a window uses reads it, reading and writing alike.**
+ * A window opened on a task shows that task, so a comment written in it belongs
+ * to that task; without this a window on one task would write into another, and
+ * a finding stored where nothing reads it back is the loss product principle 5
+ * forbids. `current` stays what a human typing a command by hand gets, and only
+ * `review use` moves it ([ADR-010](../../docs/adr/adr-010-review-task-scope.md),
+ * decision 7).
+ */
+function named(c: Context): string | undefined {
+  const name = c.req.query("review");
+  return name === undefined || name === "" ? undefined : name;
+}
+
 /** What `GET /api/config` gives the UI: the two settings it has to know. */
 export type ClientConfig = { user: string; port: number };
 
@@ -103,7 +119,7 @@ export function createApp({ activity, config, events, review, ui, verbose }: App
   // `?review=<name>` is the task an agent printed a link to; without it the
   // current session, as before ([ADR-010](../../docs/adr/adr-010-review-task-scope.md)).
   app.get("/api/review", async (c) =>
-    c.body(await review.payload(c.req.query("review")), 200, {
+    c.body(await review.payload(named(c)), 200, {
       "content-type": "application/json",
     }),
   );
@@ -128,7 +144,7 @@ export function createApp({ activity, config, events, review, ui, verbose }: App
 
   app.get("/api/repos/:repo{.+}/diff", async (c) => {
     const repo = c.req.param("repo");
-    const change = await review.repository(repo);
+    const change = await review.repository(repo, named(c));
     if (change === null) {
       return c.json<ErrorBody>(
         { error: "no-such-repository", message: `no repository ${repo} in this change set` },
@@ -140,11 +156,15 @@ export function createApp({ activity, config, events, review, ui, verbose }: App
 
   app.get("/api/comments/:id", async (c) =>
     c.json(
-      await getComment(config.dataDir, await resolveSessionName(config.dataDir), c.req.param("id")),
+      await getComment(
+        config.dataDir,
+        await resolveSessionName(config.dataDir, named(c)),
+        c.req.param("id"),
+      ),
     ),
   );
 
-  app.get("/api/warnings", async (c) => c.json((await review.document()).warnings));
+  app.get("/api/warnings", async (c) => c.json((await review.document(named(c))).warnings));
 
   // What the feed shows before anything happens: the lines the server noticed
   // while it has been running, oldest first, the same shape the `activity`
@@ -174,7 +194,7 @@ export function createApp({ activity, config, events, review, ui, verbose }: App
 
   app.post("/api/comments", async (c) => {
     const body = await readBody(c);
-    const session = await resolveSessionName(config.dataDir);
+    const session = await resolveSessionName(config.dataDir, named(c));
     const repo = nullableText(body, "repo");
     const path = nullableText(body, "path");
     // A comment names a repository the root has; the anchor is taken from the
@@ -200,7 +220,7 @@ export function createApp({ activity, config, events, review, ui, verbose }: App
 
   app.post("/api/comments/:id/replies", async (c) => {
     const body = await readBody(c);
-    const session = await resolveSessionName(config.dataDir);
+    const session = await resolveSessionName(config.dataDir, named(c));
     const comment = await reply(config.dataDir, session, c.req.param("id"), {
       body: text(body, "body"),
       ...author,
@@ -234,18 +254,28 @@ export function createApp({ activity, config, events, review, ui, verbose }: App
   ): Promise<Comment> {
     const body = await readBody(c);
     const note = optionalText(body, "note");
-    const session = await resolveSessionName(config.dataDir);
+    const session = await resolveSessionName(config.dataDir, named(c));
     return close(config.dataDir, session, id, {
       ...author,
       ...(note === undefined ? {} : { note }),
     });
   }
 
+  // A session, and a review task is one with a scope: `scope` builds it in the
+  // same write rather than leaving a moment where the task is about the whole
+  // root. `use: false` is `review new --no-use` — the task is written and
+  // `current` is left where the human's own commands put it, which is what the
+  // UI always asks for ([ADR-010](../../docs/adr/adr-010-review-task-scope.md)).
   app.post("/api/sessions", async (c) => {
     const body = await readBody(c);
     const base = parseBaseArgument(optionalText(body, "base") ?? "head");
     const title = optionalText(body, "title");
-    const created = await createSession(config.dataDir, text(body, "name"), base, title);
+    const wanted = scope(body);
+    if (wanted !== null) assertScope(wanted, await findRepositories(config));
+    const created = await createSession(config.dataDir, text(body, "name"), base, title, {
+      ...(wanted === null ? {} : { scope: wanted }),
+      ...(body.use === undefined ? {} : { use: consent(body, "use") }),
+    });
     review.invalidate();
     return c.json(created, 201);
   });
@@ -305,7 +335,7 @@ export function createApp({ activity, config, events, review, ui, verbose }: App
   app.get("/api/export", async (c) => {
     const status = choice(c.req.query("status"), "status", ["open", "all"] as const, "open");
     const format = choice(c.req.query("format"), "format", ["md", "json"] as const, "md");
-    const session = await resolveSessionName(config.dataDir);
+    const session = await resolveSessionName(config.dataDir, named(c));
     const comments = await list(config.dataDir, session, status === "all" ? {} : { status });
     if (format === "json") return c.json(comments);
     const metadata = await readSession(config.dataDir, session);

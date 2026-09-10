@@ -60,7 +60,18 @@ function refusal(code: string, status = 404): Response {
 
 afterEach(() => {
   vi.unstubAllGlobals();
-  useStore.setState({ scan: null, switching: false, newName: "", newBase: "head" });
+  // `reviewName` and `status` go back too: the store is one module-level
+  // instance shared by every test in this file, and a test that left a task
+  // name behind would send the next one's requests into that task without
+  // saying so (DA-55).
+  useStore.setState({
+    scan: null,
+    switching: false,
+    newName: "",
+    newBase: "head",
+    reviewName: null,
+    status: "loading",
+  });
 });
 
 describe("a root with no session", () => {
@@ -98,7 +109,14 @@ describe("creating the first session", () => {
 
     await useStore.getState().createSession();
 
-    expect(calls[0]).toEqual({ url: "/api/sessions", body: { name: "ls-1", base: "head" } });
+    // The first session of a root becomes `current`: this screen is exactly
+    // the state in which there is none to leave alone, and a root the CLI
+    // cannot name without `--review` is a root the tool half works in
+    // ([ADR-010](../docs/adr/adr-010-review-task-scope.md), decision 7).
+    expect(calls[0]).toEqual({
+      url: "/api/sessions",
+      body: { name: "ls-1", base: "head", use: true },
+    });
     expect(calls[1]?.url).toBe("/api/review");
     expect(useStore.getState().status).toBe("ready");
     expect(useStore.getState().session?.name).toBe("ls-1");
@@ -113,13 +131,41 @@ describe("creating the first session", () => {
         "/api/config": () => new Response(JSON.stringify({ user: "kim.p" })),
         "/api/sessions?": () => new Response(JSON.stringify({ sessions: [], warnings: [] })),
       });
-      useStore.setState({ newName: "ls-1", newBase: base, switching: false });
+      useStore.setState({ status: "no-session", newName: "ls-1", newBase: base, switching: false });
 
       await useStore.getState().createSession();
 
-      expect(calls[0]).toEqual({ url: "/api/sessions", body: { name: "ls-1", base } });
+      expect(calls[0]).toEqual({
+        url: "/api/sessions",
+        body: { name: "ls-1", base, use: true },
+      });
       vi.unstubAllGlobals();
     }
+  });
+
+  it("leaves `current` alone once the root has a session, and takes the window there", async () => {
+    // Every session but the first: `current` is what a terminal beside this
+    // window is on, and only `review use` moves it (ADR-010, decision 7). The
+    // window follows the task it made through its own address instead.
+    const calls = serve({
+      "/api/sessions": () => new Response(JSON.stringify(REVIEW.session), { status: 201 }),
+      "/api/review?review=ls-1": () => new Response(JSON.stringify(REVIEW)),
+      "/api/config": () => new Response(JSON.stringify({ user: "kim.p" })),
+    });
+    useStore.setState({ status: "ready", newName: "ls-1", newBase: "head", switching: false });
+
+    await useStore.getState().createSession([{ repo: "repos/a", paths: ["src/a.ts"] }]);
+
+    expect(calls[0]).toEqual({
+      url: "/api/sessions",
+      body: {
+        name: "ls-1",
+        base: "head",
+        use: false,
+        scope: [{ repo: "repos/a", paths: ["src/a.ts"] }],
+      },
+    });
+    expect(useStore.getState().reviewName).toBe("ls-1");
   });
 
   it("does nothing without a name", async () => {

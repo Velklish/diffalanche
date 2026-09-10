@@ -15,7 +15,7 @@ import type { ActivityEvent } from "../core/watcher/activity.ts";
 import type { WatcherEvent } from "../core/watcher/bus.ts";
 import { afterPaint, perf } from "./perf.ts";
 import { PROBE_Y } from "./reveal.ts";
-import { useStore } from "./store.ts";
+import { onTask, useStore } from "./store.ts";
 import type { Comment } from "./types.ts";
 
 /** What the sidebar footer says about the stream. */
@@ -85,9 +85,16 @@ export function startLive(): () => void {
     thread(event.id),
   );
   on<Extract<WatcherEvent, { type: "session-changed" }>>("session-changed", (event) => {
-    // The page's own `use`, `new` and base change come back through the watcher
-    // like anyone else's. It has already read the review they name, and reading
-    // it again would cost megabytes for nothing.
+    // The frame is about the current session, which is not what this window is
+    // on when it was opened on a task of its own: `current` moving is then
+    // somebody else's business, and re-reading megabytes for it would take the
+    // reader's own task away and put it back
+    // ([ADR-010](../../docs/adr/adr-010-review-task-scope.md)).
+    const held = store().reviewName;
+    if (held !== null && held !== event.name) return;
+    // The page's own base change comes back through the watcher like anyone
+    // else's. It has already read the review it names, and reading it again
+    // would cost megabytes for nothing.
     if (store().claimSelfSession(event.name)) return;
     return store().loadReview();
   });
@@ -124,7 +131,7 @@ async function readActivity(): Promise<void> {
  * has no changes left — and is as much of an update as a new diff is.
  */
 async function diffChanged(repo: string): Promise<void> {
-  const response = await fetch(`/api/repos/${repo}/diff`);
+  const response = await fetch(onTask(`/api/repos/${repo}/diff`));
   if (!response.ok && response.status !== 404) {
     throw new Error(
       `the diff of ${repo} could not be read: the server answered ${response.status}`,
@@ -146,7 +153,7 @@ async function diffChanged(repo: string): Promise<void> {
  * toast as well as in the rail.
  */
 async function thread(id: string, replyId?: string): Promise<void> {
-  const response = await fetch(`/api/comments/${id}`);
+  const response = await fetch(onTask(`/api/comments/${id}`));
   if (!response.ok) {
     throw new Error(`the thread ${id} could not be read: the server answered ${response.status}`);
   }

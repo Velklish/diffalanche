@@ -4,9 +4,9 @@
  * something says it changed — the whole document arrives in one response and
  * nothing is loaded lazily afterwards (`docs/SPEC.md` section 6).
  */
-import { sameBase, sameScope, scanReview } from "../core/change-set.ts";
+import { filterChange, sameBase, sameScope, scanReview } from "../core/change-set.ts";
 import type { Config } from "../core/config/index.ts";
-import { countReview, list, resolveSessionName } from "../core/domain/index.ts";
+import { countReview, list, repositoryInScope, resolveSessionName } from "../core/domain/index.ts";
 import { readRepositoryChange, scan } from "../core/index.ts";
 import type { Base, DiffCache } from "../core/storage/index.ts";
 import {
@@ -83,8 +83,15 @@ export type ReviewService = {
    * reading.
    */
   payload: (session?: string) => Promise<string>;
-  /** One repository of the change set, or `null` when it has no changes. */
-  repository: (repo: string) => Promise<RepositoryChange | null>;
+  /**
+   * One repository of the change set, or `null` when it has no changes. The
+   * change set is a named session's when one is named, because a window on
+   * `?review=` patches its own task and not the current one's
+   * ([ADR-010](../../docs/adr/adr-010-review-task-scope.md)); a named one is
+   * read from the working tree rather than from that task's cache, which the
+   * watcher does not keep fresh — see `freshRepository` below.
+   */
+  repository: (repo: string, session?: string) => Promise<RepositoryChange | null>;
   /** The change set as a rescan left it on disk, taken as the document's own. */
   adopt: (cache: DiffCache) => void;
   /** Something changed underneath: the document is built again when next asked for. */
@@ -168,8 +175,10 @@ export function createReviewService(config: Config): ReviewService {
       held.payload ??= JSON.stringify(held.document);
       return held.payload;
     },
-    repository: async (repo) =>
-      (await current()).document.repositories.find((one) => one.path === repo) ?? null,
+    repository: async (repo, session) =>
+      session === undefined
+        ? ((await current()).document.repositories.find((one) => one.path === repo) ?? null)
+        : freshRepository(config, session, repo),
     adopt: (cache) => {
       if (state === null) return;
       state.document = {
@@ -234,6 +243,41 @@ async function rebuild(config: Config, session: string): Promise<DiffCache> {
     await writeDiffCache(config.dataDir, session, cache);
   });
   return cache;
+}
+
+/**
+ * One repository of a **named** task, read from the working tree as it now
+ * stands rather than from that task's `diff.json`.
+ *
+ * The cache would be wrong here. The watcher rescans and rewrites the cache of
+ * the **current** session only ([05-watcher.md](../../docs/reference/05-watcher.md)),
+ * so a task that is not current holds a change set frozen at the moment it was
+ * last read — and this is the answer a live update patches the page with.
+ * Measured on the synthetic review: served from the cache, the card of the
+ * edited file never showed the edit, three times out of three, while the same
+ * event on the current session showed it every time.
+ *
+ * It costs the four git processes of one repository — what the watcher pays for
+ * the current session anyway — and not the whole scope's. The hunks are dropped
+ * as everywhere else: the renderer reads the patch, and the structured lines
+ * live in `diff.json` for anchor capture.
+ */
+async function freshRepository(
+  config: Config,
+  session: string,
+  repo: string,
+): Promise<RepositoryChange | null> {
+  const review = await readReview(config.dataDir, session);
+  // A repository the task is not about has nothing to say to it, and reading it
+  // would be four git processes for a change set nothing may show.
+  if (!repositoryInScope(review.scope, repo)) return null;
+  const change = filterChange(
+    review.scope,
+    await readRepositoryChange(config.root, repo, review.base, { hunks: false }),
+  );
+  // A repository with nothing to show is not part of a change set: the route
+  // turns that into the 404 the page reads as "it has left the review".
+  return change.files.length === 0 ? null : change;
 }
 
 /**

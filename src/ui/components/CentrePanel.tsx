@@ -15,10 +15,39 @@ import { FileCardSkeleton } from "./Skeleton.tsx";
  */
 const SETTLE_MS = 120;
 
+/**
+ * A review that could not be read. When the window was on a task of its own —
+ * `?review=<name>`, the address an agent prints and a person pastes — the way
+ * out is named as well as the reason: a mistyped name is the one failure here a
+ * reader can fix by hand, and without a way back they are left on a screen with
+ * nothing on it ([08-ui.md](../../../docs/reference/08-ui.md)).
+ */
+function Failure() {
+  const failure = useStore((store) => store.failure);
+  const task = useStore((store) => store.reviewName);
+  const showTask = useStore((store) => store.showTask);
+
+  if (task === null) return <p className="failure">The review could not be loaded: {failure}</p>;
+  return (
+    <div className="no-changes">
+      <h2 className="no-changes-title">Задача «{task}» не открылась</h2>
+      <p className="failure">{failure}</p>
+      <p className="no-changes-note">
+        Адрес этого окна называет задачу <code>?review={task}</code>. Проверьте имя или откройте
+        текущую сессию.
+      </p>
+      <div className="no-changes-actions">
+        <button type="button" className="ghost accent" onClick={() => void showTask(null)}>
+          Текущая сессия
+        </button>
+      </div>
+    </div>
+  );
+}
+
 /** The centre column of handoff section 1.4: one section per repository. */
 export function CentrePanel() {
   const status = useStore((store) => store.status);
-  const failure = useStore((store) => store.failure);
   const repositories = useStore((store) => store.repositories);
   const files = useStore((store) => store.files);
   const indexById = useMemo(() => new Map(files.map((entry) => [entry.id, entry.index])), [files]);
@@ -28,7 +57,7 @@ export function CentrePanel() {
   if (status === "failed") {
     return (
       <main className="centre">
-        <p className="failure">The review could not be loaded: {failure}</p>
+        <Failure />
       </main>
     );
   }

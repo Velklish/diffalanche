@@ -527,6 +527,10 @@ adjustment.
 - **Primary:** filled `acc` with `onAcc` text. One per context at most: the
   `Comment` button in the composer, `Apply` in the base picker, `Create` for a
   session, `Спросить модель` on an orphaned thread.
+- **Danger:** the primary filled `crit` instead of `acc`. There is exactly one
+  in the product — `Убрать и удалить` in the scope editor's confirmation, the
+  only press that destroys review data — and it is the colour of a filled
+  critical badge, so it is no louder than the loudest thing already allowed.
 - **Resolve:** filled `ok` with `onAcc` text; `Reopen` is the ghost variant of
   the same control.
 - **Segments** (`split`/`unified`, `☾`/`☀`, `working tree`/`base <sha>`): a

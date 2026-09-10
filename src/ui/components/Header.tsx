@@ -1,5 +1,6 @@
 import { useEffect, useRef } from "react";
 import { baseLabel } from "../base.ts";
+import { countScope, scopeLabel } from "../scope.ts";
 import { useStore } from "../store.ts";
 import { Logo } from "./Logo.tsx";
 import { SessionMenu } from "./SessionMenu.tsx";
@@ -67,6 +68,8 @@ export function Header() {
         <span className="caret">▾</span>
       </button>
 
+      <ScopePill />
+
       <span className="spacer" />
 
       <button type="button" className="counter" onClick={() => filterRail("open")}>
@@ -112,5 +115,34 @@ export function Header() {
         Export .md
       </button>
     </header>
+  );
+}
+
+/**
+ * The `SCOPE` pill of handoff section 1.1, beside `BASE` and the same control
+ * shape: what this review task is about, and the way into the editor that
+ * changes it.
+ *
+ * **A session with no scope has no pill at all.** It is about the whole root,
+ * which is what a session has always been, and a pill saying so would be a
+ * control for a state that is not a narrowing
+ * ([ADR-010](../../../docs/adr/adr-010-review-task-scope.md)).
+ */
+function ScopePill() {
+  const scope = useStore((store) => store.session?.scope ?? null);
+  const openScope = useStore((store) => store.openScope);
+  if (scope === null) return null;
+
+  return (
+    <button
+      type="button"
+      className="pill scope"
+      aria-haspopup="dialog"
+      onClick={() => openScope(true)}
+    >
+      <span className="tag">SCOPE</span>
+      <span className="pill-name">{scopeLabel(countScope(scope))}</span>
+      <span className="caret">▾</span>
+    </button>
   );
 }

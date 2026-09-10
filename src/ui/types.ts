@@ -35,7 +35,7 @@ export type {
 export { SEVERITIES } from "../core/storage/types.ts";
 
 import type { Base, ReviewStatus, Scope } from "../core/storage/types.ts";
-import type { ScanWarning } from "../core/types.ts";
+import type { FileStatus, ScanWarning } from "../core/types.ts";
 
 export type {
   BaseMode,
@@ -110,4 +110,35 @@ export type SessionList = {
   sessions: SessionSummary[];
   /** Directories under `reviews/` that are not review sessions. */
   warnings: string[];
+};
+
+/**
+ * What `GET /api/sessions/candidates` answers with (DA-55): the change set of
+ * the whole root, whatever the task is about, which is what the scope editor
+ * offers to pick from. It carries names and not diffs — a picker shows paths,
+ * and the patch of a whole root is megabytes
+ * ([07-server.md](../../docs/reference/07-server.md)).
+ *
+ * Written again here for the reason the two shapes above are: the server owns
+ * it in `src/server/review.ts`, that module reaches git, and the UI compiles
+ * with `"types": []`. `tests/ui-wire.test.ts` is what keeps them the same type.
+ */
+export type CandidateFile = {
+  path: string;
+  oldPath: string | null;
+  status: FileStatus;
+  additions: number;
+  deletions: number;
+};
+
+export type CandidateRepository = {
+  path: string;
+  branch: string;
+  files: CandidateFile[];
+};
+
+export type CandidateSet = {
+  root: string;
+  repositories: CandidateRepository[];
+  warnings: ScanWarning[];
 };

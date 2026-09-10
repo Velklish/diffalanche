@@ -4,7 +4,7 @@
  * the CLI to read a moment later.
  */
 import { execFile } from "node:child_process";
-import { mkdtempSync, rmSync } from "node:fs";
+import { mkdtempSync, readFileSync, rmSync } from "node:fs";
 import { tmpdir } from "node:os";
 import { join } from "node:path";
 import { fileURLToPath } from "node:url";
@@ -299,6 +299,128 @@ describe("sessions over the API", () => {
     const missing = await post("/api/sessions/nope/use", {});
     expect(missing.status).toBe(404);
     expect(await missing.json()).toMatchObject({ error: "no-such-session" });
+  });
+});
+
+describe("a window on a named task", () => {
+  /**
+   * The whole point of `?review=<name>` (DA-55): a window opened on a task both
+   * **shows and writes** that task. `current` is what a human typing a command
+   * by hand gets and only `review use` moves it
+   * ([ADR-010](../docs/adr/adr-010-review-task-scope.md), decision 7), so
+   * without the parameter on every route a window would read one task and
+   * write into another — a finding stored where nothing reads it back.
+   */
+  it("writes into that task and leaves the current session's comments untouched", async () => {
+    const where = await anchorable();
+    const created = await post("/api/sessions", {
+      name: "on-task",
+      base: "head",
+      use: false,
+      scope: [{ repo: where.repo, paths: [where.path] }],
+    });
+    expect(created.status).toBe(201);
+    expect(await created.json()).toMatchObject({
+      scope: [{ repo: where.repo, paths: [where.path] }],
+      status: "open",
+    });
+    // `use: false` is `review new --no-use`: the pointer stays where it was.
+    expect(await readCurrent(config.dataDir)).toBe(SESSION);
+
+    // The window reads the task before anybody comments in it, and that read is
+    // what writes its change set: a line anchor is taken from the diff the
+    // person was shown ([04-domain.md](../docs/reference/04-domain.md)).
+    expect((await app.request("/api/review?review=on-task")).status).toBe(200);
+
+    const currentComments = join(config.dataDir, "reviews", SESSION, "comments.json");
+    const before = readFileSync(currentComments);
+
+    const written = await app.request("/api/comments?review=on-task", {
+      method: "POST",
+      headers: { "content-type": "application/json" },
+      body: JSON.stringify({ ...where, side: "new", severity: "nit", body: "on the task" }),
+    });
+    expect(written.status, await written.clone().text()).toBe(201);
+    const comment = (await written.json()) as Comment;
+
+    expect((await list(config.dataDir, "on-task")).map((one) => one.id)).toEqual([comment.id]);
+    expect(readFileSync(currentComments).equals(before)).toBe(true);
+  });
+
+  it("reads that task's threads, warnings, diff and export, and the current one's without it", async () => {
+    const written = await app.request("/api/comments?review=on-task", {
+      method: "POST",
+      headers: { "content-type": "application/json" },
+      body: JSON.stringify({ severity: "question", body: "a thread of this task" }),
+    });
+    const comment = (await written.json()) as Comment;
+
+    const onTask = await app.request(`/api/comments/${comment.id}?review=on-task`);
+    expect(onTask.status).toBe(200);
+    // The same id read against the current session is a thread it does not have.
+    expect((await app.request(`/api/comments/${comment.id}`)).status).toBe(404);
+
+    const document = (await (
+      await app.request("/api/review?review=on-task")
+    ).json()) as ReviewDocument;
+    const scoped = document.repositories;
+    expect(scoped).toHaveLength(1);
+    expect(scoped[0]?.files.map((file) => file.path)).toEqual([(await anchorable()).path]);
+
+    // The repository the live stream fetches is the one of *this* task, so a
+    // window on it is patched with its own change set and not another's.
+    const repo = scoped[0]?.path as string;
+    const diff = await app.request(`/api/repos/${repo}/diff?review=on-task`);
+    expect(((await diff.json()) as { files: { path: string }[] }).files).toHaveLength(1);
+
+    const exported = await (await app.request("/api/export?review=on-task")).text();
+    expect(exported).toContain("a thread of this task");
+    expect(await (await app.request("/api/export")).text()).not.toContain("a thread of this task");
+
+    expect((await app.request("/api/warnings?review=on-task")).status).toBe(200);
+  });
+
+  it("resolves and replies inside that task, and refuses a task there is not", async () => {
+    const comment = (await (
+      await app.request("/api/comments?review=on-task", {
+        method: "POST",
+        headers: { "content-type": "application/json" },
+        body: JSON.stringify({ severity: "warning", body: "answer me" }),
+      })
+    ).json()) as Comment;
+
+    const replied = await app.request(`/api/comments/${comment.id}/replies?review=on-task`, {
+      method: "POST",
+      headers: { "content-type": "application/json" },
+      body: JSON.stringify({ body: "answered" }),
+    });
+    expect(replied.status).toBe(201);
+
+    const resolved = await app.request(`/api/comments/${comment.id}/resolve?review=on-task`, {
+      method: "POST",
+      headers: { "content-type": "application/json" },
+      body: "{}",
+    });
+    expect(await resolved.json()).toMatchObject({ status: "resolved", resolvedBy: config.user });
+
+    const missing = await app.request("/api/review?review=nope");
+    expect(missing.status).toBe(404);
+    expect(await missing.json()).toMatchObject({ error: "no-such-session" });
+  });
+
+  it("refuses a comment the task's scope is not about, by name", async () => {
+    const outside = await app.request("/api/comments?review=on-task", {
+      method: "POST",
+      headers: { "content-type": "application/json" },
+      body: JSON.stringify({
+        repo: (await anchorable()).repo,
+        path: "not/in/the/scope.ts",
+        severity: "nit",
+        body: "outside",
+      }),
+    });
+    expect(outside.status).toBe(400);
+    expect(await outside.json()).toMatchObject({ error: "out-of-scope" });
   });
 });
 

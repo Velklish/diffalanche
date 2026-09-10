@@ -2,7 +2,7 @@
 version: 1
 slug: "src-ui-app-tsx"
 primary_target: "src/ui/App.tsx"
-related_targets: ["src/ui/components/Header.tsx","src/ui/components/Sidebar.tsx","src/ui/components/CentrePanel.tsx","src/ui/components/ThreadRail.tsx","src/ui/components/ThreadCard.tsx","src/ui/components/StatusBar.tsx","src/ui/components/FileCard.tsx","src/ui/components/Overlay.tsx","src/ui/components/Toast.tsx","src/ui/components/Skeleton.tsx","src/ui/components/Logo.tsx","src/ui/Composer.tsx","src/ui/renderers/ReactDiffFile.tsx","src/ui/styles.css"]
+related_targets: ["src/ui/components/Header.tsx","src/ui/components/Sidebar.tsx","src/ui/components/CentrePanel.tsx","src/ui/components/ThreadRail.tsx","src/ui/components/ThreadCard.tsx","src/ui/components/StatusBar.tsx","src/ui/components/FileCard.tsx","src/ui/components/Overlay.tsx","src/ui/components/ScopeEditor.tsx","src/ui/components/Toast.tsx","src/ui/components/Skeleton.tsx","src/ui/components/Logo.tsx","src/ui/Composer.tsx","src/ui/renderers/ReactDiffFile.tsx","src/ui/styles.css"]
 ---
 
 # Surface: the review workspace
@@ -15,9 +15,19 @@ expression on this surface, and the brand lives in the precision of the details.
 
 `src/ui/App.tsx` and the five regions it lays out — the header, the sidebar, the
 centre panel, the thread rail, and the status bar — plus the overlays that open
-over them: the base picker, the sessions menu, global search, and the export
-dialog. Section 1 of `docs/design/HANDOFF.md` is the layout and behaviour
-authority for all of it.
+over them: the base picker, the sessions menu, global search, the export dialog,
+and the **scope editor** with its confirmation. Sections 1 and 12 of
+`docs/design/HANDOFF.md` are the layout and behaviour authority for all of it.
+
+The scope editor is the one part of this surface that does not show the task.
+Everywhere else the screen carries the scope and nothing else — no summary of
+what was left out, no count of it (`PRODUCT.md` principle 5 and its one
+carve-out, [ADR-010](../../docs/adr/adr-010-review-task-scope.md)) — and the
+editor shows the **whole root**, because a scope cannot be widened from a tree
+that already hides what is missing. That exception is why it is an overlay
+opened by hand rather than a mode of the tree, and why it says so in its own
+header. Its confirmation is the only place in the product where a press destroys
+review data, and the only place a primary button is red.
 
 This is the only screen of the MVP. Insights (handoff section 11) is a separate
 surface for a later phase and gets its own brief when it is built.
@@ -94,6 +104,10 @@ instead of in a side panel that has lost the code.
   states are not built yet (DA-24 to DA-27). Each arrives with the store slice it
   needs; this brief is what they are built against. The composer (DA-22) and the
   thread cards (DA-23) are built.
+- A window on a task that is not `current` does not hear about its own comments
+  while it is open: the watcher follows the comments of one session. The diff
+  still updates live. Nothing on the surface says so, which is a hole the fix
+  closes rather than a state to design for (DA-55.1).
 - The focus treatment is currently two shapes — a border change on bordered
   controls, a 1 px outline on rows that have none. That is deliberate and
   recorded in `DESIGN.md`, but no keyboard pass has walked the whole surface yet;

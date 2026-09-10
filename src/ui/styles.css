@@ -87,6 +87,17 @@ button:disabled {
   background: var(--panel3);
 }
 
+/*
+ * A bordered control shows the focus by its border, as every other one here
+ * does (`DESIGN.md`, Inputs and fields). The three pills — the session, `BASE`
+ * and `SCOPE` — are the header's own controls and had no ring of their own
+ * until `SCOPE` joined them (DA-55).
+ */
+.pill:focus-visible {
+  border-color: var(--accBd);
+  outline: none;
+}
+
 .pill-name {
   font: 500 12px / 1 var(--mono);
 }
@@ -283,6 +294,25 @@ button:disabled {
   color: var(--tx);
 }
 
+/*
+ * The sidebar's tabs became buttons when `select` joined `changes` (DA-55), and
+ * a button carries the browser's own plate until it is told not to — the rail's
+ * tabs say the same thing for the same reason. A tab is a row with no border of
+ * its own, so its ring is an outline.
+ */
+.sidebar-tabs .tab {
+  border: 0;
+  background: none;
+}
+
+.sidebar-tabs .tab.on {
+  background: var(--panel3);
+}
+
+.sidebar-tabs .tab:focus-visible {
+  outline: 1px solid var(--accBd);
+}
+
 .sidebar-filter {
   position: relative;
   padding: 9px 10px;
@@ -450,6 +480,25 @@ button:disabled {
   overflow: hidden;
   text-overflow: ellipsis;
   white-space: nowrap;
+}
+
+/*
+ * The foot of select mode (DA-55): what the tree has picked, and the task it
+ * becomes. It sits above the `watching` line rather than replacing it — the
+ * stream is still running while a task is being built.
+ */
+.select-bar {
+  display: flex;
+  align-items: center;
+  gap: 7px;
+  padding: 8px 10px;
+  border-top: 1px solid var(--bd);
+  background: var(--panel2);
+}
+
+.select-count {
+  color: var(--tx2);
+  font: 11px / 1 var(--mono);
 }
 
 .sidebar-foot {
@@ -1432,6 +1481,16 @@ button:disabled {
   outline: none;
 }
 
+/*
+ * The primary in the one place a press destroys review data: the same control,
+ * filled `crit` instead of `acc`. It is the colour of a filled critical badge
+ * and no louder (`DESIGN.md`, The One Loud Thing Rule) — here the loud thing is
+ * not a finding but the deletion of one.
+ */
+.primary.danger {
+  background: var(--crit);
+}
+
 .primary:disabled {
   opacity: 0.5;
 }
@@ -2070,6 +2129,117 @@ button.chip {
 .picker-summary {
   color: var(--tx2);
   font: 11.5px / 1 var(--mono);
+}
+
+/* the scope editor and the one confirmation in the product */
+
+.scope-form {
+  display: flex;
+  flex-direction: column;
+  gap: 7px;
+  padding: 12px;
+}
+
+/*
+ * The one thing about this list that is not self-evident: it is the whole root
+ * and not the task. Everywhere else the screen shows the task and nothing else
+ * (ADR-010, decision 2), so the exception says so out loud.
+ */
+.scope-head {
+  display: flex;
+  align-items: baseline;
+  gap: 9px;
+  padding-bottom: 8px;
+  border-bottom: 1px solid var(--bd2);
+}
+
+.scope-about {
+  color: var(--tx3);
+  font-size: 11.5px;
+}
+
+/*
+ * The whole root is what this list carries, so it is the one overlay body that
+ * can be long: it scrolls inside the panel while the count and `Apply` stay
+ * where they are.
+ */
+.scope-body {
+  max-height: 56vh;
+  overflow: auto;
+}
+
+.scope-repo + .scope-repo {
+  margin-top: 6px;
+}
+
+.scope-row {
+  display: flex;
+  align-items: center;
+  gap: 7px;
+  width: 100%;
+  padding: 4px 7px;
+  border: 0;
+  border-radius: 7px;
+  background: none;
+  font: 500 12px / 1.5 var(--mono);
+  text-align: left;
+}
+
+.scope-row:hover {
+  background: var(--panel2);
+}
+
+.scope-row:focus-visible {
+  outline: 1px solid var(--accBd);
+}
+
+.scope-file {
+  padding-left: 21px;
+  font-size: 11px;
+  font-weight: 400;
+}
+
+/* A picker is tighter than the card it names, the way the tree is. */
+.scope-row .add,
+.scope-row .del {
+  font-size: 10px;
+  white-space: nowrap;
+}
+
+/*
+ * The tick, in the editor and in select mode. `◆` is a repository some of whose
+ * files are picked — a state the on-disk scope has no entry for and the only
+ * place this mark appears.
+ */
+.tick {
+  flex: 0 0 12px;
+  color: var(--acc);
+  font-size: 11px;
+  text-align: center;
+}
+
+.tick.off::before {
+  content: "·";
+  color: var(--tx3);
+}
+
+.confirm-question {
+  margin: 0;
+  padding: 14px 14px 0;
+  font-size: 13.5px;
+  line-height: 1.5;
+}
+
+.confirm-note {
+  margin: 0;
+  padding: 8px 14px 0;
+  color: var(--tx3);
+  font-size: 11.5px;
+  line-height: 1.5;
+}
+
+.overlay.confirm .picker-foot {
+  padding: 12px 14px 14px;
 }
 
 /* export */

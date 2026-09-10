@@ -17,6 +17,8 @@ The “Term” column gives the spelling for prose; EN is the name in code and E
 | review task | `review` | A review session with a scope — the same thing on disk, and what the prose calls a session someone is working through. Not a filter over a larger review: it is what the task is. | SPEC.md §4, ADR-010 |
 | scope | `scope` | What a review task is about: one list of entries, each a whole repository or a repository with an explicit list of paths. `null` is the whole root. Nothing outside it is shown or returned. | SPEC.md §4, §7, ADR-010 |
 | task status | `status` | Whether a review task is `open` or `closed`. Only a human sets it, and closing is a marker rather than a lock. | SPEC.md §5, §7, ADR-010 |
+| scope editor | `ScopeEditor` | The overlay that builds and changes a scope: the whole root with a tick per repository and per file. The one surface that shows what the task is not about, opened from the `SCOPE` pill. | HANDOFF.md §12, reference/08-ui.md, src/ui/components/ScopeEditor.tsx |
+| select mode | `select` | The tab that turns the navigation tree into a picking surface, with a bar at the foot of the sidebar and `New task…`. Outside it the tree is unchanged. | HANDOFF.md §1.3, reference/08-ui.md |
 | current session | `current` | The pointer file naming the session the UI and the CLI use without `--review`. | SPEC.md §4, §7 |
 | data directory | `dataDir` | `<root>/.diffalanche/` with `config.json`, `reviews/`, `current`, and the embedding index; overridden by `--data-dir`. | SPEC.md §3.5, §7 |
 | change set | `diff` | The changes of every repository that has changes, computed against the base mode; untracked files included. Cached in `diff.json`. | SPEC.md §5, §7 |

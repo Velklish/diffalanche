@@ -71,7 +71,8 @@ flowchart LR
 - A file diff is shown side by side or unified, at the user's choice.
 - The user jumps to any repository or file in the review and sees the number of comments per file.
 - The review updates by itself when code or comments change, without a reload and without losing the reading position.
-- The user creates a review session with a name and a base mode, switches between sessions, and sees the history of past sessions.
+- The user creates a review session with a name and a base mode, switches between sessions, and sees the history of past sessions. The window shows the task its own address names; switching a task moves that address and not `current`, and creating a session from the window leaves `current` where it is — except the first session of a root, which there is no `current` to leave.
+- The user builds and edits a task's scope by hand: a picker over the whole root takes repositories and files in and out, and taking out one that carries comments asks first, naming what is going and how many comments would go with it. Nothing is written until that question is answered.
 - The user changes the base mode of the current session, including the branch used for merge base.
 - The user sees a feed of recent activity events with relative time: which repository's diff changed, and which agent commented or replied where. The feed is collapsed by default.
 - The user moves between open threads, opens the comment form, resolves the focused thread, closes any overlay, and opens global search from the keyboard. Global search finds files and comments of the current review and previews the target in place.

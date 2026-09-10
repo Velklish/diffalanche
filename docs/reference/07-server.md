@@ -38,6 +38,10 @@ duration. Without it the server writes nothing but its own failures.
 
 ## Routes
 
+Every route a window uses takes `?review=<name>` — **reading and writing
+alike** — and answers for the current session without it. See
+[The task a request is about](#the-task-a-request-is-about).
+
 | Route | What it answers |
 |---|---|
 | `GET /api/review[?review=<name>]` | the review document: the change set, the session, its comments and counters; without the parameter, of the current session |
@@ -47,15 +51,15 @@ duration. Without it the server writes nothing but its own failures.
 | `GET /api/scan` | every repository under the root, with whether it has changes |
 | `GET /api/repos/branches` | every branch of the root, for the base picker |
 | `GET /api/events` | the live stream: what the watcher noticed, as it happens |
-| `GET /api/repos/:repo/diff` | one repository of the change set |
-| `GET /api/comments/:id` | one thread |
-| `GET /api/warnings` | the warnings of the change set |
+| `GET /api/repos/:repo/diff[?review=]` | one repository of the change set |
+| `GET /api/comments/:id[?review=]` | one thread |
+| `GET /api/warnings[?review=]` | the warnings of the change set |
 | `GET /api/activity` | the feed of what the server noticed while it has been running |
-| `GET /api/export?status=&format=` | the export of the current session |
-| `POST /api/comments` | a new comment; the updated comment comes back |
-| `POST /api/comments/:id/replies` | a reply in a thread |
-| `POST /api/comments/:id/resolve`, `/reopen` | the status of a thread |
-| `POST /api/sessions` | a new review session, made current |
+| `GET /api/export?status=&format=[&review=]` | the export of a session |
+| `POST /api/comments[?review=]` | a new comment; the updated comment comes back |
+| `POST /api/comments/:id/replies[?review=]` | a reply in a thread |
+| `POST /api/comments/:id/resolve`, `/reopen` `[?review=]` | the status of a thread |
+| `POST /api/sessions` | a new review session, with a scope and with or without becoming current |
 | `POST /api/sessions/:name/use` | make a session current |
 | `PUT /api/sessions/:name/base` | change the base of a session |
 | `PUT /api/sessions/:name/scope` | replace the scope of a session |
@@ -127,6 +131,63 @@ task without becoming it ([ADR-010](../adr/adr-010-review-task-scope.md)). The
 current session's document is the one built and kept; a named one is built for
 the request that asked, because a window opening another task must not evict the
 review everyone else is reading.
+
+### The task a request is about
+
+`?review=<name>` is not the review document's alone. **Every route a window
+uses carries it, and the writes carry it too**: `GET /api/comments/:id`,
+`GET /api/warnings`, `GET /api/repos/:repo/diff`, `GET /api/export`,
+`POST /api/comments`, `POST /api/comments/:id/replies`, and
+`POST /api/comments/:id/resolve` and `/reopen`. Without the parameter every one
+of them answers for `current`, which is what it always did and what a human
+typing a command by hand gets.
+
+The reason is the decision that there is no main task
+([ADR-010](../adr/adr-010-review-task-scope.md), decision 7): a window opened on
+a task stays on it while `current` names something else, and only `review use`
+moves `current`. A window that *read* one task and *wrote* into another would
+put a person's comment in a file nothing they can see reads back — the loss
+product principle 5 is about — and would patch the screen of one task with the
+change set of another when the stream woke. So the name travels with the
+request, and `ReviewService.repository()` takes it as well: the repository a
+live update fetches is the repository of *that* task's change set.
+
+**`GET /api/repos/:repo/diff?review=<name>` reads git rather than that task's
+cache.** The current session's repository comes out of the document the watcher
+keeps fresh; a named task's cannot, because the watcher rescans and rewrites
+`diff.json` for the current session only ([05-watcher.md](05-watcher.md)), so a
+task that is not current holds a change set frozen at the moment it was last
+read. Answered from that cache, a live update patched the page with the diff of
+a minute ago: the card of an edited file never showed the edit, three times out
+of three on the synthetic review, while the same event on the current session
+showed it every time. So the route reads the one repository the event names —
+four git processes, what the watcher pays for the current session anyway, and
+not the whole scope's — and filters it by the task's scope. Measured end to end
+on the synthetic review, from the edit to the frame that showed it: 295 ms for a
+window on a named task against 235 ms for one on the current session, inside the
+300 ms budget of `docs/SPEC.md` section 6 and close to it.
+
+The *document* of a named task has the same cache under it and no such repair:
+`GET /api/review?review=<name>` trusts a `diff.json` whose base and scope still
+match, so a window reloaded after the code changed shows the change set of the
+last time that task was read. Rebuilding it would read every repository of the
+scope, which is not what one event is worth; it is named here rather than fixed.
+
+The routes that name their session in the path — `PUT /api/sessions/:name/base`,
+`/scope`, `POST /api/sessions/:name/close`, `/reopen`, `/use` — need no
+parameter, and the three answers about the whole root — `GET /api/scan`,
+`GET /api/sessions`, `GET /api/sessions/candidates` — are about no session at
+all.
+
+A window on a task the watcher is not following gets no live event about that
+task's **comments**: the watcher snapshots the comments of one session, the
+current one ([05-watcher.md](05-watcher.md)). `diff-changed` and
+`sessions-changed` are unaffected — the first is about a repository and the
+second walks every session. Closing that gap means teaching the watcher to
+follow more than one session: [DA-55.1](../backlog/queue/DA-55.1-watcher-follows-one-session.md).
+The document of a named task has a second, separate staleness — it is built
+from a cache the watcher never refreshes, so opening a task can show the change
+set of the previous read: [DA-55.3](../backlog/triage/DA-55.3-named-task-document-is-stale.md).
 
 ### The candidates
 
@@ -314,7 +375,7 @@ either, which is why only a human ever resolves a thread through this server.
 | `POST /api/comments/:id/replies` | `body` | 201 and the thread |
 | `POST /api/comments/:id/resolve` | `note` | the thread, `resolvedBy` the configured user |
 | `POST /api/comments/:id/reopen` | `note` | the thread, open again |
-| `POST /api/sessions` | `name`, `base`, `title` | 201 and `review.json` |
+| `POST /api/sessions` | `name`, `base`, `title`, `scope`, `use` | 201 and `review.json` |
 | `POST /api/sessions/:name/use` | — | `review.json` of the session now current |
 | `PUT /api/sessions/:name/base` | `base` | `review.json` with the new base |
 | `PUT /api/sessions/:name/scope` | `scope`, `dropComments` | `review.json` with the new scope, or 409 |
@@ -339,6 +400,15 @@ reader — the UI, the CLI, or an agent — sees that it answers a different
 question and scans instead of trusting it
 ([03-storage.md](03-storage.md), [06-cli.md](06-cli.md)). A scope edit does the
 same, and for the same reason: the cache records the scope too.
+
+`POST /api/sessions` takes a **scope** and a **`use`**, which is how a task is
+made in one write rather than made and then narrowed: `scope` is checked against
+the repositories the scan found before anything is written, the same check the
+CLI runs, and `use: false` is `review new --no-use` — the session is written and
+`current` stays where it is. The UI sends `use: false` for every session but the
+first of a root, where there is no `current` and leaving it unset would hand the
+person a root whose only session the CLI cannot name without `--review`
+([ADR-010](../adr/adr-010-review-task-scope.md), decision 4).
 
 **The scope is replaced whole rather than edited entry by entry.** The editor
 holds the list the person sees, and one write is one state. What the new scope

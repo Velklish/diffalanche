@@ -76,7 +76,14 @@ follows from them in the format, the core, the CLI, and the HTTP API.
    is reopened by the same gesture. Closing is a marker and not a lock:
    `comment`, `reply`, and `resolve` all still work on a closed task.
 4. **Creating a task does not move `current`.** `review new --no-use` writes the
-   task and prints its address; the human opens it when they are ready.
+   task and prints its address; the human opens it when they are ready. The UI
+   creates every session that way, and switching a task in it moves that
+   window's address rather than the pointer. **One exception, taken with the
+   owner in DA-55:** the first session of a root, created from the first-run
+   screen, becomes current. What decision 4 protects is a screen a human is on
+   from an agent that takes it away; on that screen there is no `current` at all
+   and the human is doing it to themselves, and leaving the pointer unset would
+   hand them a root whose only session the CLI cannot name without `--review`.
 5. **A file that is in the scope but has no changes any more is not shown.** The
    scope keeps it; the screen does not — the rule the review already uses for
    repositories.

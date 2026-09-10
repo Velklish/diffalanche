@@ -15,6 +15,28 @@ and `bun run release` refuses a version that has no section. See
 
 ### Added
 
+- **The scope on the screen** (DA-55). A `SCOPE` pill sits beside `BASE` and
+  says what the task is about — `2 repos · 5 files` — and opens the **scope
+  editor**: an overlay over the whole root with a tick per repository and per
+  file, where a task is built and changed by hand. A session with no scope has
+  no pill: it is about the whole root, which is not a narrowing. The review
+  screen carries the scope and nothing else — the tree, the reading column, the
+  counters and the rail all speak about the task, and nothing names what was
+  left outside it.
+- **Taking something out of a task asks first.** Removing a repository or a file
+  that carries comments opens a confirmation naming it, how many comments would
+  go with it and how many of those are open, and only then consents. Cancelling
+  writes nothing. This is the only place in the product that destroys review
+  data, and it never happens without that dialog.
+- **Select mode.** A second tab beside `changes` turns the tree into a picking
+  surface with a bar at the foot of the sidebar — `N repos · M files` and
+  `New task…`, which asks for a name and a base and creates the task with that
+  scope. Outside the mode the tree is exactly what it was.
+- **A window shows the task its address names.** `?review=<name>` decides what
+  this window loads, and switching a task in the menu changes that address
+  rather than `current`: several agents work on several tasks at once and none
+  of them is the main one. `Back` walks the tasks a window has been on.
+
 - A review session carries a **scope** — the repositories and the files it is
   about — and a **status** a human sets, so a review is one task rather than the
   whole working area (DA-53, [ADR-010](docs/adr/adr-010-review-task-scope.md)).
@@ -62,6 +84,21 @@ and `bun run release` refuses a version that has no section. See
   that file (DA-52).
 
 ### Changed
+
+- **Every route a window uses takes `?review=<name>`, writes included** —
+  `GET /api/comments/:id`, `/api/warnings`, `/api/repos/:repo/diff`,
+  `/api/export`, `POST /api/comments`, `/api/comments/:id/replies`, and
+  `/resolve` and `/reopen`. Without it they answer for the current session, as
+  before. A window opened on a task now writes into that task: until this it
+  read one and wrote into another, which put a comment where nothing the reader
+  could see would read it back. `GET /api/repos/:repo/diff?review=` reads that
+  one repository from the working tree rather than from the task's `diff.json`,
+  which the watcher keeps fresh only for the current session — served from the
+  cache, a live update showed the diff of a minute ago.
+- `POST /api/sessions` takes a `scope` and a `use`, so a review task is made in
+  one write. The UI sends `use: false` everywhere but the first-run screen,
+  where there is no `current` to leave alone
+  ([ADR-010](docs/adr/adr-010-review-task-scope.md), decision 4).
 
 - `SCHEMA_VERSION` is 2. `review.json` and `comments.json` of version 1 are read
   — a version 1 review is the whole root and open — and written back as version

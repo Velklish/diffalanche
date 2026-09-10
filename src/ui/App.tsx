@@ -6,6 +6,7 @@ import { ExportModal } from "./components/ExportModal.tsx";
 import { FirstRun } from "./components/FirstRun.tsx";
 import { GlobalSearch } from "./components/GlobalSearch.tsx";
 import { Header } from "./components/Header.tsx";
+import { NewTaskForm, ScopeConfirmation, ScopeEditor } from "./components/ScopeEditor.tsx";
 import { Sidebar } from "./components/Sidebar.tsx";
 import { StatusBar } from "./components/StatusBar.tsx";
 import { ThreadRail } from "./components/ThreadRail.tsx";
@@ -32,6 +33,15 @@ export function App() {
   useEffect(() => {
     void loadReview();
   }, [loadReview]);
+
+  // `?review=<name>` is what this window is on, so `Back` is a way through the
+  // tasks it has shown. Switching pushes an entry; this is what walks it
+  // ([ADR-010](../../docs/adr/adr-010-review-task-scope.md)).
+  useEffect(() => {
+    const follow = () => void useStore.getState().syncTaskFromUrl();
+    window.addEventListener("popstate", follow);
+    return () => window.removeEventListener("popstate", follow);
+  }, []);
 
   // The stream is opened after the first read is asked for and stays open for
   // the life of the page: what it carries is what keeps the review current
@@ -134,14 +144,33 @@ export function App() {
   );
 }
 
-/** The three of handoff sections 5, 6 and 9, each opening over the same scrim. */
+/**
+ * The overlays of handoff sections 5, 6, 9 and 12, each opening over the same
+ * scrim — and **one at a time**. `Overlay` holds the focus and listens for
+ * `esc` on the document, so two of them on screen would trap the ring in two
+ * places at once and give one `esc` press to both: the confirmation would take
+ * the editor and its draft away with it. The three of the scope are therefore
+ * exclusive here rather than stacked, and the confirmation *replaces* the
+ * editor while it is being answered — `Отмена` puts the editor back with the
+ * draft it had ([08-ui.md](../../docs/reference/08-ui.md)).
+ */
 function Overlays() {
   const baseOpen = useStore((store) => store.baseOpen);
   const exportOpen = useStore((store) => store.exportOpen);
+  const scopeOpen = useStore((store) => store.scopeOpen);
+  const confirm = useStore((store) => store.scopeConfirm);
+  const newTaskOpen = useStore((store) => store.newTaskOpen);
   return (
     <>
       {baseOpen ? <BasePicker /> : null}
       {exportOpen ? <ExportModal /> : null}
+      {confirm !== null ? (
+        <ScopeConfirmation confirm={confirm} />
+      ) : scopeOpen ? (
+        <ScopeEditor />
+      ) : newTaskOpen ? (
+        <NewTaskForm />
+      ) : null}
       <GlobalSearch />
     </>
   );
