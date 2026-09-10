@@ -12,6 +12,23 @@ import { useStore } from "./store.ts";
 /** How many times the scroll is repeated; two rounds settle the small fixture. */
 const ROUNDS = 3;
 
+/**
+ * Where the page is asked what is being read, in pixels from the top of the
+ * window: below everything stuck there — 52 px of header and the 38 px
+ * repository bar under it — plus the 10 px of clearance the value carried when
+ * the header was all there was (DA-54).
+ *
+ * One value because two probes ask the same question at the same point:
+ * [components/CentrePanel.tsx](components/CentrePanel.tsx) asks which card is
+ * being read, [live.ts](live.ts) asks what is under the reader's eyes before it
+ * patches the page. A probe inside the bar hits the bar, which is sticky and
+ * never moves, and both of them then anchor to nothing. The third copy of this
+ * number is `.file-card { scroll-margin-top }` in [styles.css](styles.css),
+ * where CSS cannot reach a constant: a card jumped to lands on the probe and is
+ * the current file when the scroll settles, and the two move together.
+ */
+export const PROBE_Y = 100;
+
 export async function revealCard(selector: string): Promise<void> {
   const first = document.querySelector(selector);
   if (!first) return;

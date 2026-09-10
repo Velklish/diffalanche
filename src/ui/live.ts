@@ -14,18 +14,12 @@ import type { RepositoryChange } from "../core/types.ts";
 import type { ActivityEvent } from "../core/watcher/activity.ts";
 import type { WatcherEvent } from "../core/watcher/bus.ts";
 import { afterPaint, perf } from "./perf.ts";
+import { PROBE_Y } from "./reveal.ts";
 import { useStore } from "./store.ts";
 import type { Comment } from "./types.ts";
 
 /** What the sidebar footer says about the stream. */
 export type Connection = "connecting" | "watching" | "reconnecting";
-
-/**
- * Where the reading position is measured, in pixels from the top of the window:
- * just under the 52 px header, the same probe the centre panel picks the
- * current file with.
- */
-const PROBE_Y = 62;
 
 /** A shift smaller than this is not worth a scroll: a sub-pixel jitter is not a jump. */
 const ANCHOR_EPSILON = 1;
@@ -187,9 +181,11 @@ function capture(): Anchor {
   if (!centre) return null;
   const x = centre.left + centre.width / 2;
   // Down from the probe until the topmost element there belongs to the column
-  // that scrolls. The header is sticky and the scanner's warnings bar sits
-  // under it at the top of the page: neither moves when a card grows, so an
-  // anchor on one of them is an anchor on nothing.
+  // that scrolls. The header is sticky, the scanner's warnings bar sits under
+  // it at the top of the page, and the repository bar is stuck below both and
+  // is itself inside `.centre`: none of the three moves when a card grows, so
+  // an anchor on one of them is an anchor on nothing. The probe starts below
+  // all of them (DA-54).
   for (let y = PROBE_Y; y < PROBE_Y + PROBE_DEPTH; y += PROBE_STEP) {
     const element = document.elementFromPoint(x, y);
     if (element?.closest(".centre")) {

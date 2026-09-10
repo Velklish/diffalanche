@@ -1,4 +1,4 @@
-import { useMemo } from "react";
+import { type KeyboardEvent, useMemo } from "react";
 import type { FileChange, RepositoryChange } from "../../core/types.ts";
 import { revealCard } from "../reveal.ts";
 import type { Connection } from "../store.ts";
@@ -39,6 +39,7 @@ export function Sidebar() {
         <SidebarSkeleton />
       ) : (
         <div className="tree">
+          <RowKeys />
           {/* A review with no changes at all is the centre panel's own screen
               (components/NoChanges.tsx); the tree only speaks about the filter. */}
           {tree.length === 0 && query.trim() !== "" ? (
@@ -78,11 +79,39 @@ function Watching() {
   );
 }
 
+/**
+ * The sentence every repository row points at, once. The row's second action is
+ * reachable only by the key: an assistive technology that activates the row
+ * synthesises a click whose target is the row itself, which jumps, and the
+ * caret is `aria-hidden` because it draws a state the row already carries. So
+ * the keys are said out loud rather than left to be discovered by pressing them
+ * (DA-54).
+ */
+const KEYS_ID = "repo-row-keys";
+
+/** One sentence for the whole tree; every row's `aria-describedby` names it. */
+function RowKeys() {
+  return (
+    <p id={KEYS_ID} className="visually-hidden">
+      Enter goes to this repository in the diff, Space collapses and expands its files.
+    </p>
+  );
+}
+
+/**
+ * The row of handoff section 1.3, and its two targets: the caret puts the
+ * branch away, the rest of the row goes to that repository in the reading
+ * column. It is one tab stop and one focus ring — the row itself — and the two
+ * actions are told apart twice: the pointer by where it landed, the keyboard by
+ * which key was pressed. `Enter` jumps, `Space` toggles (DA-54).
+ */
 function RepoBranch({ repo, files }: { repo: RepositoryChange; files: FileChange[] }) {
   const collapsed = useStore((store) => store.collapsedRepos[repo.path] === true);
   const active = useStore((store) => store.repo === repo.path);
   const count = useStore((store) => store.repoCounts.get(repo.path));
   const toggleRepo = useStore((store) => store.toggleRepo);
+  const jump = () => void revealCard(`[data-repo-section="${CSS.escape(repo.path)}"]`);
+  const toggle = () => toggleRepo(repo.path);
 
   return (
     <div className="branch">
@@ -90,9 +119,29 @@ function RepoBranch({ repo, files }: { repo: RepositoryChange; files: FileChange
         type="button"
         className={active ? "repo-row on" : "repo-row"}
         aria-expanded={!collapsed}
-        onClick={() => toggleRepo(repo.path)}
+        aria-keyshortcuts="Enter Space"
+        aria-describedby={KEYS_ID}
+        onClick={(event) => {
+          const caret = event.target instanceof Element && event.target.closest(".repo-toggle");
+          if (caret) toggle();
+          else jump();
+        }}
+        onKeyDown={(event: KeyboardEvent<HTMLButtonElement>) => {
+          if (event.key !== "Enter" && event.key !== " ") return;
+          // A button acts on both keys by itself; this row has two things to do
+          // and the key is what says which, so the native activation has to be
+          // stopped before it fires the click.
+          event.preventDefault();
+          if (event.key === "Enter") jump();
+          else toggle();
+        }}
       >
-        <span className="caret">{collapsed ? "▸" : "▾"}</span>
+        {/* The state it changes is on the row, where a screen reader reads it
+            when the row takes the focus; the glyph itself is for the eye and
+            for the pointer. */}
+        <span className="caret repo-toggle" aria-hidden="true">
+          {collapsed ? "▸" : "▾"}
+        </span>
         <span className="repo-name">{repo.path}</span>
         <Counter count={count} />
         <span className="repo-files">· {repo.files.length} files</span>

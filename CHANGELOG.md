@@ -15,6 +15,16 @@ and `bun run release` refuses a version that has no section. See
 
 ### Added
 
+- The reading column says which repository it is in, and there are two ways into
+  one. The repository header is one 38 px line — path, `<branch> ← <base>`,
+  counts, `Comment on repo` — stuck under the header while its files are being
+  read and pushed out by the next repository's, with a `--bd2` hairline above
+  every section but the first. The name in the tree and the repository on a
+  thread card jump to that section; the caret in the tree still only collapses
+  the branch. The row stays one tab stop and one focus ring: the pointer picks
+  by where it landed and the keyboard by key, `⏎` to jump and `Space` to
+  collapse (DA-54).
+
 - The data directory can be moved for good, not only per command: after
   `--data-dir`, `loadConfig` reads `DIFFALANCHE_DATA_DIR`, then `dataDir` from
   the user config `$XDG_CONFIG_HOME/diffalanche/config.json` (`~/.config`
@@ -24,6 +34,14 @@ and `bun run release` refuses a version that has no section. See
   that file (DA-52).
 
 ### Changed
+
+- The probe that asks what is being read moved from 62 px to 100 px — under the
+  header and the new repository bar — and is now one exported `PROBE_Y` in
+  `src/ui/reveal.ts` instead of a copy in the centre panel and another in the
+  live update. The second copy was what made a live edit above the reader move
+  the text under their eyes: it anchored to the bar, which is sticky and never
+  moves. `.file-card { scroll-margin-top }` holds the same number, so a card
+  jumped to still lands on the probe (DA-54).
 
 - The performance gate on a GitHub-hosted runner holds every millisecond
   ceiling times a named allowance — `RUNNER_ALLOWANCE` in `perf/budgets.ts`,

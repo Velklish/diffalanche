@@ -3,7 +3,7 @@
  * level is read from the nulls, as `docs/SPEC.md` section 7 defines it, and the
  * lines are numbered on the new side, as the store holds them.
  */
-import type { ComposerTarget, RailScope } from "./store.ts";
+import type { ComposerTarget } from "./store.ts";
 import type { Comment } from "./types.ts";
 
 /**
@@ -51,23 +51,17 @@ export function composerLabel(target: ComposerTarget, endLine: number | null): s
 
 /**
  * What a thread card says it is attached to (`docs/design/HANDOFF.md` section
- * 3): `L42–45`, `file`, `review`, and, on the tab that spans the whole review,
- * the repository in front of it — on the file's own tab that would be the same
- * word on every card.
+ * 3): `L42–45`, `file`, `review`. On the tab that spans the whole review the
+ * repository is named in front of it, but as its own button rather than as part
+ * of this string — it is a jump to that repository's section (DA-54), and the
+ * card decides whether to show it.
  */
-export function threadAnchor(comment: Comment, scope: RailScope): string {
-  const where =
-    comment.repo === null
-      ? "review"
-      : comment.path === null
-        ? "repository"
-        : comment.line === null
-          ? "file"
-          : comment.endLine === null
-            ? `L${comment.line}`
-            : `L${comment.line}–${comment.endLine}`;
-  if (scope === "file" || comment.repo === null) return where;
-  return `${comment.repo.split("/").at(-1)} · ${where}`;
+export function threadAnchor(comment: Comment): string {
+  if (comment.repo === null) return "review";
+  if (comment.path === null) return "repository";
+  if (comment.line === null) return "file";
+  if (comment.endLine === null) return `L${comment.line}`;
+  return `L${comment.line}–${comment.endLine}`;
 }
 
 /**

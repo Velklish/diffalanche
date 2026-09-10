@@ -6,11 +6,14 @@ type Review = {
   comments: { repo: string | null; path: string | null; status: string }[];
 };
 
-/** The file card the reading position points at: the one under the header. */
+/**
+ * The file card the reading position points at: the one under the header and
+ * the repository bar. `PROBE_Y` of `src/ui/reveal.ts`.
+ */
 function underTheHeader(): string | null {
   return (
     document
-      .elementFromPoint(window.innerWidth / 2, 62)
+      .elementFromPoint(window.innerWidth / 2, 100)
       ?.closest("[data-path]")
       ?.getAttribute("data-path") ?? null
   );
@@ -147,11 +150,11 @@ test("a repository collapses and expands", async ({ page }) => {
   const files = await branch.locator(".file-row").count();
   expect(files).toBeGreaterThan(0);
 
-  await branch.locator(".repo-row").click();
+  await branch.locator(".repo-toggle").click();
   await expect(branch.locator(".file-row")).toHaveCount(0);
   await expect(branch.locator(".repo-row")).toHaveAttribute("aria-expanded", "false");
 
-  await branch.locator(".repo-row").click();
+  await branch.locator(".repo-toggle").click();
   await expect(branch.locator(".file-row")).toHaveCount(files);
 });
 
@@ -159,6 +162,7 @@ test("the keyboard walks the filter, the repository, then its files", async ({ p
   await open(page);
   await page.getByLabel("filter").focus();
 
+  // The row is one tab stop for both of its targets; the keys tell them apart.
   await page.keyboard.press("Tab");
   await expect(page.locator(".repo-row").first()).toBeFocused();
   await page.keyboard.press("Tab");

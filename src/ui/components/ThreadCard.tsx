@@ -1,6 +1,7 @@
 import { memo, useCallback } from "react";
 import { isAwaiting } from "../../core/domain/counters.ts";
 import { threadAnchor } from "../anchor.ts";
+import { revealCard } from "../reveal.ts";
 import type { RailScope } from "../store.ts";
 import { useStore } from "../store.ts";
 import { relativeTime } from "../time.ts";
@@ -31,6 +32,10 @@ export const ThreadCard = memo(function ThreadCard({
 
   const resolved = thread.status === "resolved";
   const state = resolved ? "RESOLVED" : isAwaiting(thread) ? "awaiting" : null;
+  // On the file's own tab the repository would be the same word on every card;
+  // on the tab that spans the review it is what says which one this is, and it
+  // goes there (DA-54).
+  const repo = scope === "all" ? thread.repo : null;
 
   return (
     // The card is a region the reader points at, and everything inside it that
@@ -41,16 +46,23 @@ export const ThreadCard = memo(function ThreadCard({
       data-thread={thread.id}
       aria-current={focused ? "true" : undefined}
     >
-      <button type="button" className="thread-head" onClick={() => onFocus(thread.id)}>
-        <span className={`sev-tag ${thread.severity}`}>{thread.severity.toUpperCase()}</span>
-        <span className="thread-anchor">{threadAnchor(thread, scope)}</span>
-        <span className="spacer" />
-        {state === null ? null : (
-          <span className={resolved ? "thread-state resolved" : "thread-state awaiting"}>
-            {state}
-          </span>
-        )}
-      </button>
+      {/* The repository is the one thing in the header that goes somewhere else,
+          so it is the one button beside the focus click; everything the focus
+          click owns — the chip, the anchor, the state, and the space between
+          them — is inside it, and pressing any of it focuses the thread. */}
+      <div className="thread-head">
+        {repo === null ? null : <RepoJump repo={repo} />}
+        <button type="button" className="thread-focus" onClick={() => onFocus(thread.id)}>
+          <span className={`sev-tag ${thread.severity}`}>{thread.severity.toUpperCase()}</span>
+          <span className="thread-anchor">{threadAnchor(thread)}</span>
+          <span className="spacer" />
+          {state === null ? null : (
+            <span className={resolved ? "thread-state resolved" : "thread-state awaiting"}>
+              {state}
+            </span>
+          )}
+        </button>
+      </div>
 
       <p className="thread-body">{thread.body}</p>
 
@@ -77,6 +89,25 @@ export const ThreadCard = memo(function ThreadCard({
     </article>
   );
 });
+
+/**
+ * The repository of a thread, and the way to it: the same `revealCard` the tree
+ * jumps with, so the section lands under the header and the 50 ms budget of
+ * `docs/SPEC.md` section 6 holds here too. The label is the last segment, which
+ * is what the rail has room for; the full path is the title.
+ */
+function RepoJump({ repo }: { repo: string }) {
+  return (
+    <button
+      type="button"
+      className="thread-repo"
+      title={repo}
+      onClick={() => void revealCard(`[data-repo-section="${CSS.escape(repo)}"]`)}
+    >
+      {repo.split("/").at(-1)}
+    </button>
+  );
+}
 
 function cardClass(focused: boolean, resolved: boolean): string {
   return ["thread", focused ? "on" : "", resolved ? "resolved" : ""].filter(Boolean).join(" ");

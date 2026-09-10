@@ -59,7 +59,7 @@ async function focusOneThread(page: Page): Promise<Comment> {
   );
   if (thread === undefined) throw new Error("the fixture has no line comment");
   await page.locator(".rail-tabs .tab").nth(1).click();
-  await page.locator(`.rail-list [data-thread="${thread.id}"] .thread-head`).click();
+  await page.locator(`.rail-list [data-thread="${thread.id}"] .thread-focus`).click();
   return thread;
 }
 
@@ -114,8 +114,23 @@ test("a card and its anchor point at each other", async ({ page }) => {
 
   // And the widget under the line brings the focus back to the card.
   await page.locator(".rail-tabs .tab").first().click();
-  await page.locator(`[data-thread-anchor="${thread.id}"] .thread-head`).click();
+  await page.locator(`[data-thread-anchor="${thread.id}"] .thread-focus`).click();
   await expect(page.locator(".rail-list .thread.on")).toHaveCount(1);
+});
+
+test("the whole header focuses the thread, and only the repository leaves it", async ({ page }) => {
+  await open(page);
+  const bundle = await review(page);
+  const thread = bundle.comments.find((comment) => comment.repo !== null && comment.path !== null);
+  if (thread === undefined) throw new Error("the fixture has no thread on a file");
+  await page.locator(".rail-tabs .tab").nth(1).click();
+
+  // The severity chip and the state sit inside the focus click, not beside it:
+  // pressing the chip focuses the thread, as pressing anywhere in the header
+  // did before the repository became a target of its own (DA-54).
+  const card = page.locator(`.rail-list [data-thread="${thread.id}"]`);
+  await card.locator(".sev-tag").click();
+  await expect(card).toHaveClass(/\bon\b/);
 });
 
 test("resolve takes the thread out of the open list, and reopen brings it back", async ({
@@ -168,7 +183,7 @@ test("a thread whose line is not mounted is still listed and still clickable", a
   const card = page.locator(`.rail-list [data-thread="${thread.id}"]`);
   await expect(card).toBeVisible();
 
-  await card.locator(".thread-head").click();
+  await card.locator(".thread-focus").click();
   await expect(page.locator(`[data-thread-anchor="${thread.id}"]`)).toBeInViewport();
 });
 
@@ -210,7 +225,7 @@ test("a thread on a line the collapsed context hides is reached by showing it ag
 
   // The rail still lists the thread, and asking for it shows the context again.
   await page.locator(".rail-tabs .tab").nth(1).click();
-  await page.locator(`.rail-list [data-thread="${written?.id}"] .thread-head`).click();
+  await page.locator(`.rail-list [data-thread="${written?.id}"] .thread-focus`).click();
   await expect(anchor).toHaveCount(1);
   await expect(anchor).toBeInViewport();
 });

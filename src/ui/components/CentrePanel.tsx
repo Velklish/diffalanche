@@ -1,20 +1,19 @@
 import { useEffect, useMemo } from "react";
 import type { RepositoryChange, ResolvedBase } from "../../core/types.ts";
 import { Composer } from "../Composer.tsx";
+import { PROBE_Y } from "../reveal.ts";
 import { useStore } from "../store.ts";
 import { FileCard } from "./FileCard.tsx";
 import { NoChanges } from "./NoChanges.tsx";
 import { FileCardSkeleton } from "./Skeleton.tsx";
 
 /**
- * How long the scroll has to settle before the sidebar follows it, and where the
- * page is asked which card is being read — just under the header. One hit test
+ * How long the scroll has to settle before the sidebar follows it. One hit test
  * when the scroll stops, rather than three hundred intersections per frame: the
  * harness scrolls the whole review in five seconds and the budget is 8.3 ms of
- * CPU per frame.
+ * CPU per frame. Where it asks is `PROBE_Y` of [reveal.ts](../reveal.ts).
  */
 const SETTLE_MS = 120;
-const PROBE_Y = 62;
 
 /** The centre column of handoff section 1.4: one section per repository. */
 export function CentrePanel() {
@@ -92,13 +91,15 @@ function RepoSection({
 
   return (
     <section className="repo" data-repo-section={repo.path}>
+      {/* One line, stuck under the header while this repository is being read
+          and pushed out by the next one, because it is sticky inside its own
+          section. The path here is not a jump target: the reader is already in
+          this repository. */}
       <div className="repo-head">
-        <div>
-          <div className="repo-path">{repo.path}</div>
-          <div className="repo-base">
-            {repo.branch} ← {baseLine(repo.base)}
-          </div>
-        </div>
+        <span className="repo-path">{repo.path}</span>
+        <span className="repo-base">
+          {repo.branch} ← {baseLine(repo.base)}
+        </span>
         <span className="spacer" />
         <span className="repo-count">{repo.files.length} files</span>
         <span className="add">+{additions}</span>

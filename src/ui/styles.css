@@ -320,6 +320,22 @@ button:disabled {
   overflow: auto;
 }
 
+/*
+ * Said to a screen reader and to nothing else. Not `display: none`, which would
+ * take it out of the accessibility tree along with the layout.
+ */
+.visually-hidden {
+  position: absolute;
+  width: 1px;
+  height: 1px;
+  margin: -1px;
+  padding: 0;
+  border: 0;
+  overflow: hidden;
+  clip-path: inset(50%);
+  white-space: nowrap;
+}
+
 .tree-empty {
   margin: 0;
   padding: 14px 8px;
@@ -352,6 +368,25 @@ button:disabled {
   padding: 4px 7px;
   color: var(--tx);
   font: 500 12px / 1.7 var(--mono);
+}
+
+/*
+ * The caret is the row's other target, and as a glyph on its own it would be an
+ * 11 px one. It takes 24x24 — the floor of WCAG 2.2 SC 2.5.8, and the spacing
+ * exception does not apply, because what lies on both sides of it is the row's
+ * other action — and eats the row's left padding, so the whole left end of the
+ * row toggles and a miss to the left no longer scrolls the page instead. The
+ * row is one tab stop, so this is a target for the pointer; the keyboard
+ * reaches the same action with `Space` (DA-54).
+ */
+.repo-toggle {
+  display: flex;
+  min-width: 24px;
+  min-height: 24px;
+  margin-left: -7px;
+  padding-left: 7px;
+  align-items: center;
+  justify-content: center;
 }
 
 .repo-row:hover {
@@ -547,20 +582,54 @@ button:disabled {
 
 /* repository and file cards */
 
+/*
+ * A repository of the synthetic review is around 18 000 px tall, so the bar
+ * that says which one is being read has to stay on screen for the whole of it.
+ * The space between two repositories hangs under the earlier one, so the
+ * hairline sits directly above the arriving bar and the bar itself starts at
+ * the top of its section — which is where a jump puts it, under the header.
+ */
+.repo {
+  padding-bottom: 18px;
+  scroll-margin-top: 52px;
+}
+
+/* The boundary read at the moment of the transition as well as during it. */
+.repo + .repo {
+  border-top: 1px solid var(--bd2);
+}
+
+/*
+ * Sticky inside its own section, so the next repository's bar pushes this one
+ * out rather than stacking under it. The z-index is below the header (5) and
+ * the status bar (4) and above the file cards, which hold sticky elements of
+ * their own — the composer strip and the hunk headers — and would otherwise
+ * paint over the bar simply by coming later in the document.
+ */
 .repo-head {
+  position: sticky;
+  top: 52px;
+  z-index: 3;
   display: flex;
   align-items: center;
   gap: 10px;
-  margin: 18px 0 9px;
+  height: 38px;
+  margin-bottom: 9px;
+  background: var(--bg);
+  border-bottom: 1px solid var(--bd);
 }
 
 .repo-path {
+  flex: none;
   font: 600 14.5px / 1.3 var(--mono);
 }
 
 .repo-base {
+  overflow: hidden;
   color: var(--tx3);
   font: 11px / 1.5 var(--mono);
+  text-overflow: ellipsis;
+  white-space: nowrap;
 }
 
 .repo-count {
@@ -584,7 +653,10 @@ button:disabled {
   border-radius: 10px;
   background: var(--panel);
   overflow: hidden;
-  scroll-margin-top: 62px;
+  /* Below the header and the repository bar, and the same value as `PROBE_Y` in
+     reveal.ts, which CSS cannot import: a card jumped to lands on the probe and
+     is the current file when the scroll settles. */
+  scroll-margin-top: 100px;
 }
 
 .file-head {
@@ -1498,14 +1570,48 @@ button.chip {
   align-items: center;
   gap: 8px;
   width: 100%;
+}
+
+/*
+ * Everything the focus click owns is inside it — the severity chip, the anchor,
+ * the state, and the space between them — so anywhere in the header that is not
+ * the repository focuses the thread, as the whole header did before the
+ * repository became a target of its own (DA-54).
+ */
+.thread-focus {
+  display: flex;
+  min-width: 0;
+  flex: 1;
+  align-items: center;
+  gap: 8px;
   padding: 0;
   border: 0;
   background: none;
   text-align: left;
 }
 
-.thread-head:focus-visible {
+.thread-focus:focus-visible,
+.thread-repo:focus-visible {
   outline: 1px solid var(--accBd);
+}
+
+.thread-repo {
+  overflow: hidden;
+  flex: none;
+  max-width: 40%;
+  padding: 0;
+  border: 0;
+  background: none;
+  color: var(--tx3);
+  font: 11px / 1.5 var(--mono);
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+/* Up the text ladder, the way a ghost button lights: the accent is for what is
+   in play, not for anything that can be pressed. */
+.thread-repo:hover {
+  color: var(--tx);
 }
 
 .sev-tag {
@@ -2088,10 +2194,11 @@ button.chip {
 /* scanner warnings */
 
 /*
- * Not sticky: the header is, and a second bar under it would sit over the point
- * the centre panel asks which card is being read at, and over the top of a card
- * `scrollIntoView` has just brought up. It is a bar above the workspace and it
- * scrolls away with it.
+ * Not sticky: it is a bar above the workspace and it scrolls away with it. The
+ * repository bar is the one thing allowed to stick under the header, and
+ * `PROBE_Y` of reveal.ts is counted from those two heights. A
+ * third bar of a height that comes and goes with the scanner's findings would
+ * have no fixed point below it to ask which card is being read at.
  */
 .warnings {
   display: flex;

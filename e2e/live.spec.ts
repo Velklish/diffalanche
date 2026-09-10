@@ -120,7 +120,8 @@ test("an edit patches its own card, holds the reading position, and leaves the c
   // in the card that grows, or in the warnings bar, and the test would then be
   // measuring something the anchoring does not promise to hold.
   const placed = await page.locator(`[data-file="${untouched}"]`).evaluate((element) => {
-    const probe = 62;
+    // `PROBE_Y` of `src/ui/reveal.ts`: below the header and the repository bar.
+    const probe = 100;
     element.scrollIntoView();
     window.scrollBy(0, element.getBoundingClientRect().top - (probe - 10));
     const box = element.getBoundingClientRect();

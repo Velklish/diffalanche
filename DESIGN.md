@@ -420,7 +420,11 @@ them.
 
 The page is one vertical scroll. The header, both side panels, and the status
 bar are `sticky`, so the document scrolls and a file card is reached with
-`scrollIntoView`. Inside the centre panel, each file card owns one horizontal
+`scrollIntoView`. One thing sticks *under* the header: the 38 px repository bar,
+at `top: 52px` and inside its own section, so each repository's bar is pushed
+out by the next one rather than stacking — 90 px is the whole of what is fixed
+to the top of the page, and everything measured from it counts both. Inside the
+centre panel, each file card owns one horizontal
 scroll at least 1080 px wide, so a long line moves the whole diff and the two
 columns stay aligned; the composer inside it is `position: sticky; left: 0` and
 stays in view while that scroll moves.
