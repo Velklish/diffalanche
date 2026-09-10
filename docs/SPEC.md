@@ -40,7 +40,9 @@ None of them combines many repositories in one review with on-disk comments and 
 - **Root** — the directory under review. It contains the repositories and the data directory.
 - **Repository** — a git working tree found under the root, identified by its relative path. Worktrees count as repositories.
 - **Base mode** — `head`, `branch`, or `ref`. Set per review session, resolved per repository. In `branch` mode the session may name the branch; otherwise each repository uses its remote default branch.
-- **Review session** — a named unit of review work: base mode plus all its comments. Exactly one session is current; `current` is a pointer file in the data directory.
+- **Review session** — a named unit of review work: base mode, scope, status, plus all its comments. Exactly one session is current; `current` is a pointer file in the data directory. A session with a scope is a **review task**: the two are one thing on disk, and "task" is what the prose calls a session someone is working through.
+- **Scope** — what a review task is about: one list of entries, each a whole repository or a repository with an explicit list of paths. `scope: null` is the whole root, which is what every session written before [ADR-010](adr/adr-010-review-task-scope.md) means. Nothing outside the scope is shown or returned. A scope is not a view over a larger review and is never called a filter: it is what the task *is*.
+- **Task status** — `open` or `closed`. A human sets both; closing is a marker and not a lock.
 - **Comment** — a finding with severity, status, author, role, and an anchor. **Thread** — a comment with its replies.
 - **Anchor** — where a comment attaches: review, repository, file, line, or line range. Line anchors keep the line text and context.
 - **Data directory** — `.diffalanche/` with `config.json`, `reviews/<name>/`, `current`, and the embedding index.
@@ -64,6 +66,8 @@ flowchart LR
 ### Review
 
 - The user sees the changes of every repository that has changes as one review, grouped by repository, with each repository's branch and base. Repositories without changes are not shown.
+- A review task carries a scope, and the review is what the scope names: the repositories and the files of the task, and nothing else — no summary of what was left out, and no count of it. A repository or a file that is in the scope and has no changes any more is not shown either; the scope keeps it, the screen does not.
+- The user closes a task when it is done and reopens it when it is not, and the history shows which tasks are open. Closing is a marker: comments, replies, and resolutions still work on a closed task.
 - A file diff is shown side by side or unified, at the user's choice.
 - The user jumps to any repository or file in the review and sees the number of comments per file.
 - The review updates by itself when code or comments change, without a reload and without losing the reading position.
@@ -85,8 +89,9 @@ flowchart LR
 
 - An agent gets open comments that have no answer yet, for one repository or all, including line text and context.
 - An agent replies in a thread and opens new comments under its own name.
-- An agent does not resolve comments.
-- Several agents work on one session at the same time, each in its own repository.
+- An agent proposes a review task for the work it has just done: it names the repositories and the files, creates the task without moving `current`, and hands the human its address.
+- An agent does not resolve comments, and does not close or reopen a task.
+- Several agents work on several tasks at the same time, each naming its own with `--review`.
 
 ### Phase 2 — suggestions and context
 
@@ -126,20 +131,29 @@ A review session is the directory `reviews/<name>/` with three files. `review.js
 
 ```json
 {
-  "version": 1,
+  "version": 2,
   "name": "ls-240372",
   "title": "Cargo flags across services",
   "base": { "mode": "branch", "branch": "origin/develop" },
+  "scope": [
+    { "repo": "repos/core/cargos-api", "paths": ["app/route/route_94.py", "docs/cargo-163.md"] },
+    { "repo": "repos/platform/loads-search" }
+  ],
+  "status": "open",
+  "closedAt": null,
+  "closedBy": null,
   "createdAt": "2026-09-02T18:00:00Z",
   "updatedAt": "2026-09-02T18:30:00Z"
 }
 ```
 
+`scope` absent or `null` is the whole root, which is what every session written before [ADR-010](adr/adr-010-review-task-scope.md) means; an empty array is refused, because a task that shows nothing is a mistake and not a state. `paths` absent or `null` is the whole repository, and a path is relative to the repository exactly as `comments.json` writes one — a write spells both out, so what the tool leaves on disk is `"paths": null` where the hand-written form omits the key. One repository is one entry: naming it twice is refused, because "the whole repository" and "these files" cannot both be true of it. `status` is `open` or `closed`, `closedAt` and `closedBy` are set by the human who closed the task and cleared when it is opened again.
+
 `comments.json` holds the threads:
 
 ```json
 {
-  "version": 1,
+  "version": 2,
   "comments": [
     {
       "id": "c_7f3k2q",
@@ -178,7 +192,9 @@ A review session is the directory `reviews/<name>/` with three files. `review.js
 
 Anchor levels: `repo: null` — the whole review; `path: null` — a repository; `line: null` — a file; `endLine` is optional. `base.mode` is `head`, `branch` with an optional `branch` field, or `ref` with a `ref` field.
 
-`diff.json` is a cache of the last scan: the repositories with changes, each with its branch, resolved base and merge base, and its file diffs — the same set that `diff --json` prints. The tool overwrites it on every scan; git stays the source of truth, and hand edits to this file are lost. It lets the UI open instantly and lets an agent read the change set without a running server.
+`diff.json` is a cache of the last scan: the repositories with changes, each with its branch, resolved base and merge base, and its file diffs — the same set that `diff --json` prints. It records the base **and the scope** it was computed for, and a cache computed for either of another value is read again rather than trusted: it answers a different question. The tool overwrites it on every scan; git stays the source of truth, and hand edits to this file are lost. It lets the UI open instantly and lets an agent read the change set without a running server.
+
+**Schema versions.** Every file of the data directory carries `version`, and the current one is 2. `review.json` and `comments.json` of version 1 are read — a version 1 review is `scope: null`, `status: "open"` — and written back as version 2 by the next write, so a data directory upgrades itself as it is used. A version this build does not know is refused for those two files, because a person wrote what is in them; `diff.json` of an unknown version is discarded and scanned again, because the tool wrote it and can write it again.
 
 A write to `review.json` or `comments.json` replaces the whole file at once, and a transient `.lock` directory inside the session directory marks a write in progress; writers from the UI and from several CLI processes wait for it, so no message is lost. Next to the sessions live the `current` pointer and the embedding index over all sessions.
 
@@ -207,9 +223,13 @@ Every command accepts `--review <name>` (default: the current session) and `--da
 | Command | Purpose |
 |---|---|
 | `serve [--root] [--port] [--open]` | server and UI |
-| `review new <name> [--base head\|branch\|branch:<name>\|<ref>] [--title]` | create a session and make it current; `branch:<name>` names the merge-base branch |
-| `review use <name>`, `review list [--json]` | switch sessions, list history |
+| `review new <name> [--base head\|branch\|branch:<name>\|<ref>] [--title] [--repo <path>]… [--path <repo>:<file>]… [--no-use]` | create a session and make it current; `branch:<name>` names the merge-base branch; repeated `--repo` and `--path` give it a scope; `--no-use` leaves `current` where it is and prints the task's address, `http://127.0.0.1:<port>/?review=<name>` |
+| `review use <name>`, `review list [--json]` | switch sessions, list history; every row carries the scope and the status |
 | `review base <head\|branch\|branch:<name>\|<ref>>` | change the base of a session |
+| `review scope [--json]` | what the session is about |
+| `review scope add [--repo <path>]… [--path <repo>:<file>]…` | widen the scope |
+| `review scope remove [--repo <path>]… [--path <repo>:<file>]… [--drop-comments]` | narrow it; without `--drop-comments`, and with comments under what is being removed, exit code 1, nothing written, the message naming the count and the ids |
+| `review close [<name>] --role human [--author]`, `review reopen [<name>] --role human [--author]` | set `status`; `closedBy` comes from `--author` and `closedAt` from the clock; any other role is refused with exit code 1, as it is for `resolve` |
 | `review delete <name>` | delete a session (Phase 2) |
 | `diff [--repo] [--json\|--patch]` | the current change set, the same one the UI shows |
 | `list [--status open\|resolved\|all] [--repo] [--severity] [--unanswered] [--json]` | comments; `--unanswered` — the last message of the thread is from a human |
@@ -225,6 +245,8 @@ Every command accepts `--review <name>` (default: the current session) and `--da
 
 CLI defaults: `--author agent`, `--role agent`. The UI writes `author` from `config.user` and `role: human`.
 
+`diff`, `list`, `show`, and `export` answer inside the scope of the session they run against, and `comment` writes inside it: an anchor on a repository or a file the task is not about is refused with exit code 1 and a message naming what the task *is* about, because a comment stored where nothing reads it back is a finding lost.
+
 ## 9. Agent protocol
 
 The repository ships two skills, following the pattern of difit and diffity.
@@ -232,7 +254,9 @@ The repository ships two skills, following the pattern of difit and diffity.
 - `skills/diffalanche-apply`: run `list --unanswered --json`, group by repository, present the plan, get the human's confirmation, apply the edits in `<root>/<repo>/<path>`, then `reply` to every comment. The agent never calls `resolve`.
 - `skills/diffalanche-review`: the agent reads `diff --json` and opens findings with `comment` — self-review, or review of another agent's work.
 
-Reply rules: one or two sentences when the issue is fixed; the full reasoning when the agent declines. Several agents on one session filter by `--repo` and sign with their own `--author`.
+Reply rules: one or two sentences when the issue is fixed; the full reasoning when the agent declines. Several agents work on several sessions at the same time; each names its own with `--review` and signs with its own `--author`.
+
+An agent that has just written code proposes the review of it: `review new <name> --repo … --path … --no-use` creates the task with the repositories and the files it touched, leaves `current` where it is, and prints the address the human opens. It never closes a task, exactly as it never resolves a comment — both refuse any role but `human` ([ADR-004](adr/adr-004-agent-contract.md), [ADR-010](adr/adr-010-review-task-scope.md)). A `comment` on something outside the task's scope is refused by name: the change belongs to another task, and the refusal says what this one is about so the agent can widen the scope or open its own.
 
 ## 10. Phases
 
@@ -247,6 +271,11 @@ Reply rules: one or two sentences when the issue is fixed; the full reasoning wh
 - `resolve` from the UI removes the comment from `list --status open`. `resolve` from the CLI without `--role human` fails and changes nothing.
 - A reply made with `reply` shows up in the activity feed with the agent's `--author`.
 - `review use` switches both the UI and the CLI without `--review`.
+- `review new t --repo <one> --path <other>:<file> --no-use` leaves `current` where it was, and `diff --json --review t` answers with the changed files of `<one>` and that one path of `<other>`, and nothing else.
+- A task over two repositories of the synthetic review starts no git process for the other nineteen, counted rather than timed.
+- `review scope remove` with a comment under what it removes exits 1 and writes nothing; with `--drop-comments` the comment is gone and the scope is narrower.
+- `review close` marks the task closed and `resolve`, `reply`, and `comment` still work on it; both `review close` and `review reopen` refuse a role that is not `human`.
+- A `review.json` of version 1 is read as the whole root and open, and is on disk as version 2 after the next write.
 - Two CLI processes replying to different comments at the same moment both land in `comments.json`.
 - The performance test on the synthetic review stays within the budget table.
 - CI is green on Node and Bun; binaries build for all six targets.

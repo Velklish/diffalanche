@@ -5,7 +5,7 @@
  * process becomes comment events.
  */
 import { execFile } from "node:child_process";
-import { mkdirSync, mkdtempSync, rmSync, writeFileSync } from "node:fs";
+import { chmodSync, mkdirSync, mkdtempSync, readFileSync, rmSync, writeFileSync } from "node:fs";
 import { readFile, rm, writeFile } from "node:fs/promises";
 import { tmpdir } from "node:os";
 import { join } from "node:path";
@@ -16,6 +16,7 @@ import { generate, PROFILES } from "../scripts/synth.ts";
 import { scanReview } from "../src/core/change-set.ts";
 import type { Config } from "../src/core/config/index.ts";
 import { loadConfig } from "../src/core/config/index.ts";
+import { closeSession, createSession } from "../src/core/domain/index.ts";
 import { checkIgnore } from "../src/core/git/index.ts";
 import { scan } from "../src/core/index.ts";
 import {
@@ -34,6 +35,7 @@ import {
   IGNORE_CACHE_LIMIT,
   repositoryIgnore,
   rescanRepository,
+  snapshotSessions,
   startWatcher,
   supportsRecursiveWatch,
   trimVerdicts,
@@ -539,6 +541,23 @@ describe("watcher", () => {
     await writeFile(join(config.dataDir, "current"), `${SESSION}\n`);
     await waitFor("session-changed", performance.now() - 1);
   }, 30_000);
+
+  it("announces a task that appeared and a task whose status changed", async () => {
+    // A task an agent opens does not become the current session (DA-53), so
+    // this is the only word an open window gets about it.
+    const appeared = performance.now();
+    await createSession(config.dataDir, "a-new-task", { mode: "head" }, "opened by an agent", {
+      use: false,
+    });
+    const created = await waitFor("sessions-changed", appeared);
+    expect(created.event).toMatchObject({ name: "a-new-task", status: "open" });
+    expect(watcher.session()).toBe(SESSION);
+
+    const closed = performance.now();
+    await closeSession(config.dataDir, "a-new-task", { author: "kim.p", role: "human" });
+    const marked = await waitFor("sessions-changed", closed);
+    expect(marked.event).toMatchObject({ name: "a-new-task", status: "closed" });
+  }, 30_000);
 });
 
 describe("a rescan that fails", () => {
@@ -569,6 +588,36 @@ describe("a rescan that fails", () => {
     await writeFile(file, "export const broken = 2;\n");
     const hit = await waitFor("diff-changed", mark);
     expect((hit.event as { repo: string }).repo).toBe(REPO);
+  }, 30_000);
+});
+
+describe("the snapshot the session events are read from", () => {
+  it("keeps what it knew when `reviews/` cannot be listed, and does not empty it", async () => {
+    const reviews = join(config.dataDir, "reviews");
+    const first = await snapshotSessions(config, null);
+    expect(first?.get(SESSION)).toBe("open");
+
+    chmodSync(reviews, 0o000);
+    try {
+      // A failed listing is not an empty data directory. Answering with one
+      // would make every session news again on the next readable pass, and a
+      // few hundred of those would push the replay out of the stream's ring.
+      expect(await snapshotSessions(config, first)).toBeNull();
+    } finally {
+      chmodSync(reviews, 0o755);
+    }
+
+    // A session whose own file cannot be read keeps the status it had: a file
+    // caught mid-write is not a task that changed.
+    const broken = join(reviews, SESSION, "review.json");
+    const kept = readFileSync(broken, "utf8");
+    writeFileSync(broken, "{ not json");
+    try {
+      expect((await snapshotSessions(config, first))?.get(SESSION)).toBe("open");
+      expect((await snapshotSessions(config, null))?.has(SESSION)).toBe(false);
+    } finally {
+      writeFileSync(broken, kept);
+    }
   }, 30_000);
 });
 

@@ -22,7 +22,13 @@ export type DomainErrorCode =
   /** `resolve` or `reopen` from anything but a human ([ADR-004](../../../docs/adr/adr-004-agent-contract.md)). */
   | "role-not-human"
   /** A line anchor on a line the change set does not have. */
-  | "line-not-in-diff";
+  | "line-not-in-diff"
+  /** A scope that does not add up: a repository the root has not, a path outside its repository. */
+  | "invalid-scope"
+  /** A comment on something the review task is not about ([ADR-010](../../../docs/adr/adr-010-review-task-scope.md)). */
+  | "out-of-scope"
+  /** Narrowing the scope would take comments with it, and nothing consented to that. */
+  | "scope-has-comments";
 
 export class DomainError extends Error {
   readonly code: DomainErrorCode;
@@ -31,5 +37,36 @@ export class DomainError extends Error {
     super(message);
     this.name = "DomainError";
     this.code = code;
+  }
+}
+
+/** How many comment ids a refusal spells out before it counts the rest. */
+const NAMED_IDS = 12;
+
+/**
+ * The refusal that narrowing the scope raises while comments are anchored under
+ * what it removes (`docs/SPEC.md` section 7). It carries every id, because the
+ * caller decides what to do with them, while the message names the count and
+ * the first of them: a line with two hundred ids on it answers nobody. The
+ * message names the CLI flag, which is the contract this refusal is written
+ * for; the API hands the UI `count` and `comments` so it can word its own
+ * question ([07-server.md](../../../docs/reference/07-server.md)).
+ */
+export class ScopeCommentsError extends DomainError {
+  /** The comments the narrowing would delete, in the order they were written. */
+  readonly comments: string[];
+
+  constructor(comments: string[]) {
+    const named = comments.slice(0, NAMED_IDS);
+    const rest = comments.length - named.length;
+    const ids = rest === 0 ? named.join(", ") : `${named.join(", ")}, and ${rest} more`;
+    super(
+      "scope-has-comments",
+      `${comments.length} ${comments.length === 1 ? "comment is" : "comments are"} ` +
+        `anchored under what this removes (${ids}); pass --drop-comments to delete them ` +
+        "with the scope",
+    );
+    this.name = "ScopeCommentsError";
+    this.comments = comments;
   }
 }

@@ -46,7 +46,9 @@ tree under it, resolves a base per repository — the working tree against `HEAD
 the merge base with a branch, or an explicit ref — and serves the review on
 `127.0.0.1`.
 
-A review session is a named unit of work with its own base mode and comments.
+A review session is a named unit of work with its own base mode, scope, status,
+and comments. A scoped session is a review task: it shows the repositories and
+the files it names and nothing else, and a human closes it when it is done.
 Sessions accumulate and are never deleted automatically. Comments live in
 `<root>/.diffalanche/reviews/<name>/` as JSON a human can read and edit. A
 finding carries a severity (`critical`, `warning`, `nit`, `question`) and a
@@ -60,6 +62,10 @@ and the threads update live, without losing the reading position.
 
 - Many repositories in one review; three base modes; untracked files included;
   comments anchored to a review, a repository, a file, a line, or a line range.
+- A review session carries a **scope** — the repositories and the files it is
+  about — and a status a human sets. A session without one is the whole root,
+  which is what every session used to be. An agent proposes a task for the work
+  it just did without taking over the screen the human is on.
 - Threads with agent replies, an activity feed of what changed while the review
   is open, review sessions with history, global search, markdown export, a
   keyboard map.
@@ -125,7 +131,13 @@ and the threads update live, without losing the reading position.
    two wrote a message.
 5. **Nothing is silently lost.** A repository the scan skipped, a base that did
    not resolve, a comment whose anchor is gone — each one is shown and named,
-   never dropped.
+   never dropped. **One carve-out, made deliberately in
+   [ADR-010](docs/adr/adr-010-review-task-scope.md):** a change outside the
+   scope of a review task is not shown at all — no summary line, no collapsed
+   section, no count of what was left out. Such a change belongs to another
+   task, and the history says which tasks exist. The carve-out is about what a
+   task *shows*: a comment written outside its scope is still refused by name
+   rather than stored where nothing would read it back.
 
 ## Accessibility & Inclusion
 

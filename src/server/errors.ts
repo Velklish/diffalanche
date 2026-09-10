@@ -7,11 +7,20 @@
 import type { Context } from "hono";
 import { HTTPException } from "hono/http-exception";
 import type { DomainErrorCode } from "../core/domain/index.ts";
-import { DomainError } from "../core/domain/index.ts";
+import { DomainError, ScopeCommentsError } from "../core/domain/index.ts";
 import { StorageError } from "../core/storage/index.ts";
 
 /** The body of every refusal: the code to branch on, the message to show. */
 export type ErrorBody = { error: string; message: string };
+
+/**
+ * The refusal a scope edit gets while comments are anchored under what it
+ * removes. It carries the count and the ids on top of the message, so the
+ * editor of DA-55 can word its own question — "delete 3 comments?" — instead of
+ * showing a message written for the CLI
+ * ([04-domain.md](../../docs/reference/04-domain.md)).
+ */
+export type ScopeConflictBody = ErrorBody & { count: number; comments: string[] };
 
 /**
  * A request the domain never gets to see: a body that is not an object, a
@@ -78,6 +87,20 @@ export function errorResponse(error: Error, c: Context): Response {
   }
   if (error instanceof RequestError) {
     return c.json<ErrorBody>({ error: error.code, message: error.message }, 400);
+  }
+  // The one refusal that is neither "there is nothing here" nor "that request
+  // is wrong": the request is well formed and the state says no, and what it
+  // needs is a decision — a 409 with the comments it would take.
+  if (error instanceof ScopeCommentsError) {
+    return c.json<ScopeConflictBody>(
+      {
+        error: error.code,
+        message: error.message,
+        count: error.comments.length,
+        comments: error.comments,
+      },
+      409,
+    );
   }
   if (error instanceof DomainError) {
     return c.json<ErrorBody>({ error: error.code, message: error.message }, statusOf(error));

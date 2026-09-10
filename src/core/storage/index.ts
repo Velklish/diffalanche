@@ -28,13 +28,18 @@ export type {
   DiffCache,
   Reply,
   Review,
+  ReviewStatus,
   Role,
+  Scope,
+  ScopeEntry,
   SessionListing,
   Severity,
   Side,
 } from "./types.ts";
 export {
   COMMENT_STATUSES,
+  READABLE_VERSIONS,
+  REVIEW_STATUSES,
   ROLES,
   SCHEMA_VERSION,
   SEVERITIES,

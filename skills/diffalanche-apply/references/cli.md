@@ -8,13 +8,22 @@ across two repositories. Long bodies are cut where marked and nowhere else.
 
 ```
 $ diffalanche review list
-* review-demo  head  2 open   0 resolved  3 repositories  Self-review of quotes-worker
-  demo         head  3 open   0 resolved  3 repositories  Cargo flags and quotes
-  synth        head  17 open  3 resolved  not scanned     Synthetic review
+  cargo-flags  head  open  0 open   0 resolved  not scanned     scope: repos/core/cargos-api, repos/platform/loads-search (app/cargo/cargo_404.py)  Кэш тарифов: правки агента
+* synth        head  open  17 open  3 resolved  3 repositories  scope: the whole root                                                               Synthetic review
 ```
 
 The `*` is the current session. Every command below uses it unless you pass
-`--review demo`.
+`--review cargo-flags`. The columns after the base are the status, the comment
+counters, the repositories of the last scan, and the scope — what the task is
+about, or the whole root when it is about everything.
+
+```
+$ diffalanche review scope --review cargo-flags
+repos/core/cargos-api        the whole repository
+repos/platform/loads-search  app/cargo/cargo_404.py
+```
+
+A task answers inside that scope and your writes stay inside it too.
 
 ## list --unanswered --json — the work
 
@@ -154,8 +163,17 @@ diffalanche: only a human may resolve a comment; this call came with role "agent
 ```
 
 Exit code 1, nothing changed — with the default role and with an explicit
-`--role agent` alike. `reopen` is the same. Do not work around it by passing
-`--role human`.
+`--role agent` alike. `reopen` is the same, and so are `review close` and
+`review reopen`, which mark the whole task:
+
+```
+$ diffalanche review close cargo-flags
+diffalanche: only a human may close a review task; this call came with role "agent"
+```
+
+Do not work around any of them by passing `--role human`. A closed task is not
+locked, so nothing else here changes when the human closes one: `reply` still
+lands, and `list --unanswered` still answers.
 
 ## Narrowing for several agents
 

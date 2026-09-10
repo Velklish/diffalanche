@@ -10,15 +10,18 @@ import type { CommandSpec } from "./spec.ts";
 import { GLOBAL } from "./spec.ts";
 
 export type Arguments = {
-  values: Record<string, string | boolean | undefined>;
+  /** A flag its command declared `multiple` arrives as a list; every other as one value. */
+  values: Record<string, string | boolean | (string | boolean)[] | undefined>;
   positionals: string[];
 };
 
 /** Parses the arguments of one command against its own definitions and the global ones. */
 export function parse(spec: CommandSpec, argv: string[]): Arguments {
-  const options: Record<string, { type: "string" | "boolean"; short?: string }> = {};
+  const options: Record<string, { type: "string" | "boolean"; short?: string; multiple?: true }> =
+    {};
   for (const [name, option] of Object.entries({ ...GLOBAL, ...spec.options })) {
-    options[name] = { type: option.type };
+    options[name] =
+      option.multiple === true ? { type: option.type, multiple: true } : { type: option.type };
   }
   options.help = { type: "boolean", short: "h" };
   try {
@@ -41,6 +44,17 @@ export function parse(spec: CommandSpec, argv: string[]): Arguments {
 export function text(args: Arguments, name: string): string | undefined {
   const value = args.values[name];
   return typeof value === "string" ? value : undefined;
+}
+
+/**
+ * Every value of a flag that may be given more than once, in the order it was
+ * typed, and an empty list when it was not given at all. Only a flag its
+ * command declared `multiple` arrives as a list; every other one is one value.
+ */
+export function texts(args: Arguments, name: string): string[] {
+  const value = args.values[name];
+  if (!Array.isArray(value)) return [];
+  return value.filter((one): one is string => typeof one === "string");
 }
 
 export function flag(args: Arguments, name: string): boolean {

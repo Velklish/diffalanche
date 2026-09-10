@@ -3,7 +3,7 @@
  * changing its base. `docs/SPEC.md` sections 4, 5, and 8; the on-disk side is
  * `src/core/storage`.
  */
-import type { Base, Review } from "../storage/index.ts";
+import type { Base, Review, Scope } from "../storage/index.ts";
 import {
   listSessionNames,
   readComments,
@@ -11,6 +11,7 @@ import {
   readDiffCache,
   readReview,
   reviewPath,
+  SCHEMA_VERSION,
   StorageError,
   sessionExists,
   timestamp,
@@ -81,17 +82,30 @@ export function formatBase(base: Base): string {
   return base.branch === undefined ? "branch" : `branch:${base.branch}`;
 }
 
+export type CreateSessionOptions = {
+  /** What the task is about; `null`, the default, is the whole root. */
+  scope?: Scope;
+  /**
+   * Whether the new session becomes the current one. `false` leaves `current`
+   * where it is: an agent that opens a task prints its link and the human opens
+   * it when they are ready ([ADR-010](../../../docs/adr/adr-010-review-task-scope.md)).
+   */
+  use?: boolean;
+};
+
 /**
- * Creates a session and makes it current. The session directory carries both
- * files from the start: an empty `comments.json` is the session's comments, and
- * a reader that has to tell "no file yet" from "no comments" tells them apart
- * for no reason.
+ * Creates a session. The session directory carries both files from the start:
+ * an empty `comments.json` is the session's comments, and a reader that has to
+ * tell "no file yet" from "no comments" tells them apart for no reason. The
+ * scope is not checked here — it is checked against the repositories the scan
+ * found, which this module does not read ([scope.ts](scope.ts)).
  */
 export async function createSession(
   dataDir: string,
   name: string,
   base: Base,
   title?: string,
+  options: CreateSessionOptions = {},
 ): Promise<Review> {
   assertSessionName(name);
   // `sessionExists` answers from the file being there, not from it parsing: a
@@ -107,10 +121,14 @@ export async function createSession(
   try {
     review = await updateSession(dataDir, name, (draft) => draft.review, {
       create: {
-        version: 1,
+        version: SCHEMA_VERSION,
         name,
         title: title ?? null,
         base,
+        scope: options.scope ?? null,
+        status: "open",
+        closedAt: null,
+        closedBy: null,
         createdAt: now,
         updatedAt: now,
       },
@@ -126,7 +144,7 @@ export async function createSession(
     throw error;
   }
 
-  await writeCurrent(dataDir, name);
+  if (options.use !== false) await writeCurrent(dataDir, name);
   return review;
 }
 
@@ -167,6 +185,8 @@ export async function listSessions(dataDir: string): Promise<SessionList> {
       name,
       title: review.title,
       base: review.base,
+      scope: review.scope,
+      status: review.status,
       createdAt: review.createdAt,
       updatedAt: review.updatedAt,
       current: name === current,

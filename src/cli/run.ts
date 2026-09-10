@@ -15,7 +15,17 @@ import { diff } from "./commands/diff.ts";
 import { exportReview } from "./commands/export.ts";
 import { list } from "./commands/list.ts";
 import { reply } from "./commands/reply.ts";
-import { reviewBase, reviewList, reviewNew, reviewUse } from "./commands/review.ts";
+import {
+  reviewBase,
+  reviewClose,
+  reviewList,
+  reviewNew,
+  reviewReopen,
+  reviewScope,
+  reviewScopeAdd,
+  reviewScopeRemove,
+  reviewUse,
+} from "./commands/review.ts";
 import { serve } from "./commands/serve.ts";
 import { show } from "./commands/show.ts";
 import { reopen, resolve } from "./commands/verdict.ts";
@@ -35,6 +45,11 @@ const COMMANDS: Command[] = [
   reviewUse,
   reviewList,
   reviewBase,
+  reviewScope,
+  reviewScopeAdd,
+  reviewScopeRemove,
+  reviewClose,
+  reviewReopen,
   diff,
   list,
   show,

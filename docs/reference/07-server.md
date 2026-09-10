@@ -40,8 +40,9 @@ duration. Without it the server writes nothing but its own failures.
 
 | Route | What it answers |
 |---|---|
-| `GET /api/review` | the review document: the change set, the session, its comments and counters |
-| `GET /api/sessions` | every review session with its counters, most recently updated first |
+| `GET /api/review[?review=<name>]` | the review document: the change set, the session, its comments and counters; without the parameter, of the current session |
+| `GET /api/sessions` | every review session with its counters, its scope, and its status, most recently updated first |
+| `GET /api/sessions/candidates` | the change set of the whole root, scope ignored: what a scope is picked from |
 | `GET /api/config` | `{ user, port }` — what the UI signs comments with, and where it is |
 | `GET /api/scan` | every repository under the root, with whether it has changes |
 | `GET /api/repos/branches` | every branch of the root, for the base picker |
@@ -57,6 +58,8 @@ duration. Without it the server writes nothing but its own failures.
 | `POST /api/sessions` | a new review session, made current |
 | `POST /api/sessions/:name/use` | make a session current |
 | `PUT /api/sessions/:name/base` | change the base of a session |
+| `PUT /api/sessions/:name/scope` | replace the scope of a session |
+| `POST /api/sessions/:name/close`, `/reopen` | the status of a review task |
 | anything else | a file of the built UI, or `index.html` |
 
 An unknown path under `/api` is a 404 saying so rather than the page: the UI
@@ -89,7 +92,8 @@ that file's import graph may reach a module that uses the Node API.
   ],
   "totals": { "repositories": 21, "files": 300, "lines": 30000 },
   "warnings": [{ "path": "repos/closed", "message": "directory cannot be read: EACCES" }],
-  "session": { "version": 1, "name": "ls-240372", "base": { "mode": "head" }, "…": "…" },
+  "session": { "version": 2, "name": "ls-240372", "base": { "mode": "head" },
+               "scope": null, "status": "open", "…": "…" },
   "comments": [],
   "counters": { "counters": { "open": 3, "…": "…" }, "repositories": [] }
 }
@@ -102,8 +106,8 @@ per scrolled frame than the budget of `docs/SPEC.md` section 6 has
 `diff.json`, where anchor capture reads them ([04-domain.md](04-domain.md)).
 
 The change set comes from `diff.json`; without one — or with one computed
-against a base that is no longer the session's — the server reads every
-repository and writes it. The document is built once and serialised once — the
+against a base or for a scope that is no longer the session's — the server reads
+every repository of the scope and writes it. The document is built once and serialised once — the
 review is megabytes, and re-serialising it per request would charge every reload
 for it. What rebuilds it is the watcher: a rescan hands over the change set as
 it now stands, and every other event drops the document so the next request
@@ -111,7 +115,41 @@ builds it again.
 
 `warnings` is everything the scan and the reads had to say — `ScanWarning[]`,
 the directories that could not be read and the bases that did not resolve
-([01-scanner.md](01-scanner.md), [02-git.md](02-git.md)).
+([01-scanner.md](01-scanner.md), [02-git.md](02-git.md)). Under a scope they are
+the warnings of the walk, which covers the whole root, plus those of reading the
+repositories of the task — a repository the task is not about is not read, so it
+has nothing to say — plus one naming a scope entry the walk found no repository
+for.
+
+`?review=<name>` answers with the document of that session instead of the
+current one: the address `review new --no-use` prints, so a window can open a
+task without becoming it ([ADR-010](../adr/adr-010-review-task-scope.md)). The
+current session's document is the one built and kept; a named one is built for
+the request that asked, because a window opening another task must not evict the
+review everyone else is reading.
+
+### The candidates
+
+`GET /api/sessions/candidates` is the change set of the **whole** root, whatever
+the session is about: the scope editor has to offer what the task is not about
+yet. It is the third route that reads git per request, and it carries names
+rather than diffs — no `patch`, no `hunks` — because a picker shows paths and
+the diff of a whole root is megabytes.
+
+```json
+{
+  "root": "/abs/path",
+  "repositories": [
+    { "path": "repos/core/cargos-api", "branch": "main",
+      "files": [{ "path": "app/route/route_94.py", "oldPath": null,
+                  "status": "modified", "additions": 12, "deletions": 3 }] }
+  ],
+  "warnings": []
+}
+```
+
+A repository with nothing to show is not part of a change set, here as
+everywhere else.
 
 ### The scan
 
@@ -177,8 +215,16 @@ Every refusal is the domain's own code and message
 | Code | Status |
 |---|---|
 | `no-current-session`, `no-such-session`, `no-such-comment` | 404 |
+| `scope-has-comments` | 409, with `count` and `comments` beside the message |
 | every other `DomainError` | 400 |
 | a file of the data directory that cannot be read | 500, `error: "storage"` |
+
+The 409 is the one refusal that is neither "there is nothing here" nor "that
+request is wrong": the request is well formed and the state says no, and what it
+needs is a decision. Its body carries the count and the ids on top of the
+message, so the scope editor words its own question — "delete 3 comments?" —
+rather than showing a message written for the CLI
+([04-domain.md](04-domain.md)).
 
 A `comments.json` that is not JSON, a `review.json` of another schema version, a
 `current` holding a path rather than a name: all of those are the 500, with the
@@ -204,7 +250,8 @@ browser fetches what an event names rather than being sent it.
 | `comment-added` | `{ type, id }` |
 | `reply-added` | `{ type, id, commentId }` — `id` is the reply |
 | `comment-status` | `{ type, id }` |
-| `session-changed` | `{ type, name }` |
+| `session-changed` | `{ type, name }` — the current session, or the metadata of it |
+| `sessions-changed` | `{ type, name, status }` — a review task appeared, or a task's status changed |
 | `warnings` | `{ type, list }` |
 | `activity` | `{ id, verb, author, repo, path, at }` — one line of the feed |
 | `reload` | `{ type, reason }` — read the review again; see below |
@@ -270,10 +317,15 @@ either, which is why only a human ever resolves a thread through this server.
 | `POST /api/sessions` | `name`, `base`, `title` | 201 and `review.json` |
 | `POST /api/sessions/:name/use` | — | `review.json` of the session now current |
 | `PUT /api/sessions/:name/base` | `base` | `review.json` with the new base |
+| `PUT /api/sessions/:name/scope` | `scope`, `dropComments` | `review.json` with the new scope, or 409 |
+| `POST /api/sessions/:name/close`, `/reopen` | — | `review.json` with the new status |
 
 An anchor level is read from what is absent: no `repo` is the whole review, no
 `path` a repository, no `line` a file (`docs/SPEC.md` section 7). A `repo` that
-is not a repository under the root is a 400 naming it; the repository is not
+is not a repository under the root is a 400 naming it, and so is an anchor the
+task's scope is not about — that one is the domain's own refusal, `out-of-scope`,
+because a comment stored outside the scope is one nothing reads back, whichever
+interface wrote it ([04-domain.md](04-domain.md)); the repository is not
 read again before the anchor is captured, because the comment is on the diff the
 person was shown and not on what the file says a moment later. `base` is the
 string the CLI takes — `head`, `branch`, `branch:<name>`, or a ref — read by the
@@ -285,7 +337,23 @@ Changing the base of a session leaves its `diff.json` where it is and makes it
 stale on purpose: the cache records the base it was computed with, so the next
 reader — the UI, the CLI, or an agent — sees that it answers a different
 question and scans instead of trusting it
-([03-storage.md](03-storage.md), [06-cli.md](06-cli.md)).
+([03-storage.md](03-storage.md), [06-cli.md](06-cli.md)). A scope edit does the
+same, and for the same reason: the cache records the scope too.
+
+**The scope is replaced whole rather than edited entry by entry.** The editor
+holds the list the person sees, and one write is one state. What the new scope
+removes takes the comments anchored under it, so the consent is in the body:
+without `dropComments: true` a scope that would delete any is a 409 that names
+how many, and nothing is written — not the scope and not `comments.json`. The
+body's `scope` is a list of entries, each with a `repo` and optionally `paths`,
+or `null` for the whole root; what an entry may say is the domain's check
+([04-domain.md](04-domain.md)).
+
+`close` and `reopen` are signed like every other write here — `config.user` and
+`role: human` — and nothing in the request can change either, which is why only
+a human ever closes a task through this server
+([ADR-010](../adr/adr-010-review-task-scope.md)). A comment written into a
+closed task is not refused: closing is a marker and not a lock.
 
 What the request itself is wrong about is a `400` with `error: "invalid-request"`
 naming the field: a body that is not a JSON object, a severity that is not one

@@ -3,7 +3,7 @@
  * (`docs/SPEC.md` sections 8 and 9). This is how an agent opens a finding.
  */
 
-import { addComment, readSession } from "../../core/domain/index.ts";
+import { addComment, assertAnchorInScope, readSession } from "../../core/domain/index.ts";
 import { refreshRepository } from "../../core/index.ts";
 import { choice, count, noExtra, requiredChoice, text } from "../args.ts";
 import type { Command } from "../command.ts";
@@ -52,15 +52,19 @@ export const comment: Command = {
 
     const session = await context.session();
     const config = await context.config();
+    const review = await readSession(config.dataDir, session);
     // Before anything is written: a comment stored on a repository the review
     // does not have shows up in `list` and in `export` and nowhere in the UI.
     if (repo !== null) await assertRepository(config, repo);
+    // And before the repository is read again: a comment outside the scope is
+    // refused, so an anchor the task is not about costs no git process on its
+    // way to the refusal. The domain checks it too, for every caller.
+    assertAnchorInScope(review, repo, path);
     // The anchor is captured from `diff.json`, so the repository the line is in
     // is read again first: a comment written right after an edit has to point
     // at the line that is there now.
     if (line !== null && repo !== null) {
-      const review = await readSession(config.dataDir, session);
-      await refreshRepository(config, session, review.base, repo);
+      await refreshRepository(config, session, review.base, repo, review.scope);
     }
 
     const written = await addComment(config.dataDir, session, {

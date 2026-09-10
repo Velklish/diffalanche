@@ -8,6 +8,13 @@ export type OptionSpec = {
   type: "string" | "boolean";
   /** The value's name in the usage line; a boolean option carries none. */
   value?: string;
+  /**
+   * Whether the flag may be given more than once, the way the entries of a
+   * scope are typed: `--repo a --repo b`. The parser collects them into a list
+   * and `texts()` reads it; a flag without this keeps the last value, which is
+   * what a flag that names one thing should do.
+   */
+  multiple?: boolean;
   about: string;
 };
 
@@ -47,7 +54,8 @@ export const GLOBAL: Record<string, OptionSpec> = {
 };
 
 function label(name: string, option: OptionSpec): string {
-  return `--${name}${option.value === undefined ? "" : ` ${option.value}`}`;
+  const flag = `--${name}${option.value === undefined ? "" : ` ${option.value}`}`;
+  return option.multiple === true ? `${flag} …` : flag;
 }
 
 function block(title: string, rows: [string, string][]): string {

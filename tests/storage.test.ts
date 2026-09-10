@@ -16,6 +16,7 @@ import {
   commentsPath,
   currentPath,
   dataDirOf,
+  diffCachePath,
   ensureDataDir,
   listSessionNames,
   readComments,
@@ -23,6 +24,7 @@ import {
   readDiffCache,
   readReview,
   reviewPath,
+  SCHEMA_VERSION,
   StorageError,
   sessionDir,
   updateComments,
@@ -30,6 +32,7 @@ import {
   withLock,
   writeCurrent,
   writeDiffCache,
+  writeReview,
 } from "../src/core/storage/index.ts";
 import { comment, makeSession, review } from "./helpers/session.ts";
 
@@ -80,10 +83,10 @@ describe("data directory", () => {
     expect(readdirSync(join(root, ".diffalanche"))).toEqual(["reviews"]);
   });
 
-  it("writes JSON with version 1 and two-space indentation", async () => {
+  it("writes JSON with the current version and two-space indentation", async () => {
     await makeSession(dataDir, "one", [comment("c_aaaaaa")]);
     const text = readFileSync(reviewPath(dataDir, "one"), "utf8");
-    expect(text.startsWith('{\n  "version": 1,\n')).toBe(true);
+    expect(text.startsWith(`{\n  "version": ${SCHEMA_VERSION},\n`)).toBe(true);
     expect(text.endsWith("}\n")).toBe(true);
     expect(readFileSync(commentsPath(dataDir, "one"), "utf8")).toContain('\n  "comments": [\n');
   });
@@ -153,8 +156,37 @@ describe("reading", () => {
 
   it("refuses a file of an unknown schema version", async () => {
     await makeSession(dataDir, "one");
-    writeFileSync(reviewPath(dataDir, "one"), JSON.stringify({ ...review("one"), version: 2 }));
-    await expect(readReview(dataDir, "one")).rejects.toThrow(/version: expected 1, got 2/);
+    writeFileSync(reviewPath(dataDir, "one"), JSON.stringify({ ...review("one"), version: 3 }));
+    await expect(readReview(dataDir, "one")).rejects.toThrow(
+      /version: expected one of 1, 2, got 3/,
+    );
+  });
+
+  it("reads a version 1 review as a task over the whole root, and writes it back as 2", async () => {
+    await makeSession(dataDir, "one");
+    // What a session written before DA-53 looks like: no scope, no status, and
+    // the four fields of version 2 nowhere in the file.
+    writeFileSync(
+      reviewPath(dataDir, "one"),
+      JSON.stringify({
+        version: 1,
+        name: "one",
+        title: null,
+        base: { mode: "head" },
+        createdAt: "2026-09-01T09:00:00.000Z",
+        updatedAt: "2026-09-01T09:00:00.000Z",
+      }),
+    );
+
+    const read = await readReview(dataDir, "one");
+    expect(read).toMatchObject({ version: SCHEMA_VERSION, scope: null, status: "open" });
+    expect(read.closedAt).toBeNull();
+    expect(read.closedBy).toBeNull();
+
+    await writeReview(dataDir, "one", read);
+    expect(JSON.parse(readFileSync(reviewPath(dataDir, "one"), "utf8")).version).toBe(
+      SCHEMA_VERSION,
+    );
   });
 
   it("refuses a review session that does not exist", async () => {
@@ -182,8 +214,9 @@ describe("reading", () => {
     expect(await readDiffCache(dataDir, "one")).toBeNull();
 
     const cache = {
-      version: 1,
+      version: SCHEMA_VERSION,
       base: { mode: "head" } as const,
+      scope: null,
       root,
       repositories: [],
       totals: { repositories: 0, files: 0, lines: 0 },
@@ -191,6 +224,18 @@ describe("reading", () => {
     };
     await writeDiffCache(dataDir, "one", cache);
     expect(await readDiffCache(dataDir, "one")).toEqual(cache);
+  });
+
+  it("discards a diff cache of a version it does not know rather than refusing it", async () => {
+    await makeSession(dataDir, "one");
+    // The cache is an answer the tool wrote and can write again, so a version
+    // this build does not know is "never scanned" and not a broken file
+    // ([ADR-003](../docs/adr/adr-003-on-disk-format.md)).
+    writeFileSync(
+      diffCachePath(dataDir, "one"),
+      JSON.stringify({ version: 99, base: { mode: "head" }, scope: null, root, repositories: [] }),
+    );
+    expect(await readDiffCache(dataDir, "one")).toBeNull();
   });
 });
 

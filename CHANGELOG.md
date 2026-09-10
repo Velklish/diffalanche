@@ -15,6 +15,34 @@ and `bun run release` refuses a version that has no section. See
 
 ### Added
 
+- A review session carries a **scope** — the repositories and the files it is
+  about — and a **status** a human sets, so a review is one task rather than the
+  whole working area (DA-53, [ADR-010](docs/adr/adr-010-review-task-scope.md)).
+  A scope is one list of entries, each a whole repository or a repository with
+  an explicit list of paths; a session without one is the whole root, which is
+  what every session used to be. Nothing outside the scope is shown or returned:
+  `diff`, `list`, `show`, `export`, and the review document all answer inside
+  it, and no summary of what was left out is offered anywhere.
+- `review new` takes repeated `--repo <path>` and `--path <repo>:<file>` and a
+  `--no-use` that leaves `current` where it is and prints the task's address —
+  how an agent proposes the review of what it has just written without taking
+  over the screen the human is on. `review scope`, `review scope add`, and
+  `review scope remove [--drop-comments]` read and edit the scope; `review
+  close` and `review reopen` set the status and need `--role human`, the rule
+  `resolve` has had since [ADR-004](docs/adr/adr-004-agent-contract.md).
+  `review list` carries the scope and the status in every row.
+- `GET /api/review?review=<name>` answers with a named task instead of the
+  current one; `GET /api/sessions/candidates` is the change set of the whole
+  root, scope ignored, for a scope editor to pick from; `PUT
+  /api/sessions/:name/scope` replaces a scope and answers 409 with the number of
+  comments a narrowing would delete unless the body consents to it; `POST
+  /api/sessions/:name/close` and `/reopen` set the status. The live stream gains
+  `sessions-changed`, so an open window hears that a task appeared or was
+  closed.
+- A comment on something outside the task's scope is refused by name — in the
+  CLI and over the API — and the refusal says what the task *is* about. Stored,
+  it would be a finding nothing reads back.
+
 - The reading column says which repository it is in, and there are two ways into
   one. The repository header is one 38 px line — path, `<branch> ← <base>`,
   counts, `Comment on repo` — stuck under the header while its files are being
@@ -34,6 +62,21 @@ and `bun run release` refuses a version that has no section. See
   that file (DA-52).
 
 ### Changed
+
+- `SCHEMA_VERSION` is 2. `review.json` and `comments.json` of version 1 are read
+  — a version 1 review is the whole root and open — and written back as version
+  2 by the next write, so a data directory upgrades itself as it is used;
+  `diff.json` of a version this build does not know is discarded and scanned
+  again, because it is a cache. `diff.json` now records the scope it was
+  computed for beside the base, and a cache computed for another scope is read
+  again rather than trusted.
+- A scan reads only the repositories of the scope. The walk still finds every
+  repository — it starts no git process, and it is what tells a repository the
+  scope names but the root has not from one that is simply quiet — so a task
+  over two repositories of the synthetic review's twenty-one starts no git
+  process for the other nineteen; `tests/scope-scan.test.ts` counts the
+  processes rather than the seconds. The watcher watches every repository and
+  rescans only the ones in the scope.
 
 - The probe that asks what is being read moved from 62 px to 100 px — under the
   header and the new repository bar — and is now one exported `PROBE_Y` in

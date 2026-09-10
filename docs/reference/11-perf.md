@@ -82,6 +82,15 @@ pointer naming `synth`, so the fixture opens without `--review`
 ([03-storage.md](03-storage.md)). There is no `diff.json`: git is the source of
 truth and the scanner writes that cache itself.
 
+**Those two files are written at version 1 and stay there.** It is not a place
+the DA-53 schema bump missed: the fixture is what a data directory written
+before that bump looks like, so every reader that opens it — the perf gate, the
+smoke matrix, and most of the suite — exercises the compatibility
+`READABLE_VERSIONS` promises, instead of one test doing it alone. The tool
+raises the files to the current version on its first write to them, which leaves
+the generated fixture on disk as it was generated
+([03-storage.md](03-storage.md#schema-versions)).
+
 Comments are spread over all four anchor levels (review, repository, file, line)
 and all four severities; a line comment's anchor names a line inside the block
 its file actually changed, with its real context and hunk header.

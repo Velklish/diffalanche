@@ -4,6 +4,7 @@
  * listening inside this process. The SSE stream of the server is one listener;
  * the activity feed is built from the same events.
  */
+import type { ReviewStatus } from "../storage/types.ts";
 import type { ScanWarning } from "../types.ts";
 
 /**
@@ -19,6 +20,13 @@ export type WatcherEvent =
   | { type: "comment-status"; id: string }
   /** The current session changed, or the metadata of the current one did. */
   | { type: "session-changed"; name: string }
+  /**
+   * A review task appeared in the data directory, or a task's status changed —
+   * whichever session it is, current or not. An open window says a new task is
+   * there without becoming that task
+   * ([ADR-010](../../../docs/adr/adr-010-review-task-scope.md)).
+   */
+  | { type: "sessions-changed"; name: string; status: ReviewStatus }
   | { type: "warnings"; list: ScanWarning[] };
 
 export type WatcherEventType = WatcherEvent["type"];

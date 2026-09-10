@@ -8,15 +8,52 @@ twenty changed files. Long arrays are cut where marked and nowhere else.
 
 ```
 $ diffalanche review list
-* review-demo  head  2 open   0 resolved  3 repositories  Self-review of quotes-worker
-  demo         head  3 open   0 resolved  3 repositories  Cargo flags and quotes
-  synth        head  17 open  3 resolved  not scanned     Synthetic review
+  cargo-flags  head  open  0 open   0 resolved  not scanned     scope: repos/core/cargos-api, repos/platform/loads-search (app/cargo/cargo_404.py)  Кэш тарифов: правки агента
+* synth        head  open  17 open  3 resolved  3 repositories  scope: the whole root                                                               Synthetic review
 ```
 
-The `*` is the current session — the one every command uses without `--review`.
+The `*` is the current session — the one every command uses without `--review`,
+and the human's default rather than yours. The columns after the base are the
+status, the comment counters, the repositories of the last scan, and the scope.
 `--json` gives `{"sessions": [...], "warnings": [...]}`, each session with
-`name`, `title`, `base`, `createdAt`, `updatedAt`, `current`, `open`,
-`resolved`, and `repositories` (`null` when the session has never been scanned).
+`name`, `title`, `base`, `scope`, `status`, `createdAt`, `updatedAt`, `current`,
+`open`, `resolved`, and `repositories` (`null` when the session has never been
+scanned).
+
+## review new --no-use — proposing the task
+
+```
+$ diffalanche review new cargo-flags --title "Кэш тарифов: правки агента" \
+    --repo repos/core/cargos-api \
+    --path repos/platform/loads-search:app/cargo/cargo_404.py --no-use
+created review session cargo-flags (base head) about repos/core/cargos-api, repos/platform/loads-search (app/cargo/cargo_404.py); current is unchanged
+http://127.0.0.1:4880/?review=cargo-flags
+```
+
+The address is a line of its own, so `tail -1` reads it. `current` is where it
+was: the human opens the task when they are ready.
+
+## review scope — what a task is about
+
+```
+$ diffalanche review scope --review cargo-flags
+repos/core/cargos-api        the whole repository
+repos/platform/loads-search  app/cargo/cargo_404.py
+```
+
+```
+$ diffalanche review scope --review cargo-flags --json
+{
+  "name": "cargo-flags",
+  "scope": [
+    { "repo": "repos/core/cargos-api", "paths": null },
+    { "repo": "repos/platform/loads-search", "paths": ["app/cargo/cargo_404.py"] }
+  ]
+}
+```
+
+`"scope": null` is a session about the whole root, which is what a session
+without one is. `review scope add --review <name> --repo <path>` widens it.
 
 ## diff --json — the change set
 
@@ -26,7 +63,7 @@ $ diffalanche diff --repo repos/services/quotes-worker --json
 
 ```json
 {
-  "version": 1,
+  "version": 2,
   "base": { "mode": "head" },
   "root": "/…/fixture",
   "repositories": [
@@ -184,5 +221,24 @@ diffalanche: only a human may resolve a comment; this call came with role "agent
 ```
 
 Exit code 1, nothing changed — with the default role and with an explicit
-`--role agent` alike. `reopen` is the same. Do not work around it by passing
-`--role human`.
+`--role agent` alike. `reopen` is the same, and so are `review close` and
+`review reopen`, which mark the whole task:
+
+```
+$ diffalanche review close cargo-flags
+diffalanche: only a human may close a review task; this call came with role "agent"
+```
+
+Do not work around any of them by passing `--role human`.
+
+A comment outside the task's scope is refused too, and the refusal names what
+the task is about:
+
+```
+$ diffalanche comment --review cargo-flags --repo repos/services/quotes-worker \
+    --severity nit --body "not this task"
+diffalanche: repos/services/quotes-worker is not in the scope of review task "cargo-flags", which is about repos/core/cargos-api, repos/platform/loads-search (app/cargo/cargo_404.py): widen the scope or open a task of its own
+```
+
+Exit code 1 and nothing written. Widen the scope when the finding belongs to
+this task, and open a task of its own when it does not.

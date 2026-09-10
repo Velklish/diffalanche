@@ -3,7 +3,7 @@
  * shows. Every run scans the whole root and rewrites `diff.json`, so an agent
  * without a running server reads the review here (`docs/SPEC.md` section 8).
  */
-import { readSession } from "../../core/domain/index.ts";
+import { formatScope, readSession, repositoryInScope } from "../../core/domain/index.ts";
 import { scanReview, totalsOf } from "../../core/index.ts";
 import type { DiffCache } from "../../core/storage/index.ts";
 import { writeDiffCache } from "../../core/storage/index.ts";
@@ -78,11 +78,24 @@ export const diff: Command = {
     // narrows what is printed, never what is stored, because a cache with one
     // repository in it would tell the UI and the next `comment` that the rest
     // of the review has no changes.
-    const scanned = await scanReview(config, review.base);
+    // Inside the scope of the session: a task returns nothing outside it, so
+    // `diff` prints the repositories and the files the task is about and
+    // `diff.json` holds exactly those
+    // ([ADR-010](../../../docs/adr/adr-010-review-task-scope.md)).
+    const scanned = await scanReview(config, review.base, review.scope);
     // Before the write: an empty change set means the repository is there and
     // has nothing to show, and a path nothing is at must not print the same.
     const repo = text(args, "repo");
     if (repo !== undefined && !scanned.found.includes(repo)) throw repositoryNotFound(repo);
+    // A repository the root has but the task is not about is refused as well,
+    // and by its own message: the task returns nothing outside its scope, and
+    // an empty change set would read as "nothing changed there".
+    if (repo !== undefined && !repositoryInScope(review.scope, repo)) {
+      throw new UsageError(
+        `no repository "${repo}" in the scope of review session "${review.name}", ` +
+          `which is about ${formatScope(review.scope)}`,
+      );
+    }
     await writeDiffCache(config.dataDir, session, scanned.cache);
 
     const shown = narrow(scanned.cache, repo);

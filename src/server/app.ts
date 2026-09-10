@@ -5,6 +5,7 @@ import { findRepositories } from "../core/change-set.ts";
 import type { Config } from "../core/config/index.ts";
 import {
   addComment,
+  closeSession,
   createSession,
   exportMarkdown,
   get as getComment,
@@ -13,10 +14,12 @@ import {
   parseBaseArgument,
   readSession,
   reopen,
+  reopenSession,
   reply,
   resolve,
   resolveSessionName,
   setBase,
+  setScope,
   useSession,
 } from "../core/domain/index.ts";
 import type { Comment, Role } from "../core/storage/index.ts";
@@ -28,10 +31,12 @@ import type { EventStream } from "./events.ts";
 import { streamEvents } from "./events.ts";
 import {
   choice,
+  consent,
   nullableLine,
   nullableText,
   optionalText,
   readBody,
+  scope,
   severity,
   side,
   text,
@@ -95,11 +100,21 @@ export function createApp({ activity, config, events, review, ui, verbose }: App
   }
 
   // Serialised once per change, not once per request: the review is megabytes.
+  // `?review=<name>` is the task an agent printed a link to; without it the
+  // current session, as before ([ADR-010](../../docs/adr/adr-010-review-task-scope.md)).
   app.get("/api/review", async (c) =>
-    c.body(await review.payload(), 200, { "content-type": "application/json" }),
+    c.body(await review.payload(c.req.query("review")), 200, {
+      "content-type": "application/json",
+    }),
   );
 
   app.get("/api/sessions", async (c) => c.json(await listSessions(config.dataDir)));
+
+  // The change set of the whole root, whatever the session is about: what the
+  // scope editor offers to pick from. It is the one answer a scoped session
+  // gives about anything outside its scope, and it is a picker's list rather
+  // than a review — no patch, no hunks.
+  app.get("/api/sessions/candidates", async (c) => c.json(await review.candidates()));
 
   app.get("/api/config", (c) => c.json<ClientConfig>({ user: config.user, port: config.port }));
 
@@ -161,14 +176,17 @@ export function createApp({ activity, config, events, review, ui, verbose }: App
     const body = await readBody(c);
     const session = await resolveSessionName(config.dataDir);
     const repo = nullableText(body, "repo");
+    const path = nullableText(body, "path");
     // A comment names a repository the root has; the anchor is taken from the
     // change set as it was shown, and the repository is not read again for it.
+    // That the task's scope covers it is the domain's check, one level down
+    // ([04-domain.md](../../docs/reference/04-domain.md)).
     if (repo !== null && !(await findRepositories(config)).includes(repo)) {
       throw new RequestError(`repo ${repo} is not a repository under the root`);
     }
     const comment = await addComment(config.dataDir, session, {
       repo,
-      path: nullableText(body, "path"),
+      path,
       line: nullableLine(body, "line"),
       endLine: nullableLine(body, "endLine"),
       side: side(body),
@@ -234,6 +252,41 @@ export function createApp({ activity, config, events, review, ui, verbose }: App
 
   app.post("/api/sessions/:name/use", async (c) => {
     const session = await useSession(config.dataDir, c.req.param("name"));
+    review.invalidate();
+    return c.json(session);
+  });
+
+  // The scope is replaced whole rather than edited entry by entry: the editor
+  // of DA-55 holds the list the person sees, and one write is one state. What
+  // it removes takes its comments with it, and the consent for that is in the
+  // body: without it the answer is a 409 that names how many there are and
+  // writes nothing ([ADR-010](../../docs/adr/adr-010-review-task-scope.md)).
+  app.put("/api/sessions/:name/scope", async (c) => {
+    const body = await readBody(c);
+    const name = c.req.param("name");
+    const updated = await setScope(
+      config.dataDir,
+      name,
+      scope(body),
+      await findRepositories(config),
+      { dropComments: consent(body, "dropComments") },
+    );
+    review.invalidate();
+    return c.json(updated.review);
+  });
+
+  app.post("/api/sessions/:name/close", async (c) => {
+    // Signed with the configured user and `role: human`, like every write here:
+    // the UI is the human, and only a human closes a task
+    // ([ADR-010](../../docs/adr/adr-010-review-task-scope.md)). Nothing in the
+    // request can say otherwise.
+    const session = await closeSession(config.dataDir, c.req.param("name"), author);
+    review.invalidate();
+    return c.json(session);
+  });
+
+  app.post("/api/sessions/:name/reopen", async (c) => {
+    const session = await reopenSession(config.dataDir, c.req.param("name"), author);
     review.invalidate();
     return c.json(session);
   });

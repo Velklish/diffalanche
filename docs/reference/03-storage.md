@@ -61,7 +61,7 @@ review writes it too ([11-perf.md](11-perf.md)).
 | `sessionExists(dataDir, name)` | whether `review.json` is there, whatever is in it |
 | `listSessionNames(dataDir)` | `{ names, warnings }` |
 
-Every file is written as JSON with `"version": 1`, two-space indentation, and a
+Every file is written as JSON with `"version": 2`, two-space indentation, and a
 trailing newline — the format the spec asks for so the files stay readable and
 diffable by hand.
 
@@ -231,18 +231,56 @@ The `base` of `review.json` is the change-set reader's own `BaseSpec`
 ([02-git.md](02-git.md)): storage parses it, git resolves it, and one name means
 one thing on both sides.
 
+The `scope` of `review.json` is checked for being a scope at all and no further:
+a list of entries with a `repo` and, when it has them, a list of `paths`; absent
+or `null` is the whole root. An empty list is refused, and so is an empty
+`paths` — an entry that shows nothing is not a state, and the way to say "the
+whole repository" is to leave `paths` out. A repository named twice is refused
+as well: one repository is one entry, and two entries for it would leave "the
+whole repository" and "these files" both true of it. Whether a repository is
+under the root is not asked here — that needs the scan, and it is the domain's
+([04-domain.md](04-domain.md)).
+
 `diff.json` is checked down to its envelope only — `version`, `root`,
-`repositories`, `totals`. It is written by a scan and overwritten whole by the
-next one, so the shape inside it is the git reader's contract
-([02-git.md](02-git.md)), not storage's.
+`repositories`, `totals` — plus the two fields that say what it is an answer
+**to**: `base` and `scope`. Both are part of the cache's key. A cache computed
+against another base answers a different question, and so does one computed for
+another scope: it holds the repositories and the files of the scope it was read
+under, so a scope edit would otherwise leave the review reading the answer to
+the question it used to ask ([ADR-010](../adr/adr-010-review-task-scope.md)).
+Either field missing altogether is read as "never scanned" — a cache that cannot
+say what it answers is no answer. The rest of the shape inside it is the git
+reader's contract ([02-git.md](02-git.md)), not storage's.
+
+## Schema versions
+
+`SCHEMA_VERSION` is what a write puts in a file; `READABLE_VERSIONS` is what a
+read accepts. They are 2 and `[1, 2]`.
+
+A `review.json` or `comments.json` of version 1 predates the scope of a review
+task: it is read as a task over the whole root that is still open — which is
+what such a session has always meant — and what the caller holds is the current
+shape, so the next write puts the file on version 2. A data directory therefore
+upgrades itself as it is used, and nothing has to walk it. A version that is
+neither of the two is refused whole, before any field of the file is read: a
+person wrote what is in these two, and half-reading that is worse than saying
+no.
+
+**`diff.json` is not in that list.** A version this build does not know is
+discarded and the caller scans again, the same answer a cache with no `base` or
+no `scope` gets. It is the one file the tool writes and can write again, and
+`docs/SPEC.md` section 7 already says hand edits to it are lost.
 
 ## What it does not do yet
 
-- Migrations between schema versions. Version 1 is the only version there is;
-  a version 2 brings the task that migrates to it.
-- Keeping unknown keys. Parsing is strict against the version 1 schema: a key
-  the schema does not name is dropped on the next write, so a note added by hand
-  to a comment does not survive the next reply to it.
+- Migrating a file in place. Nothing walks the data directory to raise its
+  files: a version 1 file is raised by the next write to it, and one nothing
+  writes to stays as it is and keeps being read.
+- Keeping unknown keys. Parsing is strict against the schema of the version it
+  is reading: a key the schema does not name is dropped on the next write, so a
+  note added by hand to a comment does not survive the next reply to it. That is
+  also what raises a version 1 file — the four fields DA-53 added are filled in
+  as it is read, and the write puts them on disk.
 - The lock covers one session directory. `current` and `config.json` sit outside
   every session and are written atomically but unlocked; two processes switching
   sessions at the same instant leave one of the two names, never a mixture.

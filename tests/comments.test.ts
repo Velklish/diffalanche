@@ -20,7 +20,13 @@ import {
   resolve,
 } from "../src/core/domain/index.ts";
 import type { Comment } from "../src/core/storage/index.ts";
-import { dataDirOf, readComments, readReview, writeDiffCache } from "../src/core/storage/index.ts";
+import {
+  dataDirOf,
+  readComments,
+  readReview,
+  SCHEMA_VERSION,
+  writeDiffCache,
+} from "../src/core/storage/index.ts";
 import type { DiffLine, RepositoryChange } from "../src/core/types.ts";
 import { readHunks } from "./helpers/change-set.ts";
 
@@ -51,8 +57,9 @@ beforeAll(async () => {
   await createSession(dataDir, SESSION, { mode: "head" }, "Anchors");
   const repository = readHunks(root, REPO);
   await writeDiffCache(dataDir, SESSION, {
-    version: 1,
+    version: SCHEMA_VERSION,
     base: { mode: "head" },
+    scope: null,
     root,
     repositories: [repository],
     totals: { repositories: 1, files: repository.files.length, lines: 0 },

@@ -96,6 +96,10 @@ export async function startReviewServer(options: ReviewServerOptions): Promise<R
   // would charge the next reader of the review for every comment written.
   bus.subscribe((event) => {
     if (event.type === "diff-changed") return;
+    // A task that appeared or was closed elsewhere in the data directory is
+    // news for the page, not for this document: the sessions are read per
+    // request and the review the page is on has not changed.
+    if (event.type === "sessions-changed") return;
     if (event.type === "session-changed" || event.type === "warnings") review.invalidate();
     else review.invalidateComments();
   });

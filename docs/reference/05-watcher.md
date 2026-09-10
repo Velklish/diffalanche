@@ -128,10 +128,10 @@ otherwise leave every later edit of a now-tracked file suppressed by a cached
 verdict.
 
 In the data directory every change is one signal: the reload reads `current`,
-`comments.json`, and `review.json` and compares each with the last read, so a
-name that turns out to be the lock, or a temporary file, or the directory itself
-costs three small reads and says nothing. Only `diff.json` is left out, because
-the watcher writes it. Matching on the file name instead would drop the write:
+`comments.json`, `review.json`, and the status of every session, and compares
+each with the last read, so a name that turns out to be the lock, or a temporary
+file, or the directory itself costs a handful of small reads and says nothing.
+Only `diff.json` is left out, because the watcher writes it. Matching on the file name instead would drop the write:
 `writeFileAtomic` renames a temporary file over the target, and a runtime may
 report the temporary name, the target, or neither.
 
@@ -159,7 +159,8 @@ the same, because the CLI writes the same directory.
 | `comment-added` | `{ id }` | a comment appeared in `comments.json` |
 | `reply-added` | `{ id, commentId }` | a reply appeared in a thread; `id` is the reply |
 | `comment-status` | `{ id }` | a comment was resolved or reopened |
-| `session-changed` | `{ name }` | the `current` pointer moved, or the base, title, or name of the current session changed |
+| `session-changed` | `{ name }` | the `current` pointer moved, or the base, title, name, scope, or status of the current session changed |
+| `sessions-changed` | `{ name, status }` | a review task appeared in the data directory, or a task's status changed — whichever session it is |
 | `warnings` | `{ list }` | the warnings of the change set are not what they were |
 
 A file touched without its content changing — a build output written again, a
@@ -167,7 +168,23 @@ save with the same bytes — is not a change of the review: the recomputed entry
 is compared with the cached one, patch by patch, and nothing is announced when
 they agree. `session-changed` is the same kind of answer: every write to a
 session bumps `updatedAt` in `review.json`, and only a change to what the review
-*is* counts.
+*is* counts — its base, title, name, scope, or status.
+
+`sessions-changed` is the other half of that, and it is not the same event: a
+task created by `review new --no-use` never becomes current, so nothing about
+the current session changes and an open window would otherwise never hear that
+it exists ([ADR-010](../adr/adr-010-review-task-scope.md)). It is read from the
+status of every session under `reviews/`, one small file each, on every burst
+the data directory produces — the cost `listSessions` already pays per request
+([04-domain.md](04-domain.md)). A session that disappears says nothing: deleting
+one is Phase 2 (DA-40).
+
+**A repository the current task is not about is watched and not rescanned.**
+Watching it costs no git process, and it is what makes a scope that widens while
+the server runs take effect without a restart; reading it would cost four git
+processes to produce a change set nothing may show. The scope is re-read
+whenever `review.json` changes, so a scope edit is in force from the next burst
+on.
 
 Comment events come from reading `comments.json` and comparing it with the last
 read, so a write from the UI, from one `diffalanche reply`, or from twenty of

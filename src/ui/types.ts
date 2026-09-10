@@ -24,14 +24,17 @@ export type {
   CommentStatus,
   Reply,
   Review,
+  ReviewStatus,
   Role,
+  Scope,
+  ScopeEntry,
   Severity,
   Side,
 } from "../core/storage/types.ts";
 /** Worst first (`docs/SPEC.md` section 3, decision 7): the order of the composer's chips. */
 export { SEVERITIES } from "../core/storage/types.ts";
 
-import type { Base } from "../core/storage/types.ts";
+import type { Base, ReviewStatus, Scope } from "../core/storage/types.ts";
 import type { ScanWarning } from "../core/types.ts";
 
 export type {
@@ -89,6 +92,10 @@ export type SessionSummary = {
   name: string;
   title: string | null;
   base: Base;
+  /** What the task is about; `null` is the whole root. */
+  scope: Scope;
+  /** Whether the task is still open, or a human has closed it. */
+  status: ReviewStatus;
   createdAt: string;
   updatedAt: string;
   /** Whether `current` names this session. */

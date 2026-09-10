@@ -19,11 +19,14 @@ a caller reads; the message is what a person reads.
 | `invalid-anchor` | anchor levels that do not add up: a line without a file, a range that runs backwards |
 | `role-not-human` | `resolve` or `reopen` from anything but a human |
 | `line-not-in-diff` | a line anchor on a line the change set does not have |
+| `invalid-scope` | a scope that does not add up: a repository the root has not, a repository named twice, a path that is not one inside its repository, an edit a scope cannot express |
+| `out-of-scope` | a comment on something the review task is not about |
+| `scope-has-comments` | narrowing the scope would delete comments and nothing consented to that; the error carries their ids |
 
 ## Review sessions
 
 ```ts
-createSession(dataDir, name, base, title?): Promise<Review>
+createSession(dataDir, name, base, title?, { scope?, use? }?): Promise<Review>
 useSession(dataDir, name): Promise<Review>
 setBase(dataDir, name, base): Promise<Review>
 listSessions(dataDir): Promise<SessionList>
@@ -32,9 +35,14 @@ resolveSessionName(dataDir, name?): Promise<string>
 ```
 
 `createSession` writes `review.json` and an empty `comments.json` under the
-session's lock and then makes the session current. Both files exist from the
-start on purpose: a reader that has to tell "no file yet" from "no comments"
-tells them apart for nothing.
+session's lock and then makes the session current — unless it is told not to.
+`use: false` leaves `current` where it is: an agent that opens a task prints its
+address and the human opens it when they are ready
+([ADR-010](../adr/adr-010-review-task-scope.md)). The `scope` it is given is
+written as it is; what a scope may say is checked against the repositories the
+scan found, which this module does not read — see [Scope](#scope) below. Both
+files exist from the start on purpose: a reader that has to tell "no file yet"
+from "no comments" tells them apart for nothing.
 
 A name that is already a session is refused with `session-exists`. The check
 runs twice — before the lock and inside it, which is the one that decides — so
@@ -55,13 +63,113 @@ the counters the sessions menu shows (`docs/design/HANDOFF.md` section 7):
 
 | Field | Where it comes from |
 |---|---|
-| `name`, `title`, `base`, `createdAt`, `updatedAt` | `review.json` |
+| `name`, `title`, `base`, `scope`, `status`, `createdAt`, `updatedAt` | `review.json` |
 | `current` | whether `current` names it |
 | `open`, `resolved` | `comments.json`, by status |
 | `repositories` | repositories in `diff.json`, or `null` when nothing has been scanned |
 
 `warnings` beside the sessions carries the directories under `reviews/` that are
 not sessions, exactly as storage reported them.
+
+## Scope
+
+`src/core/domain/scope.ts` holds what a review task is about and everything that
+follows from it ([ADR-010](../adr/adr-010-review-task-scope.md)). A scope is one
+list of entries, each a whole repository or a repository with the paths the task
+names; `null` is the whole root, which is what every session written before that
+decision means.
+
+```ts
+repositoryInScope(scope, repo): boolean
+pathInScope(scope, repo, path): boolean
+commentInScope(scope, comment): boolean
+assertScope(scope, found): void
+assertAnchorInScope(review, repo, path): void
+widenScope(scope, change): Scope
+narrowScope(scope, change): Scope
+setScope(dataDir, name, scope, found, { dropComments? }): Promise<ScopeUpdate>
+closeSession(dataDir, name, by): Promise<Review>
+reopenSession(dataDir, name, by): Promise<Review>
+```
+
+**What is in a scope.** A repository the scope names without paths is the whole
+repository, so every file of it is in. A comment on the whole review is always
+in — it is about the task itself and hangs under no entry — and one on a
+repository the task names is in whichever files that entry lists, because the
+entry *is* the repository and a finding about it sits on it.
+
+**What a scope may say.** `assertScope` checks it against the repositories the
+scan found and refuses everything by name: a repository the root has not, a
+repository named twice, an entry with an empty list of paths, and a path that is
+not a path inside its repository — absolute, trailing, or with a `.` or `..` in
+it. Whether a file has changes is never asked: a file in the scope with nothing
+to show is kept by the task and left off the screen, which is decision 5 of the
+ADR.
+
+**Editing a scope.** `widenScope` only ever widens: adding a path to a
+repository that is in as a whole changes nothing, because the whole already
+holds it. `narrowScope` refuses what it cannot do rather than passing over it —
+a repository or a path the scope does not have, and a path of a repository the
+scope holds as a whole, since "everything but this file" is not an entry the
+format has. An entry whose last path is removed goes with it, and a narrowing
+that would leave the task about nothing is refused: an empty scope is not a
+state. Both refuse a session whose scope is `null` — the whole root is as wide
+as a task gets, and there is nothing in it to remove.
+
+**Writing a scope.** `setScope` replaces it. The comments that would fall
+outside the new scope are counted first: without `dropComments` the call throws
+`ScopeCommentsError` — a `DomainError` with code `scope-has-comments` carrying
+every id — and writes nothing, and with it they are deleted in the same write,
+under the same lock, as the scope itself. A scope narrowed while its comments
+waited for a second call would be a review with findings nothing can reach. The
+comments are read inside the lock rather than taken from the draft, so a scope
+change that drops none leaves `comments.json` alone and does not wake the
+watcher for nothing ([03-storage.md](03-storage.md#read-modify-write)).
+
+The message of `ScopeCommentsError` names the count, the first twelve ids, and
+the CLI flag: the CLI is the contract it is written for. A caller that words its
+own question reads `comments` off the error instead — that is what the API's 409
+carries ([07-server.md](07-server.md)).
+
+**Writing a comment.** `assertAnchorInScope` is what `addComment` calls before
+anything is stored, and every interface therefore goes through it: a comment
+outside the scope would be written where `list`, `show`, `export`, and the UI
+will not return it, which is the loss product principle 5 forbids. The refusal
+names the scope, because an agent that is only told "no" cannot tell whether to
+widen the task or open its own.
+
+**What the task shows, it takes a comment on**, and by the same rule: the names
+of the scope, matched as they are written. `filterChange` shows the change set
+under those names ([02-git.md](02-git.md)) and this refuses everything else, so
+a file the task prints is a file it accepts a comment on, and a file it does not
+print is one it refuses.
+
+A renamed file is where the two would come apart if either side were cleverer.
+Its new name is not in the scope, so the task shows nothing for it and takes no
+comment on it; its old name is still what the task is about, so a comment on
+that path is taken, the way a comment is taken on a path whose file stopped
+changing (decision 5). Matching the old name on the show side instead would put
+a file on screen under a name the scope has not, and then every reader of the
+comments — `list`, `show`, `export` — would have to resolve the rename again,
+from a change set that stops carrying it the moment the rename is committed.
+That the scope should *follow* a rename is a decision nobody has taken;
+`review scope add` is how a task takes the new name today.
+
+**Reading comments back.** `list`, `get`, `reply`, `resolve`, and `reopen` all
+answer inside the scope: a comment outside it is not in the list, and every one
+of the other four says `no-such-comment` — one question, one answer. Nothing
+writes such a comment; a `comments.json` edited by hand is where it comes from.
+They read `review.json` for the scope, one small file per call.
+
+**The status of a task.** `closeSession` and `reopenSession` set `status`,
+`closedAt`, and `closedBy`, and both refuse any role but `human` through the
+same `assertHuman` that `resolve` and `reopen` use — the rule of
+[ADR-004](../adr/adr-004-agent-contract.md) reaching from a thread to the task
+the threads are in. It lives in `src/core/domain/roles.ts` because both callers
+need it and `comments.ts` already imports `scope.ts`. Setting a status that is
+already set writes nothing, so the moment a task was closed at stays the moment
+it was closed at. Closing is a marker and not a lock: `comment`, `reply`, and
+`resolve` all still work on a closed task.
 
 ## Session names
 
@@ -108,7 +216,8 @@ already holds it. A reply id is `r_` plus a counter inside the thread, one past
 the highest already there rather than the length of the list — a thread edited
 by hand cannot then produce two `r_3`.
 
-`list` returns the comments in the order they were written, filtered by:
+`list` returns the comments in the order they were written, inside the scope of
+the session ([Scope](#scope)), filtered by:
 
 | Filter | Values |
 |---|---|
@@ -217,7 +326,12 @@ reader can paste back into `review base`.
 - Deleting a session (Phase 2, DA-40).
 - The counters are read on every `listSessions` call: every session's
   `comments.json` and `diff.json` are opened. On a data directory with hundreds
-  of sessions that will matter.
+  of sessions that will matter. The watcher reads every session's `review.json`
+  on every burst of the data directory, for the same reason and at the same
+  cost ([05-watcher.md](05-watcher.md)).
+- The counters of `listSessions` are over the whole `comments.json` and not
+  inside the scope. Nothing can write a comment outside a task's scope, so the
+  two agree unless the file was edited by hand.
 - Re-anchoring and the `orphaned` status (Phase 3). An anchor is captured once
   and never checked again, so a comment whose line has moved keeps the old
   text.

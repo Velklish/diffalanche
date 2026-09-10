@@ -21,8 +21,27 @@ export {
   worstSeverity,
 } from "./counters.ts";
 export type { DomainErrorCode } from "./errors.ts";
-export { DomainError } from "./errors.ts";
+export { DomainError, ScopeCommentsError } from "./errors.ts";
 export { anchorLabel, exportMarkdown } from "./export.ts";
+export type { Actor } from "./roles.ts";
+export { assertHuman } from "./roles.ts";
+export type { ScopeChange, ScopeUpdate, SetScopeOptions } from "./scope.ts";
+export {
+  assertAnchorInScope,
+  assertScope,
+  closeSession,
+  commentInScope,
+  formatScope,
+  isEmptyChange,
+  narrowScope,
+  pathInScope,
+  reopenSession,
+  repositoryInScope,
+  scopeEntry,
+  setScope,
+  widenScope,
+} from "./scope.ts";
+export type { CreateSessionOptions } from "./sessions.ts";
 export {
   assertSessionName,
   createSession,

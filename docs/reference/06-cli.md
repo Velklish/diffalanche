@@ -11,10 +11,15 @@ are not written yet.
 | Command | What it does |
 |---|---|
 | `diffalanche serve [--port <n>] [--open] [--verbose]` | scans the root and serves the review and the UI on `127.0.0.1`; `--open` opens the browser, `--verbose` logs every request |
-| `diffalanche review new <name> [--base <base>] [--title <text>]` | creates a review session and makes it current |
+| `diffalanche review new <name> [--base <base>] [--title <text>] [--repo <path>]… [--path <repo>:<file>]… [--no-use]` | creates a review session and makes it current; `--repo` and `--path` give it a scope, `--no-use` leaves `current` alone |
 | `diffalanche review use <name>` | makes an existing session the current one |
-| `diffalanche review list [--json]` | the sessions, most recently updated first; `--json` prints `{"sessions": […], "warnings": […]}` |
+| `diffalanche review list [--json]` | the sessions, most recently updated first, each with its scope and status; `--json` prints `{"sessions": […], "warnings": […]}` |
 | `diffalanche review base <base>` | changes what the session's change set is read against |
+| `diffalanche review scope [--json]` | what the session is about |
+| `diffalanche review scope add [--repo <path>]… [--path <repo>:<file>]…` | widens it |
+| `diffalanche review scope remove [--repo <path>]… [--path <repo>:<file>]… [--drop-comments]` | narrows it |
+| `diffalanche review close [<name>] --role human [--author <name>]` | marks the task closed |
+| `diffalanche review reopen [<name>] --role human [--author <name>]` | opens it again |
 | `diffalanche diff [--repo <path>] [--json\|--patch]` | the change set of the session; rewrites `diff.json` |
 | `diffalanche list [--status <open\|resolved\|all>] [--repo <path>] [--severity <s>] [--unanswered] [--json]` | the comments of the session; default status `open` |
 | `diffalanche show <id> [--json]` | one comment with its thread and its anchor |
@@ -41,6 +46,48 @@ The `warnings` of `review list --json` are storage's own: a directory under
 `reviews/` with no `review.json` in it. They are printed with the sessions
 rather than dropped, because a session that has gone missing looks exactly like
 a session that was never there.
+
+## The scope of a task
+
+A review session carries a scope — the repositories and the files it is about —
+and everything the CLI answers, it answers inside it
+([ADR-010](../adr/adr-010-review-task-scope.md)). A session with no scope is the
+whole root, which is what every session used to be, and nothing below applies to
+it.
+
+`--repo <path>` and `--path <repo>:<file>` are repeated, once per entry:
+`review new t --repo repos/core/cargos-api --path repos/platform/loads-search:app/cargo/cargo_404.py`.
+The first colon of `--path` separates the two, so a file whose name has a colon
+in it still reads. A repository the root has not, and a path that is not one
+inside its repository, are exit code 1 before the session is written: a task
+that shows nothing must not be left on disk for the next `review list` to
+explain. Repeated flags are the one place `util.parseArgs` is asked for
+`multiple`, and `texts()` reads the list.
+
+**`--no-use` is how an agent proposes a task.** It writes the session, leaves
+`current` where it is, and prints the address of the running server —
+`http://127.0.0.1:<port>/?review=<name>` — on a line of its own, so the human
+opens it when they are ready and a script reads it with `tail -1`. The port is
+the configured one; whether a server is listening on it is not checked, because
+the CLI works without one.
+
+`review scope add` only widens: adding a path to a repository that is in as a
+whole changes nothing, so it never leaves a comment outside the scope and never
+asks for consent. `review scope remove` narrows, and **that is what
+`--drop-comments` is for**: without it, a removal with comments anchored under
+what it removes is exit code 1 with the count and the ids, and nothing is
+written — not the scope and not `comments.json`. With it, the comments and the
+scope are written in one step under one lock. Both refuse a session with no
+scope: the whole root is as wide as a task gets, and there is nothing in it to
+remove.
+
+`review close` and `review reopen` take the name after the command, else
+`--review`, else the current session. Both need `--role human` and refuse any
+other role with exit code 1, changing nothing — the rule `resolve` has had since
+[ADR-004](../adr/adr-004-agent-contract.md), reaching from a thread to the task
+the threads are in. `closedBy` is `--author` and `closedAt` is the clock.
+Closing marks the task; `comment`, `reply`, and `resolve` all still work on a
+closed one.
 
 ## Global flags
 
@@ -93,9 +140,13 @@ inside it. Both are exit code 1: they are answers, not faults.
 
 ## The change set
 
-`diff` scans the whole root — the `roots` of `config.json` to `depth` levels —
-reads every repository found against the session's base, and writes the result
-to `reviews/<name>/diff.json` before printing it. What is printed with `--json`
+`diff` walks the whole root — the `roots` of `config.json` to `depth` levels —
+reads every repository of the session's scope against the session's base, and
+writes the result to `reviews/<name>/diff.json` before printing it. The walk
+stays whole because it starts no git process and is what tells a repository the
+scope names but the root has not from one that is simply quiet; the reading is
+what the scope narrows, and a task over two repositories of twenty-one does not
+pay for the other nineteen. What is printed with `--json`
 is byte for byte what is written, which is what `docs/SPEC.md` section 7 means
 by "the same set that `diff --json` prints". Without `--json` the same set is
 printed as a unified patch — `--patch` is the explicit spelling of that default,
@@ -113,13 +164,16 @@ one repository in it would tell the UI and the next `comment` that the rest of
 the review has no changes. A path the scan found no repository at is exit code
 1, `no repository "<path>" under the root`: an empty change set means the
 repository is there and has nothing to show, and a mistyped flag must not print
-the same thing as a clean review.
+the same thing as a clean review. A repository the root has but the task is not
+about is exit code 1 too, with its own message naming the scope, for the same
+reason: printing nothing would read as "nothing changed there".
 
-`diff.json` records the base it was computed with. `review base` changes what
-the session asks, and a cache holding the answer to the previous question is not
-patched one repository at a time — the next `comment` on a line rescans the
-whole root instead. A `diff.json` written before that field existed has no base
-to compare and counts as never scanned.
+`diff.json` records the base **and the scope** it was computed for. `review
+base` and a scope edit change what the session asks, and a cache holding the
+answer to the previous question is not patched one repository at a time — the
+next `comment` on a line rescans the whole root instead. A `diff.json` written
+before either field existed cannot say what it answers and counts as never
+scanned.
 
 The scan asks for the structured hunks, which the review response leaves out. They are what the anchor of a line comment is captured from, and
 `diff.json` is the only place they are kept.
@@ -168,11 +222,25 @@ operations, and a thread reopened without a word in it says nothing about why.
 `list --unanswered` is the open threads whose last message is from a human: what
 an agent has not answered yet. A reply from an agent takes a thread out of it.
 
+`list`, `show`, and `export` answer inside the scope of the session they run
+against, and so do `reply`, `resolve`, and `reopen`: a comment outside it is not
+in the list, and the other five give it the same refusal a comment of another
+session gets. Nothing can write such a comment, so this is what a hand-edited
+`comments.json` meets.
+
 `comment --repo` is checked against the repositories under the root before
 anything is read or written, and a path none is at is exit code 1 with the same
 message `diff` gives: a comment stored on a repository the review does not have
 would show up in `list` and in `export` and nowhere in the UI, and a `comment`
 that ends in exit 1 must not have rewritten `diff.json` on its way there.
+
+**Then it is checked against the scope**, and an anchor the task is not about —
+a repository, or a file of a repository the task holds only some files of — is
+exit code 1 naming what the task *is* about. The check runs before the
+repository is read again, so a refusal costs no git process, and the domain
+makes it too, for every caller ([04-domain.md](04-domain.md)). A comment outside
+the scope would be written where `list`, `show`, and `export` will not return
+it; the change belongs to another task, and the message says so.
 
 `list --repo` is checked against something else — the repositories the session's
 comments name. A repository that was renamed or removed still has everything

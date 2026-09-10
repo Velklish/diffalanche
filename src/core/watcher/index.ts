@@ -7,13 +7,22 @@
  * (`docs/SPEC.md` section 11).
  */
 import { relative } from "node:path";
-import { sameBase, scanReview, totalsOf } from "../change-set.ts";
+import { filterChange, sameBase, sameScope, scanReview, totalsOf } from "../change-set.ts";
 import type { Config } from "../config/index.ts";
+import { repositoryInScope } from "../domain/scope.ts";
 import { checkIgnore, readRepositoryChange } from "../git/index.ts";
 import { byCodePoint } from "../order.ts";
 import { globToRegExp } from "../scanner/index.ts";
-import type { Comment, CommentStatus, DiffCache, Review } from "../storage/index.ts";
+import type {
+  Comment,
+  CommentStatus,
+  DiffCache,
+  Review,
+  ReviewStatus,
+  Scope,
+} from "../storage/index.ts";
 import {
+  listSessionNames,
   readComments,
   readCurrent,
   readDiffCache,
@@ -106,6 +115,12 @@ export async function startWatcher(options: WatcherOptions): Promise<Watcher> {
   let session = await readCurrent(config.dataDir);
   let comments: Map<string, CommentState> | null = await snapshotComments(config, session);
   let metadata = await readMetadata(config, session);
+  // What the current session is about, so a repository the task is not about
+  // costs it no git process when its files change.
+  let scope: Scope = (await readSessionOrNull(config, session))?.scope ?? null;
+  // `null` until a listing of `reviews/` succeeds: without a baseline nothing
+  // is news, and the first readable listing becomes it.
+  let sessions: Map<string, ReviewStatus> | null = await snapshotSessions(config, null);
   let queue: Promise<void> = Promise.resolve();
   let closed = false;
 
@@ -205,6 +220,13 @@ export async function startWatcher(options: WatcherOptions): Promise<Watcher> {
     const files = [...(pending.get(repo) ?? [])].sort(byCodePoint);
     pending.delete(repo);
     if (session === null) return;
+    // A repository the task is not about is watched but not read: the scope
+    // decides what the review is, and reading it would cost four git processes
+    // to produce a change set nothing may show
+    // ([ADR-010](../../../docs/adr/adr-010-review-task-scope.md)). Watching it
+    // anyway is what makes a scope that widens while the server runs take
+    // effect without a restart.
+    if (!repositoryInScope(scope, repo)) return;
     // A build writing into a directory git ignores restarts the debounce for as
     // long as it runs, and the ceiling then forces a rescan a second that can
     // find nothing. Asking git first costs one process instead of four.
@@ -226,6 +248,7 @@ export async function startWatcher(options: WatcherOptions): Promise<Watcher> {
     await reloadCurrent();
     await reloadComments();
     await reloadMetadata();
+    await reloadSessions();
   }
 
   async function reloadCurrent(): Promise<void> {
@@ -236,7 +259,31 @@ export async function startWatcher(options: WatcherOptions): Promise<Watcher> {
     // read as the new baseline, and only what happens next is an event.
     comments = await snapshotComments(config, session);
     metadata = await readMetadata(config, session);
+    scope = (await readSessionOrNull(config, session))?.scope ?? null;
     if (session !== null) bus.emit({ type: "session-changed", name: session });
+  }
+
+  /**
+   * Every session, not only the current one: a task created or closed anywhere
+   * in the data directory is news for an open window, which says a new task
+   * appeared without becoming it (`docs/SPEC.md` section 5). A session that
+   * disappears says nothing — deleting one is Phase 2 (DA-40).
+   */
+  async function reloadSessions(): Promise<void> {
+    const next = await snapshotSessions(config, sessions);
+    // The directory could not be listed. What was known stays known: replacing
+    // it with an empty snapshot would make every session news again on the next
+    // readable pass, and a few hundred of those would push the replay out of
+    // the stream's ring ([07-server.md](../../../docs/reference/07-server.md)).
+    if (next === null) return;
+    if (sessions === null) {
+      sessions = next;
+      return;
+    }
+    for (const [name, status] of next) {
+      if (sessions.get(name) !== status) bus.emit({ type: "sessions-changed", name, status });
+    }
+    sessions = next;
   }
 
   async function reloadComments(): Promise<void> {
@@ -277,6 +324,7 @@ export async function startWatcher(options: WatcherOptions): Promise<Watcher> {
     const next = await readMetadata(config, session);
     if (next === metadata) return;
     metadata = next;
+    scope = (await readSessionOrNull(config, session))?.scope ?? null;
     bus.emit({ type: "session-changed", name: session });
   }
 
@@ -374,16 +422,28 @@ export async function rescanRepository(
 ): Promise<Rescan> {
   const review = await readReview(config.dataDir, session);
   // `diff.json` is the only place the hunks live: anchor capture reads them
-  // there, while the review response of the server drops them for speed.
-  const change = await readRepositoryChange(config.root, repo, review.base, { hunks: true });
+  // there, while the review response of the server drops them for speed. What
+  // the task is not about comes back empty and drops out of the cache, the way
+  // a repository without changes does.
+  const change = filterChange(
+    review.scope,
+    await readRepositoryChange(config.root, repo, review.base, { hunks: true }),
+  );
 
   const patched = await withLock(sessionDir(config.dataDir, session), async (held) => {
     const cached = await readDiffCache(config.dataDir, session);
     // The full scan is read outside the lock: it takes as long as every
     // repository takes, and the CLI writes the same directory meanwhile. A
-    // cache computed against another base is read again for the same reason it
-    // is in the server — it answers a different question.
-    if (cached === null || !sameBase(cached.base, review.base)) return null;
+    // cache computed against another base, or for another scope, is read again
+    // for the same reason it is in the server — it answers a different
+    // question.
+    if (
+      cached === null ||
+      !sameBase(cached.base, review.base) ||
+      !sameScope(cached.scope, review.scope)
+    ) {
+      return null;
+    }
 
     const before = cached.repositories.find((one) => one.path === repo) ?? null;
     if (sameChange(before, change)) {
@@ -420,7 +480,7 @@ export async function rescanRepository(
   });
   if (patched !== null) return patched;
 
-  const { cache } = await scanReview(config, review.base);
+  const { cache } = await scanReview(config, review.base, review.scope);
   const outcome: Rescan = { cache, changed: true, warningsChanged: true };
   ready?.(outcome);
   await withLock(sessionDir(config.dataDir, session), async (held) => {
@@ -495,18 +555,62 @@ async function snapshotComments(
 
 /** The part of `review.json` that is the review rather than the moment of its last write. */
 function metadataOf(review: Review): string {
-  return JSON.stringify({ name: review.name, title: review.title, base: review.base });
+  return JSON.stringify({
+    name: review.name,
+    title: review.title,
+    base: review.base,
+    scope: review.scope,
+    status: review.status,
+  });
 }
 
 async function readMetadata(config: Config, session: string | null): Promise<string | null> {
+  const review = await readSessionOrNull(config, session);
+  return review === null ? null : metadataOf(review);
+}
+
+/**
+ * `review.json` of a session, or `null` when it cannot be read: a session named
+ * by `current` that is not there yet, or a file being rewritten as it is read.
+ * The next change reads it again.
+ */
+async function readSessionOrNull(config: Config, session: string | null): Promise<Review | null> {
   if (session === null) return null;
   try {
-    return metadataOf(await readReview(config.dataDir, session));
+    return await readReview(config.dataDir, session);
   } catch {
-    // A session named by `current` that is not there yet, or a file being
-    // rewritten as it is read: the next change reads it again.
     return null;
   }
+}
+
+/**
+ * The status of every session in the data directory, or `null` when `reviews/`
+ * itself could not be listed — which is a failed read and not an empty data
+ * directory. It is read on every burst the data directory produces, one small
+ * file per session; a data directory with hundreds of sessions pays for that
+ * here as it already does on every `listSessions`
+ * ([04-domain.md](../../../docs/reference/04-domain.md)).
+ *
+ * A session whose `review.json` could not be read this time keeps the status it
+ * had, for the same reason: a file caught mid-write is not a task that changed.
+ */
+export async function snapshotSessions(
+  config: Config,
+  previous: Map<string, ReviewStatus> | null,
+): Promise<Map<string, ReviewStatus> | null> {
+  let names: string[];
+  try {
+    ({ names } = await listSessionNames(config.dataDir));
+  } catch {
+    return null;
+  }
+  const snapshot = new Map<string, ReviewStatus>();
+  for (const name of names) {
+    const review = await readSessionOrNull(config, name);
+    const status = review?.status ?? previous?.get(name);
+    if (status !== undefined) snapshot.set(name, status);
+  }
+  return snapshot;
 }
 
 /**

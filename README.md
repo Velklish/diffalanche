@@ -112,7 +112,7 @@ writes:
   config.json              settings; missing means the defaults
   current                  the name of the current session
   reviews/<name>/
-    review.json            the session: base, title, timestamps
+    review.json            the session: base, scope, status, title, timestamps
     comments.json          every comment and reply of that session
     diff.json              the change set as it was last scanned
 ```
@@ -175,10 +175,15 @@ flags, and `tests/readme-cli.test.ts` fails if the two ever disagree.
 | Command | What it does |
 |---|---|
 | `serve [--port <n>] [--open] [--verbose]` | serve the review and the UI on `127.0.0.1`; `--open` opens the browser, `--verbose` logs every request |
-| `review new <name> [--base <head\|branch\|branch:<name>\|<ref>>] [--title <text>]` | create a review session and make it current |
+| `review new <name> [--base <head\|branch\|branch:<name>\|<ref>>] [--title <text>] [--repo <path>]… [--path <repo>:<file>]… [--no-use]` | create a review session and make it current; `--repo` and `--path` give it a scope, `--no-use` leaves `current` alone and prints the task's address |
 | `review use <name>` | make a review session the current one |
-| `review list [--json]` | the review sessions, most recently updated first |
+| `review list [--json]` | the review sessions, most recently updated first, each with its scope and status |
 | `review base <head\|branch\|branch:<name>\|<ref>>` | change what the change set of a review session is read against |
+| `review scope [--json]` | what the review session is about |
+| `review scope add [--repo <path>]… [--path <repo>:<file>]…` | widen what the review session is about |
+| `review scope remove [--repo <path>]… [--path <repo>:<file>]… [--drop-comments]` | narrow it; without `--drop-comments` a removal that would delete comments is exit code 1 and writes nothing |
+| `review close [<name>] --role human [--author <name>]` | mark a review session closed; comments still work on a closed one; `--role human` is required |
+| `review reopen [<name>] --role human [--author <name>]` | open a closed review session again; `--role human` is required |
 | `diff [--repo <path>] [--json] [--patch]` | the change set of the review session; rewrites `diff.json` |
 | `list [--status <open\|resolved\|all>] [--repo <path>] [--severity <critical\|warning\|nit\|question>] [--unanswered] [--json]` | the comments of the review session |
 | `show <id> [--json]` | one comment with its thread and its anchor |
@@ -203,6 +208,8 @@ A day of it:
 
 ```sh
 diffalanche review new ls-240372 --base branch:origin/develop --title "Cargo flags"
+diffalanche review new ls-240373 --repo repos/group/service-api \
+  --path repos/group/other-api:src/Cargo.cs --no-use   # a task over what an agent touched
 diffalanche diff --json                       # the change set; rewrites diff.json
 diffalanche diff --repo repos/group/service-api
 diffalanche list --unanswered --json          # what no agent has answered yet
@@ -214,9 +221,17 @@ diffalanche resolve c_7f3k2q --role human --author kim.p
 diffalanche export --format md > review.md
 ```
 
+A review session may carry a **scope** — the repositories and the files it is
+about — and then it shows nothing else: `diff`, `list`, `show`, and `export` all
+answer inside it, and a comment on something outside it is refused by name. A
+session without a scope is the whole root, which is what every session was
+before. `review scope` prints one; `review scope add` and `review scope remove`
+change it, and a removal that would delete comments needs `--drop-comments`.
+
 Comments are signed `--author agent` and `--role agent` unless told otherwise,
-and only `--role human` may `resolve` or `reopen` a thread. Exit code 0 is
-success, 1 is a user error with one line on stderr, and 2 is anything the tool
+and only `--role human` may `resolve` or `reopen` a thread, or `review close` or
+`review reopen` a task. Exit code 0 is success, 1 is a user error with one line
+on stderr, and 2 is anything the tool
 did not expect, with its stack trace. JSON goes to stdout and nothing else does,
 so `diffalanche diff --json | jq` never has a warning mixed into it.
 

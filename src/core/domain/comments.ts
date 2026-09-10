@@ -3,10 +3,11 @@
  * `docs/SPEC.md` section 5 "Comments" and "Agent", section 7 for the shape, and
  * [ADR-004](../../../docs/adr/adr-004-agent-contract.md) for who may do what.
  */
-import type { Comment, Reply, Role, Severity, Side } from "../storage/index.ts";
+import type { Comment, Reply, Role, Scope, Severity, Side } from "../storage/index.ts";
 import {
   readComments,
   readDiffCache,
+  readReview,
   sessionExists,
   timestamp,
   updateComments,
@@ -15,6 +16,9 @@ import type { RepositoryChange } from "../types.ts";
 import { captureAnchor } from "./anchors.ts";
 import { isAwaiting, isUnanswered } from "./counters.ts";
 import { DomainError } from "./errors.ts";
+import type { Actor } from "./roles.ts";
+import { assertHuman } from "./roles.ts";
+import { assertAnchorInScope, commentInScope } from "./scope.ts";
 
 const ID_ALPHABET = "0123456789abcdefghijklmnopqrstuvwxyz";
 /** `c_` plus six base36 characters ([ADR-002](../../../docs/adr/adr-002-stack-and-delivery.md)). */
@@ -45,9 +49,7 @@ export type Message = {
 };
 
 /** Who closes or reopens a thread. Only a human may ([ADR-004](../../../docs/adr/adr-004-agent-contract.md)). */
-export type Verdict = {
-  author: string;
-  role: Role;
+export type Verdict = Actor & {
   /** Written into the thread as a reply before the thread closes. */
   note?: string;
 };
@@ -71,6 +73,16 @@ async function assertSession(dataDir: string, session: string): Promise<void> {
   if (!(await sessionExists(dataDir, session))) {
     throw new DomainError("no-such-session", `no review session "${session}"`);
   }
+}
+
+/**
+ * What the session is about. Every read of the comments goes through it: a task
+ * returns nothing outside its scope, so a comment that is not in it is not in
+ * the answer ([ADR-010](../../../docs/adr/adr-010-review-task-scope.md)). A
+ * session with no scope covers the whole root and filters nothing.
+ */
+async function sessionScope(dataDir: string, session: string): Promise<Scope> {
+  return (await readReview(dataDir, session)).scope;
 }
 
 function newId(taken: Set<string>): string {
@@ -148,6 +160,11 @@ export async function addComment(
   const repo = input.repo ?? null;
   const path = input.path ?? null;
   const line = input.line ?? null;
+  // A comment outside the scope would be stored and never read back: `list`,
+  // `show`, `export`, and the UI all answer inside the scope. A change outside
+  // the task belongs to another task, and the refusal says what this one is
+  // about (`docs/SPEC.md` section 9).
+  assertAnchorInScope(await readReview(dataDir, session), repo, path);
   const side: Side | null = line === null ? null : (input.side ?? "new");
   const anchor =
     line === null || repo === null || path === null || side === null
@@ -178,8 +195,15 @@ export async function addComment(
   });
 }
 
-function find(comments: Comment[], id: string): Comment {
-  const comment = comments.find((one) => one.id === id);
+/**
+ * The comment this session has under that id. A comment outside the scope is
+ * not one of them: the task returns nothing outside itself, so `show` and
+ * `list` do not have it and `reply`, `resolve`, and `reopen` must not either —
+ * one question, one answer. Nothing writes such a comment; a `comments.json`
+ * edited by hand is where it comes from.
+ */
+function find(comments: Comment[], id: string, scope: Scope = null): Comment {
+  const comment = comments.find((one) => one.id === id && commentInScope(scope, one));
   if (comment === undefined) {
     throw new DomainError("no-such-comment", `no comment ${id} in this review session`);
   }
@@ -194,8 +218,9 @@ export async function reply(
   message: Message,
 ): Promise<Comment> {
   await assertSession(dataDir, session);
+  const scope = await sessionScope(dataDir, session);
   return updateComments(dataDir, session, (comments) => {
-    const comment = find(comments, id);
+    const comment = find(comments, id, scope);
     comment.replies.push({
       id: nextReplyId(comment.replies),
       author: message.author,
@@ -207,20 +232,6 @@ export async function reply(
   });
 }
 
-/**
- * Only a human resolves. The check is here rather than in the shipped skills:
- * a skill is advice, and an agent that never read it could still close a thread
- * ([ADR-004](../../../docs/adr/adr-004-agent-contract.md)).
- */
-function assertHuman(verdict: Verdict, action: string): void {
-  if (verdict.role !== "human") {
-    throw new DomainError(
-      "role-not-human",
-      `only a human may ${action} a comment; this call came with role "${verdict.role}"`,
-    );
-  }
-}
-
 export async function resolve(
   dataDir: string,
   session: string,
@@ -228,9 +239,10 @@ export async function resolve(
   verdict: Verdict,
 ): Promise<Comment> {
   await assertSession(dataDir, session);
-  assertHuman(verdict, "resolve");
+  assertHuman(verdict, "resolve a comment");
+  const scope = await sessionScope(dataDir, session);
   return updateComments(dataDir, session, (comments) => {
-    const comment = find(comments, id);
+    const comment = find(comments, id, scope);
     if (verdict.note !== undefined) {
       comment.replies.push({
         id: nextReplyId(comment.replies),
@@ -254,9 +266,10 @@ export async function reopen(
   verdict: Verdict,
 ): Promise<Comment> {
   await assertSession(dataDir, session);
-  assertHuman(verdict, "reopen");
+  assertHuman(verdict, "reopen a comment");
+  const scope = await sessionScope(dataDir, session);
   return updateComments(dataDir, session, (comments) => {
-    const comment = find(comments, id);
+    const comment = find(comments, id, scope);
     if (verdict.note !== undefined) {
       comment.replies.push({
         id: nextReplyId(comment.replies),
@@ -275,7 +288,8 @@ export async function reopen(
 
 export async function get(dataDir: string, session: string, id: string): Promise<Comment> {
   await assertSession(dataDir, session);
-  return find(await readComments(dataDir, session), id);
+  const scope = await sessionScope(dataDir, session);
+  return find(await readComments(dataDir, session), id, scope);
 }
 
 /** The comments of a session, in the order they were written, filtered. */
@@ -285,9 +299,11 @@ export async function list(
   filter: CommentFilter = {},
 ): Promise<Comment[]> {
   await assertSession(dataDir, session);
+  const scope = await sessionScope(dataDir, session);
   const comments = await readComments(dataDir, session);
   const status = filter.status ?? "all";
   return comments.filter((comment) => {
+    if (!commentInScope(scope, comment)) return false;
     if (status !== "all" && comment.status !== status) return false;
     if (filter.repo !== undefined && comment.repo !== filter.repo) return false;
     if (filter.severity !== undefined && comment.severity !== filter.severity) return false;

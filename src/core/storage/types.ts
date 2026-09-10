@@ -5,8 +5,17 @@
  */
 import type { BaseSpec, ReviewBundle } from "../types.ts";
 
-/** The version every file of the data directory carries. Migrations are a task of their own. */
-export const SCHEMA_VERSION = 1;
+/** The version every file of the data directory is written with. */
+export const SCHEMA_VERSION = 2;
+
+/**
+ * The versions of `review.json` and `comments.json` this build reads. A file of
+ * version 1 predates the scope of a review task (DA-53): it is read as a task
+ * over the whole root that is still open, and written back as version 2 the
+ * next time anything writes it. `diff.json` is not in this list — it is a cache,
+ * and one of a version this build does not know is discarded and scanned again.
+ */
+export const READABLE_VERSIONS: readonly number[] = [1, SCHEMA_VERSION];
 
 export type { BaseMode } from "../types.ts";
 
@@ -22,6 +31,25 @@ export type CommentStatus = "open" | "resolved";
 export type Role = "human" | "agent";
 export type Side = "new" | "old";
 
+/** Whether the review task is still being worked on. A human sets both. */
+export type ReviewStatus = "open" | "closed";
+
+/**
+ * One entry of a scope: a whole repository, or a repository with the paths the
+ * task is about. Both kinds are one list, so "the diff of these repositories"
+ * and "the diff of these files" are one concept
+ * ([ADR-010](../../../docs/adr/adr-010-review-task-scope.md)). A path is
+ * relative to the repository, exactly as `comments.json` writes it.
+ */
+export type ScopeEntry = {
+  repo: string;
+  /** `null` — the whole repository. */
+  paths: string[] | null;
+};
+
+/** What a review task is about; `null` is the whole root, the way sessions used to be. */
+export type Scope = ScopeEntry[] | null;
+
 /**
  * The values themselves, in the order they are written about: the schema checks
  * a file against them and the CLI checks a flag against them, and two lists of
@@ -30,6 +58,7 @@ export type Side = "new" | "old";
  */
 export const SEVERITIES: readonly Severity[] = ["critical", "warning", "nit", "question"];
 export const COMMENT_STATUSES: readonly CommentStatus[] = ["open", "resolved"];
+export const REVIEW_STATUSES: readonly ReviewStatus[] = ["open", "closed"];
 export const ROLES: readonly Role[] = ["human", "agent"];
 export const SIDES: readonly Side[] = ["new", "old"];
 
@@ -72,12 +101,21 @@ export type Comment = {
   replies: Reply[];
 };
 
-/** `review.json`: the metadata of one review session. */
+/**
+ * `review.json`: the metadata of one review session. The fields are written in
+ * this order, which is the order `docs/SPEC.md` section 7 shows them in.
+ */
 export type Review = {
   version: number;
   name: string;
   title: string | null;
   base: Base;
+  /** What the task is about; `null` is the whole root. */
+  scope: Scope;
+  status: ReviewStatus;
+  /** When and by whom the task was closed; both `null` while it is open. */
+  closedAt: string | null;
+  closedBy: string | null;
   createdAt: string;
   updatedAt: string;
 };
@@ -90,11 +128,11 @@ export type CommentsFile = {
 
 /**
  * `diff.json`: the change set of the last scan, the set `diff --json` prints.
- * It records the base it was computed with, because a session whose base has
- * changed since has a cache that answers a different question than the one now
- * being asked.
+ * It records the base **and the scope** it was computed with, because a session
+ * whose base or scope has changed since has a cache that answers a different
+ * question than the one now being asked.
  */
-export type DiffCache = { version: number; base: Base } & ReviewBundle;
+export type DiffCache = { version: number; base: Base; scope: Scope } & ReviewBundle;
 
 /** What `reviews/` holds: the session names, and why a directory was left out. */
 export type SessionListing = {

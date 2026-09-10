@@ -20,6 +20,7 @@ import {
   readCurrent,
   readReview,
   reviewPath,
+  SCHEMA_VERSION,
   StorageError,
   updateComments,
   writeDiffCache,
@@ -68,7 +69,7 @@ describe("createSession", () => {
     expect(existsSync(commentsPath(dataDir, "ls-240372"))).toBe(true);
     expect(readFileSync(currentPath(dataDir), "utf8")).toBe("ls-240372\n");
     expect(review).toMatchObject({
-      version: 1,
+      version: SCHEMA_VERSION,
       name: "ls-240372",
       title: "Cargo flags",
       base: { mode: "head" },
@@ -191,8 +192,9 @@ describe("listSessions", () => {
       comments.push(comment("c_cccccc"));
     });
     await writeDiffCache(dataDir, "newer", {
-      version: 1,
+      version: SCHEMA_VERSION,
       base: { mode: "head" },
+      scope: null,
       root,
       repositories: [
         { path: "repos/a", branch: "main", base: head, files: [], warnings: [] },

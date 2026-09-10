@@ -4,7 +4,7 @@
  * is of the right shape at all, and refuses with the field named.
  */
 import type { Context } from "hono";
-import type { Severity, Side } from "../core/storage/index.ts";
+import type { Scope, Severity, Side } from "../core/storage/index.ts";
 import { SEVERITIES, SIDES } from "../core/storage/index.ts";
 import { RequestError } from "./errors.ts";
 
@@ -73,6 +73,42 @@ export function nullableLine(body: Body, field: string): number | null {
   if (typeof value !== "number" || !Number.isInteger(value)) {
     throw new RequestError(`${field} has to be a whole line number or absent`);
   }
+  return value;
+}
+
+/**
+ * The `scope` of `PUT /api/sessions/:name/scope`: a list of entries, or `null`
+ * for the whole root. What the entries mean is the domain's — a repository the
+ * root has not, a path outside its repository — and what arrives here is only
+ * checked for being a scope at all.
+ */
+export function scope(body: Body): Scope {
+  const value = body.scope;
+  if (value === undefined || value === null) return null;
+  if (!Array.isArray(value)) {
+    throw new RequestError("scope has to be a list of entries, or null for the whole root");
+  }
+  return value.map((entry, index) => {
+    if (typeof entry !== "object" || entry === null || Array.isArray(entry)) {
+      throw new RequestError(`scope[${index}] has to be an object`);
+    }
+    const one = entry as Body;
+    if (typeof one.repo !== "string" || one.repo === "") {
+      throw new RequestError(`scope[${index}].repo has to be a non-empty string`);
+    }
+    if (one.paths === undefined || one.paths === null) return { repo: one.repo, paths: null };
+    if (!Array.isArray(one.paths) || one.paths.some((path) => typeof path !== "string")) {
+      throw new RequestError(`scope[${index}].paths has to be a list of strings, or absent`);
+    }
+    return { repo: one.repo, paths: one.paths as string[] };
+  });
+}
+
+/** A flag that says yes only when it says so; anything else is no. */
+export function consent(body: Body, field: string): boolean {
+  const value = body[field];
+  if (value === undefined || value === null) return false;
+  if (typeof value !== "boolean") throw new RequestError(`${field} has to be true or false`);
   return value;
 }
 

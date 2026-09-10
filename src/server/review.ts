@@ -4,7 +4,7 @@
  * something says it changed — the whole document arrives in one response and
  * nothing is loaded lazily afterwards (`docs/SPEC.md` section 6).
  */
-import { sameBase, scanReview } from "../core/change-set.ts";
+import { sameBase, sameScope, scanReview } from "../core/change-set.ts";
 import type { Config } from "../core/config/index.ts";
 import { countReview, list, resolveSessionName } from "../core/domain/index.ts";
 import { readRepositoryChange, scan } from "../core/index.ts";
@@ -18,6 +18,7 @@ import {
 } from "../core/storage/index.ts";
 import type {
   FileChange,
+  FileStatus,
   RepositoryChange,
   RepositoryKind,
   ReviewDocument,
@@ -40,14 +41,48 @@ export type ScanSummary = {
   warnings: ScanWarning[];
 };
 
+/** One file a scope may be built from: what it is, not what it says. */
+export type CandidateFile = {
+  path: string;
+  oldPath: string | null;
+  status: FileStatus;
+  additions: number;
+  deletions: number;
+};
+
+/** One repository of the whole root, with the files that changed in it. */
+export type CandidateRepository = {
+  path: string;
+  branch: string;
+  files: CandidateFile[];
+};
+
+/**
+ * What `GET /api/sessions/candidates` answers with: the change set of the whole
+ * root, whatever the scope of the session is, so the scope editor has something
+ * to pick from. It carries no patch and no hunks — a picker needs the names,
+ * and the diff of a whole root is megabytes
+ * ([07-server.md](../../docs/reference/07-server.md)).
+ */
+export type CandidateSet = {
+  root: string;
+  repositories: CandidateRepository[];
+  warnings: ScanWarning[];
+};
+
 export type ReviewService = {
   /**
-   * The current session's document. Refuses with the domain's own
-   * `no-current-session` or `no-such-session` when there is none.
+   * The document of a named session, or of the current one. Refuses with the
+   * domain's own `no-current-session` or `no-such-session` when there is none.
    */
-  document: () => Promise<ReviewDocument>;
-  /** The same document serialised; built once per change, not once per request. */
-  payload: () => Promise<string>;
+  document: (session?: string) => Promise<ReviewDocument>;
+  /**
+   * The same document serialised. The current session's is built once per
+   * change and kept; a named one is built for the request that asked, because
+   * a window opening another task must not evict the review everyone else is
+   * reading.
+   */
+  payload: (session?: string) => Promise<string>;
   /** One repository of the change set, or `null` when it has no changes. */
   repository: (repo: string) => Promise<RepositoryChange | null>;
   /** The change set as a rescan left it on disk, taken as the document's own. */
@@ -62,6 +97,8 @@ export type ReviewService = {
   invalidateComments: () => void;
   /** Every repository under the root with whether it has changes: the first-run screen. */
   summary: () => Promise<ScanSummary>;
+  /** The change set of the whole root, scope ignored: what a scope is picked from. */
+  candidates: () => Promise<CandidateSet>;
 };
 
 type State = { session: string; document: ReviewDocument; payload: string | null };
@@ -106,9 +143,27 @@ export function createReviewService(config: Config): ReviewService {
     return pending;
   }
 
+  /**
+   * The document of a session that is not the current one. It is built for the
+   * request and not kept: the one document in memory is the review the page is
+   * on, and a window that opens another task — from a link an agent printed —
+   * must not take that away from it.
+   */
+  async function other(session: string): Promise<State> {
+    const cached = state;
+    if (cached !== null && cached.session === session) return current();
+    return build(config, session);
+  }
+
   return {
-    document: async () => (await current()).document,
-    payload: async () => {
+    document: async (session) =>
+      (session === undefined ? await current() : await other(session)).document,
+    payload: async (session) => {
+      if (session !== undefined) {
+        const held = await other(session);
+        held.payload ??= JSON.stringify(held.document);
+        return held.payload;
+      }
       const held = await current();
       held.payload ??= JSON.stringify(held.document);
       return held.payload;
@@ -134,18 +189,22 @@ export function createReviewService(config: Config): ReviewService {
       if (state !== null) state.payload = null;
     },
     summary: async () => summarise(config),
+    candidates: async () => candidatesOf(config),
   };
 }
 
-async function build(config: Config): Promise<State> {
-  const session = await resolveSessionName(config.dataDir);
+async function build(config: Config, named?: string): Promise<State> {
+  const session = await resolveSessionName(config.dataDir, named);
   const review = await readReview(config.dataDir, session);
   // The cache is the change set of the last scan. One computed against another
-  // base answers a different question — `review base` is what puts it there —
-  // so it is read again rather than trusted.
+  // base — or for another scope — answers a different question, and `review
+  // base` and a scope edit are what put it there, so it is read again rather
+  // than trusted.
   const cached = await readDiffCache(config.dataDir, session);
   const cache =
-    cached !== null && sameBase(cached.base, review.base) ? cached : await rebuild(config, session);
+    cached !== null && sameBase(cached.base, review.base) && sameScope(cached.scope, review.scope)
+      ? cached
+      : await rebuild(config, session);
   const comments = await list(config.dataDir, session);
   return {
     session,
@@ -169,7 +228,7 @@ async function build(config: Config): Promise<State> {
  */
 async function rebuild(config: Config, session: string): Promise<DiffCache> {
   const review = await readReview(config.dataDir, session);
-  const { cache } = await scanReview(config, review.base);
+  const { cache } = await scanReview(config, review.base, review.scope);
   await withLock(sessionDir(config.dataDir, session), async (held) => {
     await held.assertHeld();
     await writeDiffCache(config.dataDir, session, cache);
@@ -204,6 +263,50 @@ async function summarise(config: Config): Promise<ScanSummary> {
     }),
   );
   return { root: config.root, repositories, warnings: found.warnings };
+}
+
+/**
+ * The change set of the whole root, the scope of the session left out of it.
+ * This is what the scope editor picks from, so it reads git per request the way
+ * the scan does and carries names rather than diffs: the patch of a whole root
+ * is megabytes, and a picker shows paths.
+ */
+async function candidatesOf(config: Config): Promise<CandidateSet> {
+  const found = await scan(config.root, {
+    roots: config.roots,
+    depth: config.depth,
+    exclude: config.exclude,
+  });
+  const base = await sessionBase(config);
+  const read = await Promise.all(
+    found.repositories.map((repository) =>
+      readRepositoryChange(config.root, repository.path, base, { hunks: false }),
+    ),
+  );
+  return {
+    root: config.root,
+    // A repository with nothing to show is not part of a change set, here as
+    // everywhere else (`docs/SPEC.md` section 5).
+    repositories: read
+      .filter((change) => change.files.length > 0)
+      .map((change) => ({
+        path: change.path,
+        branch: change.branch,
+        files: change.files.map((file) => ({
+          path: file.path,
+          oldPath: file.oldPath,
+          status: file.status,
+          additions: file.additions,
+          deletions: file.deletions,
+        })),
+      })),
+    warnings: [
+      ...found.warnings,
+      ...read.flatMap((change) =>
+        change.warnings.map((message) => ({ path: change.path, message })),
+      ),
+    ],
+  };
 }
 
 /** Without a session there is no base to read against; the default one is HEAD. */

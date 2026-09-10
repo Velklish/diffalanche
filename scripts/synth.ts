@@ -742,6 +742,14 @@ export function generate(options: SynthOptions): SynthReport {
 
   const comments = buildComments(rnd, repos, profile.comments);
   const data = join(out, ".diffalanche");
+  // The two session files are written at version 1 on purpose, and stay there:
+  // the fixture is what every read of a data directory written before DA-53
+  // goes through, so the compatibility of `READABLE_VERSIONS` is exercised by
+  // the perf gate, the smoke matrix, and half the suite rather than by one test
+  // ([03-storage.md](../docs/reference/03-storage.md)). The tool raises them to
+  // the current version on its first write, which leaves the fixture on disk as
+  // it was generated.
+
   write(
     join(data, "config.json"),
     json({ roots: ["repos"], depth: 2, exclude: [], user: "kim.p", port: 4880, lsp: {} }),

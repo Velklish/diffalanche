@@ -13,7 +13,10 @@ The “Term” column gives the spelling for prose; EN is the name in code and E
 | base mode | `base.mode` | How a repository's change set is computed: `head`, `branch`, or `ref`. Set per review session, resolved per repository. | SPEC.md §3.4, §7 |
 | merge-base branch | `base.branch` | The branch used for the merge base in `branch` mode; the remote default branch when not set. | SPEC.md §3.4, §7 |
 | resolved base | `base` | The base one repository's change set was computed against: the mode the resolution ended at, the ref it came from, and the sha. `null` when it did not resolve and the repository is out of the review. | SPEC.md §7, reference/02-git.md |
-| review session | `review` | A named unit of review work: base mode plus all comments. Lives in `reviews/<name>/`. | SPEC.md §4, §7 |
+| review session | `review` | A named unit of review work: base mode, scope, status, plus all comments. Lives in `reviews/<name>/`. | SPEC.md §4, §7 |
+| review task | `review` | A review session with a scope — the same thing on disk, and what the prose calls a session someone is working through. Not a filter over a larger review: it is what the task is. | SPEC.md §4, ADR-010 |
+| scope | `scope` | What a review task is about: one list of entries, each a whole repository or a repository with an explicit list of paths. `null` is the whole root. Nothing outside it is shown or returned. | SPEC.md §4, §7, ADR-010 |
+| task status | `status` | Whether a review task is `open` or `closed`. Only a human sets it, and closing is a marker rather than a lock. | SPEC.md §5, §7, ADR-010 |
 | current session | `current` | The pointer file naming the session the UI and the CLI use without `--review`. | SPEC.md §4, §7 |
 | data directory | `dataDir` | `<root>/.diffalanche/` with `config.json`, `reviews/`, `current`, and the embedding index; overridden by `--data-dir`. | SPEC.md §3.5, §7 |
 | change set | `diff` | The changes of every repository that has changes, computed against the base mode; untracked files included. Cached in `diff.json`. | SPEC.md §5, §7 |
@@ -49,6 +52,7 @@ The “Term” column gives the spelling for prose; EN is the name in code and E
 
 | Do not use | Use | Why |
 |---|---|---|
+| filter, filtered review | scope, review task | A scope is what the task is, not a view over a larger review: calling it a filter implies a whole review underneath that the screen is hiding, and there is none |
 | session file | review session directory | Since ADR-003 a session is a directory with three files, not one file |
 | MR, merge request | review session | diffalanche has no server-side merge requests; “merge-request-style” describes the look only |
 | review bundle | review document | One response, one name; the code calls it `review.document()`. The spelling survives in the title of the archived DA-16 |

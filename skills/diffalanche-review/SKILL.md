@@ -22,12 +22,49 @@ the command name — `diffalanche diff --root ~/work`, never `diffalanche --root
 ~/work diff`.
 
 - `--root <dir>` — the directory under review; defaults to the current one.
-- `--review <name>` — a session other than the current one. Start with
-  `diffalanche review list`: the `*` marks the current session, the one `diff`
-  and `comment` use when `--review` is absent. Findings written into the wrong
-  session are invisible in the one the human has open.
+- `--review <name>` — the session to work in. **Name yours on every command.**
+  Several agents work on several tasks at once, and `current` is the human's
+  default rather than yours; findings written into the wrong session are
+  invisible in the one the human has open. `diffalanche review list` shows them
+  all — the `*` marks the current one, and each row carries its scope and
+  whether it is open or closed.
 
 Exit code 0 is success, 1 is a user error with one line on stderr, 2 is a fault.
+
+## Propose the task first
+
+A review session carries a **scope** — the repositories and the files it is
+about — and shows nothing else. When you have just written code and want it
+reviewed, open the task for exactly what you touched:
+
+```sh
+diffalanche review new cargo-flags --title "Cargo flags across services" \
+  --repo repos/core/cargos-api \
+  --path repos/platform/loads-search:app/cargo/cargo_404.py --no-use
+```
+
+`--repo` takes a whole repository and `--path <repo>:<file>` one file; both
+repeat. **`--no-use` is not optional for you**: it leaves the human's `current`
+session where it is and prints the address they open when they are ready. Take
+that address into what you tell the human.
+
+Then write into that task by name — `--review cargo-flags` on every command
+below. A `comment` on a repository or a file the task is not about is exit
+code 1:
+
+```
+diffalanche: repos/services/quotes-worker is not in the scope of review task
+"cargo-flags", which is about repos/core/cargos-api, repos/platform/loads-search
+(app/cargo/cargo_404.py): widen the scope or open a task of its own
+```
+
+Widen it with `diffalanche review scope add --review cargo-flags --repo <path>`
+when the finding really belongs to this task, and open a task of its own when it
+does not. `diffalanche review scope --review cargo-flags` prints what a task is
+about.
+
+Reviewing a task a human already opened? Do not create one — read
+`diffalanche review scope --review <name>` and stay inside it.
 
 ## Procedure
 
@@ -38,8 +75,8 @@ diffalanche diff --json
 diffalanche diff --repo repos/core/cargos-api --json
 ```
 
-`--json` gives every repository with its files, and every file with `patch` and
-with `hunks` — the structured form, where each line carries `type`
+`--json` gives every repository **the task is about** with its files, and every
+file with `patch` and with `hunks` — the structured form, where each line carries `type`
 (`context`, `insert`, `delete`), `content`, `oldLine`, and `newLine`. Those line
 numbers are what you anchor a comment to, so read `hunks`, not the raw patch.
 
@@ -137,5 +174,8 @@ the author's, or the thread reads as one agent arguing with itself.
 - It does not edit code. A review that fixes what it finds leaves the human
   nothing to review.
 - It does not resolve, reopen, or delete anything.
+- **It does not close a task.** `review close` and `review reopen` need `--role
+  human` and refuse anything else with exit code 1, exactly as `resolve` does. A
+  task you opened stays open until the human is done with it.
 
 [ADR-004]: https://github.com/Velklish/diffalanche/blob/main/docs/adr/adr-004-agent-contract.md

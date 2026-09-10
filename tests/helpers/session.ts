@@ -1,13 +1,17 @@
 /** Builds a review session on disk for the storage tests. */
 import type { Comment, Review } from "../../src/core/storage/index.ts";
-import { writeComments, writeReview } from "../../src/core/storage/index.ts";
+import { SCHEMA_VERSION, writeComments, writeReview } from "../../src/core/storage/index.ts";
 
 export function review(name: string, overrides: Partial<Review> = {}): Review {
   return {
-    version: 1,
+    version: SCHEMA_VERSION,
     name,
     title: null,
     base: { mode: "head" },
+    scope: null,
+    status: "open",
+    closedAt: null,
+    closedBy: null,
     createdAt: "2026-09-01T09:00:00.000Z",
     updatedAt: "2026-09-01T09:00:00.000Z",
     ...overrides,

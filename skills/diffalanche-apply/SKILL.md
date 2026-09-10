@@ -21,10 +21,13 @@ takes the global flags **after** the command name — `diffalanche list --root
 
 - `--root <dir>` — the directory under review; defaults to the current one. Set
   it whenever you are not standing in the root.
-- `--review <name>` — a session other than the current one. Start with
-  `diffalanche review list`: the `*` marks the current session, the one every
-  command uses when `--review` is absent. A root can hold several sessions, and
-  reading the wrong one looks exactly like reading the right one.
+- `--review <name>` — the session to work in. **Name the one the human sent you
+  on every command.** A root holds several sessions at once, `current` is the
+  human's default rather than yours, and reading the wrong one looks exactly
+  like reading the right one. `diffalanche review list` shows them all — the `*`
+  marks the current one, and each row carries its scope and whether it is open
+  or closed. A closed task still answers every command: closing is a marker, not
+  a lock.
 
 Exit code 0 is success, 1 is a user error with one line on stderr, 2 is a fault
 with a stack trace. Do not retry a 1: it is an answer, and the message says
@@ -111,11 +114,12 @@ asked, why the code is right as it stands or why the fix costs more than it
 saves, and what you would need to change your mind. A declined comment is a
 conversation, and the human reads only what you wrote.
 
-**7. Never close a thread.** `resolve` and `reopen` are the human's; they need
-`--role human` and refuse anything else with exit code 1, changing nothing. Do
-not pass `--role human` to make them work — that is impersonating the reviewer.
-A thread you answered stays open until the human verifies it; that is what
-"awaiting" means on their side.
+**7. Never close a thread, and never close the task.** `resolve` and `reopen`
+are the human's; they need `--role human` and refuse anything else with exit
+code 1, changing nothing. So do `review close` and `review reopen`, which mark
+the whole task. Do not pass `--role human` to make any of them work — that is
+impersonating the reviewer. A thread you answered stays open until the human
+verifies it; that is what "awaiting" means on their side.
 
 **8. Check yourself.**
 
@@ -125,6 +129,20 @@ diffalanche list --unanswered --json
 
 `[]` means every thread in the plan has your reply on it. Anything left is a
 comment you skipped: either answer it or tell the human why you did not.
+
+## What the task is about
+
+A session may carry a **scope** — the repositories and the files it is about —
+and then it shows nothing else: the comments you read are the comments of that
+task, and `diffalanche review scope --review <name>` prints what it covers. Your
+own writes stay inside it too, so a `comment` on something the task is not about
+is exit code 1 naming the scope. That is not a wall to climb: the change belongs
+to another task, and the message says so.
+
+The scope is also why a fix can look wider than the review — you may have to
+edit a file the task does not name to make its finding go away. Editing is
+yours; only what you *write into diffalanche* is bounded by the scope. Say in
+the reply what you touched outside it.
 
 ## Several agents on one review
 

@@ -221,28 +221,49 @@ everything that needs a whole review goes through it: `diff` in the CLI, the
 review service of [07-server.md](07-server.md), and the watcher's rescan.
 
 ```ts
-const cache = await scanReview(config, review.base);
-await refreshRepository(config, session, review.base, "repos/group/service-api");
+const cache = await scanReview(config, review.base, review.scope);
+await refreshRepository(config, session, review.base, "repos/group/service-api", review.scope);
 ```
 
-- `scanReview(config, base)` finds the repositories of `config.roots` to
-  `config.depth`, reads each against `base`, drops the ones with no files, keeps
-  every warning — a repository whose base did not resolve has none of the first
-  and one of the second — and returns the `DiffCache` of `docs/SPEC.md` section
-  7, sorted by path with its totals counted. It asks for the structured hunks,
-  because the anchor of a line comment is captured from them.
+- `scanReview(config, base, scope?)` finds the repositories of `config.roots` to
+  `config.depth`, reads **the ones the scope names** against `base`, drops the
+  ones with no files, keeps every warning — a repository whose base did not
+  resolve has none of the first and one of the second — and returns the
+  `DiffCache` of `docs/SPEC.md` section 7, sorted by path with its totals
+  counted. It asks for the structured hunks, because the anchor of a line
+  comment is captured from them.
   It comes back as `{ cache, found }`: `found` is every repository the walk saw,
   with changes or without, which is how a caller tells a `--repo` nothing is at
   from a repository that has nothing to show.
+- **The walk stays whole and the reading is what the scope narrows**
+  ([ADR-010](../adr/adr-010-review-task-scope.md)). Finding a repository is
+  reading directories and starts no git process, and it is what tells a
+  repository the scope names but the root has not from one that is simply quiet:
+  the first gets a warning of its own — `in the scope of this review task, but
+  not a repository under the root` — because the entry was checked when it was
+  written, so what the warning says is that the repository has gone since.
+  Reading one is four git processes, and a task over two repositories of
+  twenty-one must not pay for the other nineteen;
+  `tests/scope-scan.test.ts` counts the processes rather than the seconds.
+- `filterChange(scope, change)` is what the scope leaves of one repository: a
+  repository the task is not about comes back with no files and no warnings, one
+  the scope holds as a whole keeps every file, and one that names paths keeps
+  those and no others. **The names are matched as they are written, a renamed
+  file included**: a file whose name changed is at a path the scope does not
+  name, and nothing outside the scope is shown
+  ([ADR-010](../adr/adr-010-review-task-scope.md)). What the task keeps is the
+  path it was given, which now has nothing to show — the answer a file that
+  stopped changing gets.
+- `sameScope(left, right)` is `sameBase` for the other half of the cache's key.
 - `findRepositories(config)` is that list on its own, without reading any git:
   what a command checks a `--repo` against before it writes anything.
 - `totalsOf(repositories)` counts a set of repositories again, for a caller that
   narrowed one.
-- `refreshRepository(config, session, base, repo)` reads one repository
+- `refreshRepository(config, session, base, repo, scope?)` reads one repository
   again and writes it into the cache in place, so a comment written right after
   an edit anchors to the line that is there now. A cache computed against
-  another base is not patched — `review base` puts it there, and one full scan
-  repairs it. It re-reads rather than
+  another base, or for another scope, is not patched — `review base` and a scope
+  edit put it there, and one full scan repairs it. It re-reads rather than
   comparing the cache against the mtimes of `.git` and the working tree: one
   `git diff` on one repository costs less than walking that tree, and it is
   right in the case a mtime comparison gets wrong — a file saved within the same
