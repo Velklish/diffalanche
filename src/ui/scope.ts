@@ -141,6 +141,18 @@ export function scopeLabel(counted: { repos: number; files: number }): string {
 }
 
 /**
+ * What a row of the history says a task is about. The same count as the pill —
+ * the two numbers are about one thing and may not disagree — plus the words a
+ * session with no scope gets. The header has no pill for that session, because
+ * the whole root is not a narrowing and there is nothing there to manage; a row
+ * has to say what *every* task is about, so this is the one place the state has
+ * words ([08-ui.md](../../docs/reference/08-ui.md)).
+ */
+export function historyScopeLabel(scope: Scope): string {
+  return scope === null ? "все репозитории" : scopeLabel(countScope(scope));
+}
+
+/**
  * What a scope edit takes out of the task, by name: a repository the new scope
  * has not, and a path its entry no longer names. A repository that was held
  * whole and now names paths is named as the repository — the entry it had could

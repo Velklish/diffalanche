@@ -193,6 +193,14 @@ the data directory produces — the cost `listSessions` already pays per request
 ([04-domain.md](04-domain.md)). A session that disappears says nothing: deleting
 one is Phase 2 (DA-40).
 
+**One press can produce both.** Closing the *current* task writes a `status`
+that `metadataOf` reads and that the session snapshot compares, so
+`session-changed` goes out from `reloadMetadata` and `sessions-changed` from
+`reloadSessions` right after it — in that order, since `reloadData` reads the
+three files in the order a change of one affects the others. A reader that
+recognises its own writes has to keep the two apart: the UI does
+([08-ui.md](08-ui.md)).
+
 **A repository the current task is not about is watched and not rescanned.**
 Watching it costs no git process, and it is what makes a scope that widens while
 the server runs take effect without a restart; reading it would cost four git

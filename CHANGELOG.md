@@ -15,6 +15,25 @@ and `bun run release` refuses a version that has no section. See
 
 ### Added
 
+- **The sessions menu is the history of tasks** (DA-56). Two groups —
+  `Открытые задачи` and, under them, `Закрытые` — and every row says what its
+  task is about: `2 repos · 5 files`, or `все репозитории` for a session with no
+  scope. A closed row keeps its counters, carries a `CLOSED` chip, and steps
+  back by tone the way a resolved thread does.
+- **A task is closed and reopened from its row.** The same press does both, and
+  it is the human's gesture: the server signs the write with the configured user
+  and `role: human` and takes neither from the request. Closing is a marker and
+  not a lock — comments, replies and resolves go on working on a closed task —
+  so there is no confirmation in front of it and no red button.
+- **The row says which window is on it, and which task the CLI answers about.**
+  Two different chips, because they are two different facts: switching a task
+  moves this window's address and never `current`, so the reader can be on one
+  task while the terminal beside them is on another. Neither says `CURRENT`:
+  there is no main task.
+- **A task that appears while the window is open raises a quiet mark** on the
+  session pill and does nothing else — no toast, no switch, no scroll, and the
+  composer being written in stays open. Opening the menu clears it. A task this
+  window created, closed or reopened raises no mark: the reader has seen it.
 - **The scope on the screen** (DA-55). A `SCOPE` pill sits beside `BASE` and
   says what the task is about — `2 repos · 5 files` — and opens the **scope
   editor**: an overlay over the whole root with a tick per repository and per

@@ -111,6 +111,19 @@ button:disabled {
   white-space: nowrap;
 }
 
+/*
+ * The history has something this window has not seen, and nothing more: the
+ * news is a task somebody else made, which is worth a mark and not an
+ * interruption. It is `.dot.acc` — the 7 px status dot, the one circle the
+ * system has (`DESIGN.md`, Shapes) — and this adds only what a dot inside the
+ * pill needs: a size a flex row may not squeeze, and `dcin`, because it appears
+ * (The Two-Keyframe Rule).
+ */
+.pill-mark {
+  flex: none;
+  animation: dcin 140ms ease-out;
+}
+
 .tag {
   color: var(--tx3);
   font: 10px / 1 var(--mono);
@@ -1901,34 +1914,79 @@ button.chip {
   overflow: auto;
 }
 
+/*
+ * A group of the history, and its heading. The heading is a tag rather than a
+ * title: it names a section of an instrument, and the type ramp has one size
+ * for that (`DESIGN.md`, Chips and badges).
+ */
+.menu-group + .menu-group {
+  margin-top: 10px;
+  padding-top: 8px;
+  border-top: 1px solid var(--bd2);
+}
+
+.menu-group-label {
+  margin: 0;
+  padding: 4px 9px 6px;
+  color: var(--tx3);
+  font: 10px / 1.4 var(--mono);
+  letter-spacing: 0.07em;
+}
+
+/*
+ * The row has two targets — switch to the task, and close or reopen it — so it
+ * is a container with a button for each, the way a thread card is. Its own
+ * ground is what the hover and the mark of this window colour.
+ */
 .session-row {
   display: flex;
-  flex-direction: column;
-  gap: 4px;
-  width: 100%;
+  align-items: flex-start;
+  gap: 7px;
   padding: 8px 9px;
-  border: 0;
   border-radius: 7px;
-  background: none;
-  text-align: left;
 }
 
 .session-row:hover {
   background: var(--panel2);
 }
 
-.session-row:focus-visible {
-  outline: 1px solid var(--accBd);
-}
-
 .session-row.on {
   background: var(--accBg);
 }
 
+.session-open {
+  display: flex;
+  flex: 1;
+  flex-direction: column;
+  gap: 4px;
+  min-width: 0;
+  padding: 0;
+  border: 0;
+  border-radius: 5px;
+  background: none;
+  text-align: left;
+}
+
+.session-open:focus-visible {
+  outline: 1px solid var(--accBd);
+  outline-offset: 2px;
+}
+
+/* The gesture is rare and terminal; it does not compete with the name beside it. */
+.session-status {
+  flex: none;
+  margin-top: 1px;
+}
+
+/*
+ * The name, what the task is, and where it is being read: up to six things at
+ * 420 px, so the head wraps rather than squeezing a chip into an ellipsis.
+ */
 .session-head {
   display: flex;
+  flex-wrap: wrap;
   align-items: center;
-  gap: 7px;
+  gap: 6px 7px;
   width: 100%;
 }
 
@@ -1936,9 +1994,20 @@ button.chip {
   font: 600 12.5px / 1.3 var(--mono);
 }
 
-.chip.current {
+/* The task this window is showing; the pointer the CLI uses keeps the plain chip. */
+.chip.here {
   border-color: var(--accBd);
   color: var(--accTx);
+}
+
+/*
+ * A closed task steps back by tone and never by opacity, which would take its
+ * text below AA with it — the rule a resolved thread already follows
+ * (`DESIGN.md`, Cards and containers). Its counters keep their colours: they
+ * are what the task found, and closing it did not unfind them.
+ */
+.session-row.closed .session-name {
+  color: var(--tx2);
 }
 
 .session-title {
@@ -1948,6 +2017,7 @@ button.chip {
 
 .session-metrics {
   display: flex;
+  flex-wrap: wrap;
   gap: 12px;
   color: var(--tx2);
   font: 11px / 1.4 var(--mono);

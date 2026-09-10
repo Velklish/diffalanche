@@ -52,6 +52,7 @@ export function Header() {
         >
           <span className="pill-name">{session?.name ?? "no session"}</span>
           <span className="pill-title">{session?.title ?? ""}</span>
+          <HistoryMark />
           <span className="caret">▾</span>
         </button>
         {menuOpen ? <SessionMenu /> : null}
@@ -115,6 +116,33 @@ export function Header() {
         Export .md
       </button>
     </header>
+  );
+}
+
+/**
+ * The quiet mark of handoff section 1.1: a task appeared in the data directory,
+ * or one was closed or reopened, while this window was open. It is a dot on the
+ * pill that opens the history and **nothing else** — no toast, no switch, no
+ * scroll, and nothing that closes a composer the reader is writing in. They go
+ * on reading and open the task when they are ready; opening the menu clears it
+ * (DA-56).
+ *
+ * It is `.dot`, the system's status dot, and not a shape of its own: the 7 px
+ * status dot is the only circle `DESIGN.md` allows, and a second round
+ * primitive beside it would be a change to the visual contract rather than a
+ * mark (`DESIGN.md`, Shapes).
+ *
+ * The dot is not the news itself, so the sentence goes to a screen reader,
+ * which has no dot to read.
+ */
+function HistoryMark() {
+  const marked = useStore((store) => store.historyMark);
+  if (!marked) return null;
+  return (
+    <>
+      <span className="dot acc pill-mark" />
+      <span className="visually-hidden">в истории появилась задача</span>
+    </>
   );
 }
 

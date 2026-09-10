@@ -44,6 +44,7 @@ import type {
   Review,
   ReviewCounters,
   ReviewDocument,
+  ReviewStatus,
   ScanWarning,
   Scope,
   SessionList,
@@ -53,6 +54,17 @@ import type {
 } from "./types.ts";
 
 export type Theme = "dark" | "light";
+/**
+ * What a frame of this page's own write is about, and so which frame may claim
+ * the mark it left. `review` is the session itself — `session-changed`, which
+ * costs a read of the whole review; `history` is the list of tasks —
+ * `sessions-changed`, which costs a mark in the header. **One write can produce
+ * both:** closing the current task changes metadata the watcher compares and a
+ * status the session snapshot compares, so it emits `session-changed` and then
+ * `sessions-changed` ([05-watcher.md](../../docs/reference/05-watcher.md)). A
+ * mark is claimed once, so the two kinds are two marks and not one.
+ */
+export type SelfWrite = "review" | "history";
 /**
  * The tabs of the sidebar. `changes` is the tree of handoff section 1.3;
  * `select` turns it into the picking surface a new review task is built on
@@ -170,11 +182,11 @@ type ThemeAndBaseSlice = {
 
 type SessionsSlice = {
   /**
-   * The sessions this page has just written — through `use`, `new`, or a change
-   * of base — with the moment of each write. The watcher sees such a write like
-   * any other and sends `session-changed` back; the page has already read the
-   * review it names, so the frame it caused is skipped rather than costing a
-   * second read of megabytes ([live.ts](live.ts)).
+   * The session writes this page has just made — through `use`, `new`, a change
+   * of base or scope, or a change of status — with the moment of each. The
+   * watcher sees such a write like any other and sends its frame back; the page
+   * has already read what the frame names, so the frame it caused is skipped
+   * rather than costing a second read of megabytes ([live.ts](live.ts)).
    *
    * A map and not one slot: two switches in a row are two writes in flight, and
    * the frame for the first can land after the second was made. And every entry
@@ -184,18 +196,27 @@ type SessionsSlice = {
    * sit there for the life of the page and swallow the next real event for that
    * session.
    */
-  selfSessions: Map<string, number>;
+  selfWrites: Map<string, number>;
   /** Remembers a session write of this page's own, and forgets the stale ones. */
-  markSelfSession: (name: string) => void;
+  markSelf: (kind: SelfWrite, name: string) => void;
   /**
    * Whether this frame is the page's own write coming back. The entry is taken
-   * when it matches: one write, one frame.
+   * when it matches: one write of one kind, one frame.
    */
-  claimSelfSession: (name: string) => boolean;
+  claimSelf: (kind: SelfWrite, name: string) => boolean;
   session: Review | null;
   /** The history: every session with its counters, most recently updated first. */
   sessions: SessionSummary[];
   sessionMenuOpen: boolean;
+  /**
+   * The history has something this window has not seen: a task appeared, or one
+   * was closed or reopened, somewhere else in the data directory. It is a mark
+   * and nothing else — no toast, no switch, no scroll — and opening the menu
+   * clears it (DA-56).
+   */
+  historyMark: boolean;
+  /** A `sessions-changed` frame that is not this window's own doing. */
+  noteHistory: (name: string) => void;
   /** The create form of handoff section 7. */
   newName: string;
   newBase: string;
@@ -220,6 +241,14 @@ type SessionsSlice = {
   showTask: (name: string | null) => Promise<void>;
   /** The menu's own gesture: the same move, with the menu closed and a toast. */
   switchSession: (name: string) => Promise<void>;
+  /**
+   * `POST /api/sessions/:name/close` and `/reopen`, from the row in the history.
+   * A closed task is reopened by the same gesture, and the server signs both
+   * with `config.user` and `role: human` — only a human closes a task
+   * ([ADR-010](../../docs/adr/adr-010-review-task-scope.md), decision 3).
+   * Neither route moves `current`: they name their session in the path.
+   */
+  setTaskStatus: (name: string, status: ReviewStatus) => Promise<void>;
 };
 
 /**
@@ -583,7 +612,7 @@ export const useStore = create<Store>()((set, get) => ({
       });
       if (!response.ok) throw new Error((await refusal(response)).message);
       set({ baseOpen: false });
-      get().markSelfSession(session.name);
+      get().markSelf("review", session.name);
       // The change set is computed against the base, so the whole review is
       // read again rather than patched ([03-storage.md]).
       await get().loadReview();
@@ -595,25 +624,38 @@ export const useStore = create<Store>()((set, get) => ({
 
   // sessions
   session: null,
-  selfSessions: new Map(),
-  markSelfSession: (name) => {
-    const held = fresh(get().selfSessions);
-    held.set(name, Date.now());
-    set({ selfSessions: held });
+  selfWrites: new Map(),
+  markSelf: (kind, name) => {
+    const held = fresh(get().selfWrites);
+    held.set(selfKey(kind, name), Date.now());
+    set({ selfWrites: held });
   },
-  claimSelfSession: (name) => {
-    const held = fresh(get().selfSessions);
-    const mine = held.delete(name);
-    set({ selfSessions: held });
+  claimSelf: (kind, name) => {
+    const held = fresh(get().selfWrites);
+    const mine = held.delete(selfKey(kind, name));
+    set({ selfWrites: held });
     return mine;
   },
   sessions: [],
   sessionMenuOpen: false,
+  historyMark: false,
+  noteHistory: (name) => {
+    // A task this window made, closed or reopened is not news to it: the list
+    // was read again on the spot, and the mark would be about the reader's own
+    // press.
+    if (get().claimSelf("history", name)) return;
+    // The mark and nothing else. The reader keeps reading and opens the task
+    // when they are ready, so no toast, no switch, no scroll, and the list is
+    // not read again under an open menu — the mark is what says it is stale
+    // (DA-56).
+    set({ historyMark: true });
+  },
   newName: "",
   newBase: "head",
   switching: false,
   setSessionMenu: (sessionMenuOpen) => {
-    set({ sessionMenuOpen });
+    // Opening the menu is reading the history, so the mark has done its work.
+    set({ sessionMenuOpen, ...(sessionMenuOpen ? { historyMark: false } : {}) });
     if (sessionMenuOpen) void loadSessions(set);
   },
   setNewName: (newName) => set({ newName }),
@@ -647,7 +689,11 @@ export const useStore = create<Store>()((set, get) => ({
       // Only the branch that moves `current`: without `use` the watcher sees a
       // session appear and sends `sessions-changed`, which this page does not
       // read the review for.
-      if (use) get().markSelfSession(name);
+      if (use) get().markSelf("review", name);
+      // A session appearing is `sessions-changed` either way, and this window
+      // is about to be on the task it just made: the mark in the header is for
+      // the tasks somebody else made (DA-56).
+      get().markSelf("history", name);
       await get().showTask(use ? null : name);
       set({ switching: false, toast: use ? `review new ${name}` : `review new ${name} --no-use` });
       void loadSessions(set);
@@ -664,6 +710,42 @@ export const useStore = create<Store>()((set, get) => ({
     await get().showTask(name);
     set({ switching: false, toast: `?review=${name}` });
     void loadSessions(set);
+  },
+  setTaskStatus: async (name, status) => {
+    if (get().switching) return;
+    // The command the CLI writes for the same gesture, so one thing is said one
+    // way whichever surface did it.
+    const verb = status === "closed" ? "close" : "reopen";
+    set({ switching: true });
+    try {
+      // The name is in the path, so no `onTask()` here: these two routes are
+      // about the task the row names and not about the task this window is on,
+      // and neither of them moves `current`
+      // ([07-server.md](../../docs/reference/07-server.md)).
+      const response = await fetch(`/api/sessions/${encodeURIComponent(name)}/${verb}`, {
+        method: "POST",
+        headers: { "content-type": "application/json" },
+        body: "{}",
+      });
+      if (!response.ok) throw new Error((await refusal(response)).message);
+      const review = (await response.json()) as Review;
+      get().markSelf("history", name);
+      // The task this window is on carries the status too — the screen would
+      // otherwise go on saying `open` about a task the reader has just closed.
+      // Its metadata changed, so the watcher sends `session-changed` back for
+      // it as well, and the review it names has not changed at all.
+      if (get().session?.name === name) {
+        get().markSelf("review", name);
+        set({ session: review });
+      }
+      // The row moves between the groups on what the disk now holds, not on
+      // what this page guessed: the counters and `updatedAt` beside it come
+      // from the same read.
+      await loadSessions(set);
+      set({ switching: false, toast: `review ${verb} ${name}` });
+    } catch (error) {
+      set({ switching: false, toast: reason(error) });
+    }
   },
   showTask: async (name) => {
     // The address bar is what says which task this window is on, so it is
@@ -743,7 +825,7 @@ export const useStore = create<Store>()((set, get) => ({
       // write and sends `session-changed` back. The review it names is read
       // here, on the next line, and reading it twice costs megabytes for
       // nothing ([live.ts](live.ts)).
-      get().markSelfSession(session.name);
+      get().markSelf("review", session.name);
       // The change set is computed for the scope, so the review is read again
       // rather than patched ([03-storage.md]).
       await get().loadReview();
@@ -1202,6 +1284,11 @@ const SELF_WRITE_WINDOW_MS = 5_000;
 function fresh(held: Map<string, number>): Map<string, number> {
   const since = Date.now() - SELF_WRITE_WINDOW_MS;
   return new Map([...held].filter(([, at]) => at >= since));
+}
+
+/** One mark: which frame may take it, and which session it is about. */
+function selfKey(kind: SelfWrite, name: string): string {
+  return `${kind}:${name}`;
 }
 
 /**

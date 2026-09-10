@@ -539,7 +539,7 @@ adjustment.
 
 ### Chips and badges
 
-- **Tag** (`BASE`, `SCAN`, `MODEL`, `CURRENT`): mono 10 px, `0.07em`, `tx3`,
+- **Tag** (`BASE`, `SCAN`, `MODEL`, `CLOSED`): mono 10 px, `0.07em`, `tx3`,
   either bare or in a 4 px-radius 1 px-bordered plate.
 - **Key chip** (`⌘K`, `esc`, `↵`): 4 px radius, 1 px `bd` border, `tx3`,
   `1px 4px`.

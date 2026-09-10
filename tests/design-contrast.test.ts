@@ -26,11 +26,17 @@ const AA = 4.5;
  * grounds. `--ln` is not on that wash at all: the gutter of a selected row
  * takes `--accTx` (`styles.css`, `.diff-gutter-selected`), because `--ln` there
  * is 4.23:1.
+ *
+ * The three text greys gained `accBg` with the history of tasks (DA-56): the
+ * row of the task this window is on has that ground, its chips are `--tx3`, and
+ * a closed one sets its name in `--tx2` — a closed task steps back by tone,
+ * never by opacity, which would take its text below AA with it. `--tx3` there
+ * is the tightest of the three at 4.87:1 dark.
  */
 const PAIRS: { text: string; grounds: string[] }[] = [
-  { text: "tx", grounds: ["bg", "panel", "panel2", "panel3"] },
-  { text: "tx2", grounds: ["bg", "panel", "panel2", "panel3"] },
-  { text: "tx3", grounds: ["bg", "panel", "panel2", "panel3"] },
+  { text: "tx", grounds: ["bg", "panel", "panel2", "panel3", "accBg"] },
+  { text: "tx2", grounds: ["bg", "panel", "panel2", "panel3", "accBg"] },
+  { text: "tx3", grounds: ["bg", "panel", "panel2", "panel3", "accBg"] },
   { text: "code", grounds: ["panel", "accBg"] },
   { text: "ln", grounds: ["panel"] },
   { text: "accTx", grounds: ["accBg", "panel", "panel3"] },

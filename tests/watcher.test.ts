@@ -103,6 +103,16 @@ let settled = 0;
  * The write is **repeated** rather than waited on for longer: what is being
  * waited out is a lost write, and no ceiling brings one back. It is done per
  * repository, because each tree is its own watch.
+ *
+ * **The probe file's removal is waited for by its own event, never by a sleep.**
+ * Taking the file away changes the repository's change set back, so it produces
+ * a `diff-changed` of its own, and that event is the only proof it has been
+ * through the queue. A fixed pause here was wrong in the way this file already
+ * warns about at `settle()`: a machine slow enough to deliver it late hands the
+ * *next* test an event for the repository that was armed last. Measured on
+ * `main` as one red run in six — the first test received `loads-search` where
+ * it expected `cargos-api`, 21 ms in, which is an event arriving early for
+ * somebody else rather than one arriving late.
  */
 async function arm(repo: string): Promise<void> {
   const deadline = performance.now() + 30_000;
@@ -115,8 +125,9 @@ async function arm(repo: string): Promise<void> {
       if (changesOf(mark, repo).length > 0) {
         // The file goes again, and its removal is a change of its own: the
         // tests that follow start from a watcher with nothing in flight.
+        const removed = performance.now();
         await rm(file, { force: true });
-        await new Promise((done) => setTimeout(done, 300));
+        await waitForChangeOf(repo, removed);
         return;
       }
       await new Promise((done) => setTimeout(done, 5));
@@ -174,6 +185,21 @@ async function reveal(name: string): Promise<void> {
   await rm(join(root, REPO, "node_modules", name), { recursive: true, force: true });
 }
 
+/**
+ * The first event of a type since a mark, **whichever repository it is about**.
+ * `changesOf` is the filtered one; this is deliberately not, and the difference
+ * is not an oversight to tidy up.
+ *
+ * A caller that expects an event of its own and receives another repository's
+ * fails on the assertion that follows, naming both — which is exactly how the
+ * cross-repository event `arm()` used to leave behind was found: `expected
+ * 'repos/platform/loads-search' to be 'repos/core/cargos-api'`, 21 ms in. Given
+ * a filter here, that event would have been skipped over in silence and the
+ * test would have gone on to catch its own a moment later, green every time
+ * while the watcher was handing out somebody else's news. **The lack of a
+ * filter is what makes a stray event visible at all**, so anything that leaks
+ * one is a defect to fix at the source rather than to hide here.
+ */
 async function waitFor(
   type: WatcherEvent["type"],
   mark: number,

@@ -95,8 +95,18 @@ export function startLive(): () => void {
     // The page's own base change comes back through the watcher like anyone
     // else's. It has already read the review it names, and reading it again
     // would cost megabytes for nothing.
-    if (store().claimSelfSession(event.name)) return;
+    if (store().claimSelf("review", event.name)) return;
     return store().loadReview();
+  });
+  // A task appeared in the data directory, or one was closed or reopened —
+  // whichever session it is, current or not. It is the one frame that is news
+  // about the *history* rather than about this review, and it is answered with
+  // a mark in the header and nothing else: no toast, no switch, nothing that
+  // moves the reading position or takes an open composer away. The reader goes
+  // on reading and opens the task when they are ready
+  // ([ADR-010](../../docs/adr/adr-010-review-task-scope.md)).
+  on<Extract<WatcherEvent, { type: "sessions-changed" }>>("sessions-changed", (event) => {
+    store().noteHistory(event.name);
   });
   on<Extract<WatcherEvent, { type: "warnings" }>>("warnings", (event) => {
     store().setWarnings(event.list);

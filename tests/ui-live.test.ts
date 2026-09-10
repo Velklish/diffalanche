@@ -398,26 +398,26 @@ describe("a review the stream brought again", () => {
 describe("a session-changed frame the page caused itself", () => {
   it("is skipped once, and only for the write that is waiting for it", () => {
     loaded();
-    useStore.setState({ selfSessions: new Map() });
-    useStore.getState().markSelfSession("ls-1");
+    useStore.setState({ selfWrites: new Map() });
+    useStore.getState().markSelf("review", "ls-1");
 
-    expect(useStore.getState().claimSelfSession("ls-1")).toBe(true);
+    expect(useStore.getState().claimSelf("review", "ls-1")).toBe(true);
     // One write, one frame: a second frame for the same session is somebody
     // else's and must be read.
-    expect(useStore.getState().claimSelfSession("ls-1")).toBe(false);
-    expect(useStore.getState().claimSelfSession("ls-2")).toBe(false);
+    expect(useStore.getState().claimSelf("review", "ls-1")).toBe(false);
+    expect(useStore.getState().claimSelf("review", "ls-2")).toBe(false);
   });
 
   it("holds two writes at once, and matches them in either order", () => {
     // What the perf harness does: switch there and back without waiting, so the
     // frame for the first can land after the second write was made.
     loaded();
-    useStore.setState({ selfSessions: new Map() });
-    useStore.getState().markSelfSession("ls-b");
-    useStore.getState().markSelfSession("ls-a");
+    useStore.setState({ selfWrites: new Map() });
+    useStore.getState().markSelf("review", "ls-b");
+    useStore.getState().markSelf("review", "ls-a");
 
-    expect(useStore.getState().claimSelfSession("ls-b")).toBe(true);
-    expect(useStore.getState().claimSelfSession("ls-a")).toBe(true);
+    expect(useStore.getState().claimSelf("review", "ls-b")).toBe(true);
+    expect(useStore.getState().claimSelf("review", "ls-a")).toBe(true);
   });
 
   it("lets go of a write that never produced a frame", () => {
@@ -426,10 +426,28 @@ describe("a session-changed frame the page caused itself", () => {
     // would sit there for the life of the page and swallow the next real
     // event for that session — an agent's `review base`, say.
     loaded();
-    useStore.setState({ selfSessions: new Map([["ls-1", Date.now() - 60_000]]) });
+    useStore.setState({ selfWrites: new Map([["review:ls-1", Date.now() - 60_000]]) });
 
-    expect(useStore.getState().claimSelfSession("ls-1")).toBe(false);
-    expect(useStore.getState().selfSessions.size).toBe(0);
+    expect(useStore.getState().claimSelf("review", "ls-1")).toBe(false);
+    expect(useStore.getState().selfWrites.size).toBe(0);
+  });
+
+  /**
+   * One press on a closed row is two frames: closing the *current* task
+   * rewrites metadata the watcher compares and a status the session snapshot
+   * compares, so `session-changed` and `sessions-changed` both come back
+   * ([05-watcher.md](../docs/reference/05-watcher.md)). A single mark would be
+   * taken by whichever arrived first, and the other would then read the review
+   * again or raise a mark in the header about the reader's own press.
+   */
+  it("keeps the review's mark and the history's mark apart", () => {
+    loaded();
+    useStore.setState({ selfWrites: new Map() });
+    useStore.getState().markSelf("review", "ls-1");
+    useStore.getState().markSelf("history", "ls-1");
+
+    expect(useStore.getState().claimSelf("review", "ls-1")).toBe(true);
+    expect(useStore.getState().claimSelf("history", "ls-1")).toBe(true);
   });
 });
 

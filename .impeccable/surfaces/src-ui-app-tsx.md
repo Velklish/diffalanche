@@ -2,7 +2,7 @@
 version: 1
 slug: "src-ui-app-tsx"
 primary_target: "src/ui/App.tsx"
-related_targets: ["src/ui/components/Header.tsx","src/ui/components/Sidebar.tsx","src/ui/components/CentrePanel.tsx","src/ui/components/ThreadRail.tsx","src/ui/components/ThreadCard.tsx","src/ui/components/StatusBar.tsx","src/ui/components/FileCard.tsx","src/ui/components/Overlay.tsx","src/ui/components/ScopeEditor.tsx","src/ui/components/Toast.tsx","src/ui/components/Skeleton.tsx","src/ui/components/Logo.tsx","src/ui/Composer.tsx","src/ui/renderers/ReactDiffFile.tsx","src/ui/styles.css"]
+related_targets: ["src/ui/components/Header.tsx","src/ui/components/Sidebar.tsx","src/ui/components/CentrePanel.tsx","src/ui/components/ThreadRail.tsx","src/ui/components/ThreadCard.tsx","src/ui/components/StatusBar.tsx","src/ui/components/FileCard.tsx","src/ui/components/Overlay.tsx","src/ui/components/ScopeEditor.tsx","src/ui/components/SessionMenu.tsx","src/ui/components/Toast.tsx","src/ui/components/Skeleton.tsx","src/ui/components/Logo.tsx","src/ui/Composer.tsx","src/ui/renderers/ReactDiffFile.tsx","src/ui/styles.css"]
 ---
 
 # Surface: the review workspace
@@ -15,9 +15,17 @@ expression on this surface, and the brand lives in the precision of the details.
 
 `src/ui/App.tsx` and the five regions it lays out — the header, the sidebar, the
 centre panel, the thread rail, and the status bar — plus the overlays that open
-over them: the base picker, the sessions menu, global search, the export dialog,
-and the **scope editor** with its confirmation. Sections 1 and 12 of
-`docs/design/HANDOFF.md` are the layout and behaviour authority for all of it.
+over them: the base picker, the **history of tasks** on the session pill, global
+search, the export dialog, and the **scope editor** with its confirmation.
+Sections 1, 7 and 12 of `docs/design/HANDOFF.md` are the layout and behaviour
+authority for all of it.
+
+The history is where a task is closed and reopened, and it is the one place on
+this surface that says anything about a task other than the one being read: two
+groups, a scope on every row, and a quiet mark in the header when a task appears
+while the window is open. The mark moves nothing — no toast, no switch, no
+scroll, no composer taken away — because a task somebody else made is worth
+knowing about and is not worth the screen.
 
 The scope editor is the one part of this surface that does not show the task.
 Everywhere else the screen carries the scope and nothing else — no summary of
@@ -97,6 +105,21 @@ The memorable moment is the composer: dragging across lines of the new side
 opens a form directly under the last selected line, inside the diff, with the
 range still highlighted above it — the finding is written where it belongs
 instead of in a side panel that has lost the code.
+
+## Working on this surface
+
+**The system knows one circle: the 7 px status dot (`.dot`, with `.dot.acc`,
+`.dot.crit`, `.dot.warn`, `.dot.ok`).** `DESIGN.md` says so in Shapes, and every
+other shape here is a rectangle with a small radius. A new round thing is a
+change to the visual contract, not a mark.
+
+**A new primitive is introduced only after two checks**: grep `src/ui/styles.css`
+for one that already does it, and read the section of `DESIGN.md` that governs
+that category — Shapes for a form, Buttons for a control, Chips and badges for a
+plate. Reading the section you are *taking* a decision from is not the same as
+reading the section that governs what you are *drawing*, and the mechanical
+detector does not catch a duplicate primitive: it has no opinion about whether
+the system already had one.
 
 ## Unresolved on this surface
 
