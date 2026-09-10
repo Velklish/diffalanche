@@ -1,6 +1,6 @@
 # DA-56 · Closing a review task and the history of tasks
 
-- **Order:** 315
+- **Order:** 30
 - **Scope:** 08-ui, 07-server (see [reference](../../reference/README.md))
 - **Created:** 2026-09-10
 - **Dependencies:** DA-53

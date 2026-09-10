@@ -1,6 +1,6 @@
 # DA-38 · Text search in global search
 
-- **Order:** 380
+- **Order:** 130
 - **Scope:** 08-ui, 07-server (see [reference](../../reference/README.md))
 - **Created:** 2026-09-05
 - **Dependencies:** DA-37

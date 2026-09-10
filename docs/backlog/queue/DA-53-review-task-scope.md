@@ -1,6 +1,6 @@
 # DA-53 · Review task scope and status: format, core, CLI, HTTP
 
-- **Order:** 285
+- **Order:** 10
 - **Scope:** 03-storage, 04-domain, 02-git, 06-cli, 07-server (see [reference](../../reference/README.md))
 - **Created:** 2026-09-10
 - **Dependencies:** none

@@ -1,6 +1,6 @@
 # DA-35 · suggest command and API
 
-- **Order:** 350
+- **Order:** 100
 - **Scope:** 09-ml, 06-cli, 07-server (see [reference](../../reference/README.md))
 - **Created:** 2026-09-05
 - **Dependencies:** DA-34
