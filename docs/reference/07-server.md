@@ -187,7 +187,7 @@ second walks every session. Closing that gap means teaching the watcher to
 follow more than one session: [DA-55.1](../backlog/queue/DA-55.1-watcher-follows-one-session.md).
 The document of a named task has a second, separate staleness — it is built
 from a cache the watcher never refreshes, so opening a task can show the change
-set of the previous read: [DA-55.3](../backlog/triage/DA-55.3-named-task-document-is-stale.md).
+set of the previous read: [DA-55.3](../backlog/queue/DA-55.3-named-task-document-is-stale.md).
 
 ### The candidates
 
