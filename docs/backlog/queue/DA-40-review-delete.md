@@ -1,6 +1,6 @@
 # DA-40 · review delete in CLI and UI
 
-- **Order:** 150
+- **Order:** 690
 - **Scope:** 04-domain, 06-cli, 08-ui (see [reference](../../reference/README.md))
 - **Created:** 2026-09-05
 - **Dependencies:** DA-24

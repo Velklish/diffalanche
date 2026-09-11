@@ -1,6 +1,6 @@
 # DA-37 · Browse repo: all files, working tree and base revision
 
-- **Order:** 120
+- **Order:** 660
 - **Scope:** 08-ui, 07-server, 02-git (see [reference](../../reference/README.md))
 - **Created:** 2026-09-05
 - **Dependencies:** DA-26

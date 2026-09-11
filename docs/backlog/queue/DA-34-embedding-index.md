@@ -1,6 +1,6 @@
 # DA-34 · Embedding index over all sessions
 
-- **Order:** 90
+- **Order:** 630
 - **Scope:** 09-ml (see [reference](../../reference/README.md))
 - **Created:** 2026-09-05
 - **Dependencies:** DA-33

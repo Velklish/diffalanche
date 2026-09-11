@@ -1,6 +1,6 @@
 # DA-33 · Embedding model runtime and delivery decision
 
-- **Order:** 80
+- **Order:** 620
 - **Scope:** 09-ml (see [reference](../../reference/README.md))
 - **Created:** 2026-09-05
 - **Dependencies:** DA-16

@@ -104,6 +104,13 @@ and `bun run release` refuses a version that has no section. See
 
 ### Changed
 
+- **A comment in code is at most two lines** (DA-57, [ADR-011](docs/adr/adr-011-comment-length.md)).
+  `//`, `/* */` and JSDoc alike, across `.ts`, `.tsx`, `.css`, `.yml` and shell.
+  Knowledge that does not fit moves to its `docs/reference/` section, or to an ADR
+  when it is a decision, and the comment left behind is the pointer. Markdown keeps
+  no limit. 720 blocks in the repository are over the line the day this lands; DA-58
+  brings them in and turns the count into a gate, and until then the rule binds new
+  and edited code.
 - **Every route a window uses takes `?review=<name>`, writes included** —
   `GET /api/comments/:id`, `/api/warnings`, `/api/repos/:repo/diff`,
   `/api/export`, `POST /api/comments`, `/api/comments/:id/replies`, and

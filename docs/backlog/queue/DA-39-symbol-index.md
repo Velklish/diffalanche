@@ -1,6 +1,6 @@
 # DA-39 · Symbol index with tree-sitter
 
-- **Order:** 140
+- **Order:** 680
 - **Scope:** 09-ml, 07-server, 08-ui (see [reference](../../reference/README.md))
 - **Created:** 2026-09-05
 - **Dependencies:** DA-37

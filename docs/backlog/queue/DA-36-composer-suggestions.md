@@ -1,6 +1,6 @@
 # DA-36 · Composer suggestions and automatic severity
 
-- **Order:** 110
+- **Order:** 650
 - **Scope:** 08-ui (see [reference](../../reference/README.md))
 - **Created:** 2026-09-05
 - **Dependencies:** DA-35

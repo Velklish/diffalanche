@@ -1,6 +1,6 @@
 # DA-41 · Model delivery: embedded in binaries, downloaded for npm
 
-- **Order:** 160
+- **Order:** 700
 - **Scope:** 09-ml, 06-cli (see [reference](../../reference/README.md))
 - **Created:** 2026-09-05
 - **Dependencies:** DA-33
