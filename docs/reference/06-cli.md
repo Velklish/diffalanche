@@ -16,6 +16,7 @@ are not written yet.
 | `diffalanche review list [--json]` | the sessions, most recently updated first, each with its scope and status; `--json` prints `{"sessions": […], "warnings": […]}` |
 | `diffalanche review base <base>` | changes what the session's change set is read against |
 | `diffalanche review scope [--json]` | what the session is about |
+| `diffalanche review scope set [--repo <path>]… [--path <repo>:<file>]… [--drop-comments]` | replaces it |
 | `diffalanche review scope add [--repo <path>]… [--path <repo>:<file>]…` | widens it |
 | `diffalanche review scope remove [--repo <path>]… [--path <repo>:<file>]… [--drop-comments]` | narrows it |
 | `diffalanche review close [<name>] --role human [--author <name>]` | marks the task closed |
@@ -58,11 +59,13 @@ it.
 `--repo <path>` and `--path <repo>:<file>` are repeated, once per entry:
 `review new t --repo repos/core/cargos-api --path repos/platform/loads-search:app/cargo/cargo_404.py`.
 The first colon of `--path` separates the two, so a file whose name has a colon
-in it still reads. A repository the root has not, and a path that is not one
-inside its repository, are exit code 1 before the session is written: a task
-that shows nothing must not be left on disk for the next `review list` to
-explain. Repeated flags are the one place `util.parseArgs` is asked for
-`multiple`, and `texts()` reads the list.
+in it still reads. A repository the root has not, and a path of the wrong form —
+absolute, trailing, or with a `.` or `..` segment — are exit code 1 before the
+session is written: a task that shows nothing must not be left on disk for the
+next `review list` to explain. Whether the file exists is not asked: a file in
+the scope with nothing to show is kept by the task and left off the screen
+([ADR-010](../adr/adr-010-review-task-scope.md)). Repeated flags are the one
+place `util.parseArgs` is asked for `multiple`, and `texts()` reads the list.
 
 **`--no-use` is how an agent proposes a task.** It writes the session, leaves
 `current` where it is, and prints the address of the running server —
@@ -80,6 +83,20 @@ written — not the scope and not `comments.json`. With it, the comments and the
 scope are written in one step under one lock. Both refuse a session with no
 scope: the whole root is as wide as a task gets, and there is nothing in it to
 remove.
+
+**`review scope set` replaces** — it is the one of the three that turns a
+session about the whole root into a task about something. What it names becomes
+the whole scope, so it narrows whatever it does not name, and it takes
+`--drop-comments` for the same reason `remove` does and refuses the same way
+without it. It is the CLI's half of `PUT /api/sessions/:name/scope`, which the
+scope editor writes through ([07-server.md](07-server.md)): one write is one
+state on both sides.
+
+The two sides are not symmetrical yet, and this is the difference. The HTTP
+route takes `scope: null` and puts a task back to the whole root; `review scope
+set` needs at least one `--repo` or `--path` and has no spelling for "none", so
+a scoped session is widened back only through the editor. `review scope remove`
+does not close that either: it refuses to empty a scope.
 
 `review close` and `review reopen` take the name after the command, else
 `--review`, else the current session. Both need `--role human` and refuse any

@@ -177,6 +177,15 @@ and `bun run release` refuses a version that has no section. See
   checked on every machine instead. See
   [07-server.md](docs/reference/07-server.md).
 
+- **`review scope set` gives a scope to a session that has none** (DA-53.1). The
+  scope editor writes through `PUT /api/sessions/:name/scope`, which replaces,
+  and the CLI had only `scope add`, which widens and therefore refuses a session
+  about the whole root. The new command replaces the scope outright and takes
+  `--drop-comments` for what falls outside it, refusing with the count and the
+  ids without it — the shape `scope remove` already had. Putting a task back to
+  the whole root is still the editor's alone. See
+  [06-cli.md](docs/reference/06-cli.md).
+
 ### Fixed
 
 - **`serve --review <name>` opens on that task instead of being ignored**

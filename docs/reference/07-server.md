@@ -521,6 +521,11 @@ body's `scope` is a list of entries, each with a `repo` and optionally `paths`,
 or `null` for the whole root; what an entry may say is the domain's check
 ([04-domain.md](04-domain.md)).
 
+The CLI's half of this route is `review scope set` ([06-cli.md](06-cli.md)): the
+same body, the same consent, and the same one-write-one-state — except for the
+`null`. There is no spelling for it on the command line, so putting a task back
+to the whole root is this route's alone, and the editor is what writes it.
+
 `close` and `reopen` are signed like every other write here — `config.user` and
 `role: human` — and nothing in the request can change either, which is why only
 a human ever closes a task through this server
@@ -607,5 +612,6 @@ test that reaches the server from another of the machine's own addresses can
 only run where the machine has one, and on a loopback-only host it reports a
 skip. Without a value read from the socket, a default changed to `0.0.0.0` would
 be reported as verified by a run that verified nothing.
+
 Everything else in `src/` uses APIs both runtimes share, and adding a second such
 module is a new decision ([ADR-008](../adr/adr-008-diff-rendering-verdict.md)).

@@ -181,6 +181,7 @@ flags, and `tests/readme-cli.test.ts` fails if the two ever disagree.
 | `review list [--json]` | the review sessions, most recently updated first, each with its scope and status |
 | `review base <head\|branch\|branch:<name>\|<ref>>` | change what the change set of a review session is read against |
 | `review scope [--json]` | what the review session is about |
+| `review scope set [--repo <path>]… [--path <repo>:<file>]… [--drop-comments]` | replace it; this is what gives a scope to a session that has none |
 | `review scope add [--repo <path>]… [--path <repo>:<file>]…` | widen what the review session is about |
 | `review scope remove [--repo <path>]… [--path <repo>:<file>]… [--drop-comments]` | narrow it; without `--drop-comments` a removal that would delete comments is exit code 1 and writes nothing |
 | `review close [<name>] --role human [--author <name>]` | mark a review session closed; comments still work on a closed one; `--role human` is required |
@@ -226,8 +227,9 @@ A review session may carry a **scope** — the repositories and the files it is
 about — and then it shows nothing else: `diff`, `list`, `show`, and `export` all
 answer inside it, and a comment on something outside it is refused by name. A
 session without a scope is the whole root, which is what every session was
-before. `review scope` prints one; `review scope add` and `review scope remove`
-change it, and a removal that would delete comments needs `--drop-comments`.
+before. `review scope` prints one; `review scope set` replaces it, `review scope
+add` and `review scope remove` change it, and a replacement or removal that
+would delete comments needs `--drop-comments`.
 
 Comments are signed `--author agent` and `--role agent` unless told otherwise,
 and only `--role human` may `resolve` or `reopen` a thread, or `review close` or

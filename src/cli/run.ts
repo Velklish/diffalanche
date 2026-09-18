@@ -25,6 +25,7 @@ import {
   reviewScope,
   reviewScopeAdd,
   reviewScopeRemove,
+  reviewScopeSet,
   reviewUse,
 } from "./commands/review.ts";
 import { serve } from "./commands/serve.ts";
@@ -47,6 +48,7 @@ const COMMANDS: Command[] = [
   reviewList,
   reviewBase,
   reviewScope,
+  reviewScopeSet,
   reviewScopeAdd,
   reviewScopeRemove,
   reviewClose,

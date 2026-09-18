@@ -240,6 +240,50 @@ export const reviewScope: Command = {
   },
 };
 
+/** How many comments a scope edit deleted, as `set` and `remove` both report it. */
+function droppedNote(dropped: { id: string }[]): string {
+  if (dropped.length === 0) return "";
+  return (
+    `; ${dropped.length} comment${dropped.length === 1 ? "" : "s"} deleted ` +
+    `with it (${dropped.map((comment) => comment.id).join(", ")})`
+  );
+}
+
+export const reviewScopeSet: Command = {
+  spec: {
+    name: "review scope set",
+    about: "replace what the review session is about",
+    options: {
+      ...SCOPE_OPTIONS,
+      "drop-comments": {
+        type: "boolean",
+        about: "delete the comments anchored outside the new scope",
+      },
+    },
+  },
+  run: async (context, args) => {
+    noExtra(args, 0);
+    const change = scopeChange(texts(args, "repo"), texts(args, "path"));
+    if (isEmptyChange(change)) throw new UsageError("--repo or --path is required");
+    const session = await context.session();
+    const config = await context.config();
+    // Replacing rather than widening, so a session with no scope gets one here
+    // — the one thing `add` cannot do ([06-cli.md](../../../docs/reference/06-cli.md)).
+    const updated = await setScope(
+      config.dataDir,
+      session,
+      scopeOf(change),
+      await findRepositories(config),
+      { dropComments: flag(args, "drop-comments") },
+    );
+    context.io.out(
+      `review session ${session}: the scope is now ${formatScope(updated.review.scope)}` +
+        `${droppedNote(updated.dropped)}\n`,
+    );
+    return 0;
+  },
+};
+
 export const reviewScopeAdd: Command = {
   spec: {
     name: "review scope add",
@@ -289,13 +333,9 @@ export const reviewScopeRemove: Command = {
     const updated = await setScope(config.dataDir, session, next, await findRepositories(config), {
       dropComments: flag(args, "drop-comments"),
     });
-    const dropped =
-      updated.dropped.length === 0
-        ? ""
-        : `; ${updated.dropped.length} comment${updated.dropped.length === 1 ? "" : "s"} deleted ` +
-          `with it (${updated.dropped.map((comment) => comment.id).join(", ")})`;
     context.io.out(
-      `review session ${session}: the scope is now ${formatScope(updated.review.scope)}${dropped}\n`,
+      `review session ${session}: the scope is now ${formatScope(updated.review.scope)}` +
+        `${droppedNote(updated.dropped)}\n`,
     );
     return 0;
   },

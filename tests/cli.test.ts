@@ -450,6 +450,65 @@ describe("serve on a review that cannot be read", () => {
   }, 60_000);
 });
 
+describe("giving a scope to a session that has none", () => {
+  useFixtureRoot();
+
+  it("replaces the scope, which is the one thing `scope add` cannot do", async () => {
+    await inRoot("review", "new", "t1");
+    // `add` widens, and nothing is wider than the whole root, so on a session
+    // with no scope it refuses by name.
+    const widened = await inRoot("review", "scope", "add", "--repo", REPOS[0]);
+    expect(widened.code).toBe(1);
+    expect(widened.err).toContain("has no scope");
+
+    const set = await inRoot("review", "scope", "set", "--repo", REPOS[0]);
+    expect(set).toMatchObject({ code: 0, err: "" });
+    expect(set.out).toContain(`the scope is now ${REPOS[0]}`);
+    const shown = await inRoot("review", "scope", "--json");
+    expect(JSON.parse(shown.out)).toEqual({
+      name: "t1",
+      scope: [{ repo: REPOS[0], paths: null }],
+    });
+  });
+
+  it("refuses a replacement that would delete comments, and takes the consent", async () => {
+    await inRoot("review", "new", "t1", "--repo", REPOS[0]);
+    const written = await inRoot(
+      "comment",
+      "--repo",
+      REPOS[0],
+      "--severity",
+      "nit",
+      "--body",
+      "on the repository",
+    );
+    expect(written.code).toBe(0);
+
+    const refused = await inRoot("review", "scope", "set", "--repo", REPOS[1]);
+    expect(refused.code).toBe(1);
+    expect(refused.err).toContain("1 comment is anchored under what this removes");
+    expect(refused.err).toContain("--drop-comments");
+    // Nothing is written until the consent is there: the scope is untouched.
+    expect(JSON.parse((await inRoot("review", "scope", "--json")).out)).toMatchObject({
+      scope: [{ repo: REPOS[0] }],
+    });
+
+    const consented = await inRoot("review", "scope", "set", "--repo", REPOS[1], "--drop-comments");
+    expect(consented.code).toBe(0);
+    expect(consented.out).toContain("1 comment deleted with it");
+    expect(JSON.parse((await inRoot("review", "scope", "--json")).out)).toMatchObject({
+      scope: [{ repo: REPOS[1] }],
+    });
+  });
+
+  it("needs something to set", async () => {
+    await inRoot("review", "new", "t1");
+    const empty = await inRoot("review", "scope", "set");
+    expect(empty.code).toBe(1);
+    expect(empty.err).toContain("--repo or --path is required");
+  });
+});
+
 describe("serve on a named review task", () => {
   useFixtureRoot();
 
