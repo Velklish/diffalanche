@@ -102,7 +102,7 @@ handed over as a directory or an archive, not one that arrived through git.
   changed by this.
 - A reviewed repository's `.git/config` executing commands, which is the other
   way a handed-over working tree acts on the reviewer:
-  [DA-61](DA-61-git-config-of-a-reviewed-repository-executes.md).
+  [DA-61](../../archive/DA-61-git-config-of-a-reviewed-repository-executes/task.md).
 - A general timeout around file reads. The device hang is closed here by
   refusing what is not a regular file; whether every read needs a deadline is a
   separate decision and not one this task takes.

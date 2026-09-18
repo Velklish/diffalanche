@@ -22,6 +22,7 @@ The canonical project documentation. For current work, use `npx github:Velklish/
 | [adr/adr-009-unit-suite-on-bun.md](adr/adr-009-unit-suite-on-bun.md) | The unit suite also runs on Bun's runtime, asserted by the suite itself | Accepted |
 | [adr/adr-010-review-task-scope.md](adr/adr-010-review-task-scope.md) | A review session carries a scope and a status: what the task is about, and who closes it | Accepted |
 | [adr/adr-011-comment-length.md](adr/adr-011-comment-length.md) | A code comment is at most two lines, and longer knowledge lives in docs | Accepted |
+| [adr/adr-012-git-trust-model.md](adr/adr-012-git-trust-model.md) | The git reader trusts neither the repository's configuration nor the environment it inherits | Accepted |
 
 ## Cross-cutting principles
 

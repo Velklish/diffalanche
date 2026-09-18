@@ -9,6 +9,7 @@ import {
   diff,
   mergeBase,
   remoteDefaultBranch,
+  repositoryDrivers,
   revParse,
   untrackedFiles,
 } from "./run.ts";
@@ -97,7 +98,19 @@ export async function readRepositoryChange(
   options: PatchOptions = {},
 ): Promise<RepositoryChange> {
   const cwd = join(root, repoPath);
-  const [branchName, resolution] = await Promise.all([currentBranch(cwd), resolveBase(cwd, spec)]);
+  // The drivers are read beside the base rather than before the diff: a third
+  // process in a group of three costs the read nothing in wall-clock time.
+  const [branchName, resolution, drivers] = await Promise.all([
+    currentBranch(cwd),
+    resolveBase(cwd, spec),
+    repositoryDrivers(cwd),
+  ]);
+  // A repository whose configuration could not be read is read no further: the
+  // pins that keep its own configuration inert are built from that answer.
+  if (drivers === null) {
+    const refused = [...resolution.warnings, "repository configuration could not be read"];
+    return { path: repoPath, branch: branchName, base: null, files: [], warnings: refused };
+  }
   if (!resolution.base) {
     return {
       path: repoPath,
@@ -107,7 +120,10 @@ export async function readRepositoryChange(
       warnings: resolution.warnings,
     };
   }
-  const [raw, untracked] = await Promise.all([diff(cwd, resolution.base.sha), untrackedFiles(cwd)]);
+  const [raw, untracked] = await Promise.all([
+    diff(cwd, resolution.base.sha, drivers),
+    untrackedFiles(cwd),
+  ]);
   const files = parseDiff(raw, options);
   const warnings = [...resolution.warnings];
   for (const path of untracked) {

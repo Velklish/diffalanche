@@ -457,6 +457,20 @@ and `bun run release` refuses a version that has no section. See
   paths pushed it out. Anything the watch reports inside `.git`, the bare
   directory included, now drops that repository's verdicts. See
   [05-watcher.md](docs/reference/05-watcher.md).
+- **A reviewed repository no longer runs commands on the reviewer's machine**
+  (DA-61, [ADR-012](docs/adr/adr-012-git-trust-model.md)). `core.fsmonitor`,
+  `diff.<driver>.textconv` and `filter.<driver>.clean` in a repository's own
+  `.git/config` each named a program git ran during a plain scan, with the
+  reviewer's privileges and no click in the path. Every git process the reader
+  starts now carries `--no-pager` and a list of `-c` pins over the keys that
+  name a program; the keys whose name the repository chooses — a diff, filter or
+  merge driver, `filter.<driver>.required` included — are read from it with
+  `config --list` and pinned to nothing, and the diff also carries
+  `--no-textconv`. A repository whose configuration cannot be read is not read at
+  all: it comes back with no base, no files, and the warning `repository
+  configuration could not be read`. A repository with a filter driver — git-lfs
+  is the common one — is shown the content that is on disk rather than what the
+  driver would make of it.
 
 ## [0.1.0] - 2026-09-05
 

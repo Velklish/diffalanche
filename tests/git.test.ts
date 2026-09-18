@@ -4,6 +4,7 @@ import {
   existsSync,
   mkdirSync,
   mkdtempSync,
+  readFileSync,
   rmSync,
   symlinkSync,
   unlinkSync,
@@ -44,6 +45,7 @@ function commit(cwd: string, message: string): void {
 }
 
 let root: string;
+let marks: string;
 let statusBefore: Map<string, string>;
 let statusAfter: Map<string, string>;
 
@@ -125,6 +127,34 @@ beforeAll(() => {
   rmSync(join(names, "gone file.ts"));
   chmodSync(join(names, "mode me.sh"), 0o755);
 
+  // A repository whose own configuration names four programs, each writing a
+  // file the assertions look for: what DA-61 reproduced against bare git.
+  marks = join(root, "probe/marks");
+  mkdirSync(marks, { recursive: true });
+  for (const [name, body] of [
+    ["fsmonitor", `touch "${join(marks, "fsmonitor")}"\nexit 1\n`],
+    ["textconv", `touch "${join(marks, "textconv")}"\ncat "$1"\n`],
+    ["clean", `touch "${join(marks, "clean")}"\ncat\n`],
+    ["process", `touch "${join(marks, "process")}"\nexit 1\n`],
+  ]) {
+    const script = join(root, "probe", `${name}.sh`);
+    writeFileSync(script, `#!/bin/sh\n${body}`);
+    chmodSync(script, 0o755);
+  }
+  const hostile = join(root, "repos/g/hostile");
+  mkdirSync(hostile, { recursive: true });
+  git(hostile, ["init", "--quiet", "-b", "main"]);
+  writeFileSync(join(hostile, "app.ts"), "one\n");
+  writeFileSync(join(hostile, ".gitattributes"), "app.ts diff=pwn filter=pwn\n");
+  commit(hostile, "base");
+  writeFileSync(join(hostile, "app.ts"), "two\n");
+  git(hostile, ["config", "core.fsmonitor", join(root, "probe/fsmonitor.sh")]);
+  git(hostile, ["config", "diff.pwn.textconv", join(root, "probe/textconv.sh")]);
+  git(hostile, ["config", "filter.pwn.clean", join(root, "probe/clean.sh")]);
+  git(hostile, ["config", "filter.pwn.process", join(root, "probe/process.sh")]);
+  // git-lfs sets this, and an emptied filter under it is fatal rather than skipped.
+  git(hostile, ["config", "filter.pwn.required", "true"]);
+
   statusBefore = statuses();
 }, 120_000);
 
@@ -132,12 +162,28 @@ afterAll(() => {
   rmSync(root, { recursive: true, force: true });
 });
 
+/** What the guard's own `status` needs to look at the hostile repository at all:
+ * its filter is `required`, so an unpinned read of it is fatal rather than quiet. */
+const INERT = [
+  "-c",
+  "core.fsmonitor=false",
+  "-c",
+  "filter.pwn.clean=",
+  "-c",
+  "filter.pwn.process=",
+  "-c",
+  "filter.pwn.required=",
+];
+
 function statuses(): Map<string, string> {
+  const repositories = [
+    "repos/g/api",
+    "repos/g/names",
+    "repos/g/solo",
+    "repos/g/hostile",
+  ];
   return new Map(
-    ["repos/g/api", "repos/g/names", "repos/g/solo"].map((path) => [
-      path,
-      git(join(root, path), ["status", "--porcelain"]),
-    ]),
+    repositories.map((path) => [path, git(join(root, path), [...INERT, "status", "--porcelain"])]),
   );
 }
 
@@ -419,6 +465,55 @@ describe("paths git does not write literally", () => {
     const [file] = parseDiff(patch);
     expect(file?.path).toBe('quote".ts');
     expect(file?.status).toBe("modified");
+  });
+});
+
+/** What the reader trusts a reviewed repository with, and the environment it was
+ * started in with ([ADR-012](../docs/adr/adr-012-git-trust-model.md)). */
+describe("the reader runs nothing the repository names", () => {
+  it("reads a repository whose configuration names four programs, running none", async () => {
+    const change = await read("repos/g/hostile", { mode: "head" });
+    for (const name of ["fsmonitor", "textconv", "clean", "process"]) {
+      expect({ name, ran: existsSync(join(marks, name)) }).toEqual({ name, ran: false });
+    }
+    // The diff is still the file's own content, not the program's output.
+    expect(change.files.map((file) => file.path)).toEqual(["app.ts"]);
+    expect(change.files[0]?.patch).toContain("+two");
+  });
+});
+
+describe("a repository whose configuration cannot be read is not read", () => {
+  /** A `git` first on `PATH` that refuses `config --list` and hands everything else over. */
+  function shim(): string {
+    const dir = mkdtempSync(join(tmpdir(), "diffalanche-git-refuse-"));
+    const real = execFileSync("sh", ["-c", "command -v git"], { encoding: "utf8" }).trim();
+    const script = join(dir, "git");
+    writeFileSync(
+      script,
+      `#!/bin/sh\nfor a in "$@"; do\n  if [ "$a" = "--list" ]; then echo refused >&2; exit 7; fi\n` +
+        `  if [ "$a" = "diff" ]; then echo "$@" >> "${join(dir, "calls.log")}"; fi\ndone\nexec ${real} "$@"\n`,
+    );
+    chmodSync(script, 0o755);
+    writeFileSync(join(dir, "calls.log"), "");
+    return dir;
+  }
+
+  it("answers with no base and a warning, and never reaches the diff", async () => {
+    const dir = shim();
+    const before = process.env.PATH;
+    process.env.PATH = `${dir}:${before ?? ""}`;
+    let change: RepositoryChange;
+    try {
+      change = await read("repos/g/solo", { mode: "head" });
+    } finally {
+      if (before === undefined) process.env.PATH = "";
+      else process.env.PATH = before;
+    }
+    expect(change.base).toBeNull();
+    expect(change.files).toEqual([]);
+    expect(change.warnings).toContain("repository configuration could not be read");
+    expect(readFileSync(join(dir, "calls.log"), "utf8")).toBe("");
+    rmSync(dir, { recursive: true, force: true });
   });
 });
 

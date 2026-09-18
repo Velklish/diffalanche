@@ -147,7 +147,7 @@ export async function findRepositories(config: Config): Promise<string[]> {
  * **The walk finds every repository; only the scoped ones are read.** Finding
  * them starts no git process, and it is what tells a repository the scope names
  * but the root has not from one that is simply quiet — while reading a
- * repository is four git processes, and a task over two repositories of
+ * repository is five git processes, and a task over two repositories of
  * twenty-one must not pay for the other nineteen
  * ([ADR-010](../../docs/adr/adr-010-review-task-scope.md)).
  */

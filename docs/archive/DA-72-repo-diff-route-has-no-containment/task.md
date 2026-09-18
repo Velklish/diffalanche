@@ -89,7 +89,7 @@ suite is on session names, [tests/storage.test.ts:104-113](../../../tests/storag
   page reading it: [DA-62](../DA-62-origin-guard-trusts-host/task.md). That one is the reason
   this is worth fixing rather than a duplicate of it.
 - A reviewed repository's `.git/config` executing commands:
-  [DA-61](../../backlog/active/DA-61-git-config-of-a-reviewed-repository-executes.md).
+  [DA-61](../DA-61-git-config-of-a-reviewed-repository-executes/task.md).
 - The scope default. `repositoryInScope(null, …)` being true for everything is
   correct for what a scope means; it is simply not a containment check, and this
   task does not change the domain.

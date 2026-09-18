@@ -16,13 +16,38 @@ function readOnlyEnv(): Record<string, string | undefined> {
   return { ...process.env, GIT_CONFIG_GLOBAL: devNull, GIT_CONFIG_SYSTEM: devNull };
 }
 
-/**
- * Runs one git command in a repository and returns its output. Every call here
- * only reads: nothing in this module writes an index, a working tree, or
- * history (`docs/SPEC.md` section 11).
- */
-export async function git(cwd: string, args: string[]): Promise<string> {
-  const { stdout } = await execFileAsync("git", args, {
+/** Configuration whose value git runs as a program, by the keys the tool can name
+ * itself ([ADR-012](../../../docs/adr/adr-012-git-trust-model.md)). */
+const INERT_CONFIG = [
+  "core.fsmonitor=false",
+  `core.hooksPath=${devNull}`,
+  "core.editor=false",
+  "core.sshCommand=false",
+  "core.askPass=",
+  "core.alternateRefsCommand=",
+  "core.gitProxy=",
+  "credential.helper=",
+  "diff.external=",
+  "gpg.program=false",
+  "sequence.editor=false",
+  "uploadpack.packObjectsHook=",
+];
+
+/** The half of the class whose key the repository names itself: a diff, filter, or merge driver.
+ * `filter.<d>.required` is here because without it an emptied filter is fatal, not skipped. */
+const DRIVER_KEY =
+  /^(?:diff\..+\.(?:textconv|command)|filter\..+\.(?:clean|smudge|process|required)|merge\..+\.driver)$/;
+
+/** `--no-pager` and the pinned configuration, ahead of the subcommand where git reads them. */
+function gitArgs(args: string[], overrides: string[]): string[] {
+  const config = [...INERT_CONFIG, ...overrides].flatMap((one) => ["-c", one]);
+  return ["--no-pager", ...config, ...args];
+}
+
+/** Runs one git command in a repository and returns its output; every call here
+ * only reads, never an index, a working tree or history (`docs/SPEC.md` section 11). */
+export async function git(cwd: string, args: string[], overrides: string[] = []): Promise<string> {
+  const { stdout } = await execFileAsync("git", gitArgs(args, overrides), {
     cwd,
     maxBuffer: MAX_GIT_OUTPUT,
     encoding: "utf8",
@@ -38,6 +63,17 @@ export async function gitOrNull(cwd: string, args: string[]): Promise<string | n
   } catch {
     return null;
   }
+}
+
+/** The driver keys the repository's configuration defines, each set to nothing, or `null` when the
+ * question could not be asked — the caller then reads nothing ([ADR-012](../../../docs/adr/adr-012-git-trust-model.md)). */
+export async function repositoryDrivers(cwd: string): Promise<string[] | null> {
+  const listed = await gitOrNull(cwd, ["config", "--list", "--name-only", "-z"]);
+  if (listed === null) return null;
+  return listed
+    .split("\0")
+    .filter((key) => DRIVER_KEY.test(key))
+    .map((key) => `${key}=`);
 }
 
 /** The revision a name points at, or `null` when it does not resolve to a commit. */
@@ -84,9 +120,10 @@ export async function mergeBase(cwd: string, left: string, right: string): Promi
   return sha ? sha.trim() : null;
 }
 
-/** The working tree against `base`, in the form the renderer and the parser both read. */
-export function diff(cwd: string, base: string): Promise<string> {
-  return git(cwd, ["diff", base, "--no-color", "--no-ext-diff", "-U3"]);
+/** The working tree against `base`, as the renderer and the parser both read it;
+ * the flags and `overrides` are [ADR-012](../../../docs/adr/adr-012-git-trust-model.md). */
+export function diff(cwd: string, base: string, overrides: string[] = []): Promise<string> {
+  return git(cwd, ["diff", base, "--no-color", "--no-ext-diff", "--no-textconv", "-U3"], overrides);
 }
 
 /**
@@ -121,7 +158,7 @@ export function checkIgnore(cwd: string, paths: string[]): Promise<Set<string> |
   return new Promise((resolve) => {
     const child = execFile(
       "git",
-      ["check-ignore", "--stdin", "-z"],
+      gitArgs(["check-ignore", "--stdin", "-z"], []),
       { cwd, maxBuffer: MAX_GIT_OUTPUT, encoding: "utf8", env: readOnlyEnv() },
       (error, stdout) => {
         if (error !== null && error.code !== 1) resolve(null);

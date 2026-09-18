@@ -3,9 +3,31 @@
 `src/core/git` reads the change set of the repositories the scanner found
 ([01-scanner.md](01-scanner.md)). Every call runs the `git` binary through
 `node:child_process` and only reads: no index, no working tree, no history is
-ever written (`docs/SPEC.md` section 11). `GIT_CONFIG_GLOBAL` and
-`GIT_CONFIG_SYSTEM` point at the null device, so a developer's own git
-configuration cannot change what the tool reads.
+ever written (`docs/SPEC.md` section 11).
+
+## What the reader trusts
+
+Not the repository it reads ([ADR-012](../adr/adr-012-git-trust-model.md)).
+
+- **Configuration that names a program is pinned, not read.** Every call carries
+  `--no-pager` and the `-c` pins of `INERT_CONFIG` — `core.fsmonitor`,
+  `core.hooksPath`, `diff.external`, the editor, ssh, credential and hook keys —
+  and `-c` beats every configuration file, `.git/config` of the reviewed
+  repository included. The keys whose *name* the repository chooses are read
+  from it with `git config --list --name-only -z`, filtered by family —
+  `diff.<d>.(textconv|command)`, `filter.<d>.(clean|smudge|process|required)`
+  and `merge.<d>.driver` — and pinned to nothing on the diff; `--no-ext-diff`
+  and `--no-textconv` close two of those by flag as well. `required` is in the
+  list because without it an emptied filter is fatal rather than skipped. The consequence to know about: a repository with
+  a filter driver — git-lfs is the common one — is shown the content that is on
+  disk, not what the driver would make of it.
+- **A command added to this module inherits the answer.** The key-by-key table
+  of [ADR-012](../adr/adr-012-git-trust-model.md) says which keys the commands
+  below reach and what covers each; a new command is checked against that table.
+- **A repository whose configuration cannot be read is not read.** The pins are
+  built from that answer, so without it there is nothing to read safely with:
+  the repository comes back with `base: null`, no files, and the warning
+  `repository configuration could not be read`.
 
 ## Reading one repository
 
@@ -32,12 +54,15 @@ files. That is how `ref` mode skips one.
 |---|---|
 | `rev-parse --verify --quiet <rev>^{commit}` | does a name resolve, and to what |
 | `rev-parse --abbrev-ref HEAD` | the branch shown in the repository header |
+| `rev-parse --short HEAD` | the same header when HEAD is detached |
 | `remote` | which remote to look the base branch up on |
 | `symbolic-ref --quiet --short refs/remotes/<remote>/HEAD` | the remote's default branch |
 | `merge-base HEAD <branch>` | the base of `branch` mode |
-| `diff <base> --no-color --no-ext-diff -U3` | the change set of tracked files |
+| `config --list --name-only -z` | the driver keys the repository defines, to pin them ([ADR-012](../adr/adr-012-git-trust-model.md)) |
+| `diff <base> --no-color --no-ext-diff --no-textconv -U3` | the change set of tracked files |
 | `ls-files --others --exclude-standard -z` | untracked files |
 | `check-ignore --stdin -z` | which of a burst's paths git ignores, for the watcher ([05-watcher.md](05-watcher.md)) |
+| `for-each-ref --format=… refs/heads refs/remotes` | the branches of the root, for `src/server/routes/branches.ts` ([07-server.md](07-server.md)) |
 
 ## The three base modes
 
@@ -242,7 +267,7 @@ await refreshRepository(config, session, review.base, "repos/group/service-api",
   the first gets a warning of its own — `in the scope of this review task, but
   not a repository under the root` — because the entry was checked when it was
   written, so what the warning says is that the repository has gone since.
-  Reading one is four git processes, and a task over two repositories of
+  Reading one is five git processes, and a task over two repositories of
   twenty-one must not pay for the other nineteen;
   `tests/scope-scan.test.ts` counts the processes rather than the seconds.
 - `filterChange(scope, change)` is what the scope leaves of one repository: a
