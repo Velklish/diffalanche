@@ -97,8 +97,19 @@ its token, pid, `acquiredAt`, and `expiresAt`.
 
 | Option | Default | What it is |
 |---|---|---|
-| `timeoutMs` | 10 000 | How long a writer waits before refusing with a `StorageError` |
+| `timeoutMs` | 30 000 | How long a writer waits before refusing with a `StorageError`, and never less than `staleMs` |
 | `staleMs` | 30 000 | How long the holder claims the lock for |
+
+**The wait is floored by the lease**, in the defaults and in whatever a caller
+passes: `timeoutMs` below `staleMs` is raised to it. The takeover is the only
+way a lock left by a dead holder ever goes away, and it becomes possible at the
+holder's `expiresAt` — at most one lease away. A writer that gives up earlier
+never reaches it, so with a ten-second wait against a thirty-second lease every
+writer arriving in the first twenty seconds after a holder was killed waited the
+full ten and then refused, naming a writer that was not there. Two numbers that
+have to fit each other are one decision, so the wait is derived from the lease
+rather than written beside it, and the floor holds the relation for an explicit
+pair too.
 
 `staleMs` is a lease, not a guarantee: a body that runs longer than it can have
 the lock taken from it. **Every writing body calls `lock.assertHeld()`
@@ -114,6 +125,15 @@ that instant the holder is gone and the lock is taken over, so a process killed
 mid-write blocks the next one for `staleMs` and no longer. While a holder is
 between its `mkdir` and its `info.json` the file is not there yet, and the
 directory's own age plus the default stands in for the deadline.
+
+A writer that does give up says what it read out of the lock — `held by pid 4213
+since 2026-09-11T03:28:10.031Z, its lease running to 2026-09-11T03:28:40.031Z;
+gave up after 30000 ms` — so a wait that ends in a refusal names the process to
+look for and the instant the lock would have become takeable. A claim counts
+only whole: a lock with no readable `info.json`, and one whose `info.json` is
+missing any of the pid, the acquisition or the deadline, are both reported as
+held by a writer that has not claimed it, rather than naming a holder built out
+of `undefined`.
 
 **A takeover renames the stale lock aside and deletes the renamed directory**
 rather than removing it in place. Removing it in place is not enough: two

@@ -63,6 +63,20 @@ function staleLock(dir: string, token = "dead"): void {
   );
 }
 
+/** A lock whose holder is gone but whose lease still has `leftMs` to run. */
+function expiringLock(dir: string, leftMs: number): void {
+  mkdirSync(join(dir, ".lock"), { recursive: true });
+  writeFileSync(
+    join(dir, ".lock", "info.json"),
+    JSON.stringify({
+      token: "dying",
+      pid: 1,
+      acquiredAt: new Date().toISOString(),
+      expiresAt: new Date(Date.now() + leftMs).toISOString(),
+    }),
+  );
+}
+
 /** A lock a writer still holds. */
 function liveLock(dir: string): void {
   mkdirSync(join(dir, ".lock"), { recursive: true });
@@ -331,14 +345,35 @@ describe("withLock", () => {
     expect(readdirSync(dir)).not.toContain(".lock");
   });
 
-  it("refuses a lock another writer still holds", async () => {
+  it("refuses a lock another writer still holds, naming the holder and its lease", async () => {
     const dir = sessionDir(dataDir, "one");
     await makeSession(dataDir, "one");
     liveLock(dir);
 
-    await expect(withLock(dir, async () => "never", { timeoutMs: 60 })).rejects.toThrow(
-      /held by another writer/,
-    );
+    await expect(
+      withLock(dir, async () => "never", { timeoutMs: 60, staleMs: 60 }),
+    ).rejects.toThrow(/held by pid 1 since \S+, its lease running to \S+; gave up after 60 ms/);
+  });
+
+  it("names no holder when the lock carries half a claim", async () => {
+    const dir = sessionDir(dataDir, "one");
+    await makeSession(dataDir, "one");
+    mkdirSync(join(dir, ".lock"), { recursive: true });
+    writeFileSync(join(dir, ".lock", "info.json"), "{}");
+
+    await expect(
+      withLock(dir, async () => "never", { timeoutMs: 60, staleMs: 60 }),
+    ).rejects.toThrow(/held by a writer that has not claimed it; gave up after 60 ms/);
+  });
+
+  it("waits for a lease longer than the timeout it was given, and takes the lock over", async () => {
+    const dir = sessionDir(dataDir, "one");
+    await makeSession(dataDir, "one");
+    expiringLock(dir, 150);
+
+    // The wait is floored by the lease, so a timeout below it does not turn the
+    // takeover of a dead holder's lock into a refusal.
+    await expect(withLock(dir, async () => "taken", { timeoutMs: 1 })).resolves.toBe("taken");
   });
 
   it("lets exactly one of two writers take over the same stale lock", async () => {

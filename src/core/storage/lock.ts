@@ -12,10 +12,10 @@ import { writeFileAtomic } from "./atomic.ts";
 import { StorageError } from "./errors.ts";
 import { toJson } from "./schema.ts";
 
-/** How long a writer waits for the lock before it gives up. */
-const DEFAULT_TIMEOUT_MS = 10_000;
 /** How long a holder claims the lock for; past that another writer takes it over. */
 const DEFAULT_STALE_MS = 30_000;
+/** How long a writer waits: the lease, because a shorter wait never reaches the takeover. */
+const DEFAULT_TIMEOUT_MS = DEFAULT_STALE_MS;
 const FIRST_RETRY_MS = 5;
 const MAX_RETRY_MS = 100;
 
@@ -56,17 +56,17 @@ export async function withLock<T>(
   fn: (lock: Lock) => Promise<T>,
   options: LockOptions = {},
 ): Promise<T> {
-  const timeoutMs = options.timeoutMs ?? DEFAULT_TIMEOUT_MS;
   const staleMs = options.staleMs ?? DEFAULT_STALE_MS;
+  // The floor is the invariant: a writer that gives up before the lease it
+  // would itself claim never reaches the takeover of a dead holder's lock.
+  const timeoutMs = Math.max(options.timeoutMs ?? DEFAULT_TIMEOUT_MS, staleMs);
   const lockDir = join(sessionDir, ".lock");
   const token = randomUUID();
   const deadline = Date.now() + timeoutMs;
 
   let wait = FIRST_RETRY_MS;
   while (!(await acquire(lockDir, token, staleMs))) {
-    if (Date.now() >= deadline) {
-      throw new StorageError(lockDir, null, `held by another writer for over ${timeoutMs} ms`);
-    }
+    if (Date.now() >= deadline) throw await refusal(lockDir, timeoutMs);
     await sleep(wait);
     wait = Math.min(wait * 2, MAX_RETRY_MS);
   }
@@ -76,6 +76,20 @@ export async function withLock<T>(
   } finally {
     await release(lockDir, token);
   }
+}
+
+/** The refusal says what the waiter read out of the lock: an unexplained wait is unreadable without it. */
+async function refusal(lockDir: string, timeoutMs: number): Promise<StorageError> {
+  const info = await readInfo(lockDir);
+  const pid = info?.pid;
+  const acquiredAt = info?.acquiredAt;
+  const expiresAt = info?.expiresAt;
+  // A claim counts only whole: half of one names a holder out of `undefined`.
+  const holder =
+    pid === undefined || acquiredAt === undefined || expiresAt === undefined
+      ? "held by a writer that has not claimed it"
+      : `held by pid ${pid} since ${acquiredAt}, its lease running to ${expiresAt}`;
+  return new StorageError(lockDir, null, `${holder}; gave up after ${timeoutMs} ms`);
 }
 
 function infoPath(lockDir: string): string {

@@ -170,6 +170,14 @@ and `bun run release` refuses a version that has no section. See
 
 ### Fixed
 
+- **A lock left by a killed writer is taken over instead of hanging the next
+  one** (DA-89). The wait was ten seconds against a thirty-second lease, so a
+  writer arriving in the first twenty seconds after a holder died waited the
+  whole ten and refused, naming a writer that was not there. The wait is now
+  derived from the lease and floored by it — `timeoutMs` defaults to `staleMs`
+  and an explicit value below it is raised — and the refusal names the pid and
+  the lease it read: `held by pid 4213 since …, its lease running to …; gave up
+  after 30000 ms`. See [03-storage.md](docs/reference/03-storage.md).
 - **Releasing the session lock no longer removes the lock of the writer that
   took the session over** (DA-78). The release read the token and then removed
   whatever directory was at the path, so a writer whose body outran the lease

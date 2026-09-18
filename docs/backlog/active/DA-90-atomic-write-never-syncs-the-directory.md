@@ -82,7 +82,7 @@ anything (src/core/watcher/index.ts:710-721). Cleaning that up is not part of th
 ## Out of scope
 
 - Cleaning up leftover `.tmp-<uuid>` files, refuted above as harmless.
-- The lock's own timing defects, filed as [DA-89](DA-89-stale-lock-outlives-the-wait.md) and
+- The lock's own timing defects, filed as [DA-89](../../archive/DA-89-stale-lock-outlives-the-wait/task.md) and
   [DA-78](../../archive/DA-78-lock-release-is-not-atomic/task.md); this entry touches lock.ts:109 only if the decision
   above says that write should be flushed too. Also out: any change to what a reader sees mid-write,
   a property that already holds and must keep holding.
