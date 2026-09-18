@@ -1,6 +1,7 @@
 import { execFile } from "node:child_process";
 import { devNull } from "node:os";
 import { promisify } from "node:util";
+import { GitError, gitError } from "./errors.ts";
 
 const execFileAsync = promisify(execFile);
 
@@ -50,21 +51,27 @@ function gitArgs(args: string[], overrides: string[]): string[] {
 /** Runs one git command in a repository and returns its output; every call here
  * only reads, never an index, a working tree or history (`docs/SPEC.md` section 11). */
 export async function git(cwd: string, args: string[], overrides: string[] = []): Promise<string> {
-  const { stdout } = await execFileAsync("git", gitArgs(args, overrides), {
-    cwd,
-    maxBuffer: MAX_GIT_OUTPUT,
-    encoding: "utf8",
-    env: readOnlyEnv(),
-  });
-  return stdout;
+  try {
+    const { stdout } = await execFileAsync("git", gitArgs(args, overrides), {
+      cwd,
+      maxBuffer: MAX_GIT_OUTPUT,
+      encoding: "utf8",
+      env: readOnlyEnv(),
+    });
+    return stdout;
+  } catch (error) {
+    throw gitError(args[0] ?? "", error);
+  }
 }
 
-/** The same, for a command whose failure is an answer: an unresolved ref, a missing remote. */
+/** The same, for a command whose failure is an answer: an unresolved ref, a missing remote. Only
+ * git's own non-zero exit is an answer; a git that never ran is not one and goes on out. */
 export async function gitOrNull(cwd: string, args: string[]): Promise<string | null> {
   try {
     return await git(cwd, args);
-  } catch {
-    return null;
+  } catch (error) {
+    if (error instanceof GitError && error.failure === "exited") return null;
+    throw error;
   }
 }
 

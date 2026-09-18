@@ -15,6 +15,7 @@ import {
 import { tmpdir } from "node:os";
 import { join } from "node:path";
 import { afterAll, beforeAll, describe, expect, it } from "vitest";
+import { gitError } from "../src/core/git/errors.ts";
 import { parseDiff, readRepositoryChange, scan } from "../src/core/index.ts";
 import type { RepositoryChange } from "../src/core/types.ts";
 
@@ -599,6 +600,62 @@ describe("the reader runs nothing the repository names", () => {
   });
 });
 
+describe("what a failed git call is", () => {
+  it("tells the four shapes apart by what Node reports, not by which helper ran it", () => {
+    const spawn = gitError("diff", { code: "ENOENT", errno: -2, syscall: "spawn git" });
+    expect(spawn).toMatchObject({ failure: "not-started", exit: null, repositoryFault: false });
+    expect(spawn.message).toBe("git could not be started: ENOENT");
+
+    const exited = gitError("diff-index", { code: 128, stderr: "fatal: unable to read ce01362\n" });
+    expect(exited).toMatchObject({ failure: "exited", exit: 128, repositoryFault: true });
+    expect(exited.message).toBe("git diff-index exited 128: unable to read ce01362");
+
+    const killed = gitError("diff-index", { code: null, signal: "SIGKILL", killed: true });
+    expect(killed).toMatchObject({ failure: "killed", exit: null, repositoryFault: false });
+
+    const big = gitError("diff-index", { code: "ERR_CHILD_PROCESS_STDIO_MAXBUFFER" });
+    expect(big).toMatchObject({ failure: "too-large", exit: null, repositoryFault: true });
+  });
+
+  it("does not read a spawn failure as an answer", async () => {
+    const before = process.env.PATH;
+    // A directory with no git in it, not an empty `PATH`: Bun falls back to a
+    // default path when `PATH` is empty and finds git anyway (ADR-009).
+    process.env.PATH = mkdtempSync(join(tmpdir(), "diffalanche-no-git-"));
+    try {
+      await expect(read("repos/g/solo", { mode: "head" })).rejects.toMatchObject({
+        name: "GitError",
+        failure: "not-started",
+      });
+    } finally {
+      if (before === undefined) process.env.PATH = "";
+      else process.env.PATH = before;
+    }
+  });
+
+  it("keeps a repository git refuses to one line of the review", async () => {
+    const broken = join(root, "repos/g/broken");
+    mkdirSync(broken, { recursive: true });
+    git(broken, ["init", "--quiet", "-b", "main"]);
+    writeFileSync(join(broken, "app.ts"), "one\n");
+    commit(broken, "base");
+    writeFileSync(join(broken, "app.ts"), "two\n");
+    // The blob HEAD needs, removed: refs still resolve and the diff then cannot be read.
+    const blob = git(broken, [...INERT, "rev-parse", "HEAD:app.ts"]).trim();
+    rmSync(join(broken, ".git/objects", blob.slice(0, 2), blob.slice(2)));
+
+    const change = await read("repos/g/broken", { mode: "head" });
+    expect(change.base).toBeNull();
+    expect(change.files).toEqual([]);
+    expect(change.warnings.join(" ")).toContain("exited 128");
+
+    // And the healthy repository beside it still answers.
+    const solo = await read("repos/g/solo", { mode: "head" });
+    expect(solo.files.map((file) => file.path)).toEqual(["src/app.ts", "untracked.ts"]);
+    rmSync(broken, { recursive: true, force: true });
+  });
+});
+
 describe("a repository whose configuration cannot be read is not read", () => {
   /** A `git` first on `PATH` that refuses `config --list` and hands everything else over. */
   function shim(): string {
@@ -685,5 +742,7 @@ describe("the reader writes nothing", () => {
     }
     writesAfter = snapshot();
     expect(writesAfter).toEqual(writesBefore);
-  });
+    // Eight repositories read in three base modes, five git processes each: the
+    // default five seconds is the suite's, not this one's.
+  }, 60_000);
 });

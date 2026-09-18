@@ -471,6 +471,16 @@ and `bun run release` refuses a version that has no section. See
   configuration could not be read`. A repository with a filter driver — git-lfs
   is the common one — is shown the content that is on disk rather than what the
   driver would make of it.
+- **A git failure says which of four things went wrong** (DA-66). `gitOrNull`
+  swallowed every failure into `null`, and `null` meant one thing: a git that
+  could not be started was reported as `HEAD does not resolve: no commits yet`
+  in every repository under the root, giving an empty review and exit code 0.
+  The layer now tells a spawn failure, a non-zero exit, a kill by signal and a
+  `maxBuffer` overflow apart by what Node reports. A repository's own fault — a
+  non-zero exit, output too large — is one warning on that repository and the
+  rest of the review still comes back; a machine that cannot run git is not
+  reported per repository but raised, and the CLI prints it as one line and
+  exits 1 instead of a stack trace and 2.
 - **An untracked symbolic link is no longer read through** (DA-73). The reader
   stat'd and read the entry `ls-files --others` named, following the link: a file
   outside the repository landed in the review as an addition of its content, and

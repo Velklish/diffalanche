@@ -105,6 +105,37 @@ files are given an old mtime on purpose — a file touched to *now* is racily
 clean, git re-hashes it, finds it unchanged and writes nothing, so a guard built
 on a plain `touch` is green whatever the code does.
 
+## What a failed git call is
+
+`src/core/git/errors.ts` tells four shapes apart, and by what Node reports rather
+than by which helper made the call — the discriminator is the **type** of `code`:
+
+| Failure | Recognised by | Whose fault | What happens |
+|---|---|---|---|
+| `not-started` | `code` is a string (`ENOENT`, `EAGAIN`, `ENOMEM`), with `syscall: "spawn git"` | the machine | thrown, out past every boundary |
+| `exited` | `code` is a number: git ran and returned it | the repository | one warning on that repository |
+| `killed` | `code` is `null` and `signal` is set | the machine | thrown, out past every boundary |
+| `too-large` | `code` is `ERR_CHILD_PROCESS_STDIO_MAXBUFFER` | the repository | one warning on that repository |
+
+The split is not symmetric on purpose. A git that will not start is the same
+answer in every repository under the root, and twenty-one warnings saying so hide
+it; a repository whose object store is damaged is one repository, and the other
+twenty must still come back. So `readRepositoryChange` catches the repository's
+own faults and answers with `base: null`, no files and the warning, the way the
+scan answers for a directory it cannot read, and lets the machine's faults
+through.
+
+`gitOrNull` is the other half. It exists for a command whose failure is an
+answer — an unresolved ref, a missing remote — and only a non-zero **exit** is
+such an answer. Before DA-66 it swallowed everything, so a git that could not be
+started came back as `null` and became
+`HEAD does not resolve: no commits yet`: every repository under the root reported
+as having no commits, an empty review, and exit code 0. That warning now means
+only what it says.
+
+`diffalanche` prints a `GitError` as one line and exits 1, beside the usage,
+domain and storage refusals ([06-cli.md](06-cli.md)).
+
 ## The three base modes
 
 `docs/SPEC.md` section 3, decision 4 fixes one mode per review session, resolved

@@ -2,6 +2,7 @@ import { lstat, readFile, readlink } from "node:fs/promises";
 import { join } from "node:path";
 import { byCodePoint } from "../order.ts";
 import type { BaseSpec, FileChange, RepositoryChange, ResolvedBase } from "../types.ts";
+import { GitError } from "./errors.ts";
 import { DEFAULT_MAX_FILE_BYTES, type PatchOptions, parseDiff, quotePath } from "./patch.ts";
 import {
   currentBranch,
@@ -82,20 +83,32 @@ async function branch(cwd: string, named: string | undefined): Promise<BaseResol
   return { base: { mode: "branch", ref: target, sha }, warnings };
 }
 
-/**
- * Reads the change set of one repository: the working tree against the resolved
- * base, with untracked files as additions. Git is read through the binary and
- * never written to — no index, no working tree, no history
- * (`docs/SPEC.md` section 11).
- *
- * A repository whose base did not resolve comes back with no files and a
- * warning, which is how `ref` mode skips it.
- */
+/** One repository's change set: the working tree against the resolved base, untracked files
+ * included. A base that did not resolve, and a fault of the repository's own, are warnings. */
 export async function readRepositoryChange(
   root: string,
   repoPath: string,
   spec: BaseSpec = { mode: "head" },
   options: PatchOptions = {},
+): Promise<RepositoryChange> {
+  try {
+    return await readOne(root, repoPath, spec, options);
+  } catch (error) {
+    // One repository git refuses is one line of the review, the way an unreadable
+    // directory is one line of the scan; a machine that cannot run git is not.
+    if (error instanceof GitError && error.repositoryFault) {
+      const branch = await currentBranch(join(root, repoPath)).catch(() => "HEAD");
+      return { path: repoPath, branch, base: null, files: [], warnings: [error.message] };
+    }
+    throw error;
+  }
+}
+
+async function readOne(
+  root: string,
+  repoPath: string,
+  spec: BaseSpec,
+  options: PatchOptions,
 ): Promise<RepositoryChange> {
   const cwd = join(root, repoPath);
   // The drivers are read beside the base rather than before the diff: a third
@@ -139,10 +152,8 @@ export async function readRepositoryChange(
  * warning and its own line of the change set, never the whole review. */
 type UntrackedRead = { file: FileChange } | { warning: string };
 
-/**
- * An untracked file is an addition. A staged new file is already in the diff and
- * is not listed here, so the two sources never count the same file twice.
- */
+/** An untracked file is an addition. A staged new file is already in the diff and is not listed
+ * here, so the two sources never count the same file twice. */
 async function readUntracked(
   cwd: string,
   path: string,
@@ -195,12 +206,8 @@ async function readUntracked(
   }
 }
 
-/**
- * The patch git would print for the file if it were tracked and wholly new. The
- * path is quoted the way git quotes one, so a name holding a tab is not cut
- * short when the patch is read back and a name holding a newline does not tear
- * the patch in two — `ls-files -z` hands over both.
- */
+/** The patch git would print for the entry if it were tracked and wholly new; the path is quoted
+ * the way git quotes one, because `ls-files -z` hands over tabs and newlines alike. */
 function untrackedPatch(path: string, text: string, mode: "100644" | "120000"): string {
   const lines = text.split("\n");
   if (lines.at(-1) === "") lines.pop();

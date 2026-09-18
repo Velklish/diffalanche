@@ -6,6 +6,7 @@
  * about it.
  */
 import { DomainError } from "../core/domain/index.ts";
+import { GitError } from "../core/git/errors.ts";
 import { StorageError } from "../core/storage/index.ts";
 import type { UiAssets } from "../server/assets.ts";
 import { ListenError } from "../server/serve.ts";
@@ -98,6 +99,7 @@ export async function run(argv: string[], ui: UiAssets, output: Output): Promise
       error instanceof UsageError ||
       error instanceof DomainError ||
       error instanceof StorageError ||
+      error instanceof GitError ||
       error instanceof ListenError
     ) {
       output.err(`diffalanche: ${error.message.replace(/\s*\n\s*/g, " ")}\n`);

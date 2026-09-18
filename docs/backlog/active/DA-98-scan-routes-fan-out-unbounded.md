@@ -41,13 +41,13 @@ Nothing in CI covers it: `BUDGETS` in [perf/budgets.ts](../../../perf/budgets.ts
 
 - Decide the bound before writing it, and record the decision where the reader of the route will find it. The candidates are a fixed small pool (the shape `listBranches` already uses, at width 1), a pool sized from the host (`availableParallelism`), or a configured value on `Config` — and the choice is between a predictable ceiling and a machine-dependent one.
 - Put the chosen bound in one place that all three call sites use, rather than three copies: `summarise` and `candidatesOf` in [src/server/review.ts](../../../src/server/review.ts) and `scanReview` in [src/core/change-set.ts](../../../src/core/change-set.ts) all map over a repository list and await `readRepositoryChange`.
-- Decide separately whether one repository's failure should still reject the whole response. If the answer is no, that is the taxonomy work in [DA-66](DA-66-git-errors-have-no-taxonomy.md) and belongs there; if the answer is yes for now, say so in [07-server.md](../../reference/07-server.md) so the 500 is documented behaviour rather than an accident of `git()` throwing.
+- Decide separately whether one repository's failure should still reject the whole response. If the answer is no, that is the taxonomy work in [DA-66](../../archive/DA-66-git-errors-have-no-taxonomy/task.md) and belongs there; if the answer is yes for now, say so in [07-server.md](../../reference/07-server.md) so the 500 is documented behaviour rather than an accident of `git()` throwing.
 - Make the first-run screen show that the scan failed. `loadScan` currently cannot distinguish "not asked yet" from "asked and refused", and the dash is the truth only in the first case.
 - Update [02-git.md](../../reference/02-git.md) and [07-server.md](../../reference/07-server.md) with the concurrency ceiling, next to the existing "four git processes" sentence, so the next caller that maps over repositories knows what it is joining.
 
 ## Out of scope
 
-- The error taxonomy of the git layer — `git()` versus `gitOrNull()`, and what a spawn failure means — which is [DA-66](DA-66-git-errors-have-no-taxonomy.md).
+- The error taxonomy of the git layer — `git()` versus `gitOrNull()`, and what a spawn failure means — which is [DA-66](../../archive/DA-66-git-errors-have-no-taxonomy/task.md).
 - Caching the scan, or making it incremental. This entry bounds what the route spawns; it does not change the decision in [07-server.md](../../reference/07-server.md) that the scan reads git per request.
 - Whether the perf gate should grow a line for the scan routes at all: what the gate measures and what it silently passes is [DA-69](../queue/DA-69-perf-gate-reports-green-unmeasured.md).
 
