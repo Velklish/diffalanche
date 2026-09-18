@@ -211,6 +211,13 @@ and `bun run release` refuses a version that has no section. See
   that is not the palette are refused rather than stacked: two overlays trap the
   ring in two places and answer one press twice. Adding an overlay is a row in
   that list and no edit to the keyboard.
+- **The focus goes back to what opened the ladder, not to what a swap replaced**
+  (DA-100). The scope editor, its confirmation and the new-task form take one
+  position in the tree, so each swap used to record the button it was replacing
+  and the last one to close restored a node detached two commits earlier —
+  leaving the reader with no ring and the next `Tab` starting from the top of
+  the page. The opener is recorded once per ladder and given back when the
+  ladder has emptied.
 - **A warning found after the bar was dismissed is shown again** (DA-79). The
   rule was a property of the live frame and is now a property of the state: one
   writer of the field, which the stream's `warnings` frame and the review

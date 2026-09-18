@@ -46,7 +46,7 @@ Nothing catches it. [e2e/scope.spec.ts](../../../e2e/scope.spec.ts), lines 206-2
 
 ## Out of scope
 
-- The `esc` ladder and the search shortcuts enumerating overlays by hand, filed as [DA-70](../../archive/DA-70-overlay-ladder-is-hand-enumerated/task.md). It is about the same set of overlays and a fix may well share a notion of "the ladder" with this one, but the failure there is a wiped draft and two stacked traps, not the focus return.
+- The `esc` ladder and the search shortcuts enumerating overlays by hand, filed as [DA-70](../DA-70-overlay-ladder-is-hand-enumerated/task.md). It is about the same set of overlays and a fix may well share a notion of "the ladder" with this one, but the failure there is a wiped draft and two stacked traps, not the focus return.
 - The focus trap itself — `Tab` and `Shift+Tab` cycling inside the panel — which works and which `e2e/scope.spec.ts` line 219 already asserts for the confirmation.
 - Whether `scopeOpen` should stay true under the confirmation. It is what gives the editor back with its draft intact when the question is cancelled, and this entry does not propose changing it.
 

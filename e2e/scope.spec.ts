@@ -238,6 +238,44 @@ test("taking a file out of the scope asks before it deletes the comments under i
   ]);
 });
 
+/** The three overlays of the scope replace each other at one position, so each
+ * swap used to record a new opener and restore a detached button (DA-100). */
+test("after the confirmation round-trip the ring goes back to the SCOPE pill", async ({
+  page,
+  request,
+}) => {
+  const task = await scopedTask(request);
+  const path = task.first.files[0] as string;
+  // A comment under the file that is taken out, so `Apply` raises the 409 that
+  // opens the confirmation over the editor.
+  expect((await request.get(`/api/review?review=${task.name}`)).ok()).toBe(true);
+  const written = await request.post(`/api/comments?review=${task.name}`, {
+    data: { repo: task.first.path, path, severity: "warning", body: "a finding on this file" },
+  });
+  expect(written.status(), await written.text()).toBe(201);
+
+  await open(page, `/?review=${task.name}`);
+  const pill = page.locator(".pill.scope");
+  await pill.click();
+  await page
+    .locator(".scope-repo")
+    .filter({ has: page.locator(".repo-name", { hasText: exactly(task.first.path) }) })
+    .locator(".scope-file")
+    .filter({ has: page.locator(".file-name", { hasText: exactly(path) }) })
+    .click();
+  await page.locator(".overlay.scope").getByRole("button", { name: "Apply" }).click();
+  await expect(page.locator(".confirm-question")).toHaveCount(1);
+
+  // Back to the editor, and out of it: the pill is what opened the ladder, and
+  // the button that was on screen a moment ago is not.
+  await page.getByRole("button", { name: "Отмена" }).click();
+  await expect(page.locator(".overlay.scope")).toHaveCount(1);
+  await page.keyboard.press("Escape");
+  await expect(page.locator(".overlay.scope")).toHaveCount(0);
+
+  await expect(pill).toBeFocused();
+});
+
 test("select mode builds a task out of the tree and leaves it as it was", async ({
   page,
   request,
