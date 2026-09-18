@@ -60,6 +60,20 @@ export type AppOptions = {
 /** The methods that change nothing, and so need no guard on where they came from. */
 const SAFE_METHODS = new Set(["GET", "HEAD", "OPTIONS"]);
 
+/** The names the IPv4 loopback socket answers for, as the URL parser normalises
+ * them; it binds `127.0.0.1`, so `[::1]` reaches no one and is not here. */
+const OWN_HOSTS: readonly string[] = ["127.0.0.1", "localhost"];
+
+/** The host the request arrived on, as the runtime built it from `Host`;
+ * `null` when the header is not a host at all. */
+function requestHost(url: string): string | null {
+  try {
+    return new URL(url).hostname;
+  } catch {
+    return null;
+  }
+}
+
 /**
  * The review task a request is about: `?review=<name>`, and the current session
  * without it. **Every route a window uses reads it, reading and writing alike.**
@@ -88,13 +102,20 @@ export function createApp({ activity, config, events, review, ui, verbose }: App
   /** What the UI signs with: the configured name, and never an agent's role. */
   const author = { author: config.user, role: "human" as Role };
 
-  // Two guards on the same question, because the server has no authentication
-  // and no other check on who is writing (`docs/SPEC.md` section 11). `csrf()`
-  // refuses the writes a page on another origin can send without this server
-  // being asked first — a form post, a `text/plain` post — by `Sec-Fetch-Site`
-  // and `Origin`. The second refuses any write that names another origin at
-  // all, which is what a JSON write from such a page would carry if a browser
-  // ever let it through. A request with no `Origin` is not from a page.
+  // Reads included: a rebinding page must name itself in `Host`, so this is
+  // what stops it reading the review ("Which host it answers for" in 07-server.md).
+  app.use("/api/*", async (c, next) => {
+    const host = requestHost(c.req.url);
+    if (host === null || !OWN_HOSTS.includes(host)) {
+      throw new ForbiddenError(
+        `this server answers for ${OWN_HOSTS.join(" and ")} only, not ${host ?? "a host header that is not a host"}`,
+      );
+    }
+    await next();
+  });
+
+  // Three guards on who is writing, because the server has no authentication
+  // ("Who may write" in 07-server.md); a request with no `Origin` is not a page.
   app.use("/api/*", csrf());
   app.use("/api/*", async (c, next) => {
     const origin = c.req.header("origin");

@@ -302,6 +302,79 @@ describe("a session that cannot be read", () => {
   });
 });
 
+describe("which host the server answers for", () => {
+  /** What a rebinding page sends: its own name in `Host`, and the same in `Origin`. */
+  const REBOUND = "http://attacker.example:4880";
+
+  async function write(url: string, headers: Record<string, string>): Promise<Response> {
+    return app.request(url, {
+      method: "POST",
+      headers: { "content-type": "application/json", ...headers },
+      body: JSON.stringify({}),
+    });
+  }
+
+  it("refuses a read whose host is not one of its own, whatever the origin says", async () => {
+    for (const headers of [{}, { origin: REBOUND }]) {
+      const response = await app.request(`${REBOUND}/api/review`, { headers });
+      expect(response.status).toBe(403);
+      const body = (await response.json()) as { error: string; message: string };
+      expect(body.error).toBe("forbidden");
+      // The refusal names the host it turned down and every name it does take:
+      // a sentence naming one of two would send the reader to the wrong fix.
+      expect(body.message).toContain("attacker.example");
+      expect(body.message).toContain("127.0.0.1");
+      expect(body.message).toContain("localhost");
+    }
+  });
+
+  it("refuses a host that merely carries a loopback name inside it", async () => {
+    // A name is compared whole: matching a substring would let every one of
+    // these through, and each is a name an attacker registers.
+    for (const host of [
+      "127.0.0.1.attacker.example",
+      "localhost.attacker.example",
+      "not-localhost",
+      "127.0.0.1x",
+    ]) {
+      const response = await app.request(`http://${host}:4880/api/review`);
+      expect(response.status, host).toBe(403);
+      expect(await response.json()).toMatchObject({ error: "forbidden" });
+    }
+  });
+
+  it("refuses a write from that host even though its origin matches it", async () => {
+    const response = await write(`${REBOUND}/api/comments`, { origin: REBOUND });
+    expect(response.status).toBe(403);
+    expect(await response.json()).toMatchObject({ error: "forbidden" });
+  });
+
+  it("takes the same two names however they are written", async () => {
+    // The comparison is against what the URL parser made of the header, so the
+    // short and the numeric spellings of 127.0.0.1 are that name, not another.
+    for (const host of ["127.0.0.1", "localhost", "127.1", "0x7f000001"]) {
+      const response = await app.request(`http://${host}:${config.port}/api/review`);
+      expect(response.status, host).toBe(200);
+    }
+    // `[::1]` is what the parser gives for the IPv6 loopback, brackets and all,
+    // and the socket is on 127.0.0.1, so nothing arrives under that name.
+    expect((await app.request(`http://[::1]:${config.port}/api/review`)).status).toBe(403);
+  });
+
+  it("lets the real page and a request with no origin through to the handler", async () => {
+    const own = `http://127.0.0.1:${config.port}`;
+    expect((await app.request(`${own}/api/review`)).status).toBe(200);
+    expect((await app.request(`http://localhost:${config.port}/api/review`)).status).toBe(200);
+
+    // A body the handler refuses: it got there, which is what this asserts.
+    for (const headers of [{}, { origin: own }]) {
+      const response = await write(`${own}/api/comments`, headers);
+      expect(response.status).toBe(400);
+      expect(await response.json()).toMatchObject({ error: "invalid-request" });
+    }
+  });
+});
+
 describe("starting the server", () => {
   it("listens before it reports its port and picks one when asked for port 0", async () => {
     const server = await startReviewServer({ config: { ...config, port: 0 }, ui });

@@ -86,7 +86,7 @@ suite is on session names, [tests/storage.test.ts:104-113](../../../tests/storag
 
 - The origin guard that trusts the `Host` header, which is what would turn this
   from "a local client that could read the filesystem anyway" into a visited web
-  page reading it: [DA-62](DA-62-origin-guard-trusts-host.md). That one is the reason
+  page reading it: [DA-62](../../archive/DA-62-origin-guard-trusts-host/task.md). That one is the reason
   this is worth fixing rather than a duplicate of it.
 - A reviewed repository's `.git/config` executing commands:
   [DA-61](DA-61-git-config-of-a-reviewed-repository-executes.md).

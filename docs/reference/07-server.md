@@ -36,6 +36,64 @@ port 4880 is already in use: stop the diffalanche that holds it, or run with --p
 With `--verbose` every request is one line on stderr — method, path, status,
 duration. Without it the server writes nothing but its own failures.
 
+### Which host it answers for
+
+Binding to `127.0.0.1` keeps the socket off the network; it does not say who may
+talk to it. A page on `attacker.example` can have that name rebound to
+`127.0.0.1` after it loads and then fetch `http://attacker.example:4880/api/…`:
+the browser calls that same-origin, so there is no preflight and no CORS in the
+way, and the connection lands on the loopback socket like any other.
+
+So **every request under `/api/` names the host it arrived on, and the server
+answers only for its own**. The names are two, `127.0.0.1` and `localhost`, as
+the URL parser normalises them: `127.1` and `0x7f000001` are the first one
+written differently and pass, `attacker.example` does not. Anything else is a
+`403` `error: "forbidden"` naming the host it turned down and the names it
+takes, on a read as much as on a write — what is behind these routes is the
+absolute root path and the patch of every changed file, which a rebinding page
+reads with a `GET`.
+
+`::1` is not one of the names. The socket binds `127.0.0.1`
+([runtime.ts](../../src/server/runtime.ts)), so nothing arrives over IPv6 at
+all; and the URL parser gives `[::1]` for the IPv6 loopback, brackets included,
+so a set holding the bare `::1` would never have matched anything either way.
+The set follows what the socket binds, and both change together.
+
+That is the check that stops rebinding, because a rebinding page has to send its
+own name here — and it is the check the origin comparison below rests on. The
+built page is not behind it: `/` and the assets are the same bytes for everyone
+and say nothing about the review.
+
+Only the name is compared, not the port. The port is not what a rebinding page
+controls: a request reached this server at all because it dialled the port the
+socket is on, and a browser copies into `Host` the authority it dialled. A
+second diffalanche on another port is a different origin, and that is the origin
+guard's question rather than this one's.
+
+There is no allow-list and no flag: serving on another interface is not a thing
+the tool does (`docs/SPEC.md` section 11), so the set of names is fixed in the
+code.
+
+**A `Host` that is not a host, and no `Host` at all, are the runtime's answer
+before they are ours** — and the two runtimes differ. Measured with raw HTTP
+against `serve` on an empty root, one request per line:
+
+| The request | Node | Bun |
+|---|---|---|
+| `HTTP/1.1` with no `Host` | `400`, from the HTTP parser | `400`, from the HTTP parser |
+| `Host: exa mple` | `400`, from the parser, before Hono | `403`, ours |
+| `Host: attacker.example:<port>` | `403`, ours | `403`, ours |
+| `Host: 127.0.0.1:<port>` | `200` | `200` |
+| `HTTP/1.0` with no `Host` | `200` — the adapter fills in a loopback name | `500` |
+
+So the guard's own "not a host at all" branch is reached under Bun and not under
+Node, where the adapter has already refused; and an `HTTP/1.0` request with no
+`Host` passes under Node. Neither is a way in for a rebinding page: a browser
+speaks `HTTP/1.1` and always sends `Host`. What reaches these two rows is a
+client written by hand, which is `curl` and the CLI — the callers the check is
+meant to let through. The `HTTP/1.0` `500` under Bun is not this check's: the
+base commit answers the same before the guard exists.
+
 ## Routes
 
 Every route a window uses takes `?review=<name>` — **reading and writing
@@ -433,8 +491,9 @@ own refusal with its own code.
 ### Who may write
 
 The server has no authentication and never will (`docs/SPEC.md` section 11), so
-where a write came from is the whole check. It is **two checks, and neither is
-the other's duplicate** — they cover different requests:
+where a write came from is the whole check. The host check above runs first and
+covers every request; on top of it a write passes **two more checks, and neither
+is the other's duplicate** — they cover different requests:
 
 - Hono's `csrf()` looks only at writes whose content type is one a form can
   send: its `isRequestedByFormElementRe` matches
@@ -449,9 +508,16 @@ the other's duplicate** — they cover different requests:
   browser's guarantee, not ours. So any unsafe method carrying an `Origin` that
   is not this server's is a `403` `error: "forbidden"` of our own.
 
-A request with no `Origin` at all is not from a page. Removing either check
-leaves a hole: without `csrf()` a form post from any page writes here, and
-without the origin check the API rests on nothing but the browser's preflight.
+"This server's" is the authority the request arrived on, which the host check
+has already pinned to a name this server answers for: a page on another local
+port names that port in `Origin` and not in `Host`, and a page on another
+machine's name never gets past the host check to be compared at all.
+
+A request with no `Origin` at all is not from a page. Removing any of the three
+leaves a hole: without the host check a rebound name reads and writes freely,
+without `csrf()` a form post from any page writes here, and without the origin
+check a page on another loopback port rests on nothing but the browser's
+preflight.
 
 A body has to arrive as `application/json`; a body of another type is a `400`.
 No body at all is an empty object, which is how `resolve` and `reopen` are

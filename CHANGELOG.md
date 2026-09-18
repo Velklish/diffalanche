@@ -170,6 +170,13 @@ and `bun run release` refuses a version that has no section. See
 
 ### Fixed
 
+- **A rebound name no longer reads the review** (DA-62). Both origin guards
+  asked whether the client's `Origin` matched the client's own `Host`, which a
+  DNS-rebinding page controls on both sides. Every request under `/api/` now
+  names the host it arrived on and the server answers only for its own —
+  `127.0.0.1` and `localhost`, the two names the IPv4 loopback socket it binds
+  can be reached under — with a `403` for anything else, on reads as much as on
+  writes. See [07-server.md](docs/reference/07-server.md).
 - **A `comment` refused on its anchor levels no longer rescans the repository
   first** (DA-88). The command guarded the refresh on `line` and `repo` alone,
   so a forgotten `--path` or a transposed `--line 4 --end-line 2` spawned the
