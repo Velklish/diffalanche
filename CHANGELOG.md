@@ -177,6 +177,13 @@ and `bun run release` refuses a version that has no section. See
   `127.0.0.1` and `localhost`, the two names the IPv4 loopback socket it binds
   can be reached under — with a `403` for anything else, on reads as much as on
   writes. See [07-server.md](docs/reference/07-server.md).
+- **`serve` no longer dies on a file it just decided to tolerate** (DA-64). The
+  server starts on a `comments.json` that is not JSON and says so through the
+  address; the CLI then read the same document a second time for the line under
+  it and rethrew, and the exit killed a socket that was already open and a
+  watcher that was already running. That line now says the review could not be
+  read and points at the address, which names the file. See
+  [06-cli.md](docs/reference/06-cli.md).
 - **`GET /api/repos/:repo/diff?review=` no longer reads git outside the root**
   (DA-72). The segment came from the URL and went straight to a `join` against
   the root, so a percent-encoded `../` — which Hono decodes before routing sees

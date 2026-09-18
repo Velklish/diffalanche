@@ -28,11 +28,8 @@ function openBrowser(url: string, io: Output): void {
   child.unref();
 }
 
-/**
- * The line under the address. A root with no current review session is not a
- * failure — the server serves the screen that offers to create one — so it says
- * that instead of the counters.
- */
+/** The line under the address. Nothing it reads is a reason to end the run: the
+ * server is already serving, and `serve` only exits non-zero before it starts. */
 async function summary(server: { review: { document: () => Promise<{ totals: ReviewTotals }> } }) {
   try {
     const { totals } = await server.review.document();
@@ -41,10 +38,14 @@ async function summary(server: { review: { document: () => Promise<{ totals: Rev
       `${totals.lines} changed lines\n`
     );
   } catch (error) {
+    // A root with no current session is not a failure: the server serves the
+    // screen that offers to create one.
     if (error instanceof DomainError) {
       return "  no current review session: create one with `diffalanche review new <name>`\n";
     }
-    throw error;
+    // The server wrote the file and the fault to stderr as it started, and the
+    // address answers with them too; the remedy is not `review new`.
+    return "  the review could not be read: the address above says which file and what is wrong in it\n";
   }
 }
 

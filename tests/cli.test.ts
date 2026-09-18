@@ -2,11 +2,15 @@
  * The commands of DA-13 on a fixture root: sessions, the change set, the exit
  * codes, and the usage. `run` is called in process because it is what the two
  * entry points call and what returns the exit code; the two-process case that
- * only a real process can show is in `tests/cli-comments.test.ts`.
+ * only a real process can show is in `tests/cli-comments.test.ts`, and the one
+ * case here that needs a process of its own is `serve`, which does not return
+ * until it is killed.
  */
-import { execFileSync } from "node:child_process";
+import { execFileSync, spawn } from "node:child_process";
 import { existsSync, mkdirSync, readFileSync, rmSync, writeFileSync } from "node:fs";
+import { createServer } from "node:net";
 import { join } from "node:path";
+import { fileURLToPath } from "node:url";
 import { afterEach, beforeEach, describe, expect, it } from "vitest";
 import { run } from "../src/cli/run.ts";
 import { VERSION } from "../src/cli/version.ts";
@@ -358,6 +362,92 @@ describe("the directory flags", () => {
     expect(created).toMatchObject({ code: 0, err: "" });
     expect(existsSync(join(elsewhere, "reviews", "alpha", "review.json"))).toBe(true);
   });
+});
+
+describe("serve on a review that cannot be read", () => {
+  useFixtureRoot();
+
+  const cli = fileURLToPath(new URL("../src/cli/index.ts", import.meta.url));
+
+  /** A port nothing holds right now: `--port` takes no `0`, so one is picked here. */
+  async function freePort(): Promise<number> {
+    return new Promise((found, failed) => {
+      const probe = createServer();
+      probe.once("error", failed);
+      probe.listen(0, "127.0.0.1", () => {
+        const { port } = probe.address() as { port: number };
+        probe.close(() => found(port));
+      });
+    });
+  }
+
+  type Served = { port: number; out: string; err: string; exited: number[]; stop: () => void };
+
+  /** Runs `serve` until it has printed the address and the line under it. */
+  async function serve(): Promise<Served> {
+    const port = await freePort();
+    const child = spawn(process.execPath, [cli, "serve", "--root", root, "--port", String(port)], {
+      stdio: ["ignore", "pipe", "pipe"],
+    });
+    const served: Served = { port, out: "", err: "", exited: [], stop: () => child.kill() };
+    child.stdout.on("data", (chunk: Buffer) => {
+      served.out += chunk.toString();
+    });
+    child.stderr.on("data", (chunk: Buffer) => {
+      served.err += chunk.toString();
+    });
+    child.on("exit", (code) => served.exited.push(code ?? -1));
+
+    const deadline = Date.now() + 30_000;
+    while (Date.now() < deadline && served.out.split("\n").length < 3) {
+      if (served.exited.length > 0) break;
+      await new Promise((done) => setTimeout(done, 50));
+    }
+    return served;
+  }
+
+  it("starts the server anyway and says so under the address", async () => {
+    await inRoot("review", "new", "alpha");
+    // A hand-edited file is an ordinary event (`docs/SPEC.md` section 3), and
+    // the server is documented to start on one and answer with what is wrong.
+    writeFileSync(dataFile("reviews", "alpha", "comments.json"), "{ broken");
+
+    const served = await serve();
+    try {
+      expect(served.exited, `stdout: ${served.out}\nstderr: ${served.err}`).toEqual([]);
+      expect(served.out).toContain(`http://127.0.0.1:${served.port}`);
+      expect(served.out).toContain("the review could not be read");
+      // The remedy differs from the first-run one, so the two lines differ.
+      expect(served.out).not.toContain("no current review session");
+      // The warning that names the file is the server's, on stderr.
+      expect(served.err).toContain("comments.json");
+
+      // What the line points at: the address is up, and it answers with the
+      // file and the fault rather than with nothing (07-server.md, "Refusals").
+      const warnings = await fetch(`http://127.0.0.1:${served.port}/api/warnings`);
+      expect(warnings.status).toBe(500);
+      expect(await warnings.json()).toMatchObject({
+        error: "storage",
+        message: expect.stringContaining("comments.json"),
+      });
+      expect(served.exited).toEqual([]);
+    } finally {
+      served.stop();
+    }
+  }, 60_000);
+
+  it("still prints the first-run line on a root with no session at all", async () => {
+    // The other half of the same branch: a root with no current session keeps
+    // the line that says how to make one, and does not borrow the other's.
+    const served = await serve();
+    try {
+      expect(served.exited, `stdout: ${served.out}\nstderr: ${served.err}`).toEqual([]);
+      expect(served.out).toContain("no current review session");
+      expect(served.out).not.toContain("the review could not be read");
+    } finally {
+      served.stop();
+    }
+  }, 60_000);
 });
 
 describe("exit code 2", () => {

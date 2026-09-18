@@ -85,7 +85,7 @@ docs/reference/06-cli.md:135) reads all of its input, so it never closes the pip
 - The server's writes to stderr (src/server/app.ts:114, src/server/serve.ts:75,89), which are not on
   the piped path, and `serve`'s other startup failures, filed as
   [DA-71](DA-71-refused-port-exits-2-with-a-stack.md) and
-  [DA-64](DA-64-serve-exits-on-unreadable-data.md).
+  [DA-64](../../archive/DA-64-serve-exits-on-unreadable-data/task.md).
 
 ## Verification
 

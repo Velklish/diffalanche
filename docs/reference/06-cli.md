@@ -122,6 +122,23 @@ address and the counters under it, or, on a root with no current session, the
 line that says how to make one — the server serves the screen that offers it.
 `--verbose` logs every request to stderr.
 
+**`serve` exits non-zero only for what stops it from starting**, and everything
+after the socket opens is a line rather than an exit. A file of the data
+directory that cannot be read — a hand-edited `comments.json`, a `review.json`
+of another schema version — is one of those: the server starts on it by design,
+because refusing to start would leave the person with no way to see why
+([07-server.md](07-server.md), "Refusals"), and the line under the address says
+
+```
+  the review could not be read: the address above says which file and what is wrong in it
+```
+
+instead of the counters. The file and the fault are named twice over — on stderr
+as the server starts, and by the address itself, which answers `500`
+`error: "storage"` with them. The first-run line is a different line because the
+remedy is different: `review new` fixes a root with no session and fixes nothing
+here.
+
 ## Exit codes and where output goes
 
 | Code | When | What is printed |
