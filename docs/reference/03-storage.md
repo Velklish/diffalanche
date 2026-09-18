@@ -307,6 +307,23 @@ The `base` of `review.json` is the change-set reader's own `BaseSpec`
 ([02-git.md](02-git.md)): storage parses it, git resolves it, and one name means
 one thing on both sides.
 
+**A refused write is a `StorageError` too**, not only a file that will not
+parse. `ensureDataDir` and `ensureSessionDir` create their directory through one
+helper, and a `mkdir` the filesystem turns down becomes the same error naming
+the directory and why:
+
+```
+/srv/shared/.diffalanche: could not be created: permission denied
+```
+
+The reasons it words are `EACCES` and `EPERM` — permission denied — plus
+`EROFS`, `ENOSPC` and `ENOTDIR`. An errno outside that set is rethrown
+untouched: storage says what it can name and does not dress up what it cannot,
+which is the difference between exit code 1 and exit code 2 in
+[06-cli.md](06-cli.md). The same error reaches an HTTP write through
+`updateSession`, where it is the `500` `error: "storage"` of
+[07-server.md](07-server.md) carrying that same sentence.
+
 The `scope` of `review.json` is checked for being a scope at all and no further:
 a list of entries with a `repo` and, when it has them, a list of `paths`; absent
 or `null` is the whole root. An empty list is refused, and so is an empty

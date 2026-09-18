@@ -2,12 +2,10 @@
  * The commands of DA-13 on a fixture root: sessions, the change set, the exit
  * codes, and the usage. `run` is called in process because it is what the two
  * entry points call and what returns the exit code; the two-process case that
- * only a real process can show is in `tests/cli-comments.test.ts`, and the one
- * case here that needs a process of its own is `serve`, which does not return
- * until it is killed.
+ * only a real process can show is in `tests/cli-comments.test.ts`.
  */
 import { execFileSync, spawn } from "node:child_process";
-import { existsSync, mkdirSync, readFileSync, rmSync, writeFileSync } from "node:fs";
+import { chmodSync, existsSync, mkdirSync, readFileSync, rmSync, writeFileSync } from "node:fs";
 import { createServer } from "node:net";
 import { join } from "node:path";
 import { fileURLToPath } from "node:url";
@@ -44,6 +42,18 @@ async function inRoot(...argv: string[]): Promise<Result> {
 
 function dataFile(...parts: string[]): string {
   return join(root, ".diffalanche", ...parts);
+}
+
+/** A port nothing holds right now: `--port` takes no `0`, so one is picked here. */
+async function freePort(): Promise<number> {
+  return new Promise((found, failed) => {
+    const probe = createServer();
+    probe.once("error", failed);
+    probe.listen(0, "127.0.0.1", () => {
+      const { port } = probe.address() as { port: number };
+      probe.close(() => found(port));
+    });
+  });
 }
 
 /** The describes that work on a review build a fixture root; the usage one does not. */
@@ -364,22 +374,12 @@ describe("the directory flags", () => {
   });
 });
 
+// The one case here that needs a process of its own: a `serve` that starts does
+// not return, so `run` in process would leave a server behind.
 describe("serve on a review that cannot be read", () => {
   useFixtureRoot();
 
   const cli = fileURLToPath(new URL("../src/cli/index.ts", import.meta.url));
-
-  /** A port nothing holds right now: `--port` takes no `0`, so one is picked here. */
-  async function freePort(): Promise<number> {
-    return new Promise((found, failed) => {
-      const probe = createServer();
-      probe.once("error", failed);
-      probe.listen(0, "127.0.0.1", () => {
-        const { port } = probe.address() as { port: number };
-        probe.close(() => found(port));
-      });
-    });
-  }
 
   type Served = { port: number; out: string; err: string; exited: number[]; stop: () => void };
 
@@ -474,10 +474,13 @@ describe("a listening socket the environment refuses", () => {
     }
   }, 60_000);
 
-  it("says the same about a port this user may not have", async () => {
-    // Root may bind port 1, and then there is nothing to assert.
+  it("says the same about a port this user may not have", async (context) => {
+    // Before the call, not after it: root binds port 1, and the run would then
+    // leave a socket and a watcher behind with nothing asserted.
+    if (process.getuid?.() === 0) {
+      context.skip("this run is root, which may bind port 1, so nothing refuses it here");
+    }
     const refused = await inRoot("serve", "--port", "1");
-    if (refused.code === 0) return;
     expect(refused.code).toBe(1);
     // Node says EACCES for a privileged port and Bun EADDRINUSE, so the shape
     // is what this pins rather than which of the two sentences (07-server.md).
@@ -485,6 +488,71 @@ describe("a listening socket the environment refuses", () => {
       /^diffalanche: port 1 (is not allowed for this user: run with --port <n> above 1023|is already in use: stop the diffalanche that holds it, or run with --port <n>)\n$/,
     );
   }, 60_000);
+});
+
+describe("a data directory that cannot be written", () => {
+  useFixtureRoot();
+
+  /** Whether mode 555 actually refuses this user: root ignores the bits, and an
+   * assertion made under it would be vacuous rather than wrong. */
+  function refuses(dir: string): boolean {
+    try {
+      mkdirSync(join(dir, "probe"));
+      rmSync(join(dir, "probe"), { recursive: true, force: true });
+      return false;
+    } catch {
+      return true;
+    }
+  }
+
+  it("refuses the write with one line and exit code 1, naming the directory", async (context) => {
+    const readOnly = join(root, "read-only");
+    mkdirSync(readOnly);
+    chmodSync(readOnly, 0o555);
+    try {
+      if (!refuses(readOnly)) {
+        context.skip("mode 555 does not refuse this user, so there is no refusal to assert about");
+      }
+      const result = await inRoot("review", "new", "alpha", "--data-dir", join(readOnly, "data"));
+      expect(result.code).toBe(1);
+      expect(result.out).toBe("");
+      expect(result.err.trimEnd().split("\n")).toHaveLength(1);
+      expect(result.err.startsWith("diffalanche: ")).toBe(true);
+      expect(result.err).toContain(readOnly);
+      expect(result.err).toContain("permission denied");
+      // Not the errno string, and no stack frame behind it.
+      expect(result.err).not.toContain("EACCES");
+      expect(result.err).not.toMatch(/\n\s+at /);
+    } finally {
+      chmodSync(readOnly, 0o755);
+    }
+  });
+
+  it("refuses a file sitting where the reviews directory should be", async () => {
+    // A recursive mkdir passes over a directory that is already there and
+    // refuses a file at the same path with EEXIST, which is not ENOTDIR.
+    rmSync(dataFile("reviews"), { recursive: true, force: true });
+    writeFileSync(dataFile("reviews"), "not a directory\n");
+    // `serve` because it is the one command that reaches `ensureDataDir`
+    // first; it refuses before the socket opens, so nothing is left running.
+    const result = await inRoot("serve", "--port", String(await freePort()));
+    expect(result.code).toBe(1);
+    expect(result.out).toBe("");
+    expect(result.err.trimEnd().split("\n")).toHaveLength(1);
+    expect(result.err).toContain("a file is already there");
+    expect(result.err).toContain(dataFile("reviews"));
+    expect(result.err).not.toContain("EEXIST");
+  }, 60_000);
+
+  it("keeps the stack trace for a reason it does not word", async () => {
+    // The name and not `--data-dir`: a `--data-dir` too long to `stat` is
+    // refused by `assertDirectory` and never reaches the helper this pins.
+    const result = await inRoot("review", "new", "n".repeat(300));
+    expect(result.code).toBe(2);
+    expect(result.err).toContain("ENAMETOOLONG");
+    expect(result.err).toMatch(/\n\s+at /);
+    expect(result.out).toBe("");
+  });
 });
 
 describe("exit code 2", () => {

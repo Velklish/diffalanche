@@ -97,9 +97,36 @@ export function diffCachePath(dataDir: string, name: string): string {
   return resolve(sessionDir(dataDir, name), "diff.json");
 }
 
+/** Why a directory could not be created, by errno. A code that is not here is
+ * not storage refusing anything — it is rethrown and reaches exit code 2. */
+const CANNOT_CREATE: Readonly<Record<string, string>> = {
+  EACCES: "permission denied",
+  EPERM: "permission denied",
+  EROFS: "the filesystem is read-only",
+  ENOSPC: "no space left on the device",
+  ENOTDIR: "a file is in the way of one of its parents",
+  // A recursive `mkdir` passes over a directory that is already there and
+  // refuses a file at the same path with this.
+  EEXIST: "a file is already there",
+};
+
+/** The one place a refused `mkdir` becomes a `StorageError`, so both directories
+ * refuse alike ([03-storage.md](../../../docs/reference/03-storage.md)). */
+async function makeDir(dir: string): Promise<string> {
+  try {
+    await mkdir(dir, { recursive: true });
+  } catch (error) {
+    const errno = error as NodeJS.ErrnoException;
+    const reason = errno.code === undefined ? undefined : CANNOT_CREATE[errno.code];
+    if (reason === undefined) throw error;
+    throw new StorageError(errno.path ?? dir, null, `could not be created: ${reason}`);
+  }
+  return dir;
+}
+
 /** Creates the data directory and its `reviews/` if they are not there yet. */
 export async function ensureDataDir(dataDir: string): Promise<string> {
-  await mkdir(reviewsDir(dataDir), { recursive: true });
+  await makeDir(reviewsDir(dataDir));
   return dataDir;
 }
 
@@ -113,9 +140,7 @@ export async function sessionExists(dataDir: string, name: string): Promise<bool
 }
 
 export async function ensureSessionDir(dataDir: string, name: string): Promise<string> {
-  const dir = sessionDir(dataDir, name);
-  await mkdir(dir, { recursive: true });
-  return dir;
+  return makeDir(sessionDir(dataDir, name));
 }
 
 function isMissing(error: unknown): boolean {

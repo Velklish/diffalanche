@@ -186,6 +186,14 @@ and `bun run release` refuses a version that has no section. See
   socket keeps the stack trace and exit code 2. See
   [06-cli.md](docs/reference/06-cli.md) and
   [07-server.md](docs/reference/07-server.md).
+- **A data directory that cannot be created is a refusal, not a stack trace**
+  (DA-99). `ensureDataDir` and `ensureSessionDir` let a raw `EACCES` out of
+  `mkdir` untouched, which reached the person as an errno string and exit code
+  2 while the storage reference promised that everything storage refuses is a
+  `StorageError`. Both now create their directory through one helper that names
+  the directory and why — permission, a read-only filesystem, no space, a file
+  in the way — and an errno it does not word is rethrown as it was. See
+  [03-storage.md](docs/reference/03-storage.md).
 - **`serve` no longer dies on a file it just decided to tolerate** (DA-64). The
   server starts on a `comments.json` that is not JSON and says so through the
   address; the CLI then read the same document a second time for the line under
