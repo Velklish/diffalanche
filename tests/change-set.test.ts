@@ -4,12 +4,51 @@ import { tmpdir } from "node:os";
 import { join } from "node:path";
 import { afterAll, beforeAll, describe, expect, it } from "vitest";
 import { generate, PROFILES } from "../scripts/synth.ts";
-import { findRepositories, refreshRepository, scanReview } from "../src/core/change-set.ts";
+import {
+  findRepositories,
+  mapWithLimit,
+  refreshRepository,
+  SCAN_CONCURRENCY,
+  scanReview,
+} from "../src/core/change-set.ts";
 import { loadConfig } from "../src/core/config/index.ts";
 import { parseDiff, scan } from "../src/core/index.ts";
 import type { DiffCache } from "../src/core/storage/index.ts";
 import { readDiffCache, writeDiffCache } from "../src/core/storage/index.ts";
 import type { BaseSpec } from "../src/core/types.ts";
+
+/** The bound counted in calls, not processes: this is where it holds whatever the machine is
+ * doing, and `tests/scope-scan.test.ts` is the ceiling beside it (`docs/reference/02-git.md`). */
+describe("mapWithLimit", () => {
+  /** Runs `count` items through the pool and reports the most that were ever in flight at once. */
+  async function peakOf(count: number, limit: number): Promise<{ peak: number; order: number[] }> {
+    let live = 0;
+    let peak = 0;
+    const items = Array.from({ length: count }, (_, at) => at);
+    const order = await mapWithLimit(items, limit, async (item) => {
+      live += 1;
+      peak = Math.max(peak, live);
+      await new Promise((done) => setTimeout(done, 1));
+      live -= 1;
+      return item;
+    });
+    return { peak, order };
+  }
+
+  it("never has more than the limit in flight, and answers in the order it was given", async () => {
+    const { peak, order } = await peakOf(40, 4);
+    expect(peak).toBe(4);
+    expect(order).toEqual(Array.from({ length: 40 }, (_, at) => at));
+  });
+
+  it("does not wait on a pool wider than the work", async () => {
+    expect((await peakOf(3, SCAN_CONCURRENCY)).peak).toBe(3);
+  });
+
+  it("is sequential at width one", async () => {
+    expect((await peakOf(6, 1)).peak).toBe(1);
+  });
+});
 
 /** The change set of a root, the way the server reads it before it caches it. */
 async function changeSet(root: string): Promise<DiffCache> {

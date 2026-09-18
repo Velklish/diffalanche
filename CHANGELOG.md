@@ -457,6 +457,7 @@ and `bun run release` refuses a version that has no section. See
   paths pushed it out. Anything the watch reports inside `.git`, the bare
   directory included, now drops that repository's verdicts. See
   [05-watcher.md](docs/reference/05-watcher.md).
+
 - **A reviewed repository no longer runs commands on the reviewer's machine**
   (DA-61, [ADR-012](docs/adr/adr-012-git-trust-model.md)). `core.fsmonitor`,
   `diff.<driver>.textconv` and `filter.<driver>.clean` in a repository's own
@@ -471,6 +472,19 @@ and `bun run release` refuses a version that has no section. See
   configuration could not be read`. A repository with a filter driver — git-lfs
   is the common one — is shown the content that is on disk rather than what the
   driver would make of it.
+- **A scan the first-run screen could not read says so** (DA-98). `loadScan`
+  dropped a refusal with a bare `return`, and the screen's three metrics stayed
+  dashes — the same thing they show before anything has been asked. The store
+  now keeps why the scan was refused, and the screen carries the server's own
+  sentence under the metrics with a retry beside it.
+- **A scan no longer starts one git process per repository all at once**
+  (DA-98). `scanReview` and the server's scan and candidate routes each mapped
+  over every repository under the root with an unbounded `Promise.all`, so the
+  number of git processes in flight was decided by the folder rather than by the
+  code. All three now go through `mapWithLimit` with `SCAN_CONCURRENCY` of 8,
+  chosen by measurement on the synthetic review: the curve flattens past six and
+  unbounded is no faster than eight. The peak is asserted in processes, not
+  seconds — 23 with the bound where it was 50 without.
 - **A file untracked with `git rm --cached` is listed once** (DA-76). The diff
   reported the deletion the index made and `ls-files` reported the file still on
   disk, both correctly, and the change set carried the path twice: the counters

@@ -900,6 +900,21 @@ button:disabled {
   font: 11px / 1.4 var(--mono);
 }
 
+/* The scan's refusal, in the warnings bar's own idiom: the SCAN tag and one quiet line. */
+
+.first-run-refused {
+  display: flex;
+  align-items: center;
+  flex-wrap: wrap;
+  gap: 8px;
+  /* The metrics carry 18px below them; this takes that gap and gives the form its own. */
+  margin: -8px 0 18px;
+  /* The server's sentence carries paths, and the panel is a fixed 560px. */
+  overflow-wrap: anywhere;
+  color: var(--tx2);
+  font: 11px / 1.6 var(--mono);
+}
+
 .first-run-form {
   display: flex;
   align-items: center;

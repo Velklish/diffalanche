@@ -66,6 +66,7 @@ afterEach(() => {
   // saying so (DA-55).
   useStore.setState({
     scan: null,
+    scanFailure: null,
     switching: false,
     newName: "",
     newBase: "head",
@@ -85,6 +86,30 @@ describe("a root with no session", () => {
 
     expect(useStore.getState().status).toBe("no-session");
     expect(useStore.getState().failure).toBeNull();
+    expect(useStore.getState().scan?.repositories).toHaveLength(3);
+  });
+
+  it("says the scan was refused rather than leaving three dashes to mean it", async () => {
+    serve({
+      "/api/review": () => refusal("no-current-session"),
+      "/api/scan": () => refusal("scan-failed", 500),
+    });
+
+    await useStore.getState().loadReview();
+
+    // The screen reads both: no summary to count, and a named reason to show (DA-98).
+    expect(useStore.getState().status).toBe("no-session");
+    expect(useStore.getState().scan).toBeNull();
+    expect(useStore.getState().scanFailure).toBe("scan-failed says so");
+  });
+
+  it("clears the refusal when the scan is asked again and answers", async () => {
+    serve({ "/api/scan": () => new Response(JSON.stringify(SCAN)) });
+    useStore.setState({ scanFailure: "scan-failed says so" });
+
+    await useStore.getState().loadScan();
+
+    expect(useStore.getState().scanFailure).toBeNull();
     expect(useStore.getState().scan?.repositories).toHaveLength(3);
   });
 

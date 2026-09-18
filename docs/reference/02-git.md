@@ -399,6 +399,26 @@ await refreshRepository(config, session, review.base, "repos/group/service-api",
   ([ADR-010](../adr/adr-010-review-task-scope.md)). What the task keeps is the
   path it was given, which now has nothing to show — the answer a file that
   stopped changing gets.
+- **The reads are bounded, the walk is not.** `mapWithLimit(items, limit, run)` keeps at most
+  `limit` of them in flight and returns results in the order the items were given;
+  `SCAN_CONCURRENCY` is 8, and `scanReview` and the server's `summarise` and
+  `candidatesOf` all go through it, so how many git processes a scan has in
+  flight is decided by the code rather than by how many repositories the folder
+  happens to hold (DA-98). Eight because the curve flattens there — the
+  synthetic review — its twenty-one repositories and the sibling worktree the
+  walk counts beside them, twenty-two reads — medians of three runs:
+
+  | Width | 1 | 2 | 4 | 6 | 8 | 12 | 16 | unbounded |
+  |---|---|---|---|---|---|---|---|---|
+  | ms | 802 | 404 | 322 | 261 | 270 | 279 | 279 | 275 |
+
+  Past six it buys nothing, and unbounded is not faster than eight. The
+  bound itself is asserted in calls, in `tests/change-set.test.ts`, because that
+  is the only place it holds whatever the machine is doing. `tests/scope-scan.test.ts`
+  reads a peak off a shim that records each real process starting and finishing —
+  23 with the bound against 50 without it on a quiet machine — and that one is a
+  ceiling rather than a probe: a loaded machine never reaches the peak an
+  unbounded scan would need to cross it.
 - `sameScope(left, right)` is `sameBase` for the other half of the cache's key.
 - `findRepositories(config)` is that list on its own, without reading any git:
   what a command checks a `--repo` against before it writes anything.

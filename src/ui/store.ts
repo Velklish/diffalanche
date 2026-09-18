@@ -501,6 +501,8 @@ export type ScanSummary = {
 type FirstRunSlice = {
   /** `null` until `GET /api/scan` has answered; the screen shows dashes until then. */
   scan: ScanSummary | null;
+  /** Why the scan was refused, and `null` while it has not been — a dash means "not asked". */
+  scanFailure: string | null;
   loadScan: () => Promise<void>;
 };
 
@@ -1249,13 +1251,19 @@ export const useStore = create<Store>()((set, get) => ({
   },
   // first run
   scan: null,
+  scanFailure: null,
   loadScan: async () => {
     try {
       const response = await fetch("/api/scan");
-      if (!response.ok) return;
-      set({ scan: (await response.json()) as ScanSummary });
-    } catch {
-      // The screen says what it knows: without the scan its metrics are dashes.
+      if (!response.ok) {
+        // Named rather than dropped: "asked and refused" is not "not asked yet", and
+        // the screen shows three dashes for the second (DA-98, product principle 5).
+        set({ scanFailure: (await refusal(response)).message });
+        return;
+      }
+      set({ scan: (await response.json()) as ScanSummary, scanFailure: null });
+    } catch (error) {
+      set({ scanFailure: reason(error) });
     }
   },
 

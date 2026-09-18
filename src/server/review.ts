@@ -5,7 +5,14 @@
  * nothing is loaded lazily afterwards (`docs/SPEC.md` section 6).
  */
 import { isAbsolute, relative, resolve, sep } from "node:path";
-import { filterChange, sameBase, sameScope, scanReview } from "../core/change-set.ts";
+import {
+  filterChange,
+  mapWithLimit,
+  SCAN_CONCURRENCY,
+  sameBase,
+  sameScope,
+  scanReview,
+} from "../core/change-set.ts";
 import type { Config } from "../core/config/index.ts";
 import { countReview, list, repositoryInScope, resolveSessionName } from "../core/domain/index.ts";
 import { readRepositoryChange, scan } from "../core/index.ts";
@@ -305,8 +312,10 @@ async function summarise(config: Config): Promise<ScanSummary> {
     exclude: config.exclude,
   });
   const base = await sessionBase(config);
-  const repositories = await Promise.all(
-    found.repositories.map(async (repository) => {
+  const repositories = await mapWithLimit(
+    found.repositories,
+    SCAN_CONCURRENCY,
+    async (repository) => {
       const change = await readRepositoryChange(config.root, repository.path, base, {
         hunks: false,
       });
@@ -317,7 +326,7 @@ async function summarise(config: Config): Promise<ScanSummary> {
         hasChanges: change.files.length > 0,
         files: change.files.length,
       };
-    }),
+    },
   );
   return { root: config.root, repositories, warnings: found.warnings };
 }
@@ -335,10 +344,8 @@ async function candidatesOf(config: Config): Promise<CandidateSet> {
     exclude: config.exclude,
   });
   const base = await sessionBase(config);
-  const read = await Promise.all(
-    found.repositories.map((repository) =>
-      readRepositoryChange(config.root, repository.path, base, { hunks: false }),
-    ),
+  const read = await mapWithLimit(found.repositories, SCAN_CONCURRENCY, (repository) =>
+    readRepositoryChange(config.root, repository.path, base, { hunks: false }),
   );
   return {
     root: config.root,

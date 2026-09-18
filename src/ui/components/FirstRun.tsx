@@ -1,4 +1,4 @@
-import { useEffect } from "react";
+import { useEffect, useState } from "react";
 import type { ScannedRepository } from "../store.ts";
 import { useStore } from "../store.ts";
 import type { BaseMode } from "../types.ts";
@@ -20,12 +20,15 @@ export function FirstRun() {
   const setNewName = useStore((store) => store.setNewName);
   const create = useStore((store) => store.createSession);
   const loadScan = useStore((store) => store.loadScan);
+  const failure = useStore((store) => store.scanFailure);
+  // The one control this screen has that can be pressed twice before it answers.
+  const [retrying, setRetrying] = useState(false);
 
-  // The screen can also be reached by a session being deleted under an open
-  // page, in which case the scan behind it was never asked for.
+  // The screen can also be reached by a session being deleted under an open page, in which case
+  // the scan behind it was never asked for. A refusal is not asked again on its own.
   useEffect(() => {
-    if (scan === null) void loadScan();
-  }, [scan, loadScan]);
+    if (scan === null && failure === null) void loadScan();
+  }, [scan, failure, loadScan]);
 
   // `null`, not an empty list: nothing has been counted until the scan answers,
   // and a zero is a claim where a dash is the truth.
@@ -46,6 +49,23 @@ export function FirstRun() {
           <Metric value={count(repositories, (one) => one.hasChanges)} label="с изменениями" />
           <Metric value={count(repositories, (one) => one.kind === "worktree")} label="worktree" />
         </div>
+
+        {failure === null ? null : (
+          <p className="first-run-refused" role="status">
+            <span className="tag scan">SCAN</span> не прочитан: {failure}{" "}
+            <button
+              type="button"
+              className="ghost small"
+              disabled={retrying}
+              onClick={() => {
+                setRetrying(true);
+                void loadScan().finally(() => setRetrying(false));
+              }}
+            >
+              повторить
+            </button>
+          </p>
+        )}
 
         <form
           className="first-run-form"
@@ -143,7 +163,8 @@ function Metric({ value, label }: { value: string; label: string }) {
   );
 }
 
-/** A dash rather than a zero while the scan has not answered: nothing is claimed. */
+/** A dash rather than a zero while the scan has not answered: nothing is claimed, and a scan
+ * that was refused says so on its own line instead of leaving three dashes to mean it. */
 function count(
   repositories: ScannedRepository[] | null,
   keep: (one: ScannedRepository) => boolean,

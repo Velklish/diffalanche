@@ -16,9 +16,10 @@ import { tmpdir } from "node:os";
 import { join, relative, resolve } from "node:path";
 import { afterAll, beforeAll, describe, expect, it } from "vitest";
 import { generate, PROFILES } from "../scripts/synth.ts";
-import { scanReview } from "../src/core/change-set.ts";
+import { SCAN_CONCURRENCY, scanReview } from "../src/core/change-set.ts";
 import type { Config } from "../src/core/config/index.ts";
 import { loadConfig } from "../src/core/config/index.ts";
+import { createReviewService } from "../src/server/review.ts";
 
 /**
  * The twenty-one repositories of the synthetic review (`docs/SPEC.md` section
@@ -38,6 +39,8 @@ let shim: string;
 let config: Config;
 let logPath: string;
 let argvPath: string;
+let lifePath: string;
+let slow: string;
 
 /** The repositories a run of the scan started a git process in, without repeats. */
 function touched(): string[] {
@@ -106,8 +109,10 @@ beforeAll(async () => {
   shim = mkdtempSync(join(tmpdir(), "diffalanche-git-shim-"));
   logPath = join(shim, "calls.log");
   argvPath = join(shim, "argv.log");
+  lifePath = join(shim, "life.log");
   writeFileSync(logPath, "");
   writeFileSync(argvPath, "");
+  writeFileSync(lifePath, "");
   const real = execFileSync("sh", ["-c", "command -v git"], { encoding: "utf8" }).trim();
   const script = join(shim, "git");
   // `PWD` is unset for the `pwd`: a shell inherits it from whoever started it,
@@ -115,14 +120,27 @@ beforeAll(async () => {
   writeFileSync(
     script,
     `#!/bin/sh\nprintf '%s\\n' "$(unset PWD; pwd)" >> "${logPath}"\n` +
-      `printf '%s\\n' "$*" >> "${argvPath}"\nexec ${real} "$@"\n`,
+      `printf '%s\\n' "$*" >> "${argvPath}"\n` +
+      `printf '+\\n' >> "${lifePath}"\n${real} "$@"\nstatus=$?\nprintf -- '-\\n' >> "${lifePath}"\nexit $status\n`,
   );
   chmodSync(script, 0o755);
+
+  // The same shim with a pause, so the peak is not a race the machine decides
+  // (`docs/reference/02-git.md`, the change-set section).
+  slow = mkdtempSync(join(tmpdir(), "diffalanche-git-slow-"));
+  const slowScript = join(slow, "git");
+  writeFileSync(
+    slowScript,
+    `#!/bin/sh\nprintf '+\\n' >> "${lifePath}"\nsleep 0.05\n${real} "$@"\n` +
+      `status=$?\nprintf -- '-\\n' >> "${lifePath}"\nexit $status\n`,
+  );
+  chmodSync(slowScript, 0o755);
 }, 300_000);
 
 afterAll(() => {
   rmSync(root, { recursive: true, force: true });
   rmSync(shim, { recursive: true, force: true });
+  rmSync(slow, { recursive: true, force: true });
 });
 
 // The shim is a `/bin/sh` script, so the count is taken where the tool is
@@ -137,15 +155,51 @@ describe.skipIf(process.platform === "win32")("the cost of a scoped scan", () =>
     expect(process.env.PATH ?? "").not.toContain(shim);
   }, 300_000);
 
-  /**
-   * What the scan is allowed to run. `git status --porcelain` was the only guard before DA-65 and
-   * is blind to a subcommand that writes: a `git fetch` added to `branch()` would reach the network
-   * and rewrite `refs/remotes/*` with every other check still green.
-   */
+  /** What the scan is allowed to run: a subcommand that writes is what the old status-only guard
+   * could not see (DA-65, `docs/reference/02-git.md`). */
   it("runs only the subcommands that read", async () => {
     await count(() => scanReview(config, { mode: "head" }));
     expect(subcommands()).toEqual(["config", "diff-index", "ls-files", "rev-parse"]);
   }, 300_000);
+
+  /** The peak of git processes one run held open at once, from the shim's two streams. */
+  async function peakOf(run: () => Promise<unknown>): Promise<number> {
+    writeFileSync(lifePath, "");
+    const before = process.env.PATH;
+    process.env.PATH = `${slow}:${before ?? ""}`;
+    try {
+      await run();
+    } finally {
+      if (before === undefined) process.env.PATH = "";
+      else process.env.PATH = before;
+    }
+    let live = 0;
+    let peak = 0;
+    for (const line of readFileSync(lifePath, "utf8").split("\n").filter(Boolean)) {
+      if (line === "+") live += 1;
+      else live -= 1;
+      peak = Math.max(peak, live);
+    }
+    return peak;
+  }
+
+  /** A read holds at most three processes of its own — branch, base, drivers ([02-git.md]). */
+  const CEILING = SCAN_CONCURRENCY * 4;
+
+  // Each of the three call sites, because a cap on one says nothing about the others (DA-98).
+  const sites: [string, () => Promise<unknown>][] = [
+    ["scanReview", () => scanReview(config, { mode: "head" })],
+    ["summary", () => createReviewService(config).summary()],
+    ["candidates", () => createReviewService(config).candidates()],
+  ];
+  for (const [name, run] of sites) {
+    it(`reads at most SCAN_CONCURRENCY repositories at once in ${name}`, async () => {
+      expect(PROFILE.repos).toBeGreaterThan(SCAN_CONCURRENCY);
+      const peak = await peakOf(run);
+      expect(peak).toBeGreaterThan(1);
+      expect(peak).toBeLessThanOrEqual(CEILING);
+    }, 300_000);
+  }
 
   it("starts git in the repositories of the scope and in no others", async () => {
     const scope = SCOPED.map((repo) => ({ repo, paths: null }));

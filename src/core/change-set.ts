@@ -139,18 +139,34 @@ export async function findRepositories(config: Config): Promise<string[]> {
   return found.repositories.map((repo) => repo.path);
 }
 
-/**
- * One scan of the root, inside the scope of the review task. A repository
- * without changes is not part of the review, but its warnings are kept: "ref
- * does not resolve" is why it has none.
- *
- * **The walk finds every repository; only the scoped ones are read.** Finding
- * them starts no git process, and it is what tells a repository the scope names
- * but the root has not from one that is simply quiet — while reading a
- * repository is five git processes, and a task over two repositories of
- * twenty-one must not pay for the other nineteen
- * ([ADR-010](../../docs/adr/adr-010-review-task-scope.md)).
- */
+/** How many repositories are read at once: the width that decides how many git processes a scan
+ * holds, measured rather than picked (DA-98, `docs/reference/02-git.md`). */
+export const SCAN_CONCURRENCY = 8;
+
+/** `Promise.all` over `items` with at most `limit` in flight, answering in the order they were
+ * given; `tests/change-set.test.ts` holds the bound where no machine can soften it. */
+export async function mapWithLimit<T, R>(
+  items: readonly T[],
+  limit: number,
+  run: (item: T) => Promise<R>,
+): Promise<R[]> {
+  const results = new Array<R>(items.length);
+  let next = 0;
+  const worker = async (): Promise<void> => {
+    while (next < items.length) {
+      const at = next;
+      next += 1;
+      const item = items[at];
+      if (item !== undefined) results[at] = await run(item);
+    }
+  };
+  const width = Math.max(1, Math.min(limit, items.length));
+  await Promise.all(Array.from({ length: width }, worker));
+  return results;
+}
+
+/** One scan of the root inside the task's scope: the walk finds every repository and only the
+ * scoped ones are read, five git processes each ([ADR-010](../../docs/adr/adr-010-review-task-scope.md)). */
 export async function scanReview(
   config: Config,
   base: BaseSpec,
@@ -162,13 +178,8 @@ export async function scanReview(
     exclude: config.exclude,
   });
   const selected = found.repositories.filter((repo) => repositoryInScope(scope, repo.path));
-  const scanned = await Promise.all(
-    selected.map(async (repo) =>
-      filterChange(
-        scope,
-        await readRepositoryChange(config.root, repo.path, base, { hunks: true }),
-      ),
-    ),
+  const scanned = await mapWithLimit(selected, SCAN_CONCURRENCY, async (repo) =>
+    filterChange(scope, await readRepositoryChange(config.root, repo.path, base, { hunks: true })),
   );
   const paths = found.repositories.map((repo) => repo.path);
   // A scope entry the walk has no repository for is named rather than dropped:
@@ -201,7 +212,7 @@ export async function scanReview(
  * Brings `diff.json` up to date for one repository, so a comment written right
  * after an edit anchors to the line that is there now. The repository is read
  * again rather than compared against the mtimes of its `.git` and its working
- * tree: one `git diff` on one repository costs less than walking the tree, and
+ * tree: one `diff-index` on one repository costs less than walking the tree, and
  * it is right in the case a mtime comparison gets wrong — a file edited and
  * saved within the same second as the scan.
  *
