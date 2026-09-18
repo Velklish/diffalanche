@@ -241,6 +241,90 @@ function mixedSides(): RepositoryChange {
   };
 }
 
+/** A file whose every line sits on one side: a deletion, or an addition read the other way round. */
+function oneSided(status: "deleted" | "added"): RepositoryChange {
+  const deleted = status === "deleted";
+  const lines: DiffLine[] = [1, 2, 3].map((number) => ({
+    type: deleted ? "delete" : "insert",
+    content: `line ${number}`,
+    oldLine: deleted ? number : null,
+    newLine: deleted ? null : number,
+  }));
+  return {
+    path: REPO,
+    branch: "main",
+    base: { mode: "head", ref: "HEAD", sha: "HEAD" },
+    files: [
+      {
+        path: "src/gone.ts",
+        oldPath: null,
+        status,
+        additions: deleted ? 0 : 3,
+        deletions: deleted ? 3 : 0,
+        patch: "",
+        hunks: [{ header: deleted ? "@@ -1,3 +0,0 @@" : "@@ -0,0 +1,3 @@", lines }],
+        omitted: null,
+      },
+    ],
+    warnings: [],
+  };
+}
+
+describe("a file with hunks on one side only", () => {
+  it("tells a deleted file's new side which side carries the lines", () => {
+    const error = (() => {
+      try {
+        captureAnchor([oneSided("deleted")], REPO, "src/gone.ts", "new", 2);
+      } catch (caught) {
+        return caught as DomainError;
+      }
+      return null;
+    })();
+
+    expect(error?.code).toBe("line-not-in-diff");
+    // The file is nothing but hunks, so the old message was a false statement
+    // about it, and it named no side to retry on.
+    expect(error?.message).not.toContain("has no hunks");
+    expect(error?.message).toBe(
+      `${REPO}/src/gone.ts is deleted and its hunks have lines on the old side only, ` +
+        "so line 2 cannot be anchored on the new side; anchor it on the old side",
+    );
+  });
+
+  it("tells an added file's old side the same way round", () => {
+    const error = (() => {
+      try {
+        captureAnchor([oneSided("added")], REPO, "src/gone.ts", "old", 2);
+      } catch (caught) {
+        return caught as DomainError;
+      }
+      return null;
+    })();
+
+    expect(error?.message).toBe(
+      `${REPO}/src/gone.ts is added and its hunks have lines on the new side only, ` +
+        "so line 2 cannot be anchored on the old side; anchor it on the new side",
+    );
+  });
+
+  it("still says a file with no hunks at all has none", () => {
+    const change = oneSided("deleted");
+    const file = change.files[0];
+    if (file !== undefined) file.hunks = [];
+
+    const error = (() => {
+      try {
+        captureAnchor([change], REPO, "src/gone.ts", "new", 2);
+      } catch (caught) {
+        return caught as DomainError;
+      }
+      return null;
+    })();
+
+    expect(error?.message).toContain("has no hunks in the change set");
+  });
+});
+
 describe("anchor context by side", () => {
   it("keeps a new-side anchor to the lines the new file has", () => {
     const anchor = captureAnchor([mixedSides()], REPO, "src/mixed.ts", "new", 13);

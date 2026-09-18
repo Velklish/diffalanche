@@ -262,6 +262,21 @@ where the diff is. A file left out of the diff for being binary or too large
 carries no lines to anchor to; the refusal says which, and a file-level anchor
 on it is still fine.
 
+**A file whose hunks are all on the other side is a third answer**, and it names
+the side rather than the file: "`repos/core/cargos-api/src/gone.ts` is deleted
+and its hunks have lines on the old side only, so line 2 cannot be anchored on
+the new side; anchor it on the old side". A deleted file asked about with the
+`new` side and an added file asked about with the `old` side both land here, and
+the `comment` command defaults the side to `new`, so a deleted file reaches it
+from the command line. The measure is the file's own hunks: a hunk with no line
+numbers on the side being asked about is not a candidate for "nearest" at all,
+which is different from being infinitely far from the line.
+
+"Has no hunks in the change set" is kept for the file that really has none —
+`hunks: []` with `omitted: null`, which a change set read without hunks and a
+mode-only change both produce. Saying it about a file that is nothing but hunks
+was a false statement about the file, and it named no side to retry on.
+
 ### Roles
 
 `resolve` and `reopen` refuse any role but `human` and change nothing

@@ -170,6 +170,14 @@ and `bun run release` refuses a version that has no section. See
 
 ### Fixed
 
+- **A line that cannot be anchored is refused for the reason it really has**
+  (DA-101). `captureAnchor` said "`<file>` has no hunks in the change set" about
+  a file that is nothing but hunks whenever every hunk of it lacked line numbers
+  on the side asked about — a deleted file with the default `--side new`, an
+  added file with `--side old`. The refusal now names the side that carries the
+  lines and the one to anchor on instead, and "has no hunks" is kept for a file
+  that really has none. See [04-domain.md](docs/reference/04-domain.md).
+
 - **The severity order is storage's list and nobody else's** (DA-83). The domain
   kept a second copy of `critical, warning, nit, question` for `worstSeverity`,
   against the decision that the value lists are exported once from

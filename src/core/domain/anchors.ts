@@ -41,23 +41,25 @@ function findFile(repositories: RepositoryChange[], repo: string, path: string):
   return file;
 }
 
-/** How far a line is from a hunk on the chosen side; `0` while inside it. */
-function distanceTo(hunk: Hunk, side: Side, line: number): number {
+/** How far a line is from a hunk on the chosen side; `0` inside it, `null` when the hunk has no lines on that side. */
+function distanceTo(hunk: Hunk, side: Side, line: number): number | null {
   const numbers = hunk.lines
     .map((one) => lineNumber(one, side))
     .filter((one): one is number => one !== null);
   const first = numbers[0];
   const last = numbers.at(-1);
-  if (first === undefined || last === undefined) return Number.POSITIVE_INFINITY;
+  if (first === undefined || last === undefined) return null;
   if (line >= first && line <= last) return 0;
   return line < first ? first - line : line - last;
 }
 
+/** `null` means no hunk of the file has lines on this side, which is not the same as no hunks. */
 function nearest(file: FileChange, side: Side, line: number): Hunk | null {
   let best: Hunk | null = null;
   let bestDistance = Number.POSITIVE_INFINITY;
   for (const hunk of file.hunks) {
     const distance = distanceTo(hunk, side, line);
+    if (distance === null) continue;
     if (distance < bestDistance) {
       best = hunk;
       bestDistance = distance;
@@ -99,12 +101,26 @@ export function captureAnchor(
     };
   }
 
+  if (file.hunks.length === 0) {
+    throw new DomainError(
+      "line-not-in-diff",
+      `${repo}/${path} has no hunks in the change set, so line ${line} cannot be anchored`,
+    );
+  }
+
   const closest = nearest(file, side, line);
+  if (closest !== null) {
+    throw new DomainError(
+      "line-not-in-diff",
+      `line ${line} of ${repo}/${path} is not in the change set on the ${side} side; ` +
+        `the nearest hunk is ${closest.header}`,
+    );
+  }
+
+  const other: Side = side === "new" ? "old" : "new";
   throw new DomainError(
     "line-not-in-diff",
-    closest === null
-      ? `${repo}/${path} has no hunks in the change set, so line ${line} cannot be anchored`
-      : `line ${line} of ${repo}/${path} is not in the change set on the ${side} side; ` +
-          `the nearest hunk is ${closest.header}`,
+    `${repo}/${path} is ${file.status} and its hunks have lines on the ${other} side only, ` +
+      `so line ${line} cannot be anchored on the ${side} side; anchor it on the ${other} side`,
   );
 }
