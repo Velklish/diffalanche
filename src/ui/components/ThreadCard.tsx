@@ -2,32 +2,29 @@ import { memo, useCallback } from "react";
 import { isAwaiting } from "../../core/domain/counters.ts";
 import { threadAnchor } from "../anchor.ts";
 import { revealCard } from "../reveal.ts";
-import type { RailScope } from "../store.ts";
+import type { RailScope, ReplyPlace } from "../store.ts";
 import { useStore } from "../store.ts";
 import { relativeTime } from "../time.ts";
 import type { Comment, Reply } from "../types.ts";
 
-/**
- * One thread, as handoff section 3 draws it: the severity chip, the anchor, the
- * state, the body, the replies coloured by role, and `Resolve` / `Reopen` and
- * `Reply`. The rail and the widget under the anchored line are the same card;
- * `scope` is only what the anchor is spelled with.
- *
- * `orphaned` and the `auto` / `labelled by` markers are drawn by the phases
- * that produce them — re-anchoring (DA-43) and the model (DA-36).
- */
+/** One thread of handoff section 3, drawn the same in the rail and under its
+ * line; `place` is which copy, and `scope` is not ([08-ui.md], DA-94). */
 export const ThreadCard = memo(function ThreadCard({
   thread,
   scope,
+  place,
   onFocus,
 }: {
   thread: Comment;
   scope: RailScope;
+  /** Which copy of the thread this is; only the one `Reply` was pressed on
+   * draws the field, and only it takes the caret. */
+  place: ReplyPlace;
   /** What focusing this card means where it is shown: the rail also scrolls the diff. */
   onFocus: (id: string) => void;
 }) {
   const focused = useStore((store) => store.focusId === thread.id);
-  const replying = useStore((store) => store.replyId === thread.id);
+  const replying = useStore((store) => store.replyId === thread.id && store.replyAt === place);
   const busy = useStore((store) => store.busy[thread.id] === true);
 
   const resolved = thread.status === "resolved";
@@ -75,7 +72,7 @@ export const ThreadCard = memo(function ThreadCard({
         <button
           type="button"
           className="ghost small"
-          onClick={() => useStore.getState().openReply(replying ? null : thread.id)}
+          onClick={() => useStore.getState().openReply(replying ? null : thread.id, place)}
         >
           Reply
         </button>

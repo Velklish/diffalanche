@@ -112,6 +112,9 @@ export type ComposerTarget = {
  */
 export type Selection = { repo: string; path: string; side: Side; a: number; b: number };
 
+/** Where a thread is drawn: under the line it is anchored to, and in the rail. */
+export type ReplyPlace = "widget" | "rail";
+
 /** What the sidebar footer says about the live stream ([08-ui.md]). */
 export type Connection = "connecting" | "watching" | "reconnecting";
 
@@ -395,6 +398,9 @@ type ThreadsSlice = {
   focusId: string | null;
   /** The thread whose reply field is open; one at a time, as the handoff has it. */
   replyId: string | null;
+  /** Which copy of the thread the reader pressed `Reply` on: one thread is on
+   * screen twice, and only one of them draws the field ([08-ui.md]). */
+  replyAt: ReplyPlace;
   replyText: string;
   railScope: RailScope;
   unansweredOnly: boolean;
@@ -413,7 +419,7 @@ type ThreadsSlice = {
   filterRail: (filter: "open" | "awaiting") => void;
   /** Focusing a thread makes its file the current one, so the diff can be scrolled to it. */
   focusThread: (id: string) => void;
-  openReply: (id: string | null) => void;
+  openReply: (id: string | null, at?: ReplyPlace) => void;
   setReplyText: (text: string) => void;
   sendReply: (id: string) => Promise<void>;
   /** `resolve` and `reopen`: only a human ever calls them ([ADR-004]). */
@@ -1059,6 +1065,7 @@ export const useStore = create<Store>()((set, get) => ({
   // threads
   focusId: null,
   replyId: null,
+  replyAt: "rail",
   replyText: "",
   railScope: "file",
   unansweredOnly: false,
@@ -1083,7 +1090,7 @@ export const useStore = create<Store>()((set, get) => ({
         : { repo: thread.repo, path: thread.path }),
     });
   },
-  openReply: (replyId) => set({ replyId, replyText: "" }),
+  openReply: (replyId, at = "rail") => set({ replyId, replyAt: at, replyText: "" }),
   setReplyText: (replyText) => set({ replyText }),
   sendReply: async (id) => {
     const text = get().replyText.trim();

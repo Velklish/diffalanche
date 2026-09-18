@@ -81,7 +81,13 @@ export function ThreadRail() {
           </p>
         ) : (
           visible.map((thread) => (
-            <ThreadCard key={thread.id} thread={thread} scope={scope} onFocus={revealThread} />
+            <ThreadCard
+              key={thread.id}
+              thread={thread}
+              scope={scope}
+              place="rail"
+              onFocus={revealThread}
+            />
           ))
         )}
       </div>

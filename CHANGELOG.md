@@ -202,6 +202,15 @@ and `bun run release` refuses a version that has no section. See
 
 ### Fixed
 
+- **`Reply` opens one field, in the copy of the thread it was pressed on**
+  (DA-94). A thread is on screen twice on purpose — under the line it is
+  anchored to and in the rail — and both copies drew the reply field and both
+  textareas focused themselves as they mounted. The rail's came later in the
+  tree and won, so pressing `Reply` under the line sent the caret and the scroll
+  to the right column while the field under the line sat open and inert, and a
+  screen reader found two controls labelled `reply` for one thread. The store
+  remembers which copy was pressed; a thread with no widget still opens its
+  field in the rail.
 - **A toast repeated gets its full 2.2 seconds** (DA-105). The lifetime was
   counted from the first time that exact string was set: a repeat compared equal
   under `Object.is`, so the component never re-rendered, the timer never

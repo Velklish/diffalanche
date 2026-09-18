@@ -152,10 +152,74 @@ test("resolve takes the thread out of the open list, and reopen brings it back",
     .toBe(true);
 });
 
+/** One thread is on screen twice, and only the copy `Reply` was pressed on
+ * draws the field and takes the caret (DA-94). */
+test("Reply opens one field, in the copy it was pressed on", async ({ page }) => {
+  const thread = await focusOneThread(page);
+  const widget = page.locator(`[data-thread-anchor="${thread.id}"]`);
+  const card = page.locator(`.rail-list [data-thread="${thread.id}"]`);
+  // Both copies are on screen: the rail is on the file the widget belongs to.
+  await expect(widget).toHaveCount(1);
+  await expect(card).toHaveCount(1);
+
+  await widget.getByRole("button", { name: "Reply" }).click();
+  await expect(page.locator(".reply-field")).toHaveCount(1);
+  await expect(widget.locator(".reply-field")).toBeFocused();
+
+  // And the other way round, from the rail.
+  await widget.getByRole("button", { name: "Reply" }).click();
+  await expect(page.locator(".reply-field")).toHaveCount(0);
+  await card.getByRole("button", { name: "Reply" }).click();
+  await expect(page.locator(".reply-field")).toHaveCount(1);
+  await expect(card.locator(".reply-field")).toBeFocused();
+});
+
+/** Since DA-94 the rail does not draw the field the widget owns, so the card
+ * holding it may not be unmounted from under the caret (ADR-008). */
+test("a reply being written in a widget keeps its card mounted", async ({ page }) => {
+  // The heaviest case here — a whole review, a reveal, and a scroll that
+  // unmounts cards — and it ran past the default once under load.
+  test.setTimeout(60_000);
+  const thread = await focusOneThread(page);
+  const widget = page.locator(`[data-thread-anchor="${thread.id}"]`);
+  await widget.getByRole("button", { name: "Reply" }).click();
+  await widget.locator(".reply-field").fill("still here");
+
+  // The far end of the review, well past the card's 1000 px mount margin.
+  const card = page.locator(`.file-card[data-path="${thread.path}"]`).first();
+  await expect(card.locator(".file-body.mounted")).toHaveCount(1);
+  await page.evaluate(() => window.scrollTo(0, document.documentElement.scrollHeight));
+  await page.evaluate(() => new Promise((done) => setTimeout(done, 400)));
+
+  await expect(page.locator(".reply-field")).toHaveCount(1);
+  await expect(page.locator(".reply-field")).toHaveValue("still here");
+});
+
+test("a thread with no widget opens its field in the rail", async ({ page }) => {
+  await open(page);
+  const bundle = await review(page);
+  // A comment on a whole file has no line, so it has no row to sit under and
+  // the rail is the only place it is drawn (FileCard drops it).
+  const thread = bundle.comments.find(
+    (comment) => comment.repo !== null && comment.path !== null && comment.line === null,
+  );
+  if (thread === undefined) throw new Error("the fixture has no file-level comment");
+  await page.locator(".rail-tabs .tab").nth(1).click();
+
+  const card = page.locator(`.rail-list [data-thread="${thread.id}"]`);
+  await expect(page.locator(`[data-thread-anchor="${thread.id}"]`)).toHaveCount(0);
+  await card.getByRole("button", { name: "Reply" }).click();
+
+  await expect(page.locator(".reply-field")).toHaveCount(1);
+  await expect(card.locator(".reply-field")).toBeFocused();
+});
+
 test("a reply from the rail is written as the configured author with role human", async ({
   page,
 }) => {
   const thread = await focusOneThread(page);
+  // `.rail-list` on purpose: the rail's own `Reply` is what this case is about,
+  // and the same thread is drawn under its line as well (DA-94).
   const card = page.locator(`.rail-list [data-thread="${thread.id}"]`);
 
   await card.getByRole("button", { name: "Reply" }).click();
