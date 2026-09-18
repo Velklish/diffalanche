@@ -120,7 +120,8 @@ async function acquire(lockDir: string, token: string, staleMs: number): Promise
     expiresAt: new Date(now + staleMs).toISOString(),
   };
   try {
-    await writeFileAtomic(infoPath(lockDir), toJson(info));
+    // Not durable: a lock outlives neither the write it guards nor the crash.
+    await writeFileAtomic(infoPath(lockDir), toJson(info), { durable: false });
   } catch (error) {
     // The directory was moved out from under us between the `mkdir` and this
     // write: another writer was taking over a lock it had found stale a moment

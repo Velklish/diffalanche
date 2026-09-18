@@ -193,7 +193,8 @@ export async function writeDiffCache(
   diff: DiffCache,
 ): Promise<void> {
   await ensureSessionDir(dataDir, name);
-  await writeFileAtomic(diffCachePath(dataDir, name), toJson(diff));
+  // Not durable: git is the source of truth and the next scan writes it again.
+  await writeFileAtomic(diffCachePath(dataDir, name), toJson(diff), { durable: false });
 }
 
 // ---------------------------------------------------------------------------

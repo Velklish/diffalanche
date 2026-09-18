@@ -170,6 +170,19 @@ and `bun run release` refuses a version that has no section. See
 
 ### Fixed
 
+- **An atomic write flushes the directory entry that publishes it** (DA-90). The
+  temporary file was flushed and the rename that gives it its name was left in
+  the page cache, so a `comment` that exited 0 could be absent after a power
+  loss with the previous `comments.json` still in the listing. `review.json`,
+  `comments.json` and `current` now sync the containing directory after the
+  rename; `diff.json` and the lock's `info.json` pass `durable: false`, being a
+  cache git rebuilds and a file no crash outlives. A platform that will not open
+  a directory skips the flush, and so do `EINVAL` and `ENOTSUP` from the flush
+  itself; every other failure — `EIO` above all — reaches the caller as a
+  `StorageError` naming the directory, rather than leaving a command to exit 0
+  on durability it did not get or 2 with a stack. What this closes is
+  the operating-system window and not the drive-cache one — on macOS `fsync(2)`
+  does not reach the drive. See [03-storage.md](docs/reference/03-storage.md).
 - **A lock left by a killed writer is taken over instead of hanging the next
   one** (DA-89). The wait was ten seconds against a thirty-second lease, so a
   writer arriving in the first twenty seconds after a holder died waited the

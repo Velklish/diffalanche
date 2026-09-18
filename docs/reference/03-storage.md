@@ -78,12 +78,46 @@ that treated it as absent would overwrite it.
 
 ## Atomic writes
 
-`writeFileAtomic(path, content)` writes a temporary file **in the target's own
-directory** — a rename across filesystems is a copy, and a copy is the torn
-write this exists to prevent — flushes it with `fsync`, and renames it over the
-target. A reader therefore sees either the previous file or the new one. A write
-that fails before the rename removes its temporary file and leaves the target
-exactly as it was.
+`writeFileAtomic(path, content, options?)` writes a temporary file **in the
+target's own directory** — a rename across filesystems is a copy, and a copy is
+the torn write this exists to prevent — flushes it with `fsync`, and renames it
+over the target. A reader therefore sees either the previous file or the new
+one. A write that fails before the rename removes its temporary file and leaves
+the target exactly as it was.
+
+Two guarantees live here, and only the first is about readers. The rename is
+atomic against a concurrent reader whatever else happens. **Surviving a power
+cut is the second**, and it needs the directory entry the rename created to
+reach the disk as well as the bytes that entry points at, so the write opens the
+containing directory and syncs it after the rename. Without that step the
+`fsync` of the temporary file buys nothing on its own: it flushes the data of a
+file whose only name is about to be discarded, and a `comment` that exited 0
+could be absent after a power loss with the previous `comments.json` still in
+the listing.
+
+`options.durable: false` leaves the directory sync out, and two writes ask for
+it: `diff.json`, a cache git is the source of truth for and the next scan writes
+again, and the lock's `info.json`, which no crash outlives. The choice belongs
+to the caller rather than to the function guessing from the path, and the scan
+path — measured against the budget table of `docs/SPEC.md` section 6 — pays
+nothing for durability it does not need.
+
+What the sync does not close is the drive's own cache. On macOS `fsync(2)` does
+not ask the drive to flush it: the manual page says the drive "may not
+physically write the data to the platters for quite some time" and points at
+`F_FULLFSYNC`, which neither Node nor Bun exposes. So the honest statement is
+that a durable write survives the operating system losing power, not the drive.
+A platform that refuses to open a directory at all — the hypothesis is Windows,
+where the build ships binaries — does not turn a successful write into an error:
+the flush is skipped and the write stands, because the rename has already
+published it. **A flush that was attempted and failed is a different event**, and
+only `EINVAL` and `ENOTSUP` are read as the platform declining it. Everything
+else, `EIO` above all, comes back to the caller as a `StorageError` naming the
+directory — `/root/.diffalanche/reviews/one: durability flush failed: EIO` — so
+it reads like every other refusal of this module and the CLI answers 1 with that
+line rather than 2 with a stack. A write whose durability was asked for and did
+not happen is what the caller wanted to hear about, and swallowing it would
+leave `comment` exiting 0 on the one outcome this section promises against.
 
 ## The lock
 
