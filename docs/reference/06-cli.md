@@ -101,6 +101,13 @@ Every command takes these, and they go after the command: `diffalanche diff
 | `--root <dir>` | the current directory |
 | `--help`, `-h` | prints the options of that command and does nothing else |
 
+**`--review` names a session on every command, and a name no session has is exit
+code 1 on every one of them.** `version` is the only command that reads no
+session at all. On `serve` the flag means the task the address it prints is on —
+see below — rather than the only task the server will answer about: the server
+answers about every task, one per request
+([07-server.md](07-server.md)).
+
 `--root` is with the two of the specification because the data directory is
 derived from it: without it, no command run from anywhere but the root would
 find the review. A `--root` that is not a directory that exists is exit code 1,
@@ -121,6 +128,25 @@ into `diff.json`, watches for changes, and listens on `127.0.0.1`. It prints the
 address and the counters under it, or, on a root with no current session, the
 line that says how to make one — the server serves the screen that offers it.
 `--verbose` logs every request to stderr.
+
+**`--review <name>` on `serve` is the task the printed address is on.** The
+address becomes `http://127.0.0.1:<port>/?review=<name>`, the counters under it
+are that task's, and `--open` opens that address rather than the bare one;
+`current` is not moved, which is the point — `review new <name> --no-use` prints
+the same shape of link so an agent can hand a human a task without taking over
+the screen they are on
+([ADR-010](../adr/adr-010-review-task-scope.md)). The name is resolved before
+the socket opens, so a misspelling is exit code 1 with the domain's own
+`no review session "…"` and no server is left running. Without the flag the
+address is the bare one and the counters are the current session's, exactly as
+before: `current` never enters the address on its own.
+
+The server behind that address still answers about every task, one per request,
+so the flag narrows nothing — it chooses the window. One thing it does not
+change is which session the watcher follows: that is the current one whatever
+the page asks for, so a window on another task hears no live event about *its*
+comments ([07-server.md](07-server.md),
+[DA-55.1](../backlog/queue/DA-55.1-watcher-follows-one-session.md)).
 
 **`serve` exits non-zero only for what stops it from starting**, and everything
 after the socket opens is a line rather than an exit. A file of the data

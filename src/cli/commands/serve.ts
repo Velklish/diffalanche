@@ -3,7 +3,7 @@ import { spawn } from "node:child_process";
 import { DomainError } from "../../core/domain/index.ts";
 import type { ReviewTotals } from "../../core/types.ts";
 import { startReviewServer } from "../../server/serve.ts";
-import { flag, noExtra } from "../args.ts";
+import { flag, noExtra, text } from "../args.ts";
 import type { Command } from "../command.ts";
 import type { Output } from "../output.ts";
 import { VERSION } from "../version.ts";
@@ -30,9 +30,12 @@ function openBrowser(url: string, io: Output): void {
 
 /** The line under the address. Nothing it reads is a reason to end the run: the
  * server is already serving, and `serve` only exits non-zero before it starts. */
-async function summary(server: { review: { document: () => Promise<{ totals: ReviewTotals }> } }) {
+async function summary(
+  server: { review: { document: (session?: string) => Promise<{ totals: ReviewTotals }> } },
+  session: string | undefined,
+) {
   try {
-    const { totals } = await server.review.document();
+    const { totals } = await server.review.document(session);
     return (
       `  ${totals.repositories} repositories, ${totals.files} files, ` +
       `${totals.lines} changed lines\n`
@@ -61,6 +64,9 @@ export const serve: Command = {
   },
   run: async (context, args) => {
     noExtra(args, 0);
+    // Resolved before the socket opens, and only when the flag is there: a
+    // misspelling must be refused, and `current` must not enter the address.
+    const session = text(args, "review") === undefined ? undefined : await context.session();
     const config = await context.config();
     const server = await startReviewServer({
       config,
@@ -68,8 +74,9 @@ export const serve: Command = {
       verbose: flag(args, "verbose"),
     });
 
-    context.io.out(`diffalanche ${VERSION} on ${server.url}\n${await summary(server)}`);
-    if (flag(args, "open")) openBrowser(server.url, context.io);
+    const url = session === undefined ? server.url : `${server.url}/?review=${session}`;
+    context.io.out(`diffalanche ${VERSION} on ${url}\n${await summary(server, session)}`);
+    if (flag(args, "open")) openBrowser(url, context.io);
     return 0;
   },
 };

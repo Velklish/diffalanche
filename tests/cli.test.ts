@@ -56,6 +56,33 @@ async function freePort(): Promise<number> {
   });
 }
 
+const cli = fileURLToPath(new URL("../src/cli/index.ts", import.meta.url));
+
+type Served = { port: number; out: string; err: string; exited: number[]; stop: () => void };
+
+/** Runs `serve` in a process of its own until it has printed the address and the
+ * line under it; a `serve` that starts never returns, so `run` cannot do this. */
+async function serve(...extra: string[]): Promise<Served> {
+  const port = await freePort();
+  const argv = [cli, "serve", "--root", root, "--port", String(port), ...extra];
+  const child = spawn(process.execPath, argv, { stdio: ["ignore", "pipe", "pipe"] });
+  const served: Served = { port, out: "", err: "", exited: [], stop: () => child.kill() };
+  child.stdout.on("data", (chunk: Buffer) => {
+    served.out += chunk.toString();
+  });
+  child.stderr.on("data", (chunk: Buffer) => {
+    served.err += chunk.toString();
+  });
+  child.on("exit", (code) => served.exited.push(code ?? -1));
+
+  const deadline = Date.now() + 30_000;
+  while (Date.now() < deadline && served.out.split("\n").length < 3) {
+    if (served.exited.length > 0) break;
+    await new Promise((done) => setTimeout(done, 50));
+  }
+  return served;
+}
+
 /** The describes that work on a review build a fixture root; the usage one does not. */
 function useFixtureRoot(): void {
   beforeEach(() => {
@@ -379,33 +406,6 @@ describe("the directory flags", () => {
 describe("serve on a review that cannot be read", () => {
   useFixtureRoot();
 
-  const cli = fileURLToPath(new URL("../src/cli/index.ts", import.meta.url));
-
-  type Served = { port: number; out: string; err: string; exited: number[]; stop: () => void };
-
-  /** Runs `serve` until it has printed the address and the line under it. */
-  async function serve(): Promise<Served> {
-    const port = await freePort();
-    const child = spawn(process.execPath, [cli, "serve", "--root", root, "--port", String(port)], {
-      stdio: ["ignore", "pipe", "pipe"],
-    });
-    const served: Served = { port, out: "", err: "", exited: [], stop: () => child.kill() };
-    child.stdout.on("data", (chunk: Buffer) => {
-      served.out += chunk.toString();
-    });
-    child.stderr.on("data", (chunk: Buffer) => {
-      served.err += chunk.toString();
-    });
-    child.on("exit", (code) => served.exited.push(code ?? -1));
-
-    const deadline = Date.now() + 30_000;
-    while (Date.now() < deadline && served.out.split("\n").length < 3) {
-      if (served.exited.length > 0) break;
-      await new Promise((done) => setTimeout(done, 50));
-    }
-    return served;
-  }
-
   it("starts the server anyway and says so under the address", async () => {
     await inRoot("review", "new", "alpha");
     // A hand-edited file is an ordinary event (`docs/SPEC.md` section 3), and
@@ -444,6 +444,55 @@ describe("serve on a review that cannot be read", () => {
       expect(served.exited, `stdout: ${served.out}\nstderr: ${served.err}`).toEqual([]);
       expect(served.out).toContain("no current review session");
       expect(served.out).not.toContain("the review could not be read");
+    } finally {
+      served.stop();
+    }
+  }, 60_000);
+});
+
+describe("serve on a named review task", () => {
+  useFixtureRoot();
+
+  /** Two sessions whose totals differ, so an assertion about which one was read can fail. */
+  async function twoSessions(): Promise<void> {
+    await inRoot("review", "new", "whole");
+    await inRoot("review", "new", "narrow", "--repo", REPOS[0], "--no-use");
+    expect(readFileSync(dataFile("current"), "utf8")).toBe("whole\n");
+  }
+
+  it("refuses a name there is no session for, before the socket opens", async () => {
+    await twoSessions();
+    // In process, because this run never reaches `startReviewServer`: there is
+    // nothing left listening to close.
+    const result = await inRoot("serve", "--port", String(await freePort()), "--review", "nope");
+    expect(result.code).toBe(1);
+    expect(result.out).toBe("");
+    expect(result.err).toContain('no review session "nope"');
+  }, 60_000);
+
+  it("opens on that task: the address carries it and the counters are its own", async () => {
+    await twoSessions();
+    const served = await serve("--review", "narrow");
+    try {
+      expect(served.exited, `stdout: ${served.out}\nstderr: ${served.err}`).toEqual([]);
+      expect(served.out).toContain(`http://127.0.0.1:${served.port}/?review=narrow`);
+      // The scope is one repository of the two, so the counters say so and the
+      // current session's would not.
+      expect(served.out).toContain("1 repositories");
+      expect(served.out).not.toContain(`${REPOS.length} repositories`);
+    } finally {
+      served.stop();
+    }
+  }, 60_000);
+
+  it("leaves the address and the counters alone without the flag", async () => {
+    await twoSessions();
+    const served = await serve();
+    try {
+      expect(served.exited, `stdout: ${served.out}\nstderr: ${served.err}`).toEqual([]);
+      expect(served.out).toContain(`http://127.0.0.1:${served.port}\n`);
+      expect(served.out).not.toContain("?review=");
+      expect(served.out).toContain(`${REPOS.length} repositories`);
     } finally {
       served.stop();
     }

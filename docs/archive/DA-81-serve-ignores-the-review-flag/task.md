@@ -50,7 +50,7 @@ The documentation is split on whether this is a hole or a carve-out. [06-cli.md]
 
 ## Work to do
 
-- Decide, first, which of the two `serve --review t2` should mean, and write the decision down where the flag is documented. The candidates are: (a) honour it as the window the server opens on — resolve the name through `context.session()`, pass it into `startReviewServer` as the initial task, print `?review=<name>` in the address and open that, leaving `current` alone; or (b) refuse it — `serve` serves every task and the task is chosen per request, so a name on the command line is a usage error like an unknown flag. Option (a) has to answer what the server does when the watcher follows a different session, which is [DA-55.1-watcher-follows-one-session.md](../queue/DA-55.1-watcher-follows-one-session.md)'s subject; option (b) is smaller and costs an agent the one-command gesture.
+- Decide, first, which of the two `serve --review t2` should mean, and write the decision down where the flag is documented. The candidates are: (a) honour it as the window the server opens on — resolve the name through `context.session()`, pass it into `startReviewServer` as the initial task, print `?review=<name>` in the address and open that, leaving `current` alone; or (b) refuse it — `serve` serves every task and the task is chosen per request, so a name on the command line is a usage error like an unknown flag. Option (a) has to answer what the server does when the watcher follows a different session, which is [DA-55.1-watcher-follows-one-session.md](../../backlog/queue/DA-55.1-watcher-follows-one-session.md)'s subject; option (b) is smaller and costs an agent the one-command gesture.
 - Whichever is chosen, the name must be validated before the socket opens: today a misspelling reaches no code that could notice it.
 - If (a): the summary line under the address must be that task's counters, not `current`'s, and `--open` must open the URL that was printed rather than a second one built from `server.url`.
 - If (b): the refusal belongs with the other usage refusals of [src/cli/errors.ts](../../../src/cli/errors.ts) and must say what to do instead — the `?review=` link, or `review use`.
@@ -58,9 +58,9 @@ The documentation is split on whether this is a hole or a carve-out. [06-cli.md]
 
 ## Out of scope
 
-- Which session the watcher follows while the server runs. That is one session today regardless of what the page asks for, and it is [DA-55.1-watcher-follows-one-session.md](../queue/DA-55.1-watcher-follows-one-session.md).
-- Giving the CLI a way to set a scope on a session, [DA-53.1-cli-cannot-set-a-scope.md](DA-53.1-cli-cannot-set-a-scope.md).
-- The other things `serve` does not survive: an unreadable data directory is [DA-64-serve-exits-on-unreadable-data.md](../../archive/DA-64-serve-exits-on-unreadable-data/task.md), a refused port is [DA-71-refused-port-exits-2-with-a-stack.md](../../archive/DA-71-refused-port-exits-2-with-a-stack/task.md).
+- Which session the watcher follows while the server runs. That is one session today regardless of what the page asks for, and it is [DA-55.1-watcher-follows-one-session.md](../../backlog/queue/DA-55.1-watcher-follows-one-session.md).
+- Giving the CLI a way to set a scope on a session, [DA-53.1-cli-cannot-set-a-scope.md](../../backlog/active/DA-53.1-cli-cannot-set-a-scope.md).
+- The other things `serve` does not survive: an unreadable data directory is [DA-64-serve-exits-on-unreadable-data.md](../DA-64-serve-exits-on-unreadable-data/task.md), a refused port is [DA-71-refused-port-exits-2-with-a-stack.md](../DA-71-refused-port-exits-2-with-a-stack/task.md).
 
 ## Verification
 

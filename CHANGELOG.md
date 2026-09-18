@@ -179,6 +179,15 @@ and `bun run release` refuses a version that has no section. See
 
 ### Fixed
 
+- **`serve --review <name>` opens on that task instead of being ignored**
+  (DA-81). The flag parsed everywhere and was read by every command but this
+  one, so a misspelling was exit 0 with no message while the same name was exit
+  1 on `list`, `diff`, `show`, `comment` and `export`. It now names the task the
+  printed address is on — `http://127.0.0.1:<port>/?review=<name>`, that task's
+  counters under it, and `--open` opening it — resolved before the socket opens,
+  so an unknown name is the domain's own refusal and nothing is left running.
+  `current` is not moved and never enters the address on its own. See
+  [06-cli.md](docs/reference/06-cli.md).
 - **A rebound name no longer reads the review** (DA-62). Both origin guards
   asked whether the client's `Origin` matched the client's own `Host`, which a
   DNS-rebinding page controls on both sides. Every request under `/api/` now
