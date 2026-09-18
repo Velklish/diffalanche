@@ -4,6 +4,7 @@
  * something says it changed — the whole document arrives in one response and
  * nothing is loaded lazily afterwards (`docs/SPEC.md` section 6).
  */
+import { isAbsolute, relative, resolve, sep } from "node:path";
 import { filterChange, sameBase, sameScope, scanReview } from "../core/change-set.ts";
 import type { Config } from "../core/config/index.ts";
 import { countReview, list, repositoryInScope, resolveSessionName } from "../core/domain/index.ts";
@@ -267,6 +268,9 @@ async function freshRepository(
   session: string,
   repo: string,
 ): Promise<RepositoryChange | null> {
+  // The path comes from the URL and goes to a `join` against the root, so
+  // containment is checked here, before any git process starts.
+  if (!underRoot(config.root, repo)) return null;
   const review = await readReview(config.dataDir, session);
   // A repository the task is not about has nothing to say to it, and reading it
   // would be four git processes for a change set nothing may show.
@@ -278,6 +282,15 @@ async function freshRepository(
   // A repository with nothing to show is not part of a change set: the route
   // turns that into the 404 the page reads as "it has left the review".
   return change.files.length === 0 ? null : change;
+}
+
+/** Whether a repository path names something inside the root: a path check,
+ * no walk of the filesystem ([07-server.md](../../docs/reference/07-server.md)). */
+function underRoot(root: string, repo: string): boolean {
+  // `..foo` is a directory name and not a step up, so the separator is part of
+  // what is compared.
+  const step = relative(resolve(root), resolve(root, repo));
+  return step !== "" && step !== ".." && !step.startsWith(`..${sep}`) && !isAbsolute(step);
 }
 
 /**

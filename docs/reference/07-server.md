@@ -225,6 +225,30 @@ on the synthetic review, from the edit to the frame that showed it: 295 ms for a
 window on a named task against 235 ms for one on the current session, inside the
 300 ms budget of `docs/SPEC.md` section 6 and close to it.
 
+**The path is checked to be under the root before any git process starts.** It
+comes from the URL and goes to a `join` against the root, and the scope is not a
+containment check — a task created without `--scope` is about the whole root and
+lets every string through. Hono decodes the segment before the route sees it, so
+`%2e%2e%2f` and `..%2F` arrive as `../` where a literal `../` would have been
+normalised away in routing; without a check they read any git working tree the
+person can read and come back with the `patch` of every changed file in it.
+
+The check is a **path** one: resolve the path against the root and require it to
+stay below it. The alternative — reusing `findRepositories(config)` the way
+`POST /api/comments` does — is exact but walks the root on a route the live
+stream calls on every event, and the route is on the live path. What a path
+check lets through is a path inside the root that is not a repository, which the
+route already answers: no base resolves, no files come back, and that is the
+404 below. It compares paths and does not resolve symlinks, so a symlink inside
+the root that points out of it is still followed
+([DA-73](../backlog/active/DA-73-untracked-files-are-read-through-symlinks.md)
+is the entry about reading through symlinks).
+
+The refusal is the answer the route already gives — `404` with
+`error: "no-such-repository"` — rather than a code of its own: from outside, a
+path that leaves the root and a path the change set does not have are the same
+answer, and telling them apart would say which encodings got through.
+
 The *document* of a named task has the same cache under it and no such repair:
 `GET /api/review?review=<name>` trusts a `diff.json` whose base and scope still
 match, so a window reloaded after the code changed shows the change set of the

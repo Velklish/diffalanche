@@ -177,6 +177,13 @@ and `bun run release` refuses a version that has no section. See
   `127.0.0.1` and `localhost`, the two names the IPv4 loopback socket it binds
   can be reached under — with a `403` for anything else, on reads as much as on
   writes. See [07-server.md](docs/reference/07-server.md).
+- **`GET /api/repos/:repo/diff?review=` no longer reads git outside the root**
+  (DA-72). The segment came from the URL and went straight to a `join` against
+  the root, so a percent-encoded `../` — which Hono decodes before routing sees
+  it — read any git working tree the person could read. The path is now
+  resolved against the root and refused with the route's own
+  `no-such-repository` 404 when it does not stay below it, before any git
+  process starts. See [07-server.md](docs/reference/07-server.md).
 - **A `comment` refused on its anchor levels no longer rescans the repository
   first** (DA-88). The command guarded the refresh on `line` and `repo` alone,
   so a forgotten `--path` or a transposed `--line 4 --end-line 2` spawned the

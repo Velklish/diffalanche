@@ -3,10 +3,10 @@
  * from the configuration and `role: human`, and what it wrote is on disk for
  * the CLI to read a moment later.
  */
-import { execFile } from "node:child_process";
-import { mkdtempSync, readFileSync, rmSync } from "node:fs";
+import { execFile, execFileSync } from "node:child_process";
+import { mkdirSync, mkdtempSync, readFileSync, rmSync, writeFileSync } from "node:fs";
 import { tmpdir } from "node:os";
-import { join } from "node:path";
+import { join, relative } from "node:path";
 import { fileURLToPath } from "node:url";
 import { promisify } from "node:util";
 import type { Hono } from "hono";
@@ -15,6 +15,7 @@ import { generate, PROFILES } from "../scripts/synth.ts";
 import type { Config } from "../src/core/config/index.ts";
 import { loadConfig } from "../src/core/config/index.ts";
 import { list, readSession } from "../src/core/domain/index.ts";
+import { readRepositoryChange } from "../src/core/index.ts";
 import type { Comment, Review } from "../src/core/storage/index.ts";
 import { readCurrent, readDiffCache } from "../src/core/storage/index.ts";
 import type { ReviewDocument } from "../src/core/types.ts";
@@ -28,6 +29,8 @@ import { startReviewServer } from "../src/server/serve.ts";
 const run = promisify(execFile);
 const appendReply = fileURLToPath(new URL("./helpers/append-reply.ts", import.meta.url));
 const SESSION = "synth";
+/** The name a traversal would bring back from outside the root, if it got there. */
+const SECRET = "private.ts";
 const noUi: UiAssets = { read: async () => null };
 
 let root: string;
@@ -421,6 +424,98 @@ describe("a window on a named task", () => {
     });
     expect(outside.status).toBe(400);
     expect(await outside.json()).toMatchObject({ error: "out-of-scope" });
+  });
+});
+
+describe("a repository path that leaves the root", () => {
+  let outside: string;
+  /** `../<name>`: the step from the root to a git repository beside it. */
+  let step: string;
+  /** A repository under the root whose own name carries `..`: a name, not a step up. */
+  const DOTTED = "has..dots";
+
+  function git(cwd: string, args: string[]): void {
+    execFileSync("git", args, {
+      cwd,
+      env: {
+        ...process.env,
+        GIT_CONFIG_GLOBAL: "/dev/null",
+        GIT_CONFIG_SYSTEM: "/dev/null",
+        GIT_AUTHOR_NAME: "fixture",
+        GIT_AUTHOR_EMAIL: "fixture@example.invalid",
+        GIT_COMMITTER_NAME: "fixture",
+        GIT_COMMITTER_EMAIL: "fixture@example.invalid",
+      },
+    });
+  }
+
+  /** A git repository with one committed file and an edit on top of it. */
+  function repository(dir: string): void {
+    mkdirSync(dir, { recursive: true });
+    writeFileSync(join(dir, SECRET), "the first line\n");
+    git(dir, ["init", "--quiet", "-b", "main"]);
+    git(dir, ["add", SECRET]);
+    git(dir, ["commit", "--quiet", "-m", "one"]);
+    writeFileSync(join(dir, SECRET), "the first line\nand a second\n");
+  }
+
+  beforeAll(() => {
+    // A repository the person can read and the review is not about: what the
+    // traversal reaches if nothing checks where the path lands.
+    outside = mkdtempSync(join(tmpdir(), "diffalanche-outside-"));
+    repository(outside);
+    step = relative(root, outside);
+    repository(join(root, DOTTED));
+  });
+
+  afterAll(() => {
+    rmSync(outside, { recursive: true, force: true });
+    rmSync(join(root, DOTTED), { recursive: true, force: true });
+  });
+
+  it("is a repository with changes, so nothing but the check keeps it out", async () => {
+    const change = await readRepositoryChange(root, step, { mode: "head" });
+    expect(change.files.map((file) => file.path)).toEqual([SECRET]);
+  });
+
+  it.each([
+    [
+      "percent-encoded throughout",
+      (path: string) => path.replace(/\./g, "%2e").replace("/", "%2f"),
+    ],
+    ["with only the slash encoded", (path: string) => path.replace("/", "%2F")],
+    // An absolute path `join` would have kept under the root anyway; the check
+    // resolves rather than joins, and refuses it before that is tested.
+    [
+      "as an absolute path",
+      (_path: string) => outside.split("/").map(encodeURIComponent).join("%2F"),
+    ],
+  ])("refuses it on the named-session route, %s", async (_name, encode) => {
+    const response = await app.request(`/api/repos/${encode(step)}/diff?review=${SESSION}`);
+    expect(response.status).toBe(404);
+    const body = await response.text();
+    expect(JSON.parse(body)).toMatchObject({ error: "no-such-repository" });
+    expect(body).not.toContain(SECRET);
+  });
+
+  it("still answers for a repository the root really has, with and without the task", async () => {
+    const repo = (await anchorable()).repo;
+    const named = await app.request(`/api/repos/${repo}/diff?review=${SESSION}`);
+    expect(named.status).toBe(200);
+    expect(((await named.json()) as { files: unknown[] }).files.length).toBeGreaterThan(0);
+
+    expect((await app.request(`/api/repos/${repo}/diff`)).status).toBe(200);
+    // Without the parameter the route answers from the built document, which
+    // has no such path, exactly as it did before the check.
+    expect((await app.request(`/api/repos/${encodeURIComponent(step)}/diff`)).status).toBe(404);
+  });
+
+  it("serves a repository whose own name carries two dots", async () => {
+    // `..` inside a name is not a step up: a check that searched for the
+    // characters rather than resolving the path would refuse this one.
+    const response = await app.request(`/api/repos/${DOTTED}/diff?review=${SESSION}`);
+    expect(response.status, await response.clone().text()).toBe(200);
+    expect(((await response.json()) as { files: { path: string }[] }).files).toHaveLength(1);
   });
 });
 
