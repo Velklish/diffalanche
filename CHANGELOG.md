@@ -224,6 +224,17 @@ and `bun run release` refuses a version that has no section. See
   session. It now renames the lock aside first, the way a takeover does, and
   deletes the directory it read the token from — one rename more on a path that
   every write ends with. See [03-storage.md](docs/reference/03-storage.md).
+- **Closing the watcher waits for the rescan in flight** (DA-97). `close` was
+  synchronous and stopped only what had not started: an item already inside its
+  own `await` ran to the end, holding the session lock and writing `diff.json`
+  after the caller had been told the watcher was closed. On the teardown paths
+  that is a rescan re-creating `reviews/<name>/` under a directory just removed,
+  or failing into `onError` attributed to whatever runs next, or leaving a lock
+  directory the next writer waits 30 s for. `Watcher.close` now answers a
+  promise and drains the queue, and `startReviewServer`'s own close and its
+  failed-listen path await it. The walk of a polling tree is deliberately not
+  part of the promise: it reads, and writes nothing into the data directory. See
+  [05-watcher.md](docs/reference/05-watcher.md).
 - **A failed write inside the recursive-watch probe no longer ends the server**
   (DA-92). The probe writes into a temporary directory until the watch answers,
   and the first of those writes was detached from the promise the probe awaits:

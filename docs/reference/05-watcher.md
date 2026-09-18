@@ -42,9 +42,19 @@ would mean writing into a repository, which the tool never does
 (`docs/SPEC.md` section 11). What the probe arms is the data directory, which is
 the tool's own.
 
-`watcher.close()` stops every watch and drops the pending rescans. Neither the
-recursive watch nor the polling timer keeps the process alive on its own — the
-server's socket decides how long the process runs.
+`watcher.close()` stops every watch, drops the pending rescans, and **waits for
+the one already running**: it answers a promise, and when that promise resolves
+nothing more will be written into the data directory. A teardown may remove the
+tree from that moment on. Without the wait a rescan inside its own `await` went
+on holding the session lock and writing — re-creating `reviews/<name>/` under a
+root that had just been removed, or failing into `onError` under whatever ran
+next, and leaving the lock directory for the next writer to wait out. Neither
+the recursive watch nor the polling timer keeps the process alive on its own —
+the server's socket decides how long the process runs.
+
+The walk of `src/core/watcher/tree.ts` is not part of that promise: its `tick`
+can be in flight when `close` returns. It reads and writes nothing into the data
+directory, so it changes nothing about what the guarantee says.
 
 A rescan that fails is handed to `onError` and dropped: the queue stays usable,
 and an `onError` that throws is caught too, because reporting a failure must not

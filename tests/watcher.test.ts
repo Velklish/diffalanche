@@ -289,8 +289,10 @@ beforeAll(async () => {
   await arm(OTHER_REPO);
 }, 120_000);
 
-afterAll(() => {
-  watcher?.close();
+afterAll(async () => {
+  // Awaited: a rescan still in flight would re-create the session directory
+  // under a root this line is about to remove.
+  await watcher?.close();
   rmSync(root, { recursive: true, force: true });
 });
 
@@ -1053,10 +1055,70 @@ describe("a watcher whose watches die under it", () => {
       expect(changedIn(OTHER_REPO)).toBe(true);
       expect(fellBack).toBe(1);
     } finally {
-      taken.close();
+      await taken.close();
       rmSync(dataDir, { recursive: true, force: true });
       await rm(file, { force: true });
       await rm(other, { force: true });
+      await settle();
+    }
+  }, 60_000);
+});
+
+describe("closing a watcher", () => {
+  it("waits for the rescan in flight, so nothing is written after it resolves", async () => {
+    const dataDir = mkdtempSync(join(tmpdir(), "diffalanche-drain-"));
+    mkdirSync(join(dataDir, "reviews", SESSION), { recursive: true });
+    for (const name of ["review.json", "comments.json", "diff.json"]) {
+      const from = join(config.dataDir, "reviews", SESSION, name);
+      if (existsSync(from)) copyFileSync(from, join(dataDir, "reviews", SESSION, name));
+    }
+    writeFileSync(join(dataDir, "current"), `${SESSION}\n`);
+    const own = createEventBus();
+    const changed: string[] = [];
+    own.subscribe((event) => {
+      if (event.type === "diff-changed") changed.push(event.repo);
+    });
+    const failing = new Map<string, () => void>();
+    const draining = await startWatcher({
+      config: { ...config, dataDir },
+      scan: found,
+      bus: own,
+      activity: createActivityLog(),
+      pollIntervalMs: 40,
+      native: (options, onFailure) => {
+        failing.set(options.dir, onFailure);
+        return { polling: false, ready: Promise.resolve(), close: () => undefined };
+      },
+    });
+    const file = join(root, REPO, "drained.ts");
+    try {
+      await writeFile(file, "export const drained = 1;\n");
+      (failing.get(join(root, REPO)) as () => void)();
+      const deadline = performance.now() + 20_000;
+      while (changed.length === 0 && performance.now() < deadline) {
+        await new Promise((done) => setTimeout(done, 1));
+      }
+      expect(changed).toContain(REPO);
+
+      // The event goes out from inside the rescan, before `diff.json` is
+      // written: the queue is holding the lock at exactly this moment.
+      await draining.close();
+      const cache = await readDiffCache(dataDir, SESSION);
+      expect(
+        cache?.repositories
+          .find((one) => one.path === REPO)
+          ?.files.some((one) => one.path === "drained.ts"),
+      ).toBe(true);
+
+      // And nothing follows the close: a removed data directory stays removed
+      // for as long as the suite's own watcher takes to do a whole round trip.
+      rmSync(dataDir, { recursive: true, force: true });
+      await settle();
+      expect(existsSync(dataDir)).toBe(false);
+    } finally {
+      await draining.close();
+      rmSync(dataDir, { recursive: true, force: true });
+      await rm(file, { force: true });
       await settle();
     }
   }, 60_000);

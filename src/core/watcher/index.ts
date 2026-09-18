@@ -103,7 +103,8 @@ export type WatcherOptions = {
 export type Watcher = {
   /** The review session the watcher writes into: the current one, as it changes. */
   session: () => string | null;
-  close: () => void;
+  /** Stops watching and waits for the rescan in flight; nothing is written after it resolves. */
+  close: () => Promise<void>;
 };
 
 /**
@@ -392,11 +393,14 @@ export async function startWatcher(options: WatcherOptions): Promise<Watcher> {
 
   return {
     session: () => session,
-    close: () => {
+    close: async () => {
       closed = true;
       for (const timer of timers.values()) clearTimeout(timer);
       timers.clear();
       for (const watcher of watchers) watcher.close();
+      // The rescan inside `work()` still holds the session lock and is about to
+      // write; a close that resolved first would let a teardown remove the tree.
+      await queue;
     },
   };
 }

@@ -124,7 +124,7 @@ export async function startReviewServer(options: ReviewServerOptions): Promise<R
   try {
     server = await startServer(app, config.port);
   } catch (error) {
-    watcher.close();
+    await watcher.close();
     throw listenError(error, config.port);
   }
 
@@ -136,7 +136,7 @@ export async function startReviewServer(options: ReviewServerOptions): Promise<R
       // The streams end first: a socket that waits for an open connection to
       // finish would wait for one that never does.
       events.close();
-      watcher.close();
+      await watcher.close();
       await server.close();
     },
   };
