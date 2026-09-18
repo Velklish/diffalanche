@@ -128,7 +128,7 @@ run's rescan still in flight.
 
 ## Out of scope
 
-- [DA-55.2](DA-55.2-update-budget-step-up.md) — why the update budget stepped
+- [DA-55.2](../../archive/DA-55.2-update-budget-step-up/task.md) — why the update budget stepped
   from 260 ms to 341 ms. That is a performance question; this task is about
   assertions that fail without a regression.
 - [DA-54.2](DA-54.2-ui-suite-in-gates.md), putting the Playwright UI suite in a
