@@ -547,6 +547,51 @@ describe("watcher", () => {
     await settle();
   }, 60_000);
 
+  it("wakes for a burst from a nested repository's git directory, and not for its objects", async () => {
+    const gitignore = join(root, REPO, ".gitignore");
+    const nested = join(root, REPO, "nested", "clone", ".git");
+    mkdirSync(join(nested, "objects", "ff"), { recursive: true });
+    writeFileSync(join(nested, "HEAD"), "ref: refs/heads/main\n");
+    // `nested/` is what makes this a check rather than a coincidence: git
+    // answers that everything under it is ignored, this burst included. The
+    // fixture's own `vendor/lib` is a modern submodule and was never affected.
+    const rulesMark = performance.now();
+    await writeFile(gitignore, "nested/\n");
+    await waitForChangeOf(REPO, rulesMark);
+    await settle();
+
+    await hide("nested-pad", "module.exports = 1;\n");
+
+    const headMark = performance.now();
+    writeFileSync(join(nested, "HEAD"), "ref: refs/heads/other\n");
+    await waitForChangeOf(REPO, headMark);
+    // Bun hands back the directory where Node names the file, so what is
+    // asserted is that the burst was the nested git directory and nothing else.
+    const woke = changesOf(headMark, REPO).flatMap(
+      (one) => (one.event as { files: string[] }).files,
+    );
+    expect(woke.length).toBeGreaterThan(0);
+    expect(woke.every((path) => path.startsWith("nested/clone/.git"))).toBe(true);
+
+    await reveal("nested-pad");
+    await settle();
+
+    // Its object store is the other half: pruned before any of that, so a
+    // rescan with something to announce still announces nothing.
+    await hide("nested-pad-objects", "module.exports = 2;\n");
+    const objectsMark = performance.now();
+    writeFileSync(join(nested, "objects", "ff", "0123456789abcdef"), "not an object");
+    await settle();
+    expect(changesOf(objectsMark, REPO)).toEqual([]);
+
+    await reveal("nested-pad-objects");
+    await rm(join(root, REPO, "nested"), { recursive: true, force: true });
+    const cleanMark = performance.now();
+    await rm(gitignore);
+    await waitForChangeOf(REPO, cleanMark);
+    await settle();
+  }, 60_000);
+
   it("reports every ignored path of a list", async () => {
     await writeFile(join(root, REPO, ".git", "info", "exclude"), "target/\n");
     await settle();
@@ -756,6 +801,47 @@ describe("what a repository's watch reports", () => {
     expect(answered.get("dist/out.js")).toBe(true);
   }, 30_000);
 
+  it("shows a nested repository's gitlink and none of its bookkeeping", () => {
+    const ignore = repositoryIgnore(config, {
+      path: REPO,
+      absolutePath: join(root, REPO),
+      kind: "repo",
+    });
+    // Where the gitlink points: `HEAD` moves on a checkout, the branch ref on a
+    // commit, and the outer diff moves with them.
+    expect(ignore("vendor/lib/.git/HEAD", "file")).toBe(false);
+    expect(ignore("vendor/lib/.git/packed-refs", "file")).toBe(false);
+    expect(ignore("vendor/lib/.git/refs/heads/main", "file")).toBe(false);
+    expect(ignore("vendor/lib/.git/refs/heads/feature/x", "file")).toBe(false);
+    expect(ignore("vendor/lib/.git/refs", "dir")).toBe(false);
+    expect(ignore("vendor/lib/.git/refs/heads", "dir")).toBe(false);
+    expect(ignore("vendor/lib/.git/refs/heads/feature", "dir")).toBe(false);
+    // The directory itself, for the runtime that reports only that.
+    expect(ignore("vendor/lib/.git", "dir")).toBe(false);
+    expect(ignore("vendor/lib/.git", "file")).toBe(false);
+
+    // Its bookkeeping is the outer repository's business in no way at all: a
+    // fetch writes every one of these and cannot move the outer change set.
+    expect(ignore("vendor/lib/.git/objects", "dir")).toBe(true);
+    expect(ignore("vendor/lib/.git/objects/ff/0123", "file")).toBe(true);
+    expect(ignore("vendor/lib/.git/logs", "dir")).toBe(true);
+    expect(ignore("vendor/lib/.git/logs/HEAD", "file")).toBe(true);
+    expect(ignore("vendor/lib/.git/refs/remotes", "dir")).toBe(true);
+    expect(ignore("vendor/lib/.git/refs/remotes/origin/main", "file")).toBe(true);
+    expect(ignore("vendor/lib/.git/modules", "dir")).toBe(true);
+    expect(ignore("vendor/lib/.git/FETCH_HEAD", "file")).toBe(true);
+    expect(ignore("vendor/lib/.git/index", "file")).toBe(true);
+    expect(ignore("vendor/lib/.git/config", "file")).toBe(true);
+
+    // The working tree of the nested repository is not git's directory.
+    expect(ignore("vendor/lib/src/a.ts", "file")).toBe(false);
+    // And the repository's own `.git` keeps exactly the rules it had.
+    expect(ignore(".git/HEAD", "file")).toBe(false);
+    expect(ignore(".git/index", "file")).toBe(false);
+    expect(ignore(".git/info/exclude", "file")).toBe(false);
+    expect(ignore(".git/objects/ff/0123", "file")).toBe(true);
+  }, 30_000);
+
   it("keeps the ignore verdicts of a repository inside their cap, oldest out first", () => {
     // A build writing thousands of distinct paths would otherwise grow the
     // cache for as long as the server runs.
@@ -893,6 +979,47 @@ describe("watching a tree", () => {
         await new Promise((done) => setTimeout(done, 10));
       }
       expect(seen).toEqual(["after.ts"]);
+    } finally {
+      walking.close();
+      rmSync(dir, { recursive: true, force: true });
+    }
+  }, 30_000);
+
+  it("does not walk into a nested repository's git directory", async () => {
+    const dir = mkdtempSync(join(tmpdir(), "diffalanche-nested-"));
+    const nested = join(dir, "vendor", "lib", ".git");
+    mkdirSync(join(nested, "objects", "ff"), { recursive: true });
+    mkdirSync(join(dir, "vendor", "lib", "src"), { recursive: true });
+    writeFileSync(join(nested, "objects", "ff", "0123"), "an object");
+    const seen: string[] = [];
+    const walking = watchTree({
+      dir,
+      ignore: repositoryIgnore(config, { path: ".", absolutePath: dir, kind: "repo" }),
+      onChange: (path) => seen.push(path),
+      recursive: false,
+      pollIntervalMs: 20,
+    });
+    try {
+      await walking.ready;
+      // The walk is where this costs continuously: every loose object and pack
+      // of the nested repository, stat'd on every tick.
+      writeFileSync(join(nested, "objects", "ff", "4567"), "another object");
+      writeFileSync(join(nested, "FETCH_HEAD"), "fetched\n");
+      writeFileSync(join(dir, "vendor", "lib", "src", "a.ts"), "export const a = 1;\n");
+      const deadline = performance.now() + 20_000;
+      while (!seen.includes("vendor/lib/src/a.ts") && performance.now() < deadline) {
+        await new Promise((done) => setTimeout(done, 10));
+      }
+      expect(seen).toEqual(["vendor/lib/src/a.ts"]);
+
+      // The gitlink itself is not bookkeeping: a commit in there moves the
+      // outer diff, and the branch ref is what moves with it.
+      mkdirSync(join(nested, "refs", "heads"), { recursive: true });
+      writeFileSync(join(nested, "refs", "heads", "main"), "0123456789abcdef\n");
+      while (!seen.includes("vendor/lib/.git/refs/heads/main") && performance.now() < deadline) {
+        await new Promise((done) => setTimeout(done, 10));
+      }
+      expect(seen).toContain("vendor/lib/.git/refs/heads/main");
     } finally {
       walking.close();
       rmSync(dir, { recursive: true, force: true });

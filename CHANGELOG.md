@@ -224,6 +224,19 @@ and `bun run release` refuses a version that has no section. See
   session. It now renames the lock aside first, the way a takeover does, and
   deletes the directory it read the token from — one rename more on a path that
   every write ends with. See [03-storage.md](docs/reference/03-storage.md).
+- **A nested repository's git directory is no longer watched whole** (DA-103).
+  The pruning was anchored at the watched repository's own `.git`, so a plain
+  nested clone — or an old-style submodule with a real git directory in the
+  working tree — had every loose object, pack and ref of it inside the watch: a
+  `git fetch` down there cost a `check-ignore` and a full rescan of the outer
+  repository per window, and the polling walk `stat`ed the whole object store on
+  every tick, while the outer change set could not move a line. Inside a nested
+  `.git` only `HEAD`, `packed-refs` and `refs/heads/` are reported now — where a
+  gitlink points, so a commit or a checkout down there still wakes the watch —
+  and the rest is left out, the walk included. The repository's own `.git` keeps
+  exactly the rules it had. A modern submodule was never affected: its git
+  directory is a file into `.git/modules/`, which was already pruned. See
+  [05-watcher.md](docs/reference/05-watcher.md).
 - **Closing the watcher waits for the rescan in flight** (DA-97). `close` was
   synchronous and stopped only what had not started: an item already inside its
   own `await` ran to the end, holding the session lock and writing `diff.json`

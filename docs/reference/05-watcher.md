@@ -84,9 +84,9 @@ process — the answer is a property of the runtime, not of a directory — and 
 reviewed repository is touched by it. Every write it makes is caught: a disk
 that fills between the `mkdir` and the write answers "no" at once instead of
 ending the process, because the probe's contract is a boolean and never a
-throw, and its one caller has no error path. Measured with that probe: Node 25.2 and
-Bun 1.3 on macOS both recurse and both report the path relative to the watched
-directory. A watch that fails after it started — an error from inotify or
+throw, and its one caller has no error path. Measured with that probe: Node 25.2
+and Bun 1.3 on macOS both recurse and both report the path relative to the
+watched directory. A watch that fails after it started — an error from inotify or
 FSEvents — closes itself and the walk takes over, rather than ending the process
 with an unhandled event.
 
@@ -190,6 +190,30 @@ file, or the directory itself costs a handful of small reads and says nothing.
 Only `diff.json` is left out, because the watcher writes it. Matching on the file name instead would drop the write:
 `writeFileAtomic` renames a temporary file over the target, and a runtime may
 report the temporary name, the target, or neither.
+
+**A repository inside a repository is seen only through the outer watch**, since
+the scan stops at a directory holding `.git` and never descends into it
+([01-scanner.md](01-scanner.md)). Its working files are part of the outer tree
+and wake the watcher like any others. Its git directory does not, with two
+exceptions: `HEAD` and `packed-refs` at the top, and anything under
+`refs/heads/`. Those three are where a gitlink points — `HEAD` moves on a
+checkout, the branch ref on a commit — and the outer change set moves with them,
+so suppressing them would hide a change the reviewer is meant to see. Everything
+else under a nested `.git` is git's own bookkeeping and is left out, the walk
+included: a `git fetch` down there writes into `objects/`, `logs/`,
+`refs/remotes/` and `FETCH_HEAD` without the outer diff moving a line, and
+before this it cost a `check-ignore` and a full rescan of the outer repository
+per debounce window, plus a `stat` of every loose object on every tick of the
+walk. What does come out of a nested `.git` is read the way the repository's own
+is: git is not asked about it — a burst there is a change whatever a pattern
+says, and one under a `vendor/` rule would otherwise be suppressed outright —
+and it drops that repository's kept ignore verdicts.
+
+A modern submodule never had that cost: its git directory is a file pointing at
+`.git/modules/<name>` in the superproject, which the rule for the repository's
+own `.git` prunes as a directory. What needs the rule above is a plain nested
+clone, or an old-style submodule with a real `.git` directory in the working
+tree.
 
 A repository found after the server started is not watched: the set of
 repositories is the one the scan handed over. A linked worktree keeps its `HEAD`

@@ -34,7 +34,7 @@ import {
 import type { Repository, RepositoryChange, ScanResult, ScanWarning } from "../types.ts";
 import type { ActivityLog } from "./activity.ts";
 import type { EventBus } from "./bus.ts";
-import type { Ignore, TreeWatcher, TreeWatcherOptions } from "./tree.ts";
+import type { Ignore, PathKind, TreeWatcher, TreeWatcherOptions } from "./tree.ts";
 import { supportsRecursiveWatch, watchTree } from "./tree.ts";
 
 export type { ActivityEvent, ActivityLog, ActivityVerb } from "./activity.ts";
@@ -677,9 +677,18 @@ function changesWhatGitIgnores(path: string): boolean {
   return path === ".gitignore" || path.endsWith("/.gitignore");
 }
 
-/** Whether the path is git's own directory, or anything the watch reports inside it. */
+/** Whether the path is a git directory — this repository's or one nested in it — or inside one. */
 function insideGitDir(path: string): boolean {
-  return path === ".git" || path.startsWith(".git/");
+  return path.split("/").includes(".git");
+}
+
+/** What a nested repository shows of its git directory: where its gitlink points, nothing else. */
+function nestedGitIgnore(rest: string[], kind: PathKind): boolean {
+  if (rest.length === 0) return false;
+  const position = rest[0] === "HEAD" || rest[0] === "packed-refs";
+  const branch = rest[0] === "refs" && (rest.length === 1 || rest[1] === "heads");
+  if (kind === "dir") return !branch;
+  return !(position && rest.length === 1) && !(branch && rest.length > 2);
 }
 
 /**
@@ -701,7 +710,8 @@ export function repositoryIgnore(config: Config, repository: Repository): Ignore
   return (path, kind) => {
     const segments = path.split("/");
     if (segments.includes("node_modules")) return true;
-    if (segments[0] === ".git") {
+    const git = segments.indexOf(".git");
+    if (git === 0) {
       // The directory itself is walked into, for the two files at its top and
       // the exclude file one level down, and it is a signal in its own right
       // when that is all a runtime reports.
@@ -709,6 +719,10 @@ export function repositoryIgnore(config: Config, repository: Repository): Ignore
       if (kind === "dir") return path !== ".git/info";
       return path !== ".git/HEAD" && path !== ".git/index" && path !== IGNORE_RULES_EXCLUDE;
     }
+    // A repository inside the repository is never scanned as one of its own
+    // ([01-scanner.md](../../../docs/reference/01-scanner.md)), so its git
+    // directory is only ever seen through this watch.
+    if (git > 0) return nestedGitIgnore(segments.slice(git + 1), kind);
     if (dataDir !== null && (path === dataDir || path.startsWith(`${dataDir}/`))) return true;
     const name = segments.at(-1) as string;
     return exclude.some((pattern) => pattern.test(name) || pattern.test(path));
