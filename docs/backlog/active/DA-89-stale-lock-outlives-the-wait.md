@@ -81,7 +81,7 @@ arithmetic.
 - The missing signal handler. Releasing the lock on SIGINT would make the situation rarer, not
   impossible — `kill -9` and an OOM kill leave no chance to run anything — so the lock has to
   survive a holder that vanishes regardless. That is a separate decision and has no file yet.
-- The release path, which is filed as [DA-78](DA-78-lock-release-is-not-atomic.md): its read and its
+- The release path, which is filed as [DA-78](../../archive/DA-78-lock-release-is-not-atomic/task.md): its read and its
   `rm` are two steps. This entry does not touch `release`.
 
 ## Verification

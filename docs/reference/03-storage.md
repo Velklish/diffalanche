@@ -131,14 +131,36 @@ read, and a lock that is not the stale one is renamed straight back.
 **The end-to-end guarantee is the rename together with `assertHeld` in every
 writer**, not either alone. The rename keeps two takeovers from both winning;
 `assertHeld` is what a writer whose lock was taken from it anyway — because its
-body outran the lease, or because a takeover could not put its lock back —
-finds out from before it writes. A writing body that skips `assertHeld` is
-outside the guarantee.
+body outran the lease, or because a takeover or a release could not put its lock
+back — finds out from before it writes. A writing body that skips `assertHeld`
+is outside the guarantee.
 
-Release is conditional on the token in `info.json` still being ours. Without
-that check a writer whose lock was taken over as stale would delete the lock of
-the writer that took it, and hand a third writer the same session at the same
-time.
+**A release moves the lock aside before it deletes it**, the same way a takeover
+does and for the same reason. Reading the token and then removing the directory
+at that path are two steps, and `rm` removes whatever is at the path when it
+runs rather than the directory the token was read from. A writer whose body
+outran the lease reaches its release after another writer has taken the session
+over, and a removal in place would take that writer's live lock away — two
+holders again, one step later. Renamed aside, the directory the token is read
+from is the directory that gets deleted, and a lock that turns out to belong to
+somebody else is renamed straight back. `ENOENT` on that rename is the ordinary
+case after a takeover — the lock is already gone — and a moved directory with no
+`info.json` is deleted, which is the answer the takeover gives to the same state.
+
+An uncontended release therefore costs a rename, a read and a removal where it
+used to cost a read and a removal. What it buys in exchange is that the only
+window left is the pair of renames: a lock being put back is out of its slot for
+that long, and a third writer that creates its own inside that window keeps it,
+while the writer whose lock this was learns of it from `assertHeld` before it
+writes anything.
+
+That window has a second consequence, and it is a message rather than a lost
+write. `assertHeld` reads `info.json` at the path, so a writer that calls it in
+the instant its lock is moved aside finds nothing there and is refused with "the
+lock was taken over while this write was in progress" — while nothing took it
+over and the lock comes straight back. The refusal is on the safe side, which is
+the side a check before a write belongs on, but the reason it names is not the
+reason it fired.
 
 ## Read-modify-write
 

@@ -26,22 +26,25 @@ function gate(): Gate {
   return { promise, open };
 }
 
-/**
- * What the mocked file system does at the two moments that matter: just before
- * a lock is moved aside, and just before a writer's claim reaches its
- * `info.json`. Each hook fires once — the first writer to arrive takes it.
- */
+/** What the mocked file system does at the moments that matter; each hook fires once, for the first writer to arrive. */
 const hooks: {
   beforeTakeoverMove: (() => Promise<void>) | null;
   afterTakeoverMove: (() => void) | null;
   beforeClaimWrite: (() => Promise<void>) | null;
+  beforeReleaseDestroys: (() => Promise<void>) | null;
   slowFirstRm: boolean;
 } = {
   beforeTakeoverMove: null,
   afterTakeoverMove: null,
   beforeClaimWrite: null,
+  beforeReleaseDestroys: null,
   slowFirstRm: false,
 };
+
+/** The step a release destroys the lock with: the move aside, or the removal a release that skips it makes. */
+function releaseDestroys(path: string, to?: string): boolean {
+  return to === undefined ? path.endsWith(`${sep}.lock`) : to.includes(".released-");
+}
 let rmCalls = 0;
 
 vi.mock("node:fs/promises", async (importOriginal) => {
@@ -54,9 +57,19 @@ vi.mock("node:fs/promises", async (importOriginal) => {
     ) => {
       rmCalls += 1;
       if (hooks.slowFirstRm && rmCalls === 1) await sleep(RM_DELAY_MS);
+      if (hooks.beforeReleaseDestroys !== null && releaseDestroys(path as string)) {
+        const before = hooks.beforeReleaseDestroys;
+        hooks.beforeReleaseDestroys = null;
+        await before();
+      }
       return original.rm(path, options);
     },
     rename: async (from: string, to: string) => {
+      if (hooks.beforeReleaseDestroys !== null && releaseDestroys(from, to)) {
+        const before = hooks.beforeReleaseDestroys;
+        hooks.beforeReleaseDestroys = null;
+        await before();
+      }
       if (hooks.beforeTakeoverMove !== null && to.includes(".stale-")) {
         const before = hooks.beforeTakeoverMove;
         hooks.beforeTakeoverMove = null;
@@ -128,6 +141,7 @@ beforeEach(() => {
   hooks.beforeTakeoverMove = null;
   hooks.afterTakeoverMove = null;
   hooks.beforeClaimWrite = null;
+  hooks.beforeReleaseDestroys = null;
   hooks.slowFirstRm = false;
   onFirstBody = null;
   staleLock();
@@ -137,6 +151,7 @@ afterEach(() => {
   hooks.beforeTakeoverMove = null;
   hooks.afterTakeoverMove = null;
   hooks.beforeClaimWrite = null;
+  hooks.beforeReleaseDestroys = null;
   hooks.slowFirstRm = false;
   rmSync(dir, { recursive: true, force: true });
 });
@@ -181,5 +196,46 @@ describe("taking over a stale lock", () => {
     expect((await bothWriters()).sort()).toEqual(["a", "b"]);
     expectSerialised();
     expect(readdirSync(dirname(dir)).filter((name) => name.includes(".stale-"))).toEqual([]);
+  });
+});
+
+describe("releasing a lock", () => {
+  it("leaves alone the lock of the writer that took the session over", async () => {
+    // The first writer outruns its lease and is stalled at the step its release
+    // destroys the lock with, so the second is holding it when that step lands.
+    const destroying = gate();
+    const claimed = gate();
+    const released = gate();
+    hooks.beforeReleaseDestroys = async () => {
+      destroying.open();
+      await claimed.promise;
+    };
+
+    const first = withLock(dir, async () => sleep(2 * RM_DELAY_MS).then(() => "first"), {
+      staleMs: RM_DELAY_MS / 4,
+      timeoutMs: 5_000,
+    }).then((value) => {
+      destroying.open();
+      return value;
+    });
+    await destroying.promise;
+
+    const second = withLock(
+      dir,
+      async (lock) => {
+        claimed.open();
+        await released.promise;
+        // Red on a release that reads the token and then removes whatever is at
+        // the path: what it removes there is this writer's live lock.
+        await lock.assertHeld();
+        return "second";
+      },
+      { timeoutMs: 5_000 },
+    );
+
+    expect(await first).toBe("first");
+    released.open();
+    expect(await second).toBe("second");
+    expect(readdirSync(dir).filter((name) => name.startsWith(".lock"))).toEqual([]);
   });
 });

@@ -168,6 +168,16 @@ and `bun run release` refuses a version that has no section. See
   long tasks, and the table now names the widened ceiling beside the budget.
   See [11-perf.md](docs/reference/11-perf.md).
 
+### Fixed
+
+- **Releasing the session lock no longer removes the lock of the writer that
+  took the session over** (DA-78). The release read the token and then removed
+  whatever directory was at the path, so a writer whose body outran the lease
+  could delete the live lock of its successor and hand a third writer the same
+  session. It now renames the lock aside first, the way a takeover does, and
+  deletes the directory it read the token from — one rename more on a path that
+  every write ends with. See [03-storage.md](docs/reference/03-storage.md).
+
 ## [0.1.0] - 2026-09-05
 
 ### Changed

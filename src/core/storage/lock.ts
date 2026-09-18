@@ -192,13 +192,27 @@ async function assertHeld(lockDir: string, token: string): Promise<void> {
   );
 }
 
-/**
- * Releases the lock only while it is still ours: a lock taken over as stale
- * belongs to the writer that took it, and removing it would hand a third
- * writer the same session at the same time.
- */
+/** Releases the lock by moving it aside first, as the takeover does ([03-storage.md](../../../docs/reference/03-storage.md)). */
 async function release(lockDir: string, token: string): Promise<void> {
-  const info = await readInfo(lockDir);
-  if (info?.token !== token) return;
-  await rm(lockDir, { recursive: true, force: true });
+  const aside = `${lockDir}.released-${randomUUID()}`;
+  try {
+    await rename(lockDir, aside);
+  } catch (error) {
+    // Already gone, which is the ordinary case after a takeover.
+    if ((error as NodeJS.ErrnoException).code === "ENOENT") return;
+    throw error;
+  }
+
+  // What was moved may be the lock of a writer that took this session over
+  // meanwhile; that one goes straight back, as in `takeOverIfStale`.
+  const moved = await readInfo(aside);
+  if (moved !== null && moved.token !== token) {
+    try {
+      await rename(aside, lockDir);
+      return;
+    } catch {
+      // The slot is taken again; that writer finds out from `assertHeld`.
+    }
+  }
+  await rm(aside, { recursive: true, force: true });
 }
