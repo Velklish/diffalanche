@@ -8,6 +8,7 @@
 import { DomainError } from "../core/domain/index.ts";
 import { StorageError } from "../core/storage/index.ts";
 import type { UiAssets } from "../server/assets.ts";
+import { ListenError } from "../server/serve.ts";
 import { flag, parse } from "./args.ts";
 import type { Command } from "./command.ts";
 import { comment } from "./commands/comment.ts";
@@ -94,7 +95,8 @@ export async function run(argv: string[], ui: UiAssets, output: Output): Promise
     if (
       error instanceof UsageError ||
       error instanceof DomainError ||
-      error instanceof StorageError
+      error instanceof StorageError ||
+      error instanceof ListenError
     ) {
       output.err(`diffalanche: ${error.message.replace(/\s*\n\s*/g, " ")}\n`);
       return 1;

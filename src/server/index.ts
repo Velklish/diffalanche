@@ -18,4 +18,4 @@ export { createReviewService } from "./review.ts";
 export type { RunningServer } from "./runtime.ts";
 export { startServer } from "./runtime.ts";
 export type { ReviewServer, ReviewServerOptions } from "./serve.ts";
-export { startReviewServer } from "./serve.ts";
+export { ListenError, startReviewServer } from "./serve.ts";

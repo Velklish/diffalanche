@@ -60,7 +60,7 @@ The documentation is split on whether this is a hole or a carve-out. [06-cli.md]
 
 - Which session the watcher follows while the server runs. That is one session today regardless of what the page asks for, and it is [DA-55.1-watcher-follows-one-session.md](../queue/DA-55.1-watcher-follows-one-session.md).
 - Giving the CLI a way to set a scope on a session, [DA-53.1-cli-cannot-set-a-scope.md](DA-53.1-cli-cannot-set-a-scope.md).
-- The other things `serve` does not survive: an unreadable data directory is [DA-64-serve-exits-on-unreadable-data.md](../../archive/DA-64-serve-exits-on-unreadable-data/task.md), a refused port is [DA-71-refused-port-exits-2-with-a-stack.md](DA-71-refused-port-exits-2-with-a-stack.md).
+- The other things `serve` does not survive: an unreadable data directory is [DA-64-serve-exits-on-unreadable-data.md](../../archive/DA-64-serve-exits-on-unreadable-data/task.md), a refused port is [DA-71-refused-port-exits-2-with-a-stack.md](../../archive/DA-71-refused-port-exits-2-with-a-stack/task.md).
 
 ## Verification
 

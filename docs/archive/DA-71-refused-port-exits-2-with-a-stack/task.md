@@ -79,11 +79,11 @@ never runs the CLI, which is how the drift survived.
 ## Out of scope
 
 - The unwritable data directory, which reaches exit 2 by the same catch from a
-  different source: [DA-99](DA-99-unwritable-data-directory-is-a-stack-trace.md).
+  different source: [DA-99](../../backlog/active/DA-99-unwritable-data-directory-is-a-stack-trace.md).
 - `serve` exiting 1 on an unreadable data file, which is the opposite drift:
-  [DA-64](../../archive/DA-64-serve-exits-on-unreadable-data/task.md).
+  [DA-64](../DA-64-serve-exits-on-unreadable-data/task.md).
 - The missing `stdout` error handler that crashes a piped CLI:
-  [DA-91](DA-91-piped-cli-output-crashes-on-epipe.md).
+  [DA-91](../../backlog/active/DA-91-piped-cli-output-crashes-on-epipe.md).
 - The wording of the two sentences. They are good; only their exit code and the
   stack around them are in question.
 

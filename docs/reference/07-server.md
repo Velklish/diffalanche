@@ -26,12 +26,32 @@ into `diff.json`, and starts the watcher of
 the server starts anyway, and `GET /api/review` is what says so.
 
 The server listens on `127.0.0.1` and nowhere else. There is no host to pass and
-no flag that changes it (`docs/SPEC.md` section 11). A port that is taken is
-refused with the sentence that names it:
+no flag that changes it (`docs/SPEC.md` section 11). A port that is taken, and a
+port this user may not have, are each refused with the sentence that names it,
+as a `ListenError`:
 
 ```
 port 4880 is already in use: stop the diffalanche that holds it, or run with --port <n>
+port 80 is not allowed for this user: run with --port <n> above 1023
 ```
+
+`ListenError` is a refusal and not a fault, so `diffalanche serve` prints it as
+one line with the `diffalanche: ` prefix of every other refusal and exits 1
+([06-cli.md](06-cli.md)):
+
+```
+diffalanche: port 4880 is already in use: stop the diffalanche that holds it, or run with --port <n>
+```
+
+Any other errno from the socket is rethrown as it is and keeps the stack trace
+and exit code 2: those two sentences are the whole of what this file words, and
+an `EPERM` is exactly what the tool did not expect.
+
+**Which of the two a privileged port gets depends on the runtime.** Binding port
+1 as an ordinary user is `EACCES` under Node and `EADDRINUSE` under Bun, so the
+same command answers "is not allowed for this user" on one channel and "is
+already in use" on the other. Both are a `ListenError` and both exit 1; the
+errno is the runtime's and is not translated.
 
 With `--verbose` every request is one line on stderr — method, path, status,
 duration. Without it the server writes nothing but its own failures.

@@ -53,7 +53,7 @@ Severity is minor: the path is still named in the message, so the reader is not 
 ## Out of scope
 
 - The `serve` path, where an unreadable data directory ends the process — that is [DA-64](../../archive/DA-64-serve-exits-on-unreadable-data/task.md).
-- A refused listening socket exiting 2 with a stack trace, which is the same shape of defect in the server and is filed as [DA-71](DA-71-refused-port-exits-2-with-a-stack.md).
+- A refused listening socket exiting 2 with a stack trace, which is the same shape of defect in the server and is filed as [DA-71](../../archive/DA-71-refused-port-exits-2-with-a-stack/task.md).
 - The lock protocol's own semantics: this entry changes how a failure is *reported*, not when a writer waits, retries, or takes a stale lock.
 - Making the CLI check writability up front. `assertDirectory` is named above as evidence that the project treats EACCES as a user error, not as the place to fix this.
 

@@ -142,16 +142,28 @@ export async function startReviewServer(options: ReviewServerOptions): Promise<R
   };
 }
 
-/** A port that is taken is the one failure worth its own sentence. */
+/** A socket the environment refused for a reason this file words: an answer and
+ * not a fault, so the CLI gives it one line and exit 1 ([06-cli.md](../../docs/reference/06-cli.md)). */
+export class ListenError extends Error {
+  constructor(message: string) {
+    super(message);
+    this.name = "ListenError";
+  }
+}
+
+/** A port that is taken is the one failure worth its own sentence. An errno this
+ * function does not word is rethrown as it is, which is what exit code 2 is for. */
 function listenError(error: unknown, port: number): Error {
   const code = (error as { code?: unknown } | null)?.code;
   if (code === "EADDRINUSE") {
-    return new Error(
+    return new ListenError(
       `port ${port} is already in use: stop the diffalanche that holds it, or run with --port <n>`,
     );
   }
   if (code === "EACCES") {
-    return new Error(`port ${port} is not allowed for this user: run with --port <n> above 1023`);
+    return new ListenError(
+      `port ${port} is not allowed for this user: run with --port <n> above 1023`,
+    );
   }
   return error instanceof Error ? error : new Error(String(error));
 }

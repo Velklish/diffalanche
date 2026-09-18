@@ -450,6 +450,43 @@ describe("serve on a review that cannot be read", () => {
   }, 60_000);
 });
 
+describe("a listening socket the environment refuses", () => {
+  useFixtureRoot();
+
+  it("says it in one line and exits 1, with no stack behind it", async () => {
+    // A port this process holds: `serve` cannot have it, and it does not
+    // depend on who the test runs as.
+    const held = createServer();
+    await new Promise<void>((listening) => held.listen(0, "127.0.0.1", listening));
+    const { port } = held.address() as { port: number };
+    try {
+      const taken = await inRoot("serve", "--port", String(port));
+      expect(taken.code).toBe(1);
+      expect(taken.out).toBe("");
+      expect(taken.err.trimEnd().split("\n")).toHaveLength(1);
+      // The whole of stderr, so a stack behind it would be a second line.
+      expect(taken.err).toBe(
+        `diffalanche: port ${port} is already in use: ` +
+          "stop the diffalanche that holds it, or run with --port <n>\n",
+      );
+    } finally {
+      await new Promise<void>((closed) => held.close(() => closed()));
+    }
+  }, 60_000);
+
+  it("says the same about a port this user may not have", async () => {
+    // Root may bind port 1, and then there is nothing to assert.
+    const refused = await inRoot("serve", "--port", "1");
+    if (refused.code === 0) return;
+    expect(refused.code).toBe(1);
+    // Node says EACCES for a privileged port and Bun EADDRINUSE, so the shape
+    // is what this pins rather than which of the two sentences (07-server.md).
+    expect(refused.err).toMatch(
+      /^diffalanche: port 1 (is not allowed for this user: run with --port <n> above 1023|is already in use: stop the diffalanche that holds it, or run with --port <n>)\n$/,
+    );
+  }, 60_000);
+});
+
 describe("exit code 2", () => {
   useFixtureRoot();
 

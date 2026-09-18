@@ -177,6 +177,15 @@ and `bun run release` refuses a version that has no section. See
   `127.0.0.1` and `localhost`, the two names the IPv4 loopback socket it binds
   can be reached under — with a `403` for anything else, on reads as much as on
   writes. See [07-server.md](docs/reference/07-server.md).
+- **A refused listening socket is one line and exit code 1** (DA-71). `serve`
+  worded "port 4880 is already in use" and then threw it as a bare `Error`, so
+  the CLI printed the sentence with a stack trace under it and exited 2 — the
+  code that means "anything the tool did not expect", which a failure `serve`
+  words on purpose is not. Both worded refusals are now a `ListenError` and
+  reach the person as `diffalanche: ` and the sentence; any other errno from the
+  socket keeps the stack trace and exit code 2. See
+  [06-cli.md](docs/reference/06-cli.md) and
+  [07-server.md](docs/reference/07-server.md).
 - **`serve` no longer dies on a file it just decided to tolerate** (DA-64). The
   server starts on a `comments.json` that is not JSON and says so through the
   address; the CLI then read the same document a second time for the line under
