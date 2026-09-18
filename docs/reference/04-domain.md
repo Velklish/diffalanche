@@ -232,8 +232,15 @@ The level is read off the nulls, as `docs/SPEC.md` section 7 defines it:
 `repo: null` is the whole review, `path: null` a repository, `line: null` a
 file, and a `line` with an `endLine` is a range. `addComment` refuses a
 combination that is not a level — a file without a repository, a line without a
-file, a range without a first line, a range that runs backwards — because such
-a comment is one nothing can place.
+file, a range without a first line, a line below 1, a range that runs backwards
+— because such a comment is one nothing can place.
+
+The check is `assertAnchorLevels`, and it is exported for the one caller that
+has to make it earlier than `addComment` does: the `comment` command reads the
+repository again before it writes, and an anchor that is not a level would pay
+for that read on its way to a refusal ([06-cli.md](06-cli.md)). The domain keeps
+the check regardless — `addComment` has callers that never touch the CLI, and
+the level rule belongs to the comment, not to one entry point.
 
 `side` defaults to `new` on a line anchor and is `null` above one.
 

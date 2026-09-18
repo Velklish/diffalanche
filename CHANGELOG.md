@@ -170,6 +170,15 @@ and `bun run release` refuses a version that has no section. See
 
 ### Fixed
 
+- **A `comment` refused on its anchor levels no longer rescans the repository
+  first** (DA-88). The command guarded the refresh on `line` and `repo` alone,
+  so a forgotten `--path` or a transposed `--line 4 --end-line 2` spawned the
+  git processes for that repository and rewrote `diff.json` before `addComment`
+  refused it — the one exit 1 of `comment` that broke the invariant
+  `docs/reference/06-cli.md` states. The domain's `assertAnchorLevels` is now
+  exported and called ahead of the refresh, the way the scope check already was,
+  and the domain keeps its own check for every other caller.
+
 - **A line that cannot be anchored is refused for the reason it really has**
   (DA-101). `captureAnchor` said "`<file>` has no hunks in the change set" about
   a file that is nothing but hunks whenever every hunk of it lacked line numbers

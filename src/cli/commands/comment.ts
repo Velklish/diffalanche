@@ -3,7 +3,12 @@
  * (`docs/SPEC.md` sections 8 and 9). This is how an agent opens a finding.
  */
 
-import { addComment, assertAnchorInScope, readSession } from "../../core/domain/index.ts";
+import {
+  addComment,
+  assertAnchorInScope,
+  assertAnchorLevels,
+  readSession,
+} from "../../core/domain/index.ts";
 import { refreshRepository } from "../../core/index.ts";
 import { choice, count, noExtra, requiredChoice, text } from "../args.ts";
 import type { Command } from "../command.ts";
@@ -49,6 +54,7 @@ export const comment: Command = {
     const repo = text(args, "repo") ?? null;
     const path = text(args, "path") ?? null;
     const line = count(args, "line") ?? null;
+    const endLine = count(args, "end-line") ?? null;
 
     const session = await context.session();
     const config = await context.config();
@@ -60,6 +66,9 @@ export const comment: Command = {
     // refused, so an anchor the task is not about costs no git process on its
     // way to the refusal. The domain checks it too, for every caller.
     assertAnchorInScope(review, repo, path);
+    // And the levels, for the same reason: an anchor that is not a level is
+    // refused by `addComment` anyway, after the read this saves.
+    assertAnchorLevels({ repo, path, line, endLine });
     // The anchor is captured from `diff.json`, so the repository the line is in
     // is read again first: a comment written right after an edit has to point
     // at the line that is there now.
@@ -71,7 +80,7 @@ export const comment: Command = {
       repo,
       path,
       line,
-      endLine: count(args, "end-line") ?? null,
+      endLine,
       side: choice(args, "side", SIDES) ?? "new",
       severity,
       body,

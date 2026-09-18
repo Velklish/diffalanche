@@ -4,7 +4,7 @@
  * 9, [ADR-004](../docs/adr/adr-004-agent-contract.md)).
  */
 import { execFile } from "node:child_process";
-import { readFileSync, rmSync, writeFileSync } from "node:fs";
+import { readFileSync, rmSync, statSync, utimesSync, writeFileSync } from "node:fs";
 import { join } from "node:path";
 import { promisify } from "node:util";
 import { afterAll, beforeAll, beforeEach, describe, expect, it } from "vitest";
@@ -162,6 +162,40 @@ describe("comment", () => {
     expect(readFileSync(join(root, ".diffalanche", "reviews", "alpha", "diff.json"), "utf8")).toBe(
       before,
     );
+  });
+
+  it("refuses an anchor that is not a level, before it reads the repository again", async () => {
+    const path = join(root, ".diffalanche", "reviews", "alpha", "diff.json");
+    const cases = [
+      { argv: ["--repo", ALPHA, "--line", "2"], message: "a line anchor needs a file" },
+      {
+        argv: ["--repo", ALPHA, "--path", "src/a.ts", "--line", "4", "--end-line", "2"],
+        message: "the range 4-2 runs backwards",
+      },
+      {
+        argv: ["--repo", ALPHA, "--path", "src/a.ts", "--line", "0"],
+        message: "line 0 is not a line number",
+      },
+      {
+        argv: ["--repo", ALPHA, "--path", "src/a.ts", "--end-line", "9"],
+        message: "a range anchor needs a first line",
+      },
+    ];
+
+    for (const one of cases) {
+      const before = readFileSync(path, "utf8");
+      // The rewrite this refusal used to make puts the same bytes back, so what
+      // says whether it happened is the time of the write, not the content.
+      const stamp = new Date("2020-01-01T00:00:00.000Z");
+      utimesSync(path, stamp, stamp);
+
+      const result = await invoke(["comment", ...one.argv, "--severity", "nit", "--body", "x"]);
+      expect(result.code).toBe(1);
+      expect(result.err).toContain(one.message);
+      expect(statSync(path).mtimeMs).toBe(stamp.getTime());
+      expect(readFileSync(path, "utf8")).toBe(before);
+      expect(comments()).toHaveLength(0);
+    }
   });
 
   it("rescans when the base changed, instead of patching a cache of the previous one", async () => {

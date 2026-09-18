@@ -104,12 +104,15 @@ function nextReplyId(replies: Reply[]): string {
   return `r_${highest + 1}`;
 }
 
+/** The anchor of a comment, without what is written on it. */
+export type AnchorLevels = Pick<NewComment, "repo" | "path" | "line" | "endLine">;
+
 /**
  * Checks that the anchor levels add up. `docs/SPEC.md` section 7 reads the
  * level off the nulls, so a line without a file or a range without a line is
  * not a level at all — it is a comment nothing can place.
  */
-function assertAnchorLevels(input: NewComment): void {
+export function assertAnchorLevels(input: AnchorLevels): void {
   const repo = input.repo ?? null;
   const path = input.path ?? null;
   const line = input.line ?? null;

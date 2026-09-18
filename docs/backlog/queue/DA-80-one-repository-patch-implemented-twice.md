@@ -53,7 +53,7 @@ The reference already treats the watcher's version as the specified behaviour: [
 
 - The index-wise comparisons themselves. Making `sameWarnings` and the store's guard order-insensitive would hide this symptom without closing the divergence, and the bar that pops back up is the subject of its own entry, [DA-79-dismissed-warning-hides-a-new-one.md](../active/DA-79-dismissed-warning-hides-a-new-one.md).
 - The locking around these writes. Both copies already take the session lock; the writes that do not are [DA-67-two-writes-outside-the-session-lock.md](DA-67-two-writes-outside-the-session-lock.md).
-- Whether a comment should trigger a repository re-read at all — that cost is [DA-88-a-refused-comment-has-already-rescanned.md](../active/DA-88-a-refused-comment-has-already-rescanned.md).
+- Whether a comment should trigger a repository re-read at all — that cost is [DA-88-a-refused-comment-has-already-rescanned.md](../../archive/DA-88-a-refused-comment-has-already-rescanned/task.md).
 
 ## Verification
 

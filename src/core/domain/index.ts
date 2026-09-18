@@ -1,11 +1,12 @@
 export { captureAnchor } from "./anchors.ts";
 export type {
+  AnchorLevels,
   CommentFilter,
   Message,
   NewComment,
   Verdict,
 } from "./comments.ts";
-export { addComment, get, list, reopen, reply, resolve } from "./comments.ts";
+export { addComment, assertAnchorLevels, get, list, reopen, reply, resolve } from "./comments.ts";
 export type {
   Counters,
   FileCounters,

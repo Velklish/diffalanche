@@ -242,6 +242,15 @@ makes it too, for every caller ([04-domain.md](04-domain.md)). A comment outside
 the scope would be written where `list`, `show`, and `export` will not return
 it; the change belongs to another task, and the message says so.
 
+**And then the anchor levels**, in the same place and for the same reason: a
+`--line` without a `--path`, a `--line 4 --end-line 2`, a `--line 0`, an
+`--end-line` with no `--line`. These are exit code 1 from the domain's own
+`assertAnchorLevels` ([04-domain.md](04-domain.md)), called here before the
+repository is read rather than left to `addComment` after it. Until this they
+were the one refusal of `comment` that did rewrite `diff.json` on its way out —
+a forgotten `--path` spawned the git processes for that repository and left the
+watcher and every open window a write from a command that wrote no comment.
+
 `list --repo` is checked against something else — the repositories the session's
 comments name. A repository that was renamed or removed still has everything
 that was ever said about it, and `list` is how that is read back; asking the
