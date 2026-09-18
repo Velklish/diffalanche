@@ -164,42 +164,15 @@ export async function startWatcher(options: WatcherOptions): Promise<Watcher> {
     });
   }
 
-  /**
-   * What git said about the paths of a repository, kept between bursts. The
-   * rules change only when a `.gitignore` or `.git/info/exclude` does, and
-   * asking git about the same `dist/` file on every write of a build would cost
-   * the process this cache is here to save. It holds `IGNORE_CACHE_LIMIT`
-   * paths per repository, oldest out first.
-   */
+  /** What git said about a repository's paths, kept between bursts (05-watcher.md). */
   const ignoredPaths = new Map<string, Map<string, boolean>>();
 
-  /**
-   * Whether git ignores every path of this burst. One `git check-ignore` per
-   * repository per debounce window answers for the whole burst, and a burst
-   * that is all build output — `dist/`, `target/`, a coverage report — is not a
-   * change of the review: rescanning it costs four git processes and a rewrite
-   * of the cache for nothing (`docs/SPEC.md` section 6).
-   *
-   * A path that changes what git ignores is never ignored itself and drops
-   * what was cached for that repository: `.gitignore` and `.git/info/exclude`
-   * hold the rules, and `.git/index` decides which files they apply to at all,
-   * since a tracked file is never reported as ignored.
-   *
-   * Nothing under `.git` is ever suppressed, and the check is on the whole
-   * burst rather than a filter over it. git makes no exception for `.git`
-   * — under a `.gitignore` that starts with `*`, `check-ignore` answers that
-   * `.git/HEAD` is ignored — so a burst that is a commit or a branch switch
-   * would be swallowed and the review's base go stale without a word.
-   */
+  /** Whether git ignores every path of this burst: one `check-ignore` per repository per window. */
   async function burstIsIgnored(repository: Repository, paths: string[]): Promise<boolean> {
     if (paths.length === 0) return false;
     const cache = ignoredPaths.get(repository.path) ?? new Map<string, boolean>();
     ignoredPaths.set(repository.path, cache);
-    if (paths.some(changesWhatGitIgnores)) {
-      cache.clear();
-      return false;
-    }
-    if (paths.some(insideGitDir)) return false;
+    if (dropsVerdicts(paths, cache)) return false;
     const unknown = paths.filter((path) => !cache.has(path));
     if (unknown.length > 0) {
       const ignored = await checkIgnore(repository.absolutePath, unknown);
@@ -644,14 +617,14 @@ export function trimVerdicts(cache: Map<string, boolean>): void {
 /** The repository-local exclude file, whose rules are git's as much as a `.gitignore`'s. */
 const IGNORE_RULES_EXCLUDE = ".git/info/exclude";
 
-/**
- * Whether a change of this path changes what git ignores in its repository.
- * `.gitignore` and `.git/info/exclude` hold the rules; `.git/index` decides
- * which files the rules reach at all, because a tracked file is never reported
- * as ignored — without it, one `git add -f` on a build output would leave every
- * later edit of a now-tracked file suppressed by a cached verdict. Each is news
- * on its own and makes every cached verdict of that repository stale.
- */
+/** Whether a burst's names make git's answers stale, and so a change in itself (05-watcher.md). */
+export function dropsVerdicts(paths: string[], cache: Map<string, boolean>): boolean {
+  if (!paths.some((path) => changesWhatGitIgnores(path) || insideGitDir(path))) return false;
+  cache.clear();
+  return true;
+}
+
+/** Whether a change of this path changes what git ignores in its repository. */
 function changesWhatGitIgnores(path: string): boolean {
   if (path === IGNORE_RULES_EXCLUDE || path === ".git/index") return true;
   return path === ".gitignore" || path.endsWith("/.gitignore");

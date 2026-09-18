@@ -134,12 +134,20 @@ burst is rescanned and nothing is kept from the failure.
 The answers are kept per repository between bursts, so a build writing the same
 `dist/` file a hundred times asks once. Each repository keeps at most 4096 of
 them, oldest out first, so a build writing thousands of distinct paths cannot
-grow the cache for as long as the server runs. Three paths drop what was kept
-and are changes in their own right: `.gitignore` anywhere in the repository and
-`.git/info/exclude`, which hold the rules, and `.git/index`, which decides which
-files the rules reach at all — one `git add -f` on a build output would
-otherwise leave every later edit of a now-tracked file suppressed by a cached
-verdict.
+grow the cache for as long as the server runs. What drops them is a burst that
+names the rules or git's own directory, and such a burst is a change in its own
+right: `.gitignore` anywhere in the repository and `.git/info/exclude`, which
+hold the rules, and **anything the watch reports inside `.git`, the bare
+directory included** — `.git/index` decides which files the rules reach at all,
+and one `git add -f` on a build output would otherwise leave every later edit of
+a now-tracked file suppressed by a cached verdict.
+
+The bare `.git` is in that rule rather than only the three files above, because
+a runtime is free to collapse the name of a change inside the directory to the
+directory itself — Bun does — and a `git add -f` reported that way would drop
+nothing. What it costs is that a plain commit or branch switch discards the
+repository's verdicts too, so a build writing into `dist/` pays one
+`git check-ignore` again after one.
 
 In the data directory every change is one signal: the reload reads `current`,
 `comments.json`, `review.json`, and the status of every session, and compares

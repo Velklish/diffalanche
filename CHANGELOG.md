@@ -224,6 +224,15 @@ and `bun run release` refuses a version that has no section. See
   session. It now renames the lock aside first, the way a takeover does, and
   deletes the directory it read the token from — one rename more on a path that
   every write ends with. See [03-storage.md](docs/reference/03-storage.md).
+- **A `git add -f` is no longer swallowed by a cached ignore verdict** (DA-74).
+  The answers git gave about a repository's paths were dropped when a burst
+  named `.gitignore`, `.git/info/exclude` or `.git/index` in full, and a runtime
+  that collapses the name to the bare `.git` — Bun does — left them in place: a
+  build output that had been answered `ignored` once stayed suppressed after it
+  became tracked, with no rescan, no event and no warning, until 4096 other
+  paths pushed it out. Anything the watch reports inside `.git`, the bare
+  directory included, now drops that repository's verdicts. See
+  [05-watcher.md](docs/reference/05-watcher.md).
 
 ## [0.1.0] - 2026-09-05
 

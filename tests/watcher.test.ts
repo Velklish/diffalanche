@@ -32,6 +32,7 @@ import {
   createActivityLog,
   createEventBus,
   dataIgnore,
+  dropsVerdicts,
   IGNORE_CACHE_LIMIT,
   repositoryIgnore,
   rescanRepository,
@@ -714,6 +715,30 @@ describe("what a repository's watch reports", () => {
     expect(ignore(".git", "file")).toBe(false);
     expect(ignore("src/a.ts", "file")).toBe(false);
     expect(ignore("node_modules/left-pad/index.js", "file")).toBe(true);
+  }, 30_000);
+
+  it("drops the kept verdicts when a burst names git's directory in any shape", () => {
+    // A build's `dist/out.js` was asked about once and answered `true`; the
+    // burst that follows is the `git add -f` that makes it tracked.
+    const collapsed = new Map<string, boolean>([["dist/out.js", true]]);
+    // Bun hands back the bare `.git` where Node names `.git/index`, and a kept
+    // `true` would suppress every later edit of the now-tracked file.
+    expect(dropsVerdicts([".git"], collapsed)).toBe(true);
+    expect(collapsed.has("dist/out.js")).toBe(false);
+
+    const named = new Map<string, boolean>([["dist/out.js", true]]);
+    expect(dropsVerdicts([".git/index"], named)).toBe(true);
+    expect(named.size).toBe(0);
+
+    // The rules themselves, at the root of the repository and below it.
+    expect(dropsVerdicts([".gitignore"], new Map([["dist/out.js", true]]))).toBe(true);
+    expect(dropsVerdicts(["src/.gitignore"], new Map([["dist/out.js", true]]))).toBe(true);
+    expect(dropsVerdicts([".git/info/exclude"], new Map([["dist/out.js", true]]))).toBe(true);
+
+    // An ordinary burst leaves what git already answered where it is.
+    const answered = new Map<string, boolean>([["dist/out.js", true]]);
+    expect(dropsVerdicts(["dist/out.js"], answered)).toBe(false);
+    expect(answered.get("dist/out.js")).toBe(true);
   }, 30_000);
 
   it("keeps the ignore verdicts of a repository inside their cap, oldest out first", () => {
