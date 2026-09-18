@@ -7,13 +7,16 @@ const execFileAsync = promisify(execFile);
 /** One `git diff` over the synthetic review is a few megabytes. */
 const MAX_GIT_OUTPUT = 256 * 1024 * 1024;
 
-/**
- * The environment every git process here runs in: `GIT_CONFIG_GLOBAL` and
- * `GIT_CONFIG_SYSTEM` point at the platform's null device, so a developer's own
- * git configuration cannot change what the tool reads.
- */
+/** The environment every git process runs in: every inherited `GIT_*` dropped,
+ * only what the reader sets put back ([ADR-012](../../../docs/adr/adr-012-git-trust-model.md)). */
 function readOnlyEnv(): Record<string, string | undefined> {
-  return { ...process.env, GIT_CONFIG_GLOBAL: devNull, GIT_CONFIG_SYSTEM: devNull };
+  const env: Record<string, string | undefined> = {};
+  for (const [key, value] of Object.entries(process.env)) {
+    if (!key.toUpperCase().startsWith("GIT_")) env[key] = value;
+  }
+  env.GIT_CONFIG_GLOBAL = devNull;
+  env.GIT_CONFIG_SYSTEM = devNull;
+  return env;
 }
 
 /** Configuration whose value git runs as a program, by the keys the tool can name

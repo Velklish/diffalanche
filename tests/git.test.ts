@@ -155,6 +155,17 @@ beforeAll(() => {
   // git-lfs sets this, and an emptied filter under it is fatal rather than skipped.
   git(hostile, ["config", "filter.pwn.required", "true"]);
 
+  // Two repositories of one file each: which one a read answers with is the
+  // whole assertion about `GIT_DIR` and `GIT_INDEX_FILE`.
+  for (const name of ["env-a", "env-b"]) {
+    const dir = join(root, "repos/g", name);
+    mkdirSync(join(dir, "src"), { recursive: true });
+    git(dir, ["init", "--quiet", "-b", "main"]);
+    writeFileSync(join(dir, "src", `${name}.ts`), "one\n");
+    commit(dir, "base");
+    writeFileSync(join(dir, "src", `${name}.ts`), "two\n");
+  }
+
   statusBefore = statuses();
 }, 120_000);
 
@@ -181,6 +192,8 @@ function statuses(): Map<string, string> {
     "repos/g/names",
     "repos/g/solo",
     "repos/g/hostile",
+    "repos/g/env-a",
+    "repos/g/env-b",
   ];
   return new Map(
     repositories.map((path) => [path, git(join(root, path), [...INERT, "status", "--porcelain"])]),
@@ -514,6 +527,44 @@ describe("a repository whose configuration cannot be read is not read", () => {
     expect(change.warnings).toContain("repository configuration could not be read");
     expect(readFileSync(join(dir, "calls.log"), "utf8")).toBe("");
     rmSync(dir, { recursive: true, force: true });
+  });
+});
+
+describe("the reader ignores the git environment it inherits", () => {
+  async function withEnv<T>(vars: Record<string, string>, body: () => Promise<T>): Promise<T> {
+    const before = new Map(Object.keys(vars).map((key) => [key, process.env[key]]));
+    Object.assign(process.env, vars);
+    try {
+      return await body();
+    } finally {
+      for (const [key, value] of before) {
+        if (value === undefined) delete process.env[key];
+        else process.env[key] = value;
+      }
+    }
+  }
+
+  it("reads what the repository says, not what injected configuration says", async () => {
+    const names = await withEnv(
+      { GIT_CONFIG_COUNT: "1", GIT_CONFIG_KEY_0: "diff.renames", GIT_CONFIG_VALUE_0: "false" },
+      () => read("repos/g/names", { mode: "head" }),
+    );
+    const renamed = names.files.find((file) => file.path === "new name.ts");
+    expect(renamed).toMatchObject({ status: "renamed", oldPath: "old name.ts" });
+  });
+
+  it("reads the repository whose path it was given, not the one GIT_DIR names", async () => {
+    const change = await withEnv({ GIT_DIR: join(root, "repos/g/env-b/.git") }, () =>
+      read("repos/g/env-a", { mode: "head" }),
+    );
+    expect(change.files.map((file) => file.path)).toEqual(["src/env-a.ts"]);
+  });
+
+  it("reads the repository's own index, not the one GIT_INDEX_FILE names", async () => {
+    const change = await withEnv({ GIT_INDEX_FILE: join(root, "repos/g/env-b/.git/index") }, () =>
+      read("repos/g/env-a", { mode: "head" }),
+    );
+    expect(change.files.map((file) => file.path)).toEqual(["src/env-a.ts"]);
   });
 });
 

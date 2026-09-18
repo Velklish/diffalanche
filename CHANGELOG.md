@@ -471,6 +471,16 @@ and `bun run release` refuses a version that has no section. See
   configuration could not be read`. A repository with a filter driver — git-lfs
   is the common one — is shown the content that is on disk rather than what the
   driver would make of it.
+- **The git reader no longer inherits the environment it was started in**
+  (DA-87, [ADR-012](docs/adr/adr-012-git-trust-model.md)). `GIT_CONFIG_COUNT` /
+  `GIT_CONFIG_KEY_n` / `GIT_CONFIG_VALUE_n`, `GIT_CONFIG_PARAMETERS`, `GIT_DIR`,
+  `GIT_WORK_TREE` and `GIT_INDEX_FILE` of a parent process — a git hook,
+  `git rebase --exec`, an agent shell — went straight through the two null
+  configuration files, and with `GIT_DIR` set a read of one repository answered
+  with another one's files and exited 0. The child environment is now built from
+  `process.env` without a single `GIT_*` key, so `cwd` alone says which
+  repository is read. `docs/reference/02-git.md` no longer claims more isolation
+  than the code provides.
 
 ## [0.1.0] - 2026-09-05
 

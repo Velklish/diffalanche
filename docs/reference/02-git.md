@@ -7,8 +7,17 @@ ever written (`docs/SPEC.md` section 11).
 
 ## What the reader trusts
 
-Not the repository it reads ([ADR-012](../adr/adr-012-git-trust-model.md)).
+Neither the repository it reads nor the environment it was started in
+([ADR-012](../adr/adr-012-git-trust-model.md)).
 
+- **The environment is built rather than inherited.** `readOnlyEnv` in
+  `src/core/git/run.ts` copies `process.env` without a single `GIT_*` key and
+  puts back `GIT_CONFIG_GLOBAL` and `GIT_CONFIG_SYSTEM` at the null device. A
+  parent that exports `GIT_DIR`, `GIT_WORK_TREE`, `GIT_INDEX_FILE` or
+  `GIT_CONFIG_COUNT` — a git hook, `git rebase --exec`, an agent shell — changes
+  nothing about what is read, and `cwd` alone says which repository that is.
+  `resolveUser` in `src/core/config/index.ts` is the deliberate exception: it
+  reads the developer's own `user.name` and does not go through this module.
 - **Configuration that names a program is pinned, not read.** Every call carries
   `--no-pager` and the `-c` pins of `INERT_CONFIG` — `core.fsmonitor`,
   `core.hooksPath`, `diff.external`, the editor, ssh, credential and hook keys —
