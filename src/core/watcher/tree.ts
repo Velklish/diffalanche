@@ -26,6 +26,10 @@ export type TreeWatcherOptions = {
   pollIntervalMs?: number;
   /** `false` walks the tree from the start; the default tries the recursive watch. */
   recursive?: boolean;
+  /** The walk replaced a watch and has its baseline; the tree is the caller's to read whole. */
+  onFallback?: () => void;
+  /** The native watch. A test that has to fail one after it started brings its own. */
+  native?: (options: TreeWatcherOptions, onFailure: () => void) => TreeSource | null;
 };
 
 export type TreeWatcher = {
@@ -49,7 +53,8 @@ export const PROBE_TIMEOUT_MS = 500;
 /** How often the probe writes while it waits. */
 const PROBE_WRITE_MS = 50;
 
-type Inner = { polling: boolean; ready: Promise<void>; close: () => void };
+/** One way of watching a tree, before `watchTree` puts the two behind one face. */
+export type TreeSource = { polling: boolean; ready: Promise<void>; close: () => void };
 
 /**
  * Neither the recursive watch nor the timer keeps the process alive on its own:
@@ -58,23 +63,34 @@ type Inner = { polling: boolean; ready: Promise<void>; close: () => void };
  * watcher it forgot.
  */
 export function watchTree(options: TreeWatcherOptions): TreeWatcher {
-  let current: Inner | null = null;
+  let current: TreeSource | null = null;
   let closed = false;
 
   /** A watch that fails after it started leaves the tree unwatched; the walk takes over. */
   function fallBack(): void {
     if (closed || current?.polling === true) return;
     current?.close();
-    current = polling(options);
+    const replacement = polling(options);
+    current = replacement;
+    // The replacement's baseline is silent, so the takeover itself is the
+    // signal: what changed inside that window is read whole, not name by name.
+    void replacement.ready
+      .then(() => {
+        if (!closed) options.onFallback?.();
+      })
+      .catch(() => undefined);
   }
 
-  if (options.recursive !== false) current = native(options, fallBack);
+  if (options.recursive !== false) current = (options.native ?? native)(options, fallBack);
   current ??= polling(options);
-  const ready = current.ready;
 
   return {
     polling: () => current?.polling ?? true,
-    ready,
+    // The live one: a caller that waits after a takeover is waiting for the
+    // walk that replaced the watch, not for the watch that died.
+    get ready(): Promise<void> {
+      return current?.ready ?? Promise.resolve();
+    },
     close: () => {
       closed = true;
       current?.close();
@@ -82,7 +98,7 @@ export function watchTree(options: TreeWatcherOptions): TreeWatcher {
   };
 }
 
-function native(options: TreeWatcherOptions, onFailure: () => void): Inner | null {
+function native(options: TreeWatcherOptions, onFailure: () => void): TreeSource | null {
   try {
     const watcher = watch(
       options.dir,
@@ -108,7 +124,7 @@ function native(options: TreeWatcherOptions, onFailure: () => void): Inner | nul
   }
 }
 
-function polling(options: TreeWatcherOptions): Inner {
+function polling(options: TreeWatcherOptions): TreeSource {
   const interval = options.pollIntervalMs ?? DEFAULT_POLL_INTERVAL_MS;
   let previous = new Map<string, string>();
   let closed = false;

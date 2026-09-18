@@ -34,14 +34,14 @@ import {
 import type { Repository, RepositoryChange, ScanResult, ScanWarning } from "../types.ts";
 import type { ActivityLog } from "./activity.ts";
 import type { EventBus } from "./bus.ts";
-import type { Ignore, TreeWatcher } from "./tree.ts";
+import type { Ignore, TreeWatcher, TreeWatcherOptions } from "./tree.ts";
 import { supportsRecursiveWatch, watchTree } from "./tree.ts";
 
 export type { ActivityEvent, ActivityLog, ActivityVerb } from "./activity.ts";
 export { ACTIVITY_CAPACITY, createActivityLog, EDITING_WINDOW_MS } from "./activity.ts";
 export type { EventBus, Listener, WatcherEvent, WatcherEventType } from "./bus.ts";
 export { createEventBus } from "./bus.ts";
-export type { Ignore, PathKind, TreeWatcher } from "./tree.ts";
+export type { Ignore, PathKind, TreeSource, TreeWatcher, TreeWatcherOptions } from "./tree.ts";
 export {
   DEFAULT_POLL_INTERVAL_MS,
   PROBE_TIMEOUT_MS,
@@ -86,13 +86,15 @@ export type WatcherOptions = {
   onRescan?: (cache: DiffCache) => void;
   /** A rescan that failed. Without this the failure is silent. */
   onError?: (error: unknown) => void;
+  /** A watch died and the walk took its place; said once (05-watcher.md). */
+  onFallback?: () => void;
+  /** The native watch of every tree. A test that has to fail one brings its own. */
+  native?: TreeWatcherOptions["native"];
 };
 
 export type Watcher = {
   /** The review session the watcher writes into: the current one, as it changes. */
   session: () => string | null;
-  /** `true` while any watched tree is walked on a timer instead of watched. */
-  polling: () => boolean;
   close: () => void;
 };
 
@@ -123,6 +125,7 @@ export async function startWatcher(options: WatcherOptions): Promise<Watcher> {
   let sessions: Map<string, ReviewStatus> | null = await snapshotSessions(config, null);
   let queue: Promise<void> = Promise.resolve();
   let closed = false;
+  let fellBack = false;
 
   /**
    * Debounce with a ceiling: a change resets the wait, but never past
@@ -158,6 +161,13 @@ export async function startWatcher(options: WatcherOptions): Promise<Watcher> {
         report(error);
       }
     });
+  }
+
+  /** The runtime gave up, not one tree: the trees after the first say the same thing. */
+  function reportFallback(): void {
+    if (fellBack) return;
+    fellBack = true;
+    options.onFallback?.();
   }
 
   /** Reporting a failure is not allowed to become one. */
@@ -328,7 +338,14 @@ export async function startWatcher(options: WatcherOptions): Promise<Watcher> {
           pending.set(repository.path, files);
           schedule(`repo:${repository.path}`, () => enqueue(() => rescan(repository)));
         },
+        // The walk that replaced the watch opened on a silent baseline, so the
+        // repository is read whole: an edit made during the takeover is in it.
+        onFallback: () => {
+          schedule(`repo:${repository.path}`, () => enqueue(() => rescan(repository)));
+          reportFallback();
+        },
         ...(options.pollIntervalMs === undefined ? {} : { pollIntervalMs: options.pollIntervalMs }),
+        ...(options.native === undefined ? {} : { native: options.native }),
       }),
     );
   }
@@ -349,7 +366,14 @@ export async function startWatcher(options: WatcherOptions): Promise<Watcher> {
       onChange: () => {
         schedule("data", () => enqueue(reloadData));
       },
+      // Read again for the same reason a repository is: the three files may
+      // have moved while nothing was watching them.
+      onFallback: () => {
+        schedule("data", () => enqueue(reloadData));
+        reportFallback();
+      },
       ...(options.pollIntervalMs === undefined ? {} : { pollIntervalMs: options.pollIntervalMs }),
+      ...(options.native === undefined ? {} : { native: options.native }),
     }),
   );
 
@@ -360,7 +384,6 @@ export async function startWatcher(options: WatcherOptions): Promise<Watcher> {
 
   return {
     session: () => session,
-    polling: () => watchers.some((watcher) => watcher.polling()),
     close: () => {
       closed = true;
       for (const timer of timers.values()) clearTimeout(timer);

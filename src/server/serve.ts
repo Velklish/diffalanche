@@ -90,6 +90,13 @@ export async function startReviewServer(options: ReviewServerOptions): Promise<R
         `rescan failed: ${error instanceof Error ? error.message : String(error)}\n`,
       );
     },
+    // The one word the operator gets about a session that has dropped to a walk
+    // and will never meet the budget of `docs/SPEC.md` section 6 again.
+    onFallback: () => {
+      process.stderr.write(
+        "the recursive watch failed: the trees are walked on a timer, and updates are slower\n",
+      );
+    },
   });
   // A rescan has already patched the document through `onRescan`. A comment
   // event changes one small file, and re-reading the whole change set for it

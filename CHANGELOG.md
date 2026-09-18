@@ -224,6 +224,21 @@ and `bun run release` refuses a version that has no section. See
   session. It now renames the lock aside first, the way a takeover does, and
   deletes the directory it read the token from — one rename more on a path that
   every write ends with. See [03-storage.md](docs/reference/03-storage.md).
+- **A watch that dies mid-session no longer loses the window it dies in**
+  (DA-85). When an error from inotify or FSEvents handed a tree to the walk, the
+  walk opened with a silent baseline and every edit made between the failure and
+  the end of that first walk was folded into it: a repository whose only change
+  fell inside the window kept showing the pre-edit diff for the rest of the
+  session. The takeover is now the signal — once the replacement's baseline is
+  taken the tree is read whole, a repository rescanned and the data directory
+  reloaded — so it over-reports by one rescan and cannot under-report. The
+  degradation is no longer silent either: a watch that dies after it started
+  reaches `startWatcher`'s new `onFallback` — once, whichever tree it was — and
+  `serve` prints one line about the trees being walked on a timer. A runtime
+  that never had a recursive watch still starts on the walk in silence. The
+  unused `Watcher.polling()` is gone, and a tree watcher's `ready` is the live
+  one rather than the dead watch's. See
+  [05-watcher.md](docs/reference/05-watcher.md).
 - **A broken `comments.json` no longer stops the session events** (DA-86). The
   reload of the data directory read the comments without a guard, so a file
   broken by hand while the server ran took the rest of the chain down with it:

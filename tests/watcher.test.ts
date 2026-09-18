@@ -5,7 +5,16 @@
  * process becomes comment events.
  */
 import { execFile } from "node:child_process";
-import { chmodSync, mkdirSync, mkdtempSync, readFileSync, rmSync, writeFileSync } from "node:fs";
+import {
+  chmodSync,
+  copyFileSync,
+  existsSync,
+  mkdirSync,
+  mkdtempSync,
+  readFileSync,
+  rmSync,
+  writeFileSync,
+} from "node:fs";
 import { readFile, rm, writeFile } from "node:fs/promises";
 import { tmpdir } from "node:os";
 import { join } from "node:path";
@@ -823,6 +832,58 @@ describe("watching a tree", () => {
     }
   }, 30_000);
 
+  it("says the walk took over once its baseline is taken, and reports nothing from it", async () => {
+    const dir = mkdtempSync(join(tmpdir(), "diffalanche-fallback-"));
+    const seen: string[] = [];
+    let fail = (): void => undefined;
+    let tookOver = 0;
+    const walking = watchTree({
+      dir,
+      ignore: () => false,
+      onChange: (path) => seen.push(path),
+      onFallback: () => {
+        tookOver += 1;
+      },
+      pollIntervalMs: 20,
+      // What inotify running out of watches leaves behind, driven rather than
+      // waited for: the watch is alive until the test makes it fail.
+      native: (_options, onFailure) => {
+        fail = onFailure;
+        return { polling: false, ready: Promise.resolve(), close: () => undefined };
+      },
+    });
+    try {
+      const first = walking.ready;
+      await first;
+      expect(walking.polling()).toBe(false);
+
+      // Written while the watch is dying: the walk's baseline absorbs it, which
+      // is why the takeover is announced whole instead of name by name.
+      writeFileSync(join(dir, "during.ts"), "export const during = 1;\n");
+      fail();
+      expect(walking.polling()).toBe(true);
+      // The live `ready` is the replacement's, not the dead watch's.
+      expect(walking.ready).not.toBe(first);
+
+      const deadline = performance.now() + 20_000;
+      while (tookOver === 0 && performance.now() < deadline) {
+        await new Promise((done) => setTimeout(done, 5));
+      }
+      expect(tookOver).toBe(1);
+      expect(seen).toEqual([]);
+
+      // And the tree is covered again by the time the takeover was announced.
+      writeFileSync(join(dir, "after.ts"), "export const after = 1;\n");
+      while (!seen.includes("after.ts") && performance.now() < deadline) {
+        await new Promise((done) => setTimeout(done, 10));
+      }
+      expect(seen).toEqual(["after.ts"]);
+    } finally {
+      walking.close();
+      rmSync(dir, { recursive: true, force: true });
+    }
+  }, 30_000);
+
   it("walks the tree when the recursive watch is not used", async () => {
     const dir = mkdtempSync(join(tmpdir(), "diffalanche-walk-"));
     mkdirSync(join(dir, "sub"));
@@ -914,6 +975,76 @@ describe("a comments.json that cannot be read", () => {
     } finally {
       await writeFile(join(config.dataDir, "current"), `${SESSION}\n`);
       await waitFor("session-changed", performance.now() - 1);
+    }
+  }, 60_000);
+});
+
+describe("a watcher whose watches die under it", () => {
+  it("rescans the repository the walk took over, and says the runtime gave up once", async () => {
+    const failures = new Map<string, () => void>();
+    const seenHere: WatcherEvent[] = [];
+    const own = createEventBus();
+    own.subscribe((event) => seenHere.push(event));
+    let fellBack = 0;
+    // Its own data directory, or the two watchers race for one `diff.json`:
+    // whichever writes first leaves the other's `sameChange` with nothing to say.
+    const dataDir = mkdtempSync(join(tmpdir(), "diffalanche-takeover-"));
+    mkdirSync(join(dataDir, "reviews", SESSION), { recursive: true });
+    for (const name of ["review.json", "comments.json", "diff.json"]) {
+      const from = join(config.dataDir, "reviews", SESSION, name);
+      if (existsSync(from)) copyFileSync(from, join(dataDir, "reviews", SESSION, name));
+    }
+    // Written rather than copied: the suite's pointer is moved by other tests,
+    // and the session this watcher works on has to be the one meant here.
+    writeFileSync(join(dataDir, "current"), `${SESSION}\n`);
+    // Its own bus and its own trees: the suite's watcher stays where it is, and
+    // the injected watch delivers nothing, so only the takeover can speak here.
+    const taken = await startWatcher({
+      config: { ...config, dataDir },
+      scan: found,
+      bus: own,
+      activity: createActivityLog(),
+      pollIntervalMs: 40,
+      onFallback: () => {
+        fellBack += 1;
+      },
+      native: (options, onFailure) => {
+        failures.set(options.dir, onFailure);
+        return { polling: false, ready: Promise.resolve(), close: () => undefined };
+      },
+    });
+    const file = join(root, REPO, "took-over.ts");
+    const other = join(root, OTHER_REPO, "took-over.ts");
+    const changedIn = (repo: string): boolean =>
+      seenHere.some((event) => event.type === "diff-changed" && event.repo === repo);
+    const until = async (repo: string): Promise<void> => {
+      const deadline = performance.now() + 20_000;
+      while (!changedIn(repo) && performance.now() < deadline) {
+        await new Promise((done) => setTimeout(done, 5));
+      }
+    };
+    try {
+      // Written while the watch is dying: no name for it is ever delivered, so
+      // the rescan of the whole repository is the only thing that can find it.
+      await writeFile(file, "export const tookOver = 1;\n");
+      (failures.get(join(root, REPO)) as () => void)();
+      await until(REPO);
+      expect(changedIn(REPO)).toBe(true);
+      expect(fellBack).toBe(1);
+
+      // A second tree going the same way is the same runtime giving up, so the
+      // rescan arrives again and the word about it does not.
+      await writeFile(other, "export const tookOver = 2;\n");
+      (failures.get(join(root, OTHER_REPO)) as () => void)();
+      await until(OTHER_REPO);
+      expect(changedIn(OTHER_REPO)).toBe(true);
+      expect(fellBack).toBe(1);
+    } finally {
+      taken.close();
+      rmSync(dataDir, { recursive: true, force: true });
+      await rm(file, { force: true });
+      await rm(other, { force: true });
+      await settle();
     }
   }, 60_000);
 });

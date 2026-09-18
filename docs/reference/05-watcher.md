@@ -25,6 +25,7 @@ const watcher = await startWatcher({ config, scan, bus, activity });
 | `onRescan` | the change set as the rescan left it on disk, for a caller that keeps it in memory |
 | `recursive` | `false` walks every tree instead of watching it; the default asks the runtime |
 | `onError` | a rescan that failed; without it the failure is silent |
+| `onFallback` | a recursive watch died and the walk took its place; said once |
 
 The session it works on is the current one, read from the `current` pointer. It
 follows that pointer: a session created from the UI or switched to with
@@ -54,8 +55,9 @@ become one.
 One watch per repository, plus one over the data directory. `fs.watch` with
 `recursive: true` is the whole implementation where the runtime honours it;
 where it does not, the same interface walks the tree on a timer and compares
-modification time and size. `watcher.polling()` says which of the two is
-running.
+modification time and size. A watch that **dies after it started** says so once,
+through `onFallback`; a runtime that never had one starts on the walk and says
+nothing, which is DA-85.1.
 
 `recursive: false` skips the question and walks: a filesystem whose
 notifications cannot be trusted — a network mount — is what it is for, and so is
@@ -74,6 +76,25 @@ Bun 1.3 on macOS both recurse and both report the path relative to the watched
 directory. A watch that fails after it started — an error from inotify or
 FSEvents — closes itself and the walk takes over, rather than ending the process
 with an unhandled event.
+
+**The takeover has a window, and it is closed by re-reading rather than by
+catching up.** The walk that replaces the watch opens with a baseline, and a
+baseline is silent by construction, so everything written between the error and
+the end of that first walk would be folded into it and never reported — on a
+tree big enough to have exhausted the watch descriptors, that walk is not
+instant. So the takeover itself is the signal: once the replacement's baseline
+is taken, the tree is announced whole — a repository is rescanned, the data
+directory is read again — and the edit made inside the window is in that read
+whatever its name was. It over-reports by one rescan per tree and cannot
+under-report. `ready` is the live one from then on: a caller that waits after a
+takeover waits for the walk that replaced the watch, not for the watch that
+died.
+
+The operator hears it once. `onFallback` is called for the first tree that
+falls back and not for the ones after it — the runtime gives up, not one tree —
+and `serve` turns that into one line on stderr saying the trees are walked on a
+timer and updates are slower. A session that has dropped to a walk cannot meet
+the budget of `docs/SPEC.md` section 6 at all, which is why it is worth a line.
 
 **A watch is not delivering when `watch` returns, and that holds for every
 runtime here, not only for the probe above.** A write made in the window
@@ -177,7 +198,7 @@ the same, because the CLI writes the same directory.
 
 | Event | Data | When |
 |---|---|---|
-| `diff-changed` | `{ repo, files }` | a repository was rescanned and its entry is not what it was; `files` are the paths that woke the watcher, not the files of the new change set |
+| `diff-changed` | `{ repo, files }` | a repository was rescanned and its entry is not what it was; `files` are the paths that woke the watcher, not the files of the new change set, and it is **empty** when what woke it was the walk taking over a dead watch — that names no path |
 | `comment-added` | `{ id }` | a comment appeared in `comments.json` |
 | `reply-added` | `{ id, commentId }` | a reply appeared in a thread; `id` is the reply |
 | `comment-status` | `{ id }` | a comment was resolved or reopened |
