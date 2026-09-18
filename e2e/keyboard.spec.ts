@@ -160,6 +160,77 @@ test("an open overlay keeps the focus, and gives it back when it closes", async 
   await expect(search).toBeFocused();
 });
 
+/** Opens `New task…`, which needs a repository picked and no scoped task. */
+async function newTaskForm(page: Page) {
+  await page.getByRole("button", { name: "select" }).click();
+  await page.locator(".repo-row").first().click();
+  await page.getByRole("button", { name: "New task…" }).click();
+  await expect(page.getByRole("dialog", { name: "новая задача" })).toBeVisible();
+}
+
+/** One overlay at a time, and one `esc` closes exactly one thing: before the
+ * ladder, two hand-written lists of flags both missed the scope surface (DA-70). */
+test("esc over an overlay closes it and leaves the draft being written", async ({ page }) => {
+  await open(page);
+  await page.keyboard.press("c");
+  const field = page.locator(".composer-field");
+  await field.click();
+  await field.type("half a sentence");
+
+  // `New task…` needs no scoped task, which the SCOPE pill would.
+  await newTaskForm(page);
+  const form = page.getByRole("dialog", { name: "новая задача" });
+
+  await page.keyboard.press("Escape");
+  await expect(form).toBeHidden();
+  await expect(field).toHaveValue("half a sentence");
+
+  // And the next press is the composer's own.
+  await page.keyboard.press("Escape");
+  await expect(page.locator(".composer")).toBeHidden();
+});
+
+test("⌘K and ⇧⇧ over an open overlay are refused, not stacked", async ({ page }) => {
+  await open(page);
+  await page.getByRole("button", { name: "BASE" }).click();
+  const picker = page.getByRole("dialog", { name: "base" });
+  await expect(picker).toBeVisible();
+
+  await page.keyboard.press("ControlOrMeta+k");
+  await expect(palette(page)).toBeHidden();
+  await page.keyboard.press("Shift");
+  await page.keyboard.press("Shift");
+  await expect(palette(page)).toBeHidden();
+  // The count is what makes a regression visible: two `Overlay`s mounted would
+  // trap the ring in two places and answer one `esc` twice.
+  await expect(page.locator(".scrim")).toHaveCount(1);
+
+  await page.keyboard.press("Escape");
+  await expect(picker).toBeHidden();
+  await expect(page.locator(".scrim")).toHaveCount(0);
+});
+
+test("a letter under an open overlay belongs to the overlay", async ({ page }) => {
+  await open(page);
+  await newTaskForm(page);
+
+  // Off the fields first, or the press never reaches the guard: `Create` is the
+  // form's only stop that is not one, and an empty name disables it.
+  const name = page.getByRole("textbox", { name: "name" });
+  await expect(name).toBeFocused();
+  await name.fill("ls-probe");
+  await page.keyboard.press("Tab");
+  await page.keyboard.press("Tab");
+  await expect(page.getByRole("button", { name: "Create" })).toBeFocused();
+
+  await page.keyboard.press("c");
+  await expect(page.locator(".composer")).toBeHidden();
+  await page.keyboard.press("b");
+  await expect(page.locator(".toast")).toBeHidden();
+  // And the letters went nowhere else either.
+  await expect(name).toHaveValue("ls-probe");
+});
+
 test("B says that browsing is Phase 2 and changes nothing", async ({ page }) => {
   await open(page);
   await page.keyboard.press("b");

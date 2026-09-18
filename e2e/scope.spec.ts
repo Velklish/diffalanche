@@ -201,9 +201,8 @@ test("taking a file out of the scope asks before it deletes the comments under i
   await expect(question).toContainText(path);
   await expect(question).toContainText("1 комментарий (1 открыт)");
 
-  // One overlay at a time: `esc` answers the confirmation and gives the editor
-  // back with the draft it had, rather than taking both away — `Overlay`
-  // listens for `esc` on the document, so two of them would answer one press.
+  // One press closes one thing, and the editor comes back with its draft: the
+  // ladder of `overlays.ts` is what does it (08-ui.md, DA-70).
   await page.keyboard.press("Escape");
   await expect(page.locator(".confirm-question")).toHaveCount(0);
   await expect(page.locator(".overlay.scope")).toHaveCount(1);

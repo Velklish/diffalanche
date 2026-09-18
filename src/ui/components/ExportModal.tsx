@@ -20,7 +20,7 @@ export function ExportModal() {
   const setExportView = useStore((store) => store.setExportView);
 
   return (
-    <Overlay width={760} label="export" onClose={() => openExport(false)}>
+    <Overlay width={760} label="export" ladder="export" onClose={() => openExport(false)}>
       <div className="export">
         <div className="export-head">
           <span className="segments">

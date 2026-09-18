@@ -202,6 +202,15 @@ and `bun run release` refuses a version that has no section. See
 
 ### Fixed
 
+- **One `esc` closes one thing, and one overlay is on screen at a time**
+  (DA-70). The ladder is a list in `src/ui/overlays.ts` that the keyboard asks;
+  before it, two hand-written lists of overlay flags in `keys.ts` both missed
+  the scope surface, so `esc` over the scope editor closed the editor **and**
+  threw away the comment being written underneath it, and `c` under the open
+  editor opened a composer on the file behind. `⌘K` and `⇧⇧` over an overlay
+  that is not the palette are refused rather than stacked: two overlays trap the
+  ring in two places and answer one press twice. Adding an overlay is a row in
+  that list and no edit to the keyboard.
 - **A warning found after the bar was dismissed is shown again** (DA-79). The
   rule was a property of the live frame and is now a property of the state: one
   writer of the field, which the stream's `warnings` frame and the review

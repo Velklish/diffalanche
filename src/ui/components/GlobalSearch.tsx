@@ -62,7 +62,13 @@ function Palette() {
   };
 
   return (
-    <Overlay width={880} className="palette" label="global search" onClose={() => close(false)}>
+    <Overlay
+      width={880}
+      className="palette"
+      label="global search"
+      ladder="palette"
+      onClose={() => close(false)}
+    >
       <div className="palette-field">
         <span className="palette-glyph">⌕</span>
         <input

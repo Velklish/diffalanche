@@ -1,21 +1,14 @@
 import type { ReactNode } from "react";
 import { useEffect, useRef } from "react";
+import type { Ladder } from "../overlays.ts";
 
-/**
- * The overlay primitive of the handoff: a scrim that closes on a click and on
- * `esc`, a panel that does not. The base picker, the export and global search
- * are inside it.
- *
- * It also holds the focus while it is open (DA-26.1). An overlay that does not
- * is an overlay a reader can `Tab` out of, into a page they cannot see and
- * cannot click: the ring cycles inside the panel, and when the overlay closes —
- * by `esc`, by the scrim, or by finishing what it was for — the focus goes back
- * to the control that opened it.
- */
+/** The scrim and panel of the handoff: the ring held inside, given back to
+ * whatever opened the ladder, and `esc` owned by `keys.ts` (08-ui.md). */
 export function Overlay({
   width,
   label,
   className,
+  ladder,
   onClose,
   children,
 }: {
@@ -23,25 +16,21 @@ export function Overlay({
   label: string;
   /** What the panel is besides an overlay; global search is the tall one. */
   className?: string;
+  /** Overlays that replace each other at one position share an opener (DA-100). */
+  ladder: Ladder;
   onClose: () => void;
   children: ReactNode;
 }) {
   const panel = useRef<HTMLDivElement>(null);
-  // Taken while the overlay renders, not in the effect: a child that focuses
-  // itself as it mounts — the search field does — runs before effects, and by
-  // then the control that opened the overlay is no longer the active element.
-  const opener = useRef<Element | null>(null);
-  opener.current ??= document.activeElement;
+  // Recorded while the overlay renders, not in the effect: a child that focuses
+  // itself as it mounts — the search field does — runs before effects.
+  const entered = useRef(false);
+  if (!entered.current) {
+    entered.current = true;
+    enterLadder(ladder);
+  }
 
-  useEffect(() => {
-    const close = (event: KeyboardEvent) => {
-      if (event.key === "Escape") onClose();
-    };
-    document.addEventListener("keydown", close);
-    return () => document.removeEventListener("keydown", close);
-  }, [onClose]);
-
-  useFocusHeld(panel, opener);
+  useFocusHeld(panel, ladder);
 
   return (
     <div className="scrim">
@@ -74,6 +63,31 @@ export function Overlay({
   );
 }
 
+/** The control that opened a ladder, and the restore owed to it once the ladder
+ * has emptied ([08-ui.md](../../../docs/reference/08-ui.md), DA-100). */
+const OPENERS = new Map<Ladder, Element | null>();
+const MOUNTED = new Map<Ladder, number>();
+
+/** The first overlay of a ladder records the opener; a swap keeps it. */
+function enterLadder(ladder: Ladder): void {
+  if (!OPENERS.has(ladder)) OPENERS.set(ladder, document.activeElement);
+}
+
+function held(ladder: Ladder, by: 1 | -1): void {
+  MOUNTED.set(ladder, (MOUNTED.get(ladder) ?? 0) + by);
+}
+
+/** Read after the commit, not during it: React renders the arriving overlay
+ * before it cleans up the leaving one, so a swap is only visible afterwards. */
+function leaveLadder(ladder: Ladder): void {
+  setTimeout(() => {
+    if ((MOUNTED.get(ladder) ?? 0) > 0) return;
+    const back = OPENERS.get(ladder) ?? null;
+    OPENERS.delete(ladder);
+    if (back instanceof HTMLElement && back.isConnected) back.focus({ preventScroll: true });
+  }, 0);
+}
+
 /** Everything inside the panel a `Tab` can land on, in the order it would. */
 const FOCUSABLE = [
   "a[href]",
@@ -84,22 +98,14 @@ const FOCUSABLE = [
   '[tabindex]:not([tabindex="-1"])',
 ].join(", ");
 
-/**
- * The ring inside the panel, and the focus given back on the way out. The
- * listener is on the document rather than on the panel, because the focus may
- * already have left it — a click on the page behind the scrim is what does that
- * — and a panel that has lost the ring can no longer catch it.
- */
-function useFocusHeld(
-  panel: { current: HTMLDivElement | null },
-  opener: { current: Element | null },
-): void {
+/** The ring inside the panel; the listener is on the document because a click
+ * behind the scrim can take the focus out of a panel that cannot catch it back. */
+function useFocusHeld(panel: { current: HTMLDivElement | null }, ladder: Ladder): void {
   useEffect(() => {
+    held(ladder, 1);
     const element = panel.current;
-    // The panel itself, so the first `Tab` moves to the first control inside it
-    // rather than to whatever follows the overlay in the document — unless
-    // something inside has already taken the focus, which is what the search
-    // field does the moment it mounts.
+    // The panel itself, so the first `Tab` goes inside — unless something in it
+    // has already taken the focus, which the search field does as it mounts.
     if (element !== null && !element.contains(document.activeElement)) {
       element.focus({ preventScroll: true });
     }
@@ -137,10 +143,10 @@ function useFocusHeld(
     document.addEventListener("keydown", hold);
     return () => {
       document.removeEventListener("keydown", hold);
-      // Back where it came from: closing an overlay must not leave the reader
-      // with no ring at all.
-      const back = opener.current;
-      if (back instanceof HTMLElement && back.isConnected) back.focus({ preventScroll: true });
+      // Back where it came from, once the ladder has emptied: closing an
+      // overlay must not leave the reader with no ring at all.
+      held(ladder, -1);
+      leaveLadder(ladder);
     };
-  }, [panel, opener]);
+  }, [panel, ladder]);
 }

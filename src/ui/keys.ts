@@ -1,6 +1,7 @@
 /** The handoff's keyboard map in one listener; the table, the rule about fields
- * and its exceptions are in [08-ui.md](../../docs/reference/08-ui.md). */
+ * and the overlay ladder are in [08-ui.md](../../docs/reference/08-ui.md). */
 import { useEffect } from "react";
+import { closeTopOverlay, topOverlay } from "./overlays.ts";
 import { revealThread } from "./reveal.ts";
 import { useStore } from "./store.ts";
 
@@ -14,15 +15,18 @@ export function useKeys(): void {
 
     const onKey = (event: KeyboardEvent) => {
       const store = useStore.getState();
+      const open = topOverlay(store);
       const inField =
         event.target instanceof HTMLElement &&
         event.target.closest("input, textarea, [contenteditable]") !== null;
 
       if (event.key === "Shift") {
-        // Not while typing — a person writing capitals into a comment is not
-        // searching — except while the modal is open, where the field it would
-        // close has the focus and `⇧⇧` is documented as a toggle.
+        // Not while typing — capitals in a comment are not a search — except in
+        // the modal's own field, where `⇧⇧` is documented as a toggle.
         if (event.repeat || (inField && !store.paletteOpen)) return;
+        // One overlay at a time: over another one the gesture is refused, and
+        // `esc` is what closes what is open.
+        if (open !== null && open !== "palette") return;
         const at = event.timeStamp;
         if (at - lastShift <= DOUBLE_SHIFT_MS && lastShift > 0) {
           lastShift = 0;
@@ -35,18 +39,9 @@ export function useKeys(): void {
       lastShift = 0;
 
       if (event.key === "Escape") {
-        // The topmost thing only. Without the order, one `esc` over the search
-        // modal would also throw away the comment being written under it.
-        if (store.paletteOpen) {
-          store.setPalette(false);
-          return;
-        }
-        if (store.sessionMenuOpen || store.baseOpen || store.exportOpen) {
-          store.setSessionMenu(false);
-          store.openBase(false);
-          store.openExport(false);
-          return;
-        }
+        // The topmost thing only, and exactly one of them: without the order a
+        // press over an overlay would also throw away the comment under it.
+        if (closeTopOverlay(store)) return;
         if (store.replyId !== null) {
           store.openReply(null);
           return;
@@ -58,7 +53,9 @@ export function useKeys(): void {
       if (event.metaKey || event.ctrlKey) {
         if (event.key === "k" || event.key === "K") {
           event.preventDefault();
-          store.setPalette(!store.paletteOpen);
+          // Over another overlay it is refused rather than stacked: two would
+          // trap the ring in two places and answer one `esc` twice.
+          if (open === null || open === "palette") store.setPalette(!store.paletteOpen);
           return;
         }
         if (event.key === "Enter" && store.composer !== null) {
@@ -68,11 +65,9 @@ export function useKeys(): void {
         return;
       }
       if (event.altKey || inField) return;
-      // A letter under an overlay belongs to the overlay, not to the diff
-      // behind it; `esc` above is what closes one. The search field has the
-      // focus while it is open, so this is also what covers a click that took
-      // the focus out of it.
-      if (store.paletteOpen || store.baseOpen || store.exportOpen) return;
+      // A letter under any overlay belongs to the overlay and not to the diff
+      // behind it; `esc` above is what closes one.
+      if (open !== null) return;
 
       switch (event.key) {
         case "c":

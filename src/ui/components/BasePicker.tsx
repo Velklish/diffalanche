@@ -29,7 +29,7 @@ export function BasePicker() {
   const argument = baseArgument(mode, name, refText);
 
   return (
-    <Overlay width={460} label="base" onClose={() => openBase(false)}>
+    <Overlay width={460} label="base" ladder="base" onClose={() => openBase(false)}>
       <form
         className="picker"
         onSubmit={(event) => {

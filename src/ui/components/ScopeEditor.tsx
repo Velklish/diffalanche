@@ -26,7 +26,13 @@ export function ScopeEditor() {
   const counted = countDraft(draft);
 
   return (
-    <Overlay width={640} className="scope" label="состав задачи" onClose={() => openScope(false)}>
+    <Overlay
+      width={640}
+      className="scope"
+      label="состав задачи"
+      ladder="scope"
+      onClose={() => openScope(false)}
+    >
       <form
         className="scope-form"
         onSubmit={(event) => {
@@ -143,7 +149,13 @@ export function ScopeConfirmation({ confirm }: { confirm: ScopeConfirm }) {
     // The dialog's name is the question itself: a confirmation is read out by
     // what it asks, and a screen reader entering it should hear the file and
     // the count rather than a category.
-    <Overlay width={460} className="confirm" label={confirm.question} onClose={cancel}>
+    <Overlay
+      width={460}
+      className="confirm"
+      label={confirm.question}
+      ladder="scope"
+      onClose={cancel}
+    >
       <p className="confirm-question">{confirm.question}</p>
       <p className="confirm-note">
         Комментарии удаляются вместе с записью состава. Отмена не пишет ничего.
@@ -182,7 +194,7 @@ export function NewTaskForm() {
   const counted = countDraft(draft);
 
   return (
-    <Overlay width={420} label="новая задача" onClose={() => openNewTask(false)}>
+    <Overlay width={420} label="новая задача" ladder="scope" onClose={() => openNewTask(false)}>
       <form
         className="picker"
         onSubmit={(event) => {
