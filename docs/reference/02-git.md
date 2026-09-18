@@ -164,7 +164,7 @@ creds.txt is deleted from the base and still on disk: it was untracked out of it
 One case is not covered by that: a file that changes type — a tracked file
 replaced by a symbolic link — is two patches for one path from the diff alone,
 so the loop above never sees it. That is
-[DA-76.1](../backlog/triage/DA-76.1-type-change-is-two-entries-for-one-path.md).
+[DA-76.1](../backlog/queue/DA-76.1-type-change-is-two-entries-for-one-path.md).
 
 Keeping one entry per path is what makes every consumer right at once: the
 anchor lookup, the sidebar and the card key all take the first match
