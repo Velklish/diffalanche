@@ -312,43 +312,43 @@ describe("the composer while the file under it changes", () => {
   });
 });
 
-describe("a review the stream brought again", () => {
-  /** The document `GET /api/review` answers with, for a session of one file. */
-  function document(session: string) {
-    return {
-      root: "/root",
-      repositories: [repository([file()])],
-      totals: { repositories: 1, files: 1, lines: 1 },
-      session: {
-        version: 1,
-        name: session,
-        title: "",
-        base: { mode: "head" },
-        createdAt: "2026-09-05T00:00:00Z",
-        updatedAt: "2026-09-05T00:00:00Z",
-      },
-      comments: [],
-      counters: {
-        counters: { total: 0, open: 0, resolved: 0, unanswered: 0, awaiting: 0, severity: null },
-        repositories: [],
-      },
-      warnings: [],
-    };
-  }
+/** The document `GET /api/review` answers with, for a session of one file. */
+function document(session: string, warnings: { path: string; message: string }[] = []) {
+  return {
+    root: "/root",
+    repositories: [repository([file()])],
+    totals: { repositories: 1, files: 1, lines: 1 },
+    session: {
+      version: 1,
+      name: session,
+      title: "",
+      base: { mode: "head" },
+      createdAt: "2026-09-05T00:00:00Z",
+      updatedAt: "2026-09-05T00:00:00Z",
+    },
+    comments: [],
+    counters: {
+      counters: { total: 0, open: 0, resolved: 0, unanswered: 0, awaiting: 0, severity: null },
+      repositories: [],
+    },
+    warnings,
+  };
+}
 
-  function answers(session: string): void {
-    vi.stubGlobal(
-      "fetch",
-      vi.fn((url: string) =>
-        Promise.resolve(
-          new Response(
-            JSON.stringify(url === "/api/config" ? { user: "kim.p" } : document(session)),
-          ),
+function answers(session: string, warnings: { path: string; message: string }[] = []): void {
+  vi.stubGlobal(
+    "fetch",
+    vi.fn((url: string) =>
+      Promise.resolve(
+        new Response(
+          JSON.stringify(url === "/api/config" ? { user: "kim.p" } : document(session, warnings)),
         ),
       ),
-    );
-  }
+    ),
+  );
+}
 
+describe("a review the stream brought again", () => {
   it("keeps the draft when it is the same session read again", async () => {
     loaded();
     useStore.setState({ session: document("ls-1").session as never });
@@ -525,6 +525,79 @@ describe("the warnings bar", () => {
       warningsDismissedFor: "ls-1",
     });
     useStore.getState().setWarnings([{ path: "repos/a", message: "no remote" }]);
+
+    expect(useStore.getState().warningsDismissedFor).toBe("ls-1");
+  });
+
+  /** The same rule reached the other way: a base applied here re-reads the whole
+   * review, and the session did not change, so the key catches nothing (DA-79). */
+  it("comes back when a review read again carries a warning that was not there", async () => {
+    loaded();
+    useStore.setState({
+      session: document("ls-1").session as never,
+      warnings: [{ path: "repos/a", message: "no remote" }],
+    });
+    useStore.getState().dismissWarnings();
+    answers("ls-1", [
+      { path: "repos/a", message: "no remote" },
+      { path: "repos/b", message: "ref does not resolve" },
+    ]);
+
+    await useStore.getState().loadReview();
+
+    expect(useStore.getState().warningsDismissedFor).toBeNull();
+    expect(readDismissed()).toBeNull();
+  });
+
+  it("leaves the dismissal alone when a review read again says the same thing", async () => {
+    loaded();
+    useStore.setState({
+      session: document("ls-1").session as never,
+      warnings: [{ path: "repos/a", message: "no remote" }],
+    });
+    useStore.getState().dismissWarnings();
+    answers("ls-1", [{ path: "repos/a", message: "no remote" }]);
+
+    await useStore.getState().loadReview();
+
+    // The store's field and not `readDismissed()`: `sessionStorage` is a
+    // browser's, and the suite runs on Bun too, where it is not declared.
+    expect(useStore.getState().warningsDismissedFor).toBe("ls-1");
+  });
+
+  /** A page that has shown no review yet has no list to be newer than, so the
+   * dismissal it read back out of `sessionStorage` is the reader's own. */
+  it("leaves a remembered dismissal alone on the first load of the page", async () => {
+    useStore.setState({
+      status: "loading",
+      session: null,
+      warnings: [],
+      warningsDismissedFor: "ls-1",
+    });
+    answers("ls-1", [{ path: "repos/a", message: "no remote" }]);
+
+    await useStore.getState().loadReview();
+
+    expect(useStore.getState().warnings).toHaveLength(1);
+    expect(useStore.getState().warningsDismissedFor).toBe("ls-1");
+  });
+
+  /** Another session's list is not this one's news, and the key is the session
+   * name: a reader who leaves and comes back finds the bar as they left it. */
+  it("keeps the dismissal across a switch to another session and back", async () => {
+    loaded();
+    useStore.setState({
+      session: document("ls-1").session as never,
+      warnings: [{ path: "repos/a", message: "no remote" }],
+      warningsDismissedFor: "ls-1",
+    });
+
+    answers("ls-2", [{ path: "repos/b", message: "ref does not resolve" }]);
+    await useStore.getState().loadReview();
+    expect(useStore.getState().warningsDismissedFor).toBe("ls-1");
+
+    answers("ls-1", [{ path: "repos/a", message: "no remote" }]);
+    await useStore.getState().loadReview();
 
     expect(useStore.getState().warningsDismissedFor).toBe("ls-1");
   });

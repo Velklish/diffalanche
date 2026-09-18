@@ -566,7 +566,7 @@ export const useStore = create<Store>()((set, get) => ({
       // Stamped here, not after the render: the harness measures from the moment
       // the response was parsed to the frame that showed it.
       perf.responseAt = performance.now();
-      set(fromDocument(document, get().diffView, get().session?.name ?? null));
+      set(fromDocument(document, get().diffView, get().session?.name ?? null, get().warnings));
     } catch (error) {
       set({ status: "failed", failure: reason(error) });
       return;
@@ -1182,16 +1182,7 @@ export const useStore = create<Store>()((set, get) => ({
     writeDismissed(name);
     set({ warningsDismissedFor: name });
   },
-  setWarnings: (warnings) => {
-    const before = get().warnings;
-    if (before.length === warnings.length && before.every(sameWarning(warnings))) return;
-    // A warning the scan has just found is news even to a reader who put the
-    // bar away: what was dismissed was the list before it (`docs/SPEC.md`
-    // section 5 — nothing is silently dropped). The remembered dismiss goes
-    // with it, or a reload would hide a bar the reader has never seen.
-    writeDismissed(null);
-    set({ warnings, warningsDismissedFor: null });
-  },
+  setWarnings: (warnings) => set(afterWarnings(get().warnings, warnings)),
 
   // live
   connection: "connecting",
@@ -1380,6 +1371,17 @@ function merge(held: ActivityEvent[], arriving: ActivityEvent[]): ActivityEvent[
   return events.length > ACTIVITY_KEPT ? events.slice(events.length - ACTIVITY_KEPT) : events;
 }
 
+/** The warnings and the dismissal they leave behind; every writer of the field
+ * goes through it ([08-ui.md](../../docs/reference/08-ui.md)). */
+function afterWarnings(
+  before: ScanWarning[],
+  warnings: ScanWarning[],
+): Pick<Store, "warnings"> & Partial<Pick<Store, "warningsDismissedFor">> {
+  if (before.length === warnings.length && before.every(sameWarning(warnings))) return { warnings };
+  writeDismissed(null);
+  return { warnings, warningsDismissedFor: null };
+}
+
 function sameWarning(list: ScanWarning[]): (warning: ScanWarning, index: number) => boolean {
   return (warning, index) =>
     warning.path === list[index]?.path && warning.message === list[index]?.message;
@@ -1529,6 +1531,7 @@ function fromDocument(
   document: ReviewDocument,
   previous: Record<string, DiffView>,
   held: string | null,
+  heldWarnings: ScanWarning[],
 ): Partial<Store> {
   let index = 0;
   const files = document.repositories.flatMap((repo) =>
@@ -1550,7 +1553,11 @@ function fromDocument(
     ...indexCounters(document.counters),
     threadsByFile: byFile(document.comments),
     session: document.session,
-    warnings: document.warnings,
+    // Another session's list is not this one's news: the dismissal is keyed by
+    // session name, and a reader who comes back deserves the bar still away.
+    ...(switched
+      ? { warnings: document.warnings }
+      : afterWarnings(heldWarnings, document.warnings)),
     ...(switched
       ? {
           repo: first?.repo ?? null,

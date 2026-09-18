@@ -202,6 +202,15 @@ and `bun run release` refuses a version that has no section. See
 
 ### Fixed
 
+- **A warning found after the bar was dismissed is shown again** (DA-79). The
+  rule was a property of the live frame and is now a property of the state: one
+  writer of the field, which the stream's `warnings` frame and the review
+  re-read both go through. `Apply` on the base picker and on the scope editor
+  read the whole review again and leave the session's name where it was, so a
+  base that stopped resolving in one repository used to put that repository's
+  warning in the document and show nothing at all — the reader went on reviewing
+  against a base that had silently fallen back. An identical list still changes
+  nothing, so an ordinary re-read does not bring the bar back.
 - **A test fixture no longer inherits the developer's own data directory**
   (DA-54.1). `bun run test:ui`, `bun run test:e2e` and `bun run perf` neutralise
   `DIFFALANCHE_DATA_DIR` and `$XDG_CONFIG_HOME` the way `bun run test` already
