@@ -139,7 +139,16 @@ async function readOne(
   ]);
   const files = parseDiff(raw, options);
   const warnings = [...resolution.warnings];
+  const tracked = new Set(files.map((file) => file.path));
   for (const path of untracked) {
+    // `git rm --cached` leaves both sources naming it: the diff has the deletion
+    // the index made, `ls-files` has the file still on disk (DA-76).
+    if (tracked.has(path)) {
+      warnings.push(
+        `${path} is deleted from the base and still on disk: it was untracked out of it`,
+      );
+      continue;
+    }
     const one = await readUntracked(cwd, path, options);
     if ("file" in one) files.push(one.file);
     else warnings.push(one.warning);
@@ -152,8 +161,8 @@ async function readOne(
  * warning and its own line of the change set, never the whole review. */
 type UntrackedRead = { file: FileChange } | { warning: string };
 
-/** An untracked file is an addition. A staged new file is already in the diff and is not listed
- * here, so the two sources never count the same file twice. */
+/** An untracked file is an addition. A path the diff already carries is not read again: the caller
+ * drops it, because `git rm --cached` leaves both sources naming it (DA-76). */
 async function readUntracked(
   cwd: string,
   path: string,

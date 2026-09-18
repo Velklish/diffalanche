@@ -471,6 +471,13 @@ and `bun run release` refuses a version that has no section. See
   configuration could not be read`. A repository with a filter driver — git-lfs
   is the common one — is shown the content that is on disk rather than what the
   driver would make of it.
+- **A file untracked with `git rm --cached` is listed once** (DA-76). The diff
+  reported the deletion the index made and `ls-files` reported the file still on
+  disk, both correctly, and the change set carried the path twice: the counters
+  doubled it, the UI rendered two cards under one React key, and a comment on it
+  could not be anchored, because the lookup takes the first match and that entry
+  had no new-side lines. The change set keeps the deletion — what the change
+  actually is — and the file being still on disk is a warning.
 - **A git failure says which of four things went wrong** (DA-66). `gitOrNull`
   swallowed every failure into `null`, and `null` meant one thing: a git that
   could not be started was reported as `HEAD does not resolve: no commits yet`

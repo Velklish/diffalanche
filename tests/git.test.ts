@@ -15,6 +15,7 @@ import {
 import { tmpdir } from "node:os";
 import { join } from "node:path";
 import { afterAll, beforeAll, describe, expect, it } from "vitest";
+import { captureAnchor } from "../src/core/domain/anchors.ts";
 import { gitError } from "../src/core/git/errors.ts";
 import { parseDiff, readRepositoryChange, scan } from "../src/core/index.ts";
 import type { RepositoryChange } from "../src/core/types.ts";
@@ -597,6 +598,39 @@ describe("the reader runs nothing the repository names", () => {
     // The diff is still the file's own content, not the program's output.
     expect(change.files.map((file) => file.path)).toEqual(["app.ts"]);
     expect(change.files[0]?.patch).toContain("+two");
+  });
+});
+
+describe("a file untracked with git rm --cached", () => {
+  it("is one entry, the deletion the index made, with a warning that it is still on disk", async () => {
+    const repo = join(root, "repos/g/rmcached");
+    mkdirSync(repo, { recursive: true });
+    git(repo, ["init", "--quiet", "-b", "main"]);
+    writeFileSync(join(repo, "creds.txt"), "secret\n");
+    writeFileSync(join(repo, "keep.txt"), "keep\n");
+    commit(repo, "base");
+    git(repo, ["rm", "--cached", "--quiet", "creds.txt"]);
+    try {
+      const change = await read("repos/g/rmcached", { mode: "head" }, { hunks: true });
+      // One entry for the one path, where both sources named it.
+      expect(change.files.map((file) => file.path)).toEqual(["creds.txt"]);
+      expect(change.files[0]).toMatchObject({ status: "deleted", additions: 0, deletions: 1 });
+      expect(change.warnings).toEqual([
+        "creds.txt is deleted from the base and still on disk: it was untracked out of it",
+      ]);
+      // The hunk it keeps is the one an anchor needs; the untracked entry had none to give.
+      expect(change.files[0]?.hunks.length).toBe(1);
+      // And the entry that survives anchors: on the old side, where its lines are, and with the
+      // truth on the new side rather than "no hunks in the change set" (DA-76 with DA-101).
+      expect(captureAnchor([change], "repos/g/rmcached", "creds.txt", "old", 1)).toMatchObject({
+        lineContent: "secret",
+      });
+      expect(() => captureAnchor([change], "repos/g/rmcached", "creds.txt", "new", 1)).toThrow(
+        /lines on the old side only/,
+      );
+    } finally {
+      rmSync(repo, { recursive: true, force: true });
+    }
   });
 });
 

@@ -142,11 +142,34 @@ domain and storage refusals ([06-cli.md](06-cli.md)).
 separately in every repository. Every fallback is a warning, so a repository
 measured against something other than what was asked for never says so silently.
 
-**`head`** — the working tree against HEAD. `git diff HEAD`, not `git diff`: the
-base is HEAD, not the index, so a staged change is part of the review. It
-arrives from the diff itself, and `ls-files --others` does not list it, so
-nothing is counted twice. A repository with no commits yet warns
+**`head`** — the working tree against HEAD. The base is HEAD and not the index,
+so a staged change is part of the review; it arrives from the diff itself, and
+`ls-files --others` does not list it. A repository with no commits yet warns
 `HEAD does not resolve: no commits yet` and is skipped.
+
+**One path is one entry.** The two sources can name the same file, and one
+operation makes them: `git rm --cached` takes the entry out of the index and
+leaves the file on disk, so the diff reports a deletion and `ls-files` reports an
+untracked file, both correctly. The change set keeps the diff's **deletion** —
+that is what the change is, and for the case this is usually reached by,
+`git rm --cached .env` on a secret committed by accident, it is the content
+leaving the repository that a reviewer needs to see; listing it a second time as
+an addition would say the opposite. The file being still on disk is a warning
+rather than a second entry:
+
+```
+creds.txt is deleted from the base and still on disk: it was untracked out of it
+```
+
+One case is not covered by that: a file that changes type — a tracked file
+replaced by a symbolic link — is two patches for one path from the diff alone,
+so the loop above never sees it. That is
+[DA-76.1](../backlog/triage/DA-76.1-type-change-is-two-entries-for-one-path.md).
+
+Keeping one entry per path is what makes every consumer right at once: the
+anchor lookup, the sidebar and the card key all take the first match
+(`src/core/domain/anchors.ts`, `src/ui/store.ts`), and the counters add up what
+the list holds.
 
 **`branch`** — the working tree against the merge base of HEAD and a branch. The
 session may name the branch (`base.branch`, for example `origin/develop`);
