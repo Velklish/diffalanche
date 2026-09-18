@@ -11,9 +11,10 @@ database, nothing leaves `127.0.0.1`. And it never writes to a repository you
 are reviewing — git is read through the `git` binary, and the only directory
 diffalanche creates is its own.
 
-**Status:** Phase 1, in development. The CLI, the storage, the scanner, the git
-reader, the review server and the UI are in; the UI is still being finished, and
-nothing is published to npm yet. Phase 2 (suggestions from an embedding index)
+**Status:** Phase 1 shipped as v0.1.0 on 2026-09-05. The CLI, the storage, the
+scanner, the git reader, the review server and the UI are in; the findings its
+reviews and live use raised are being closed from the backlog, and nothing is
+published to npm yet. Phase 2 (suggestions from an embedding index)
 and later are in [docs/SPEC.md](docs/SPEC.md) section 10.
 
 ## Install

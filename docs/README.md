@@ -4,7 +4,7 @@ The canonical project documentation. For current work, use `npx github:Velklish/
 
 | Document | Topic | Status |
 |---|---|---|
-| [SPEC.md](SPEC.md) | Product specification: purpose, decisions, requirements, on-disk format, CLI, agent protocol, budgets, phases | Approved, amended 2026-09-05 |
+| [SPEC.md](SPEC.md) | Product specification: purpose, decisions, requirements, on-disk format, CLI, agent protocol, budgets, phases | Approved; amended alongside the code, Phase 1 shipped as v0.1.0 |
 | [design/HANDOFF.md](design/HANDOFF.md) | UI design handoff: tokens, screens, interactions, keyboard map; prototype and variants next to it | Approved |
 | [reference/](reference/README.md) | Subsystem reference: how the current code works | Living |
 | [GLOSSARY.md](GLOSSARY.md) | Normative terminology: one concept, one name | Living |

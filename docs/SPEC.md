@@ -1,6 +1,6 @@
 # diffalanche — product specification
 
-Status: approved requirements, amended 2026-09-05 after UI/UX design; pre-implementation. Owner: Velklish. License: MIT.
+Status: approved requirements, amended alongside the code that implements them. Phase 1 shipped as v0.1.0 on 2026-09-05; its findings are closed from the backlog; Phase 2 has not started. Owner: Velklish. License: MIT.
 
 ## 1. Purpose
 

@@ -1,0 +1,7 @@
+# DA-84 · Result
+
+**Closed 2026-09-18.** Completed. The three status claims now say the same thing: `docs/SPEC.md` line 3 reads "approved requirements, amended alongside the code that implements them. Phase 1 shipped as v0.1.0 on 2026-09-05; its findings are closed from the backlog; Phase 2 has not started"; `README.md`'s status says Phase 1 shipped as v0.1.0 and its findings are being closed from the backlog; the SPEC row of `docs/README.md` says "amended alongside the code, Phase 1 shipped as v0.1.0". The amendment date is dropped rather than maintained: a date nobody updates is what rotted here. `docs/ROADMAP.md` takes the second candidate of the task — it names no task numbers at all; each phase carries its state (done / shipped / not started) and the document says a task belongs to a phase by what it delivers, with the tracker as the only mapping. So DA-50 and above no longer sit outside every phase.
+
+**Verification.** `grep -rn pre-implementation docs/ README.md` finds nothing outside `docs/archive/`; `grep -n "Tasks DA-" docs/ROADMAP.md` finds nothing; `npx github:Velklish/backslop#v0.4.0 lint` exit 0. Documentation-only change: the code gates ran with the DA-108 pass on the same tree (see that task's result). Reviewed by the orchestrator.
+
+**Documentation in the same pass.** This task is documentation: `docs/SPEC.md`, `docs/ROADMAP.md`, `README.md`, `docs/README.md`, `CHANGELOG.md`.

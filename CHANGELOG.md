@@ -104,6 +104,11 @@ and `bun run release` refuses a version that has no section. See
 
 ### Changed
 
+- **The planning documents say where the project is** (DA-84). `docs/SPEC.md`'s
+  status line, `README.md`'s status and the SPEC row of `docs/README.md` all say
+  Phase 1 shipped as v0.1.0 and its findings are closed from the backlog;
+  `docs/ROADMAP.md` names no task numbers any more — a task belongs to a phase by
+  what it delivers, and the tracker is the only mapping.
 - **An agent's reply under a comment is at most three sentences** (DA-108). One
   when the finding is fixed, three when it is declined, with no restating of the
   comment, no greeting and no lists. `skills/diffalanche-apply` shows a
