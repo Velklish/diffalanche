@@ -120,6 +120,46 @@ describe("a write on a thread", () => {
     expect(useStore.getState().toast?.text).toBe('no comment "c_two"');
   });
 
+  /** A live frame during a write that then fails. The frame is the server's own
+   * read and has already taken the optimistic draft with it (DA-93). */
+  it("keeps what a live frame brought when the write it overtook is refused", async () => {
+    const before = withOneThread();
+    let refuse = (_: Response) => {};
+    const waiting = new Promise<Response>((resolve) => {
+      refuse = resolve;
+    });
+    vi.stubGlobal("fetch", vi.fn().mockReturnValue(waiting));
+    useStore.setState({ replyText: "on it" });
+
+    const sending = useStore.getState().sendReply("c_one");
+    expect(useStore.getState().comments[0]?.replies).toHaveLength(1);
+
+    // The agent answers while the reader's reply is in flight, and the watcher
+    // brings the server's copy of the thread — without the pending draft.
+    const agent = {
+      id: "r_agent",
+      author: "claude",
+      role: "agent" as const,
+      body: "fixed in the next commit",
+      createdAt: "2026-09-05T12:01:00Z",
+    };
+    useStore.getState().patchThread({ ...before, replies: [agent] });
+
+    refuse(
+      new Response(JSON.stringify({ error: "gone", message: "the server restarted" }), {
+        status: 500,
+      }),
+    );
+    await sending;
+
+    const thread = useStore.getState().comments[0];
+    expect(thread?.replies).toEqual([agent]);
+    expect(thread?.replies.some((reply) => reply.id === "r_pending")).toBe(false);
+    expect(useStore.getState().counters.counters.awaiting).toBe(1);
+    expect(useStore.getState().busy).toEqual({});
+    expect(useStore.getState().toast?.text).toBe("the server restarted");
+  });
+
   it("carries the reply on the card before the server has it, signed as the reader", async () => {
     withOneThread();
     let sent: unknown;

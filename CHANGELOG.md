@@ -202,6 +202,14 @@ and `bun run release` refuses a version that has no section. See
 
 ### Fixed
 
+- **A refused write no longer deletes an agent's reply that arrived while it was
+  in flight** (DA-93). The rollback restored the thread as the write had found
+  it, and a `reply-added` frame in the meantime had already replaced that thread
+  with the server's own read: the agent's answer left the rail, the counters and
+  `awaiting`, while the toast talked about the reader's own failed reply. A
+  write now notices that a live frame overtook it and keeps what the frame
+  brought — there is nothing left to undo, because the frame took the optimistic
+  draft with it. Nothing was ever lost on disk; what was wrong was the screen.
 - **`Reply` opens one field, in the copy of the thread it was pressed on**
   (DA-94). A thread is on screen twice on purpose — under the line it is
   anchored to and in the rail — and both copies drew the reply field and both

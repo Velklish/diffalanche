@@ -1262,6 +1262,9 @@ export const useStore = create<Store>()((set, get) => ({
   patchThread: (comment) => {
     const comments = get().comments;
     const held = comments.some((one) => one.id === comment.id);
+    // No `busy` guard, unlike the two writers above: a live frame is the
+    // server's own read and the store takes it, and `write` notices (DA-93).
+    patched.set(comment.id, (patched.get(comment.id) ?? 0) + 1);
     set(
       withComments(
         held
@@ -1498,6 +1501,7 @@ async function write(
 ): Promise<boolean> {
   const before = get().comments.find((comment) => comment.id === id);
   if (before === undefined) return false;
+  const seen = patched.get(id) ?? 0;
   set({ busy: { ...get().busy, [id]: true }, ...replace(get, id, optimistic(before)) });
   try {
     const response = await fetch(onTask(route), {
@@ -1510,14 +1514,21 @@ async function write(
     set({ busy: without(get().busy, id), ...replace(get, id, answered) });
     return true;
   } catch (error) {
+    // A live frame that landed since has already replaced the thread with the
+    // server's read, draft and all: there is nothing left to undo (DA-93).
+    const overtaken = (patched.get(id) ?? 0) !== seen;
     set({
       busy: without(get().busy, id),
-      ...replace(get, id, before),
+      ...(overtaken ? {} : replace(get, id, before)),
       toast: raise(reason(error)),
     });
     return false;
   }
 }
+
+/** How many live frames each thread has taken, so a write can tell whether one
+ * landed while it was in flight ([08-ui.md](../../docs/reference/08-ui.md)). */
+const patched = new Map<string, number>();
 
 /** The comments with one of them swapped, and everything derived from them again. */
 function replace(get: () => Store, id: string, comment: Comment) {
