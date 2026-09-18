@@ -478,6 +478,12 @@ and `bun run release` refuses a version that has no section. See
   could not be anchored, because the lookup takes the first match and that entry
   had no new-side lines. The change set keeps the deletion — what the change
   actually is — and the file being still on disk is a warning.
+- **An added or deleted binary file is no longer reported as modified** (DA-95).
+  A patch git writes without `---`/`+++` lines has no hunks, so the parser
+  answered `modify` for a staged binary addition, a binary deletion and a staged
+  empty text file alike. The status now comes from the header — `new file mode`
+  and `deleted file mode` — and a mode-only change stays `modified`, because
+  `new mode` is not `new file mode`.
 - **A git failure says which of four things went wrong** (DA-66). `gitOrNull`
   swallowed every failure into `null`, and `null` meant one thing: a git that
   could not be started was reported as `HEAD does not resolve: no commits yet`

@@ -634,6 +634,44 @@ describe("a file untracked with git rm --cached", () => {
   });
 });
 
+describe("a patch git writes without hunks", () => {
+  let change: RepositoryChange;
+
+  beforeAll(async () => {
+    const repo = join(root, "repos/g/nohunks");
+    mkdirSync(repo, { recursive: true });
+    git(repo, ["init", "--quiet", "-b", "main"]);
+    writeFileSync(join(repo, "gone.png"), Buffer.from([0x89, 0x50, 0x4e, 0x47, 0x00, 0x01]));
+    writeFileSync(join(repo, "mode me.sh"), "echo hi\n");
+    commit(repo, "base");
+    rmSync(join(repo, "gone.png"));
+    writeFileSync(join(repo, "added.png"), Buffer.from([0x89, 0x50, 0x4e, 0x47, 0x00, 0x02]));
+    writeFileSync(join(repo, "empty.txt"), "");
+    git(repo, ["add", "added.png", "empty.txt"]);
+    chmodSync(join(repo, "mode me.sh"), 0o755);
+    change = await read("repos/g/nohunks", { mode: "head" }, { hunks: true });
+  });
+
+  /** The status comes from `new file mode` / `deleted file mode`, which is all such a patch has. */
+  function one(path: string) {
+    const file = change.files.find((each) => each.path === path);
+    return { status: file?.status, oldPath: file?.oldPath, omitted: file?.omitted };
+  }
+
+  it("calls a staged binary addition added and a binary deletion deleted", () => {
+    expect(one("added.png")).toEqual({ status: "added", oldPath: null, omitted: "binary" });
+    expect(one("gone.png")).toEqual({ status: "deleted", oldPath: null, omitted: "binary" });
+  });
+
+  it("calls a staged empty file added, which has no hunks for the same reason", () => {
+    expect(one("empty.txt")).toEqual({ status: "added", oldPath: null, omitted: null });
+  });
+
+  it("leaves a mode-only change modified, because `new mode` is not `new file mode`", () => {
+    expect(one("mode me.sh")).toEqual({ status: "modified", oldPath: null, omitted: null });
+  });
+});
+
 describe("what a failed git call is", () => {
   it("tells the four shapes apart by what Node reports, not by which helper ran it", () => {
     const spawn = gitError("diff", { code: "ENOENT", errno: -2, syscall: "spawn git" });

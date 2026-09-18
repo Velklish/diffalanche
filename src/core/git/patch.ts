@@ -69,7 +69,9 @@ function parseFile(patch: string, maxFileBytes: number, structured: boolean): Fi
   // the honest half of it: there is nothing to show. It is not known to happen.
   if (!parsed) return withoutContent(names.new ?? names.old ?? "", null, "modified", "binary");
 
-  const status = STATUS[parsed.type];
+  // The header first: a patch with no hunks — a binary file, a staged empty one —
+  // gives the parser nothing to tell an addition from a change with (DA-95).
+  const status = names.status ?? STATUS[parsed.type];
   const oldName = names.old ?? parsed.oldPath;
   const newName = names.new ?? parsed.newPath;
   const path = status === "deleted" ? oldName : newName;
@@ -144,7 +146,12 @@ function withoutContent(
 }
 
 /** The two sides of a patch, `null` where git wrote `/dev/null`. */
-type PatchPaths = { old: string | null; new: string | null };
+type PatchPaths = {
+  old: string | null;
+  new: string | null;
+  /** What the header says it is, when it says: a patch with no hunks tells the parser nothing. */
+  status: FileStatus | null;
+};
 
 /**
  * The paths of a patch, as they are on disk.
@@ -170,17 +177,21 @@ function headerPaths(patch: string): PatchPaths {
   let renamed: string | null | undefined;
   let from: string | undefined;
   let to: string | undefined;
+  let status: FileStatus | null = null;
   for (const line of head) {
     if (line.startsWith("--- ")) old = sidePath(line.slice(4));
     else if (line.startsWith("+++ ")) renamed = sidePath(line.slice(4));
     else if (line.startsWith("rename from ")) from = unquote(line.slice("rename from ".length));
     else if (line.startsWith("rename to ")) to = unquote(line.slice("rename to ".length));
+    // `new file mode`, not `new mode`: the second is a mode-only change and stays modified.
+    else if (line.startsWith("new file mode ")) status = "added";
+    else if (line.startsWith("deleted file mode ")) status = "deleted";
   }
   if (old !== undefined || renamed !== undefined) {
-    return { old: old ?? null, new: renamed ?? null };
+    return { old: old ?? null, new: renamed ?? null, status };
   }
-  if (from !== undefined && to !== undefined) return { old: from, new: to };
-  return gitLinePaths(head[0] ?? "");
+  if (from !== undefined && to !== undefined) return { old: from, new: to, status };
+  return { ...gitLinePaths(head[0] ?? ""), status };
 }
 
 /** `--- a/src/x.ts`, `+++ "b/\303\244.ts"`, `--- /dev/null`, with a tab and a timestamp allowed after. */
@@ -200,7 +211,7 @@ function sidePath(value: string): string | null {
  * rename never reaches this function — so the line is split down the middle
  * rather than at a ` b/` that the path itself could contain.
  */
-function gitLinePaths(line: string): PatchPaths {
+function gitLinePaths(line: string): Omit<PatchPaths, "status"> {
   const rest = line.slice("diff --git ".length);
   if (rest.startsWith('"')) {
     const end = closingQuote(rest);

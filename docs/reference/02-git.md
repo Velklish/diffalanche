@@ -246,6 +246,16 @@ rules out a diff parser of the project's own, and this is the library's. What
 the module writes around it is the split of `git diff` output into one patch per
 file, which the parser does not do and the renderer needs.
 
+**The status of a patch with no hunks comes from its header.** A binary file and
+a staged empty file are both written without `---` and `+++` lines and without
+hunks, so the parser has nothing to tell an addition from a change with and
+answers `modify` for all of them. The header is what knows: `new file mode` is an
+addition, `deleted file mode` is a deletion, and anything else keeps what the
+parser said. The prefix matters — `new mode` is a mode-only change and stays
+`modified`, which `tests/git.test.ts` pins from both sides. Only the region above
+the first hunk is read, because a `GIT binary patch` payload is arbitrary and a
+line-anchored match over the whole patch would be matching against content.
+
 Statuses are `added`, `deleted`, `modified`, and `renamed`. Copy detection is
 not enabled — the reader passes `-M` and not `-C` — and a copy, were one to appear,
 would be reported as a rename.
