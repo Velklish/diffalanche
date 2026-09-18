@@ -170,6 +170,15 @@ and `bun run release` refuses a version that has no section. See
 
 ### Fixed
 
+- **The severity order is storage's list and nobody else's** (DA-83). The domain
+  kept a second copy of `critical, warning, nit, question` for `worstSeverity`,
+  against the decision that the value lists are exported once from
+  `src/core/storage/types.ts`. A fifth severity would have been accepted by the
+  schema and the CLI while every badge of a scope whose only open comment
+  carried it painted as carrying none. `worstSeverity` now reads `SEVERITIES`,
+  and a test drives the property off that list rather than off a written-out
+  one. See [04-domain.md](docs/reference/04-domain.md).
+
 - **An atomic write flushes the directory entry that publishes it** (DA-90). The
   temporary file was flushed and the rename that gives it its name was left in
   the page cache, so a `comment` that exited 0 could be absent after a power

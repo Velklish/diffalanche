@@ -18,6 +18,7 @@ import {
   reopen,
   reply,
   resolve,
+  worstSeverity,
 } from "../src/core/domain/index.ts";
 import type { Comment } from "../src/core/storage/index.ts";
 import {
@@ -25,6 +26,7 @@ import {
   readComments,
   readReview,
   SCHEMA_VERSION,
+  SEVERITIES,
   writeDiffCache,
 } from "../src/core/storage/index.ts";
 import type { DiffLine, RepositoryChange } from "../src/core/types.ts";
@@ -360,6 +362,19 @@ describe("filters and counters", () => {
       open: 0,
       severity: null,
     });
+  });
+
+  it("paints a scope with the first severity of storage's list that is present", () => {
+    // Driven off `SEVERITIES` rather than off a list written here, so a value
+    // added to storage is covered on the day it is added.
+    for (const [index, worst] of SEVERITIES.entries()) {
+      const present = SEVERITIES.slice(index);
+      const comments = [...present]
+        .reverse()
+        .map((severity, n) => base(`c_00000${n}`, { severity }));
+      expect(worstSeverity(comments)).toBe(worst);
+    }
+    expect(worstSeverity([])).toBe(null);
   });
 });
 

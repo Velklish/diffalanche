@@ -4,10 +4,7 @@
  * sections 1.1 and 3).
  */
 import { byCodePoint } from "../order.ts";
-import type { Comment, Severity } from "../storage/types.ts";
-
-/** Worst first. `docs/SPEC.md` section 3, decision 7. */
-const SEVERITY_ORDER: readonly Severity[] = ["critical", "warning", "nit", "question"];
+import { type Comment, SEVERITIES, type Severity } from "../storage/types.ts";
 
 /** The last message of a thread: the comment itself when nothing was replied. */
 export function lastMessageRole(comment: Comment): Comment["role"] {
@@ -50,12 +47,10 @@ export function countComments(comments: Comment[]): Counters {
   };
 }
 
-/**
- * The severity a scope is painted with. Only open comments count: a critical
- * finding that a human has already closed should not keep the file red.
- */
+/** The severity a scope is painted with, in storage's `SEVERITIES` order rather than a list of the
+ * domain's own ([04-domain.md](../../../docs/reference/04-domain.md)). */
 export function worstSeverity(comments: Comment[]): Severity | null {
-  for (const severity of SEVERITY_ORDER) {
+  for (const severity of SEVERITIES) {
     if (comments.some((comment) => comment.severity === severity)) return severity;
   }
   return null;

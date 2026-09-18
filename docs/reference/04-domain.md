@@ -288,6 +288,13 @@ repository that carries comments, and of every file inside them: `total`,
 severity **among the open comments** of that scope, `null` when none is open. A
 critical finding a human has already closed does not keep the file red.
 
+"Worst" is the order of storage's `SEVERITIES` — worst first, `docs/SPEC.md`
+section 3, decision 7 — and the domain reads that list rather than keeping one
+of its own. Two lists of the same words drift the moment one of them gains a
+fifth: the schema and the CLI would accept the new value while `worstSeverity`
+returned `null` for a scope whose only open comment carried it, and every badge
+of that scope would paint as carrying no finding.
+
 ## Markdown export
 
 `exportMarkdown(review, comments)` writes the export of
