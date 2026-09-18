@@ -6,7 +6,7 @@
 
 ## Context
 
-Split out of [DA-53.1](../../archive/README.md), which named two questions and
+Split out of [DA-53.1](../README.md), which named two questions and
 answered only the first. That entry calls this one "squarely the owner's", so it
 is filed rather than decided: **this is a question for the owner, not a defect
 report.**

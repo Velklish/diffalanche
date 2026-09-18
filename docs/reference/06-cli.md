@@ -74,6 +74,11 @@ opens it when they are ready and a script reads it with `tail -1`. The port is
 the configured one; whether a server is listening on it is not checked, because
 the CLI works without one.
 
+A scope is a literal list of paths and does not follow a rename: a renamed file
+is at a path the scope does not name until `review scope add` or `review scope
+set` names it. That is a decision (DA-53.2, [04-domain.md](04-domain.md)), not
+a gap.
+
 `review scope add` only widens: adding a path to a repository that is in as a
 whole changes nothing, so it never leaves a comment outside the scope and never
 asks for consent. `review scope remove` narrows, and **that is what

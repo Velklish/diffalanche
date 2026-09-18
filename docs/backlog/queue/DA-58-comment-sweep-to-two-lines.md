@@ -98,3 +98,67 @@ reason for a number is gone.
 - Every block classified as knowledge has its text findable in
   `docs/reference/` or an ADR. Spot-check by taking three of the longest blocks
   from the history and searching the documentation for what they said.
+
+## Folded in: DA-62.1 · The ForbiddenError doc block is pasted twice and RequestError's sits above the wrong class
+
+Merged 2026-09-18 during the triage after the server track: one file of the same sweep, with a duplicate block on top. Its text follows in full.
+
+## Context
+
+Found while reading [src/server/errors.ts](../../../src/server/errors.ts) for
+DA-62. Lines 25–47 hold three JSDoc blocks in a row with one class under them:
+
+```
+25  /**
+26   * A request the domain never gets to see: a body that is not an object, a
+27   * severity that is not one, a missing field. The domain checks what a comment
+28   * is; this checks that what arrived is a comment at all.
+29   */
+30  /**
+31   * A request that may not write here at all: one a page on another origin sent.
+    …
+34   */
+35  /**
+36   * A request that may not write here at all: one a page on another origin sent.
+    …
+39   */
+40  export class ForbiddenError extends Error {
+```
+
+Two facts, both read off those lines. The second and third blocks are the same
+four lines twice over. The first describes `RequestError`, which is declared
+nineteen lines further down at line 49 with no doc of its own — the text that
+belongs to it is stranded above a class it is not about, and an editor showing
+the hover for `ForbiddenError` shows all three.
+
+`grep -c "A request that may not write here at all" src/server/errors.ts` prints
+`2`.
+
+Nothing is wrong at runtime; this is documentation that says the wrong thing
+about the class under it.
+
+### Work to do
+
+- Delete the duplicate block and move the `RequestError` text down to
+  `RequestError`, where `grep -n "class RequestError" src/server/errors.ts` puts
+  it.
+- Bring all three to the two lines [ADR-011](../../adr/adr-011-comment-length.md)
+  allows while they are being moved: what does not fit belongs in the "Refusals"
+  and "Who may write" sections of
+  [07-server.md](../../reference/07-server.md), which already carry it.
+
+### Out of scope
+
+- The rest of the repository's comment audit, which is
+  [DA-58](../queue/DA-58-comment-sweep-to-two-lines.md): this entry is one file and one
+  duplicate, not the sweep.
+- The behaviour of either class. Both are read by `errorResponse` and neither
+  changes.
+
+### Verification
+
+- `grep -c "A request that may not write here at all" src/server/errors.ts`
+  prints `1`.
+- Each of the two classes carries its own doc, and the awk counter of ADR-011
+  reports no block longer than two lines in that file.
+- `bun run lint`, `bun run typecheck` and `bun run test` are green.

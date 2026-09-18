@@ -152,8 +152,10 @@ changing (decision 5). Matching the old name on the show side instead would put
 a file on screen under a name the scope has not, and then every reader of the
 comments — `list`, `show`, `export` — would have to resolve the rename again,
 from a change set that stops carrying it the moment the rename is committed.
-That the scope should *follow* a rename is a decision nobody has taken;
-`review scope add` is how a task takes the new name today.
+That the scope does *not* follow a rename is a decision, taken by the owner on
+2026-09-18 (DA-53.2): a scope is a literal list of paths that only a person or an
+agent changes, and a task's definition does not move under its reader.
+`review scope add` or `review scope set` is how a task takes the new name.
 
 **Reading comments back.** `list`, `get`, `reply`, `resolve`, and `reopen` all
 answer inside the scope: a comment outside it is not in the list, and every one
