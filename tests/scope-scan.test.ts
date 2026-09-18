@@ -37,6 +37,7 @@ let realRoot: string;
 let shim: string;
 let config: Config;
 let logPath: string;
+let argvPath: string;
 
 /** The repositories a run of the scan started a git process in, without repeats. */
 function touched(): string[] {
@@ -50,6 +51,26 @@ function touched(): string[] {
   return [...repositories].sort();
 }
 
+/** The git subcommands one run started, without repeats: the first word of each recorded argv
+ * that is not a global option, which is where `-c key=value` and `--no-pager` sit (ADR-012). */
+function subcommands(): string[] {
+  const lines = readFileSync(argvPath, "utf8").split("\n").filter(Boolean);
+  const names = new Set<string>();
+  for (const line of lines) {
+    const words = line.split(" ");
+    let at = 0;
+    while (at < words.length) {
+      const word = words[at] ?? "";
+      if (word === "-c" || word === "-C") at += 2;
+      else if (word.startsWith("-")) at += 1;
+      else break;
+    }
+    const name = words[at];
+    if (name !== undefined) names.add(name);
+  }
+  return [...names].sort();
+}
+
 /**
  * Counts the git processes of one scan and nothing else. `PATH` carries the
  * shim only while `scan` runs and is put back in `finally`, so no other test
@@ -59,6 +80,7 @@ function touched(): string[] {
  */
 async function count<T>(scan: () => Promise<T>): Promise<{ result: T; touched: string[] }> {
   writeFileSync(logPath, "");
+  writeFileSync(argvPath, "");
   const before = process.env.PATH;
   process.env.PATH = `${shim}:${before ?? ""}`;
   try {
@@ -83,14 +105,17 @@ beforeAll(async () => {
 
   shim = mkdtempSync(join(tmpdir(), "diffalanche-git-shim-"));
   logPath = join(shim, "calls.log");
+  argvPath = join(shim, "argv.log");
   writeFileSync(logPath, "");
+  writeFileSync(argvPath, "");
   const real = execFileSync("sh", ["-c", "command -v git"], { encoding: "utf8" }).trim();
   const script = join(shim, "git");
   // `PWD` is unset for the `pwd`: a shell inherits it from whoever started it,
   // and what is wanted is the directory git was actually run in.
   writeFileSync(
     script,
-    `#!/bin/sh\nprintf '%s\\n' "$(unset PWD; pwd)" >> "${logPath}"\nexec ${real} "$@"\n`,
+    `#!/bin/sh\nprintf '%s\\n' "$(unset PWD; pwd)" >> "${logPath}"\n` +
+      `printf '%s\\n' "$*" >> "${argvPath}"\nexec ${real} "$@"\n`,
   );
   chmodSync(script, 0o755);
 }, 300_000);
@@ -110,6 +135,16 @@ describe.skipIf(process.platform === "win32")("the cost of a scoped scan", () =>
     expect(whole.touched.length).toBeGreaterThanOrEqual(PROFILE.repos);
     // And the shim is gone the moment the scan is over.
     expect(process.env.PATH ?? "").not.toContain(shim);
+  }, 300_000);
+
+  /**
+   * What the scan is allowed to run. `git status --porcelain` was the only guard before DA-65 and
+   * is blind to a subcommand that writes: a `git fetch` added to `branch()` would reach the network
+   * and rewrite `refs/remotes/*` with every other check still green.
+   */
+  it("runs only the subcommands that read", async () => {
+    await count(() => scanReview(config, { mode: "head" }));
+    expect(subcommands()).toEqual(["config", "diff-index", "ls-files", "rev-parse"]);
   }, 300_000);
 
   it("starts git in the repositories of the scope and in no others", async () => {

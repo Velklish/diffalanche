@@ -140,12 +140,18 @@ reader runs today are the table of `docs/reference/02-git.md`.
   skipped — `fatal: .gitattributes: clean filter 'pwn' failed`, exit 128, which
   in an unbounded `Promise.all` takes the whole review with it. Measured on this
   machine before the pin was added.
-- The flag and the pin are not redundant, and the order matters: with
-  `--no-textconv` in place git never consults `diff.<driver>.textconv`, but
-  without it the empty pin is a command git cannot run, and the read fails with
-  `error: cannot run : No such file or directory` rather than quietly running
-  the repository's program. A later change that drops the flag breaks loudly,
-  which is the direction a security default should fail in.
+- The flag and the pin are not redundant, and since DA-65 it is the **pin** that
+  carries the guarantee. The change set comes from `git diff-index`, where
+  textconv and the external driver are off unless asked for, so
+  `--no-ext-diff` and `--no-textconv` are belt-and-braces on that command and
+  removing them changes nothing — measured: with neither the flag nor the pin,
+  the repository's program does not run. What the pin does is decide what
+  happens the day a caller asks for textconv: `-c diff.<driver>.textconv=` is a
+  command git cannot run, so the read fails with
+  `error: cannot run : No such file or directory` instead of quietly running the
+  repository's program. Measured with `--textconv` added: exit 128, no marker.
+  The flags stay because the reader may yet run a command where they are not the
+  default, and a flag that is the default costs nothing.
 - A future git with a new key that names a program is not covered until the
   table above gains a row. That is the residual risk this model accepts: the
   class is closed against the keys git has, not against the keys git will grow.

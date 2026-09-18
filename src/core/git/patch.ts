@@ -91,7 +91,7 @@ function parseFile(patch: string, maxFileBytes: number, structured: boolean): Fi
   return { path, oldPath, status, additions, deletions, patch, hunks, omitted: null };
 }
 
-/** Copy detection is off — `git diff` runs without `-C` — so a copy would be a surprise. */
+/** Copy detection is off — the reader passes `-M` and not `-C` — so a copy would be a surprise. */
 const STATUS: Record<FileType, FileStatus> = {
   add: "added",
   delete: "deleted",

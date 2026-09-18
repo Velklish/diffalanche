@@ -123,10 +123,20 @@ export async function mergeBase(cwd: string, left: string, right: string): Promi
   return sha ? sha.trim() : null;
 }
 
-/** The working tree against `base`, as the renderer and the parser both read it;
- * the flags and `overrides` are [ADR-012](../../../docs/adr/adr-012-git-trust-model.md). */
+/** The working tree against `base`, as the renderer and the parser both read it. Plumbing, because
+ * `git diff` refreshes the index on its way out and this module writes nothing (`docs/SPEC.md` 11). */
 export function diff(cwd: string, base: string, overrides: string[] = []): Promise<string> {
-  return git(cwd, ["diff", base, "--no-color", "--no-ext-diff", "--no-textconv", "-U3"], overrides);
+  const args = [
+    "diff-index",
+    "-p",
+    "-M",
+    base,
+    "--no-color",
+    "--no-ext-diff",
+    "--no-textconv",
+    "-U3",
+  ];
+  return git(cwd, args, overrides);
 }
 
 /**

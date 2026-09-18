@@ -68,10 +68,42 @@ files. That is how `ref` mode skips one.
 | `symbolic-ref --quiet --short refs/remotes/<remote>/HEAD` | the remote's default branch |
 | `merge-base HEAD <branch>` | the base of `branch` mode |
 | `config --list --name-only -z` | the driver keys the repository defines, to pin them ([ADR-012](../adr/adr-012-git-trust-model.md)) |
-| `diff <base> --no-color --no-ext-diff --no-textconv -U3` | the change set of tracked files |
+| `diff-index -p -M <base> --no-color --no-ext-diff --no-textconv -U3` | the change set of tracked files |
 | `ls-files --others --exclude-standard -z` | untracked files |
 | `check-ignore --stdin -z` | which of a burst's paths git ignores, for the watcher ([05-watcher.md](05-watcher.md)) |
 | `for-each-ref --format=… refs/heads refs/remotes` | the branches of the root, for `src/server/routes/branches.ts` ([07-server.md](07-server.md)) |
+
+The change set comes from the **plumbing**, not from `git diff`. The porcelain
+refreshes the index on its way out, and a refresh takes `.git/index.lock` and
+rewrites `.git/index` — a write to a reviewed repository, which
+`docs/SPEC.md` section 11 forbids. What changes is the stat cache rather than
+content, so nothing is lost, but the rule is the rule and the race is real: a
+`git add` in that repository at the same moment fails on the lock. Measured on
+git 2.54.0, against a tracked file whose stat differs and whose content does
+not, `git diff <sha>` rewrote the index and
+`git diff-index -p -M <sha>` left it byte for byte the same.
+
+`-M` is passed because the plumbing inherits none of the porcelain's defaults
+and rename detection is one of them; the output is then byte-identical, checked
+over renames, a binary addition and deletion, a mode-only change, a deletion, a
+quoted non-ASCII name and a tab-padded one, with the index both clean and
+stat-dirty. `-c diff.autoRefreshIndex=false` also stops the write and was
+measured doing so, but it keeps the porcelain's implicit defaults, and the
+module's rule is that the tool names what it wants
+([ADR-012](../adr/adr-012-git-trust-model.md)).
+
+**The guard is about writes, not about the working tree.** `tests/git.test.ts`
+snapshots `.git/index` byte for byte, the commit HEAD names and every ref of
+every fixture repository, before and after a full read in all three base modes,
+and `tests/scope-scan.test.ts` asserts the set of subcommands a scan runs is
+exactly `config`, `diff-index`, `ls-files` and `rev-parse`. `git status
+--porcelain` was the whole guard before and is blind to each of those: an index
+rewrite, a ref update, a commit in a repository that started clean, and a
+`git fetch` added to a base resolution, which would reach the network and
+rewrite `refs/remotes/*` with every check still green. The fixture's tracked
+files are given an old mtime on purpose — a file touched to *now* is racily
+clean, git re-hashes it, finds it unchanged and writes nothing, so a guard built
+on a plain `touch` is green whatever the code does.
 
 ## The three base modes
 

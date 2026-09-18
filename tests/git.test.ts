@@ -1,4 +1,5 @@
 import { execFileSync } from "node:child_process";
+import { createHash } from "node:crypto";
 import {
   chmodSync,
   existsSync,
@@ -8,6 +9,7 @@ import {
   rmSync,
   symlinkSync,
   unlinkSync,
+  utimesSync,
   writeFileSync,
 } from "node:fs";
 import { tmpdir } from "node:os";
@@ -15,6 +17,18 @@ import { join } from "node:path";
 import { afterAll, beforeAll, describe, expect, it } from "vitest";
 import { parseDiff, readRepositoryChange, scan } from "../src/core/index.ts";
 import type { RepositoryChange } from "../src/core/types.ts";
+
+const FIXTURES = [
+  "repos/g/api",
+  "repos/g/names",
+  "repos/g/solo",
+  "repos/g/hostile",
+  "repos/g/env-a",
+  "repos/g/env-b",
+];
+
+/** 2026-01-01, well before the index was written: what makes a tracked file stat-dirty. */
+const AGED = new Date("2026-01-01T00:00:00Z");
 
 const BASE_LINES = Array.from(
   { length: 40 },
@@ -46,8 +60,8 @@ function commit(cwd: string, message: string): void {
 
 let root: string;
 let marks: string;
-let statusBefore: Map<string, string>;
-let statusAfter: Map<string, string>;
+let writesBefore: Map<string, string>;
+let writesAfter: Map<string, string>;
 
 /**
  * A remote with a default branch, a clone with a feature branch ahead of it and
@@ -166,7 +180,19 @@ beforeAll(() => {
     writeFileSync(join(dir, "src", `${name}.ts`), "two\n");
   }
 
-  statusBefore = statuses();
+  // Old enough that the index's cached stat no longer matches: only then does a
+  // porcelain `git diff` refresh the index, and only then can the guard see it.
+  for (const path of FIXTURES) {
+    const repo = join(root, path);
+    for (const tracked of git(repo, [...INERT, "ls-files"])
+      .split("\n")
+      .filter(Boolean)) {
+      // A tracked name is not always a file on disk: `gone file.ts` is deleted.
+      if (existsSync(join(repo, tracked))) utimesSync(join(repo, tracked), AGED, AGED);
+    }
+  }
+
+  writesBefore = snapshot();
 }, 120_000);
 
 afterAll(() => {
@@ -186,17 +212,20 @@ const INERT = [
   "filter.pwn.required=",
 ];
 
-function statuses(): Map<string, string> {
-  const repositories = [
-    "repos/g/api",
-    "repos/g/names",
-    "repos/g/solo",
-    "repos/g/hostile",
-    "repos/g/env-a",
-    "repos/g/env-b",
-  ];
+/** Everything a write would move: the index byte for byte, HEAD and every ref, where `git status`
+ * alone was blind to all three (DA-65, `docs/reference/02-git.md`). */
+function snapshot(): Map<string, string> {
   return new Map(
-    repositories.map((path) => [path, git(join(root, path), [...INERT, "status", "--porcelain"])]),
+    FIXTURES.map((path) => {
+      const repo = join(root, path);
+      const index = createHash("sha256")
+        .update(readFileSync(join(repo, ".git/index")))
+        .digest("hex");
+      const head = git(repo, [...INERT, "rev-parse", "HEAD"]);
+      const refs = git(repo, [...INERT, "for-each-ref"]);
+      const status = git(repo, [...INERT, "--no-optional-locks", "status", "--porcelain"]);
+      return [path, [index, head, refs, status].join("\n")];
+    }),
   );
 }
 
@@ -569,7 +598,7 @@ describe("the reader ignores the git environment it inherits", () => {
 });
 
 describe("the reader writes nothing", () => {
-  it("leaves every fixture repository as it found it", async () => {
+  it("leaves the index, HEAD, the refs and the working tree of every fixture as it found them", async () => {
     const config = { roots: ["repos"], depth: 2, exclude: [] };
     const found = await scan(root, config);
     for (const spec of [
@@ -579,7 +608,7 @@ describe("the reader writes nothing", () => {
     ]) {
       await Promise.all(found.repositories.map((repo) => read(repo.path, spec)));
     }
-    statusAfter = statuses();
-    expect(statusAfter).toEqual(statusBefore);
+    writesAfter = snapshot();
+    expect(writesAfter).toEqual(writesBefore);
   });
 });

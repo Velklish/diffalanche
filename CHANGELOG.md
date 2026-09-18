@@ -471,6 +471,15 @@ and `bun run release` refuses a version that has no section. See
   configuration could not be read`. A repository with a filter driver — git-lfs
   is the common one — is shown the content that is on disk rather than what the
   driver would make of it.
+- **A scan no longer writes `.git/index` in every repository it reads** (DA-65).
+  `git diff` refreshes the index on its way out, which takes `.git/index.lock`
+  and rewrites `.git/index` — a write to a reviewed repository, and a race with
+  a `git add` running there at the same moment. The change set now comes from
+  `git diff-index -p -M <base>`, whose output is byte-identical over every shape
+  the parser handles and which leaves the index alone. The guard behind the rule
+  changed with it: it compares `.git/index`, HEAD and every ref of each fixture
+  before and after, and asserts the set of subcommands a scan runs, where
+  `git status --porcelain` alone was blind to all of it.
 - **The git reader no longer inherits the environment it was started in**
   (DA-87, [ADR-012](docs/adr/adr-012-git-trust-model.md)). `GIT_CONFIG_COUNT` /
   `GIT_CONFIG_KEY_n` / `GIT_CONFIG_VALUE_n`, `GIT_CONFIG_PARAMETERS`, `GIT_DIR`,
