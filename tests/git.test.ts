@@ -440,20 +440,95 @@ describe("files listed without content", () => {
   });
 });
 
-describe("an untracked entry that cannot be read", () => {
+describe("an untracked symbolic link", () => {
+  const solo = () => join(root, "repos/g/solo");
+
+  /** `unlinkSync`, not `rmSync`: the latter resolves the link, and a dangling one survives it. */
+  async function withLink(name: string, target: string) {
+    symlinkSync(target, join(solo(), name));
+    try {
+      return await read("repos/g/solo", { mode: "head" });
+    } finally {
+      unlinkSync(join(solo(), name));
+    }
+  }
+
+  /** The entry the reader made of the link, as git records a tracked one: mode 120000. */
+  function link(change: RepositoryChange, name: string) {
+    const file = change.files.find((one) => one.path === name);
+    return { status: file?.status, patch: file?.patch, omitted: file?.omitted };
+  }
+
+  it("is an addition of mode 120000 whose content is the target, never the target's content", async () => {
+    const outside = join(root, "outside-the-repository.ts");
+    writeFileSync(outside, "SECRET-CONTENT\n");
+    const change = await withLink("loose.ts", outside);
+    const one = link(change, "loose.ts");
+    expect(one.status).toBe("added");
+    expect(one.omitted).toBeNull();
+    expect(one.patch).toContain("new file mode 120000");
+    expect(one.patch).toContain(`+${outside}`);
+    // The whole point: the file outside the repository is not in the review.
+    expect(JSON.stringify(change)).not.toContain("SECRET-CONTENT");
+    rmSync(outside);
+  });
+
+  it("is recorded the same way when it dangles or points at a directory", async () => {
+    const dangling = await withLink("dangling.ts", join(solo(), "nowhere.ts"));
+    expect(link(dangling, "dangling.ts").patch).toContain("new file mode 120000");
+    expect(dangling.warnings).toEqual([]);
+    const directory = await withLink("dir-link", ".");
+    expect(link(directory, "dir-link").patch).toContain("new file mode 120000");
+    expect(directory.warnings).toEqual([]);
+  });
+
+  it("does not hang on a link to a character device", async () => {
+    const change = await withLink("zero.ts", "/dev/zero");
+    expect(link(change, "zero.ts").patch).toContain("+/dev/zero");
+    expect(change.warnings).toEqual([]);
+  }, 10_000);
+});
+
+describe("an untracked entry that is gone by the time the reader looks", () => {
+  /** The one case still reaching the warning, driven by a shim that names a file nothing has:
+   * `ls-files` said it was there and the reader did not find it (`docs/reference/02-git.md`). */
   it("costs a warning and the rest of the review, not the whole response", async () => {
+    const dir = mkdtempSync(join(tmpdir(), "diffalanche-git-vanish-"));
+    const real = execFileSync("sh", ["-c", "command -v git"], { encoding: "utf8" }).trim();
+    writeFileSync(
+      join(dir, "git"),
+      `#!/bin/sh\nfor a in "$@"; do\n  if [ "$a" = "--others" ]; then printf 'vanished.ts\\0'; exit 0; fi\n` +
+        `done\nexec ${real} "$@"\n`,
+    );
+    chmodSync(join(dir, "git"), 0o755);
+    const before = process.env.PATH;
+    process.env.PATH = `${dir}:${before ?? ""}`;
+    try {
+      const change = await read("repos/g/solo", { mode: "head" });
+      expect(change.warnings).toEqual(["untracked file vanished.ts cannot be read: ENOENT"]);
+      expect(change.files.map((file) => file.path)).toEqual(["src/app.ts"]);
+    } finally {
+      if (before === undefined) process.env.PATH = "";
+      else process.env.PATH = before;
+      rmSync(dir, { recursive: true, force: true });
+    }
+  });
+});
+
+describe("an untracked entry that is not a regular file", () => {
+  /** No verdict for the warning itself: nothing but a link reaches that branch, because
+   * `ls-files --others` lists neither pipe nor socket nor device (`docs/reference/02-git.md`). */
+  it("is not something ls-files reports, which is why the guard has no other test", async () => {
     const solo = join(root, "repos/g/solo");
-    symlinkSync(join(solo, "nowhere.ts"), join(solo, "dangling.ts"));
+    execFileSync("mkfifo", [join(solo, "pipe.fifo")]);
     try {
       const change = await read("repos/g/solo", { mode: "head" });
       expect(change.files.map((file) => file.path)).toEqual(["src/app.ts", "untracked.ts"]);
-      expect(change.warnings).toEqual(["untracked file dangling.ts cannot be read: ENOENT"]);
+      expect(change.warnings).toEqual([]);
     } finally {
-      // `unlinkSync`, not `rmSync`: the latter resolves the link before removing
-      // it and a dangling one leaves it in place.
-      unlinkSync(join(solo, "dangling.ts"));
+      rmSync(join(solo, "pipe.fifo"));
     }
-  });
+  }, 10_000);
 });
 
 describe("paths git does not write literally", () => {

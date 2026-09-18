@@ -471,6 +471,14 @@ and `bun run release` refuses a version that has no section. See
   configuration could not be read`. A repository with a filter driver — git-lfs
   is the common one — is shown the content that is on disk rather than what the
   driver would make of it.
+- **An untracked symbolic link is no longer read through** (DA-73). The reader
+  stat'd and read the entry `ls-files --others` named, following the link: a file
+  outside the repository landed in the review as an addition of its content, and
+  a link to `/dev/zero` reported a size of zero, passed the limit and hung the
+  scan. A link is now an addition of mode `120000` whose content is its target,
+  read with `readlink` — what git records for a tracked one — so a dangling link
+  and a link to a directory are recorded the same way rather than refused, and
+  nothing outside the repository is read at all.
 - **A scan no longer writes `.git/index` in every repository it reads** (DA-65).
   `git diff` refreshes the index on its way out, which takes `.git/index.lock`
   and rewrites `.git/index` — a write to a reviewed repository, and a race with

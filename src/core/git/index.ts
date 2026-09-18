@@ -1,4 +1,4 @@
-import { readFile, stat } from "node:fs/promises";
+import { lstat, readFile, readlink } from "node:fs/promises";
 import { join } from "node:path";
 import { byCodePoint } from "../order.ts";
 import type { BaseSpec, FileChange, RepositoryChange, ResolvedBase } from "../types.ts";
@@ -135,12 +135,8 @@ export async function readRepositoryChange(
   return { path: repoPath, branch: branchName, base: resolution.base, files, warnings };
 }
 
-/**
- * `ls-files --others` names entries, and an entry is not always a readable file:
- * a dangling symbolic link, a link to a directory, or a file deleted between the
- * listing and the read. One of those must not cost the whole review, so it costs
- * a warning and its own line of the change set.
- */
+/** `ls-files --others` names entries, and an entry the reader cannot make a file of costs a
+ * warning and its own line of the change set, never the whole review. */
 type UntrackedRead = { file: FileChange } | { warning: string };
 
 /**
@@ -166,14 +162,28 @@ async function readUntracked(
   });
   const full = join(cwd, path);
   try {
-    const info = await stat(full);
+    // `lstat`, so nothing is followed: what the entry IS decides, not what it points at.
+    const info = await lstat(full);
+    // A link is an addition of mode 120000 whose content is its target, which is what git
+    // records for a tracked one — the same link reads the same way either side of the index.
+    if (info.isSymbolicLink()) {
+      const target = await readlink(full);
+      const file = parseDiff(untrackedPatch(path, target, "120000"), {
+        ...options,
+        maxFileBytes: Number.POSITIVE_INFINITY,
+      })[0];
+      return file ? { file } : listed("binary");
+    }
+    // `ls-files --others` lists regular files and links only, so nothing reaches this;
+    // it stays because a device reports size zero and `readFile` on one never returns.
+    if (!info.isFile()) return { warning: `untracked entry ${path} is not a regular file` };
     // Over the limit the file is never read, so it has no counts either.
     if (info.size > (options.maxFileBytes ?? DEFAULT_MAX_FILE_BYTES)) return listed("too-large");
     const content = await readFile(full);
     if (content.includes(0)) return listed("binary");
     // The size decision was already made, against the file itself. Checking the
     // generated patch again would drop a small file for the header put on it.
-    const file = parseDiff(untrackedPatch(path, content.toString("utf8")), {
+    const file = parseDiff(untrackedPatch(path, content.toString("utf8"), "100644"), {
       ...options,
       maxFileBytes: Number.POSITIVE_INFINITY,
     })[0];
@@ -191,7 +201,7 @@ async function readUntracked(
  * short when the patch is read back and a name holding a newline does not tear
  * the patch in two — `ls-files -z` hands over both.
  */
-function untrackedPatch(path: string, text: string): string {
+function untrackedPatch(path: string, text: string, mode: "100644" | "120000"): string {
   const lines = text.split("\n");
   if (lines.at(-1) === "") lines.pop();
   const body = lines.map((line) => `+${line}`).join("\n");
@@ -199,7 +209,7 @@ function untrackedPatch(path: string, text: string): string {
   const before = quotePath(`a/${path}`);
   const after = quotePath(`b/${path}`);
   return (
-    `diff --git ${before} ${after}\nnew file mode 100644\n--- /dev/null\n+++ ${after}\n` +
+    `diff --git ${before} ${after}\nnew file mode ${mode}\n--- /dev/null\n+++ ${after}\n` +
     `@@ -0,0 +1,${lines.length} @@\n${body}${tail}\n`
   );
 }

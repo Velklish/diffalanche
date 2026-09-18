@@ -261,7 +261,7 @@ check lets through is a path inside the root that is not a repository, which the
 route already answers: no base resolves, no files come back, and that is the
 404 below. It compares paths and does not resolve symlinks, so a symlink inside
 the root that points out of it is still followed
-([DA-73](../backlog/active/DA-73-untracked-files-are-read-through-symlinks.md)
+([DA-73](../archive/DA-73-untracked-files-are-read-through-symlinks/task.md)
 is the entry about reading through symlinks).
 
 The refusal is the answer the route already gives — `404` with

@@ -121,7 +121,7 @@ disk, is the ordinary way this is reached.
   this task.
 - The other ways an `ls-files --others` entry is not a plain readable file —
   dangling links, links to directories — and the symlink reading filed as
-  [DA-73](DA-73-untracked-files-are-read-through-symlinks.md).
+  [DA-73](../../archive/DA-73-untracked-files-are-read-through-symlinks/task.md).
 - The "first match wins" policy of `findFile` and the UI lookups as a general
   question. It is only wrong here because the change set is wrong.
 - The wording of the `has no hunks in the change set` message in the general

@@ -193,7 +193,7 @@ the module writes around it is the split of `git diff` output into one patch per
 file, which the parser does not do and the renderer needs.
 
 Statuses are `added`, `deleted`, `modified`, and `renamed`. Copy detection is
-not enabled — `git diff` runs without `-C` — and a copy, were one to appear,
+not enabled — the reader passes `-M` and not `-C` — and a copy, were one to appear,
 would be reported as a rename.
 
 ## Paths
@@ -267,14 +267,29 @@ the patch is read back, and a newline would tear the patch in two. A file
 holding a zero byte is binary and is listed without content; an empty file is an
 addition of nothing, with its patch.
 
-`ls-files --others` names entries, and an entry is not always a readable file: a
-dangling symbolic link, a link to a directory, a file deleted between the
-listing and the read. One of those costs a warning and its own line of the
-change set, never the whole response:
+**A symbolic link is an addition of mode `120000` whose content is its target**,
+which is what git records for a tracked one, so the same link reads the same way
+on either side of the index. `lstat` decides what the entry *is* rather than what
+it points at, and the target is read with `readlink` and never followed. A link
+out of the repository therefore puts its target's *path* in the review and not
+its content; a dangling link and a link to a directory are recorded like any
+other link rather than refused; and a link to `/dev/zero` is a one-line patch
+instead of a read that never returns. The scanner and the watcher already refuse
+to follow links ([01-scanner.md](01-scanner.md)), and this is the same rule in
+the one place that had departed from it.
+
+One case still costs a warning and its own line of the change set, never the
+whole response — `ls-files` named the entry and the reader did not find it:
 
 ```
-untracked file dangling.ts cannot be read: ENOENT
+untracked file gone.ts cannot be read: ENOENT
 ```
+
+The reader also requires a regular file before it reads, because a device
+reports a size of zero and would pass any limit. That guard has no test and no
+reachable path: `ls-files --others` lists regular files and symbolic links and
+nothing else, which was measured rather than assumed. It stays as what keeps the
+size check honest.
 
 A `diff --git` block the parser makes nothing of — not known to happen — is
 listed as `binary`: the file is real, git printed the header, and while the
@@ -331,7 +346,7 @@ await refreshRepository(config, session, review.base, "repos/group/service-api",
   another base, or for another scope, is not patched — `review base` and a scope
   edit put it there, and one full scan repairs it. It re-reads rather than
   comparing the cache against the mtimes of `.git` and the working tree: one
-  `git diff` on one repository costs less than walking that tree, and it is
+  `diff-index` on one repository costs less than walking that tree, and it is
   right in the case a mtime comparison gets wrong — a file saved within the same
   second as the scan. With no cache at all there is nothing to patch, so the
   whole root is scanned once.
