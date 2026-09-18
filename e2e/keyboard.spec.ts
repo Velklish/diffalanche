@@ -237,6 +237,27 @@ test("B says that browsing is Phase 2 and changes nothing", async ({ page }) => 
   await expect(page.locator(".toast")).toContainText("DA-37");
 });
 
+/** The same sentence said twice is two toasts: the second press starts its own
+ * 2.2 seconds rather than living out what is left of the first (DA-105). */
+test("saying the same thing again gives it the whole lifetime", async ({ page }) => {
+  await open(page);
+  const toast = page.locator(".toast");
+
+  await page.keyboard.press("b");
+  await expect(toast).toBeVisible();
+  // Late in the first toast's life, and early enough to be sure of it: the
+  // lifetime is 2.2 s, so a second press at 1.6 s carries the bar past 2.2 s.
+  await page.waitForTimeout(1_600);
+  await page.keyboard.press("b");
+
+  // Where the first deadline was. Keyed on the text, the toast is gone by now.
+  await page.waitForTimeout(900);
+  await expect(toast).toBeVisible();
+
+  // And it still goes away on its own.
+  await expect(toast).toBeHidden({ timeout: 3_000 });
+});
+
 test("C opens the composer and R resolves the focused thread", async ({ page }) => {
   await open(page);
   await page.keyboard.press("c");

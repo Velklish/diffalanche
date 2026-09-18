@@ -202,6 +202,13 @@ and `bun run release` refuses a version that has no section. See
 
 ### Fixed
 
+- **A toast repeated gets its full 2.2 seconds** (DA-105). The lifetime was
+  counted from the first time that exact string was set: a repeat compared equal
+  under `Object.is`, so the component never re-rendered, the timer never
+  restarted, and the answer to the second press lived out whatever was left of
+  the first — which is exactly when a reader repeats an action, because they did
+  not see the answer. A toast is now a message and the raise that made it, and
+  every site that sets one goes through the same call.
 - **One `esc` closes one thing, and one overlay is on screen at a time**
   (DA-70). The ladder is a list in `src/ui/overlays.ts` that the keyboard asks;
   before it, two hand-written lists of overlay flags in `keys.ts` both missed

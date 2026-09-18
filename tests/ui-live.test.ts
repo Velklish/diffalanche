@@ -254,7 +254,7 @@ describe("a diff-changed event", () => {
     const after = useStore.getState();
     // There is no anchor left to move it to: the repository has no card either.
     expect(after.composer).toBeNull();
-    expect(after.toast).toContain("repos/a");
+    expect(after.toast?.text).toContain("repos/a");
     // And the reading position is off the file that is no longer there.
     expect(after.repo).toBeNull();
     expect(after.path).toBeNull();

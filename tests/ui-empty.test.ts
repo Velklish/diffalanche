@@ -184,7 +184,7 @@ describe("creating the first session", () => {
     await useStore.getState().createSession();
 
     expect(useStore.getState().status).toBe("no-session");
-    expect(useStore.getState().toast).toBe("invalid-request says so");
+    expect(useStore.getState().toast?.text).toBe("invalid-request says so");
     expect(useStore.getState().switching).toBe(false);
   });
 });

@@ -121,6 +121,17 @@ export const LIVE_WINDOW_MS = 120_000;
 /** How many feed lines the page keeps; the server's own ring is the same size. */
 const ACTIVITY_KEPT = 200;
 
+/** A message and the press that raised it: two identical strings are two
+ * toasts, and the second gets its own 2.2 seconds ([08-ui.md]). */
+export type Raised = { text: string; seq: number };
+
+let raised = 0;
+
+function raise(text: string): Raised {
+  raised += 1;
+  return { text, seq: raised };
+}
+
 const THEME_KEY = "diffalanche.theme";
 /** The reader's own layout, kept the way the theme is: panels and line wrapping. */
 const SIDEBAR_KEY = "diffalanche.sidebar";
@@ -428,7 +439,7 @@ type SearchAndOverlaysSlice = {
   exportRaw: string;
   exportComments: Comment[];
   exportStatus: LoadStatus;
-  toast: string | null;
+  toast: Raised | null;
   setToast: (toast: string | null) => void;
   /** `⌘K` and `⇧⇧`. Opening starts from an empty field, as the handoff's does. */
   setPalette: (open: boolean) => void;
@@ -661,9 +672,9 @@ export const useStore = create<Store>()((set, get) => ({
       // The change set is computed against the base, so the whole review is
       // read again rather than patched ([03-storage.md]).
       await get().loadReview();
-      set({ switching: false, toast: `База сессии: ${base}` });
+      set({ switching: false, toast: raise(`База сессии: ${base}`) });
     } catch (error) {
-      set({ switching: false, toast: reason(error) });
+      set({ switching: false, toast: raise(reason(error)) });
     }
   },
 
@@ -740,10 +751,13 @@ export const useStore = create<Store>()((set, get) => ({
       // the tasks somebody else made (DA-56).
       get().markSelf("history", name);
       await get().showTask(use ? null : name);
-      set({ switching: false, toast: use ? `review new ${name}` : `review new ${name} --no-use` });
+      set({
+        switching: false,
+        toast: raise(use ? `review new ${name}` : `review new ${name} --no-use`),
+      });
       void loadSessions(set);
     } catch (error) {
-      set({ switching: false, toast: reason(error) });
+      set({ switching: false, toast: raise(reason(error)) });
     }
   },
   switchSession: async (name) => {
@@ -753,7 +767,7 @@ export const useStore = create<Store>()((set, get) => ({
     }
     set({ switching: true, sessionMenuOpen: false });
     await get().showTask(name);
-    set({ switching: false, toast: `?review=${name}` });
+    set({ switching: false, toast: raise(`?review=${name}`) });
     void loadSessions(set);
   },
   setTaskStatus: async (name, status) => {
@@ -787,9 +801,9 @@ export const useStore = create<Store>()((set, get) => ({
       // what this page guessed: the counters and `updatedAt` beside it come
       // from the same read.
       await loadSessions(set);
-      set({ switching: false, toast: `review ${verb} ${name}` });
+      set({ switching: false, toast: raise(`review ${verb} ${name}`) });
     } catch (error) {
-      set({ switching: false, toast: reason(error) });
+      set({ switching: false, toast: raise(reason(error)) });
     }
   },
   showTask: async (name) => {
@@ -844,7 +858,7 @@ export const useStore = create<Store>()((set, get) => ({
     // the value an empty draft produces is not "nothing" but `null`, which is
     // the whole root: a slip here would widen the task instead of refusing.
     if (!confirmed && isEmptyDraft(scopeDraft)) {
-      set({ toast: "Задача ни о чём — отметьте хотя бы один репозиторий" });
+      set({ toast: raise("Задача ни о чём — отметьте хотя бы один репозиторий") });
       return;
     }
     const scope = confirmed ? scopeConfirm.scope : draftToScope(scopeDraft);
@@ -874,10 +888,10 @@ export const useStore = create<Store>()((set, get) => ({
       // The change set is computed for the scope, so the review is read again
       // rather than patched ([03-storage.md]).
       await get().loadReview();
-      set({ applying: false, toast: `Состав задачи: ${scopeLabel(countScope(scope))}` });
+      set({ applying: false, toast: raise(`Состав задачи: ${scopeLabel(countScope(scope))}`) });
       void loadSessions(set);
     } catch (error) {
-      set({ applying: false, toast: reason(error) });
+      set({ applying: false, toast: raise(reason(error)) });
     }
   },
 
@@ -1035,10 +1049,10 @@ export const useStore = create<Store>()((set, get) => ({
         body: "",
         sending: false,
         focusId: comment.id,
-        toast: `Комментарий сохранён в reviews/${session?.name ?? "?"}/comments.json`,
+        toast: raise(`Комментарий сохранён в reviews/${session?.name ?? "?"}/comments.json`),
       });
     } catch (error) {
-      set({ sending: false, toast: reason(error) });
+      set({ sending: false, toast: raise(reason(error)) });
     }
   },
 
@@ -1141,7 +1155,7 @@ export const useStore = create<Store>()((set, get) => ({
   exportComments: [],
   exportStatus: "loading",
   toast: null,
-  setToast: (toast) => set({ toast }),
+  setToast: (toast) => set({ toast: toast === null ? null : raise(toast) }),
   setPalette: (paletteOpen) => set({ paletteOpen, paletteQuery: "", palIdx: 0 }),
   setPaletteQuery: (paletteQuery) => set({ paletteQuery, palIdx: 0 }),
   setPalIdx: (palIdx) => set({ palIdx }),
@@ -1157,9 +1171,9 @@ export const useStore = create<Store>()((set, get) => ({
     if (raw === "") return;
     try {
       await navigator.clipboard.writeText(raw);
-      set({ toast: "Markdown скопирован" });
+      set({ toast: raise("Markdown скопирован") });
     } catch (error) {
-      set({ toast: reason(error) });
+      set({ toast: raise(reason(error)) });
     }
   },
 
@@ -1205,7 +1219,7 @@ export const useStore = create<Store>()((set, get) => ({
           composer: null,
           composerEnd: null,
           sel: null,
-          toast: `${path} больше нечего ревьюить — форма закрыта`,
+          toast: raise(`${path} больше нечего ревьюить — форма закрыта`),
         });
       }
       if (get().repo === path) {
@@ -1437,7 +1451,7 @@ function revalidate(
     composer: { ...composer, side: null, line: null },
     composerEnd: null,
     sel: null,
-    toast: "Строка изменилась — комментарий теперь на файле",
+    toast: raise("Строка изменилась — комментарий теперь на файле"),
   });
 }
 
@@ -1489,7 +1503,11 @@ async function write(
     set({ busy: without(get().busy, id), ...replace(get, id, answered) });
     return true;
   } catch (error) {
-    set({ busy: without(get().busy, id), ...replace(get, id, before), toast: reason(error) });
+    set({
+      busy: without(get().busy, id),
+      ...replace(get, id, before),
+      toast: raise(reason(error)),
+    });
     return false;
   }
 }

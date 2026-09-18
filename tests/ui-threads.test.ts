@@ -72,7 +72,7 @@ describe("a write on a thread", () => {
 
     expect(useStore.getState().comments).toEqual([before]);
     expect(useStore.getState().counters.counters.open).toBe(1);
-    expect(useStore.getState().toast).toBe('no comment "c_one"');
+    expect(useStore.getState().toast?.text).toBe('no comment "c_one"');
     expect(useStore.getState().busy).toEqual({});
   });
 
@@ -117,7 +117,7 @@ describe("a write on a thread", () => {
 
     expect(useStore.getState().comments).toEqual([first, second]);
     expect(useStore.getState().busy).toEqual({ c_one: true });
-    expect(useStore.getState().toast).toBe('no comment "c_two"');
+    expect(useStore.getState().toast?.text).toBe('no comment "c_two"');
   });
 
   it("carries the reply on the card before the server has it, signed as the reader", async () => {

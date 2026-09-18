@@ -1,0 +1,9 @@
+# DA-105 · Result
+
+**Closed 2026-09-19.** Completed. A toast is `{ text, seq }`, with `seq` from a counter in the store, and `components/Toast.tsx` depends on `seq` rather than on the message. The second of the card's three candidates, chosen for the reason the card's second bullet names: **the type change is what makes the fix complete.** Seventeen sites write `set({ toast: … })` past the setter, and none of them compiles until it goes through `raise()`; a counter beside a plain string, or a timer moved into `setToast`, would have left most of the application's toasts on the old behaviour, which the card calls worse than the uniform bug. `null` still means nothing on screen.
+
+**Verification.** A case in `e2e/keyboard.spec.ts` beside the existing `B` one: two presses 1.6 s apart, the toast still on screen 0.9 s later — past the first deadline — and gone on its own afterwards. `bun run test:ui` 94 passed on the worker's tree. Mutation probe on `ae14a93`, tree empty at both ends: the timer keyed on `toast.text` again — exit 1, 12 of 13, the expected case red. **Integration into `main`:** `ae14a93` cherry-picked onto the DA-100 commit with no conflict; `src/ui/components/Toast.tsx`, `e2e/keyboard.spec.ts`, `tests/ui-empty.test.ts` and `tests/ui-live.test.ts` are byte-identical to the track head `8bdec56` afterwards. Gates of the merged tree: see DA-55.4's `result.md`.
+
+**Documentation in the same pass.** `docs/reference/08-ui.md` says from when the 2.2 seconds are counted; `CHANGELOG.md` under Fixed.
+
+**Not covered.** Nothing from the card; queueing or stacking toasts stays out of scope, as it says. One thing to look at first if the new case ever goes red: it is written on the wall clock — a press, 1.6 s, a second press, then 0.9 s — so its margin against the 2.2 s lifetime is 1.3 s, and a machine slow enough to eat that would redden it without anything being wrong with the toast.
