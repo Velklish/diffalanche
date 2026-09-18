@@ -10,6 +10,7 @@ import { createServer } from "node:net";
 import { join } from "node:path";
 import { fileURLToPath } from "node:url";
 import { afterEach, beforeEach, describe, expect, it } from "vitest";
+import { processOutput } from "../src/cli/output.ts";
 import { run } from "../src/cli/run.ts";
 import { VERSION } from "../src/cli/version.ts";
 import type { UiAssets } from "../src/server/assets.ts";
@@ -660,6 +661,64 @@ describe("a data directory that cannot be written", () => {
     expect(result.err).toContain("ENAMETOOLONG");
     expect(result.err).toMatch(/\n\s+at /);
     expect(result.out).toBe("");
+  });
+});
+
+describe("output piped into a reader that stops early", () => {
+  useFixtureRoot();
+
+  /** Past the pipe buffer in one write, which is the shape `diff` has anyway. */
+  const BIG = `${Array.from({ length: 12_000 }, (_, index) => `const line${index} = ${index};`).join("\n")}\n`;
+
+  it("ends at 0 with an empty stderr instead of an unhandled error event", async () => {
+    writeFileSync(join(root, REPOS[0], "big.ts"), BIG);
+    await inRoot("review", "new", "t1");
+
+    const child = spawn(process.execPath, [cli, "diff", "--root", root], {
+      stdio: ["ignore", "pipe", "pipe"],
+    });
+    let err = "";
+    child.stderr.on("data", (chunk: Buffer) => {
+      err += chunk.toString();
+    });
+    // The reader takes what it wants and goes, which is what `| head` does.
+    child.stdout.once("data", () => child.stdout.destroy());
+
+    const code = await new Promise<number>((exited) => {
+      child.on("exit", (status) => exited(status ?? -1));
+    });
+    expect(err).toBe("");
+    expect(code).toBe(0);
+  }, 60_000);
+
+  it("swallows only the reader going away, and reports any other stream fault", () => {
+    const listeners: ((error: NodeJS.ErrnoException) => void)[] = [];
+    const written: string[] = [];
+    const stream = {
+      write: (text: string) => written.push(text),
+      on: (_event: "error", listener: (error: NodeJS.ErrnoException) => void) =>
+        listeners.push(listener),
+    };
+    const errors: string[] = [];
+    const err = { write: (text: string) => errors.push(text), on: () => undefined };
+
+    const io = processOutput(stream, err);
+    const saved = process.exitCode;
+    try {
+      io.out("before\n");
+      listeners[0]?.(Object.assign(new Error("write EPIPE"), { code: "EPIPE" }));
+      io.out("after\n");
+      // Nothing more is written to a reader that has gone, and nothing is said.
+      expect(written).toEqual(["before\n"]);
+      expect(errors).toEqual([]);
+      expect(process.exitCode).toBe(saved);
+
+      listeners[0]?.(Object.assign(new Error("no space left on device"), { code: "ENOSPC" }));
+      expect(errors).toEqual(["diffalanche: standard output: no space left on device\n"]);
+      expect(process.exitCode).toBe(2);
+    } finally {
+      process.exitCode = saved;
+    }
   });
 });
 

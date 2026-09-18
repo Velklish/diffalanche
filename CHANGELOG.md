@@ -188,6 +188,16 @@ and `bun run release` refuses a version that has no section. See
 
 ### Fixed
 
+- **`diffalanche diff | head` no longer crashes the CLI** (DA-91). Nothing
+  listened for errors on `process.stdout`, and the `try`/`catch` that maps every
+  failure onto an exit code cannot see an `EPIPE`: it arrives later as an
+  `'error'` event on the socket, not as a rejection. A single 300 KB write into
+  a reader that had gone therefore ended in a Node internals stack trace — the
+  CLI reporting a refusal it never made. A reader that goes away is now exit
+  code 0 with nothing on stderr; any other stream fault is one line and exit
+  code 2. Both entry points take their streams from one helper, so the npm
+  channel and the binary answer alike. See
+  [06-cli.md](docs/reference/06-cli.md).
 - **`serve --review <name>` opens on that task instead of being ignored**
   (DA-81). The flag parsed everywhere and was read by every command but this
   one, so a misspelling was exit 0 with no message while the same name was exit

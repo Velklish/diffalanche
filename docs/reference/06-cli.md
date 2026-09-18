@@ -213,6 +213,22 @@ JSON goes to stdout and nothing else does: warnings of a scan are inside the
 JSON when `--json` is given and on stderr when it is not, so `diffalanche diff
 --json | jq` never has a warning mixed into it.
 
+**A reader that goes away first is exit code 0 and nothing on stderr.**
+`diffalanche diff | head` is a normal way to use a CLI: the reader got what it
+asked for, the rest of the write has nowhere to go, and there is nothing to
+report. Without a handler on the stream that `EPIPE` is an unhandled `'error'`
+event — a Node internals stack trace and exit code 1, which is the table's row
+for a refusal the tool never made. The writes are single and large enough to
+reach it: `diff` emits the whole change set in one call, against a synthetic
+review of 30 000 lines. Both entry points take their streams from one place, so
+the npm channel and the binary answer the same way; under Bun the runtime never
+aborted on it to begin with.
+
+Any other fault of a stream — a full disk on a redirected stdout — is **not**
+swallowed with it: it is one line on stderr naming the stream and the fault, and
+exit code 2, because output the person asked for did not arrive and nothing
+about that is expected.
+
 A refusal from the domain carries its own message (`no review session "x"`,
 `branch: names no branch`); a refusal from storage names the file and the field
 inside it. Both are exit code 1: they are answers, not faults.

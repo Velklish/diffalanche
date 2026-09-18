@@ -83,7 +83,7 @@ never runs the CLI, which is how the drift survived.
 - `serve` exiting 1 on an unreadable data file, which is the opposite drift:
   [DA-64](../DA-64-serve-exits-on-unreadable-data/task.md).
 - The missing `stdout` error handler that crashes a piped CLI:
-  [DA-91](../../backlog/active/DA-91-piped-cli-output-crashes-on-epipe.md).
+  [DA-91](../DA-91-piped-cli-output-crashes-on-epipe/task.md).
 - The wording of the two sentences. They are good; only their exit code and the
   stack around them are in question.
 

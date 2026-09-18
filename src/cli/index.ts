@@ -3,6 +3,7 @@ import { existsSync } from "node:fs";
 import { join } from "node:path";
 import { fileURLToPath } from "node:url";
 import { directoryAssets } from "../server/assets.ts";
+import { processOutput } from "./output.ts";
 import { run } from "./run.ts";
 
 /**
@@ -15,8 +16,5 @@ const here = fileURLToPath(new URL(".", import.meta.url));
 const packaged = join(here, "ui");
 const ui = directoryAssets(existsSync(packaged) ? packaged : join(here, "..", "..", "dist", "ui"));
 
-const code = await run(process.argv.slice(2), ui, {
-  out: (text) => process.stdout.write(text),
-  err: (text) => process.stderr.write(text),
-});
+const code = await run(process.argv.slice(2), ui, processOutput());
 if (code !== 0) process.exit(code);
