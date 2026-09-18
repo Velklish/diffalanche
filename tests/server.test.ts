@@ -389,14 +389,24 @@ describe("starting the server", () => {
     }
   }, 120_000);
 
-  it("cannot be reached from another address of this machine", async () => {
+  it("cannot be reached from another address of this machine", async (context) => {
     const outside = Object.values(networkInterfaces())
       .flat()
       .find((address) => address && address.family === "IPv4" && !address.internal);
+    // Reported, not passed over: what is left without one is that loopback
+    // answers, which every other verdict in this file already establishes.
+    if (!outside) {
+      context.skip(
+        "this machine has no non-internal IPv4 interface, so reaching the server off loopback " +
+          "was not exercised; `startServer binds loopback without being told to` in " +
+          "tests/runtime.test.ts is the check that holds here",
+      );
+      // `skip` throws; this is for the compiler, which cannot know that.
+      return;
+    }
     const server = await startReviewServer({ config: { ...config, port: 0 }, ui });
     try {
       expect(await (await fetch(`http://127.0.0.1:${server.port}/api/config`)).status).toBe(200);
-      if (!outside) return;
       await expect(fetch(`http://${outside.address}:${server.port}/api/config`)).rejects.toThrow();
     } finally {
       await server.close();

@@ -599,5 +599,13 @@ runtime it is on: `Bun.serve` under Bun, `@hono/node-server` under Node. It
 resolves when the socket is listening, not when the adapter returns — the Node
 adapter returns before it listens, and with port 0 the real port is only known
 then; a listen error rejects the promise instead of becoming an unhandled event.
+
+It answers with the **port and the hostname the socket is actually bound to**,
+read back from the runtime rather than repeated from the argument. That is what
+makes "listens on `127.0.0.1` and nowhere else" checkable on any machine: the
+test that reaches the server from another of the machine's own addresses can
+only run where the machine has one, and on a loopback-only host it reports a
+skip. Without a value read from the socket, a default changed to `0.0.0.0` would
+be reported as verified by a run that verified nothing.
 Everything else in `src/` uses APIs both runtimes share, and adding a second such
 module is a new decision ([ADR-008](../adr/adr-008-diff-rendering-verdict.md)).

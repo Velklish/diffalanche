@@ -168,6 +168,15 @@ and `bun run release` refuses a version that has no section. See
   long tasks, and the table now names the widened ceiling beside the budget.
   See [11-perf.md](docs/reference/11-perf.md).
 
+- **`startServer` answers with the address the socket is bound to** (DA-104),
+  not only its port. "Listens on `127.0.0.1` and nowhere else" was guarded by
+  one test that reaches the server from another of the machine's own addresses,
+  and on a machine with none — a container, an IPv6-only runner, a laptop with
+  the Wi-Fi off — it passed over its own assertion without a word. That test now
+  reports a skip naming what it did not exercise, and the bound address is
+  checked on every machine instead. See
+  [07-server.md](docs/reference/07-server.md).
+
 ### Fixed
 
 - **A rebound name no longer reads the review** (DA-62). Both origin guards

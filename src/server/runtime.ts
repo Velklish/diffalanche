@@ -1,6 +1,8 @@
 import type { Hono } from "hono";
 
-export type RunningServer = { port: number; close: () => Promise<void> };
+/** `hostname` is the address the socket is bound to, read back from the runtime
+ * rather than repeated: it is what says the server is on loopback and nowhere else. */
+export type RunningServer = { port: number; hostname: string; close: () => Promise<void> };
 
 type BunGlobal = {
   serve: (options: {
@@ -8,7 +10,7 @@ type BunGlobal = {
     hostname: string;
     idleTimeout: number;
     fetch: (request: Request) => Response | Promise<Response>;
-  }) => { port: number; stop: (closeActiveConnections?: boolean) => void };
+  }) => { port: number; hostname: string; stop: (closeActiveConnections?: boolean) => void };
 };
 
 /**
@@ -32,6 +34,7 @@ export async function startServer(
     const server = bun.serve({ port, hostname, idleTimeout: 0, fetch: app.fetch });
     return {
       port: server.port,
+      hostname: server.hostname,
       close: async () => {
         server.stop(true);
       },
@@ -43,6 +46,7 @@ export async function startServer(
     const server = serve({ fetch: app.fetch, port, hostname }, (info) => {
       resolve({
         port: info.port,
+        hostname: info.address,
         close: () =>
           new Promise<void>((closed, failed) => {
             server.close((error) => (error ? failed(error) : closed()));
