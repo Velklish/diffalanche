@@ -155,13 +155,18 @@ export async function startWatcher(options: WatcherOptions): Promise<Watcher> {
       try {
         await work();
       } catch (error) {
-        try {
-          options.onError?.(error);
-        } catch {
-          // Reporting a failure is not allowed to become one.
-        }
+        report(error);
       }
     });
+  }
+
+  /** Reporting a failure is not allowed to become one. */
+  function report(error: unknown): void {
+    try {
+      options.onError?.(error);
+    } catch {
+      // The reporter's own failure ends here.
+    }
   }
 
   /** What git said about a repository's paths, kept between bursts (05-watcher.md). */
@@ -228,9 +233,9 @@ export async function startWatcher(options: WatcherOptions): Promise<Watcher> {
     const next = await readCurrent(config.dataDir);
     if (next === session) return;
     session = next;
-    // The comments of the session being switched to are not news: they are
-    // read as the new baseline, and only what happens next is an event.
-    comments = await snapshotComments(config, session);
+    // The comments of the session switched to are not news: they are the new
+    // baseline, and a file that cannot be read is the same transition as below.
+    comments = await snapshotComments(config, session, report);
     metadata = await readMetadata(config, session);
     scope = (await readSessionOrNull(config, session))?.scope ?? null;
     if (session !== null) bus.emit({ type: "session-changed", name: session });
@@ -261,7 +266,16 @@ export async function startWatcher(options: WatcherOptions): Promise<Watcher> {
 
   async function reloadComments(): Promise<void> {
     if (session === null) return;
-    const list = await readComments(config.dataDir, session);
+    let list: Comment[];
+    try {
+      list = await readComments(config.dataDir, session);
+    } catch (error) {
+      // The rest of the chain still runs: a file broken by hand stops the
+      // comment events, not the metadata and session-list ones.
+      if (comments !== null) report(error);
+      comments = null;
+      return;
+    }
     // Nothing was read the last time — a file being written as it was read, or
     // one broken by hand and since repaired. What is in it now is the baseline,
     // not two hundred comments that were all just added.
@@ -509,19 +523,17 @@ function snapshotOf(comments: Comment[]): Map<string, CommentState> {
   );
 }
 
-/**
- * The comments as they are now, or `null` when they could not be read: a file
- * broken by hand is not a reason for the server not to start, and the watcher
- * takes the next readable version as its baseline.
- */
+/** The comments now, or `null` when unreadable: the next readable version is the baseline. */
 async function snapshotComments(
   config: Config,
   session: string | null,
+  onFailure?: (error: unknown) => void,
 ): Promise<Map<string, CommentState> | null> {
   if (session === null) return new Map();
   try {
     return snapshotOf(await readComments(config.dataDir, session));
-  } catch {
+  } catch (error) {
+    onFailure?.(error);
     return null;
   }
 }

@@ -224,6 +224,15 @@ and `bun run release` refuses a version that has no section. See
   session. It now renames the lock aside first, the way a takeover does, and
   deletes the directory it read the token from — one rename more on a path that
   every write ends with. See [03-storage.md](docs/reference/03-storage.md).
+- **A broken `comments.json` no longer stops the session events** (DA-86). The
+  reload of the data directory read the comments without a guard, so a file
+  broken by hand while the server ran took the rest of the chain down with it:
+  `session-changed` and `sessions-changed` stopped, and a base change, a scope
+  edit or a task opened elsewhere reached an open window as nothing at all. The
+  read is caught where it happens, the comment baseline is dropped the way it
+  already was for an unreadable file at start-up, and the failure is reported
+  once on the way into the broken state rather than once per burst. See
+  [05-watcher.md](docs/reference/05-watcher.md).
 - **A `git add -f` is no longer swallowed by a cached ignore verdict** (DA-74).
   The answers git gave about a repository's paths were dropped when a burst
   named `.gitignore`, `.git/info/exclude` or `.git/index` in full, and a runtime

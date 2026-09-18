@@ -20,11 +20,14 @@ import { closeSession, createSession } from "../src/core/domain/index.ts";
 import { checkIgnore } from "../src/core/git/index.ts";
 import { scan } from "../src/core/index.ts";
 import {
+  commentsPath,
   diffCachePath,
   readComments,
   readDiffCache,
+  readReview,
   updateComments,
   writeDiffCache,
+  writeReview,
 } from "../src/core/storage/index.ts";
 import type { ScanResult } from "../src/core/types.ts";
 import type { ActivityEvent, EventBus, Watcher, WatcherEvent } from "../src/core/watcher/index.ts";
@@ -845,6 +848,74 @@ describe("watching a tree", () => {
       rmSync(dir, { recursive: true, force: true });
     }
   }, 30_000);
+});
+
+describe("a comments.json that cannot be read", () => {
+  /** Renames the current session, which is a change of what the review is. */
+  async function rename(title: string): Promise<void> {
+    const review = await readReview(config.dataDir, SESSION);
+    await writeReview(config.dataDir, SESSION, { ...review, title });
+  }
+
+  it("stops the comment events and leaves the rest of the chain running", async () => {
+    const path = commentsPath(config.dataDir, SESSION);
+    const kept = readFileSync(path, "utf8");
+    const task = "a-broken-comments-task";
+    try {
+      // Invalid JSON first, then a version this build refuses whole: the two
+      // shapes `readComments` throws on.
+      for (const broken of ["{ not json", `{ "version": 99, "comments": [] }\n`]) {
+        const before = failures.length;
+        const brokeAt = performance.now();
+        writeFileSync(path, broken);
+        await rename(`broken at ${brokeAt}`);
+        await waitFor("session-changed", brokeAt);
+
+        const listed = performance.now();
+        if (broken === "{ not json") {
+          await createSession(config.dataDir, task, { mode: "head" }, "opened while broken", {
+            use: false,
+          });
+        } else {
+          await closeSession(config.dataDir, task, { author: "kim.p", role: "human" });
+        }
+        await waitFor("sessions-changed", listed);
+        // Reported once on the way into the broken state, not once per burst.
+        expect(failures.length).toBe(before + 1);
+
+        // Repaired: what is in the file is the baseline, not two hundred
+        // comments that were all just added.
+        const repaired = performance.now();
+        writeFileSync(path, kept);
+        await rename(`repaired at ${repaired}`);
+        await waitFor("session-changed", repaired);
+        await settle();
+        expect(since(repaired, "comment-added")).toEqual([]);
+      }
+    } finally {
+      writeFileSync(path, kept);
+    }
+  }, 60_000);
+
+  it("is a transition when the pointer moves onto it, and says so once", async () => {
+    const task = "a-task-with-broken-comments";
+    await createSession(config.dataDir, task, { mode: "head" }, "broken from the start", {
+      use: false,
+    });
+    writeFileSync(commentsPath(config.dataDir, task), "{ not json");
+    const before = failures.length;
+    const switched = performance.now();
+    try {
+      await writeFile(join(config.dataDir, "current"), `${task}\n`);
+      await waitFor("session-changed", switched);
+      // The baseline of the session switched to is read like any other, so a
+      // file that cannot be read there is the same transition as a broken write.
+      expect(failures.length).toBe(before + 1);
+    } finally {
+      await writeFile(join(config.dataDir, "current"), `${SESSION}\n`);
+      await waitFor("session-changed", performance.now() - 1);
+    }
+  }, 60_000);
 });
 
 describe("the activity feed", () => {

@@ -225,6 +225,15 @@ a baseline rather than without a start, and the next readable version becomes
 the baseline: what is in it then is what is there, not two hundred comments that
 were all just added.
 
+That read is caught where it happens, so it costs the comment events alone. The
+reload goes on to `review.json` and to the status of every session, and
+`session-changed` and `sessions-changed` keep arriving for as long as
+`comments.json` stays broken — a base change, a scope edit, a task opened or
+closed anywhere under `reviews/` are all still announced. The failure is handed
+to `onError` once, on the way into the broken state rather than once per burst,
+so a server prints one line about it instead of one per change of the data
+directory.
+
 ## The change-set cache
 
 The new change set is handed over the moment it exists and before it is written:
