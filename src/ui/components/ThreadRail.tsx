@@ -5,6 +5,7 @@ import type { RailScope } from "../store.ts";
 import { useStore } from "../store.ts";
 import type { Comment } from "../types.ts";
 import { ActivityPanel } from "./ActivityPanel.tsx";
+import { PanelAway } from "./PanelAway.tsx";
 import { ThreadCard } from "./ThreadCard.tsx";
 
 /**
@@ -71,6 +72,7 @@ export function ThreadRail() {
             awaiting you
           </button>
         ) : null}
+        <PanelAway side="rail" />
       </div>
       <div className="rail-list">
         {visible.length === 0 ? (

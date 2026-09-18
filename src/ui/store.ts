@@ -15,6 +15,7 @@ import { byCodePoint } from "../core/order.ts";
 import type { FileChange, RepositoryChange } from "../core/types.ts";
 import { firstAddedLine } from "./anchor.ts";
 import { baseArgument } from "./base.ts";
+import { centreWidth, MIN_CENTRE, RAIL_WIDTH, SIDEBAR_WIDTH } from "./measure.ts";
 import type { ChangedHunks } from "./patch.ts";
 import { changedHunks, hasNewLine, mergeRepository } from "./patch.ts";
 import { perf } from "./perf.ts";
@@ -121,6 +122,10 @@ export const LIVE_WINDOW_MS = 120_000;
 const ACTIVITY_KEPT = 200;
 
 const THEME_KEY = "diffalanche.theme";
+/** The reader's own layout, kept the way the theme is: panels and line wrapping. */
+const SIDEBAR_KEY = "diffalanche.sidebar";
+const RAIL_KEY = "diffalanche.rail";
+const WRAP_KEY = "diffalanche.wrap";
 /** Which session's warnings were put away; kept for the tab, not for ever. */
 const DISMISSED_KEY = "diffalanche.warningsDismissed";
 
@@ -160,6 +165,23 @@ type ReviewSlice = {
   loadReview: () => Promise<void>;
   /** The address bar changed under the page — `Back` — so the window follows it. */
   syncTaskFromUrl: () => Promise<void>;
+};
+
+/** The shape the reader has put the screen in: a preference, kept in
+ * `localStorage` beside the theme ([08-ui.md](../../docs/reference/08-ui.md)). */
+type LayoutSlice = {
+  sidebarOn: boolean;
+  railOn: boolean;
+  /** A line longer than its code column wraps inside it; off gives the card a scroll. */
+  wrap: boolean;
+  /** How wide the reading column is now: what the pre-mount estimate counts
+   * wrapped rows against, without ever measuring the DOM. */
+  centreWidth: number;
+  toggleSidebar: () => void;
+  toggleRail: () => void;
+  setWrap: (wrap: boolean) => void;
+  /** The window was resized; the panels change it through their own toggles. */
+  measureCentre: () => void;
 };
 
 type ThemeAndBaseSlice = {
@@ -498,6 +520,7 @@ type LiveSlice = {
 };
 
 export type Store = ReviewSlice &
+  LayoutSlice &
   ThemeAndBaseSlice &
   SessionsSlice &
   ScopeSlice &
@@ -566,6 +589,28 @@ export const useStore = create<Store>()((set, get) => ({
     set({ reviewName: name });
     await get().loadReview();
   },
+
+  // layout
+  sidebarOn: readFlag(SIDEBAR_KEY),
+  railOn: readFlag(RAIL_KEY),
+  wrap: readFlag(WRAP_KEY),
+  centreWidth: centreWidth(pageWidth(), readFlag(SIDEBAR_KEY), readFlag(RAIL_KEY)),
+  toggleSidebar: () => {
+    const sidebarOn = !get().sidebarOn;
+    writeFlag(SIDEBAR_KEY, sidebarOn);
+    set({ sidebarOn, centreWidth: centreWidth(pageWidth(), sidebarOn, get().railOn) });
+  },
+  toggleRail: () => {
+    const railOn = !get().railOn;
+    writeFlag(RAIL_KEY, railOn);
+    set({ railOn, centreWidth: centreWidth(pageWidth(), get().sidebarOn, railOn) });
+  },
+  setWrap: (wrap) => {
+    writeFlag(WRAP_KEY, wrap);
+    set({ wrap });
+  },
+  measureCentre: () =>
+    set((store) => ({ centreWidth: centreWidth(pageWidth(), store.sidebarOn, store.railOn) })),
 
   // theme and base
   theme: readTheme(),
@@ -1730,6 +1775,24 @@ function readTheme(): Theme {
 
 function writeTheme(theme: Theme): void {
   storage("local")?.setItem(THEME_KEY, theme);
+}
+
+/** A layout preference; on until the reader has turned it off, and never off by
+ * accident, because a browser with no storage answers the same as a first run. */
+function readFlag(key: string): boolean {
+  return storage("local")?.getItem(key) !== "off";
+}
+
+function writeFlag(key: string, on: boolean): void {
+  storage("local")?.setItem(key, on ? "on" : "off");
+}
+
+/** The width `.centre` lives in: the viewport less a classic scrollbar, which
+ * `innerWidth` counts and the layout does not. Node has no document. */
+function pageWidth(): number {
+  return typeof document === "undefined"
+    ? MIN_CENTRE + SIDEBAR_WIDTH + RAIL_WIDTH
+    : document.documentElement.clientWidth;
 }
 
 /**

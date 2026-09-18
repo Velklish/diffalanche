@@ -5,16 +5,15 @@ import { useStore } from "../store.ts";
 import { Logo } from "./Logo.tsx";
 import { SessionMenu } from "./SessionMenu.tsx";
 
-/**
- * The 52 px bar of handoff section 1.1: the session pill and its menu, the base
- * picker, the two counters that filter the rail, search, the theme toggle, and
- * the export, and the search that opens the modal of DA-26.
- */
+/** The 52 px bar of handoff section 1.1: the pill and its menu, the base and
+ * scope pills, the counters, search, the two toggles, the export and the stubs. */
 export function Header() {
   const session = useStore((store) => store.session);
   const counters = useStore((store) => store.counters.counters);
   const theme = useStore((store) => store.theme);
   const setTheme = useStore((store) => store.setTheme);
+  const wrap = useStore((store) => store.wrap);
+  const setWrap = useStore((store) => store.setWrap);
   const menuOpen = useStore((store) => store.sessionMenuOpen);
   const setSessionMenu = useStore((store) => store.setSessionMenu);
   const openBase = useStore((store) => store.openBase);
@@ -42,6 +41,8 @@ export function Header() {
         <Logo />
         <span className="brand-word">diffalanche</span>
       </span>
+
+      <PanelStub side="sidebar" />
 
       <span className="pill-holder" ref={pill}>
         <button
@@ -91,6 +92,27 @@ export function Header() {
         ⌕<span className="key">⌘K</span>
       </button>
 
+      {/* The same control as the theme's, in words rather than symbols: what it
+          switches is the shape of a line and not a mood (DESIGN.md, Layout). */}
+      <span className="segments labelled">
+        <button
+          type="button"
+          className={wrap ? "segment on" : "segment"}
+          aria-pressed={wrap}
+          onClick={() => setWrap(true)}
+        >
+          wrap
+        </button>
+        <button
+          type="button"
+          className={wrap ? "segment" : "segment on"}
+          aria-pressed={!wrap}
+          onClick={() => setWrap(false)}
+        >
+          scroll
+        </button>
+      </span>
+
       <span className="segments">
         <button
           type="button"
@@ -115,7 +137,27 @@ export function Header() {
       <button type="button" className="ghost" onClick={() => openExport(true)}>
         Export .md
       </button>
+
+      <PanelStub side="rail" />
     </header>
+  );
+}
+
+/** The way a hidden panel comes back: the arrow points at the screen, and the
+ * header keeps it because the panel has no row of its own left (DA-107). */
+function PanelStub({ side }: { side: "sidebar" | "rail" }) {
+  const on = useStore((store) => (side === "sidebar" ? store.sidebarOn : store.railOn));
+  const toggle = useStore((store) => (side === "sidebar" ? store.toggleSidebar : store.toggleRail));
+  if (on) return null;
+  return (
+    <button
+      type="button"
+      className="panel-toggle"
+      aria-label={side === "sidebar" ? "show the navigation" : "show the threads"}
+      onClick={toggle}
+    >
+      {side === "sidebar" ? "›" : "‹"}
+    </button>
   );
 }
 

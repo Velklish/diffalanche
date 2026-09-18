@@ -12,6 +12,7 @@ const HINTS: [string, string][] = [
   ["C", "comment"],
   ["R", "resolve"],
   ["B", "browse"],
+  ["[ ]", "panels"],
 ];
 
 /**

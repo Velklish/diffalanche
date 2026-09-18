@@ -104,6 +104,20 @@ and `bun run release` refuses a version that has no section. See
 
 ### Changed
 
+- **Either side panel comes off the screen, and a long line wraps** (DA-107).
+  `[` hides the sidebar and `]` the thread rail — whole, not narrowed and not
+  into a drawer — and so do the `‹` and `›` in each panel's own top row; while a
+  panel is gone the header carries the stub that brings it back. The floor of
+  the page follows what is left on it: 1560 px with both panels, 1252 without
+  the sidebar, 1168 without the rail, 860 with neither, so a window narrower
+  than 1560 px stops scrolling sideways once the panels it cannot fit are gone.
+  A line longer than its code column now **wraps by default**, and a file card
+  owns no horizontal scroll; the header's `wrap` / `scroll` toggle, in the form
+  of the theme's, gives back the columns aligned character by character. Both
+  panels and the toggle are kept in `localStorage` the way the theme is. The
+  height a card claims before its diff is mounted counts wrapped rows from the
+  width of the code column in characters, recomputed when a panel is hidden and
+  when the window is resized and measured against no DOM at all.
 - **The planning documents say where the project is** (DA-84). `docs/SPEC.md`'s
   status line, `README.md`'s status and the SPEC row of `docs/README.md` all say
   Phase 1 shipped as v0.1.0 and its findings are closed from the backlog;

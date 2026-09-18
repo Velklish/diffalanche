@@ -3,7 +3,7 @@ import { memo, useCallback, useEffect, useMemo, useRef, useState } from "react";
 import { worstSeverity } from "../../core/domain/counters.ts";
 import type { FileChange, FileOmission, FileStatus } from "../../core/types.ts";
 import { Composer } from "../Composer.tsx";
-import { hiddenLines, measurePatch, measureThreads } from "../measure.ts";
+import { codeColumnChars, hiddenLines, measurePatch, measureThreads } from "../measure.ts";
 import type { DiffSlots, LineEvents, LineMarkers } from "../renderers/ReactDiffFile.tsx";
 import { ReactDiffFile } from "../renderers/ReactDiffFile.tsx";
 import type { DiffView } from "../store.ts";
@@ -86,7 +86,12 @@ export const FileCard = memo(function FileCard({ id, repo, file, index }: FileCa
   const toggleHunk = useStore((store) => store.toggleHunk);
   const openComposer = useStore((store) => store.openComposer);
 
-  const shape = useMemo(() => measurePatch(file.patch, view), [file.patch, view]);
+  // How many characters a code column holds, or `null` when nothing wraps: the
+  // estimate counts the rows a wrapped line really takes (DA-107).
+  const columns = useStore((store) =>
+    store.wrap ? codeColumnChars(view, file.status, store.centreWidth) : null,
+  );
+  const shape = useMemo(() => measurePatch(file.patch, view, columns), [file.patch, view, columns]);
   const hunks = collapsedHunks ?? NO_HUNKS_COLLAPSED;
 
   /**
@@ -317,12 +322,8 @@ type DiffBodyProps = {
   keepMounted: boolean;
 };
 
-/**
- * The diff is mounted when the card comes near the viewport and unmounted when
- * it leaves; until it has been mounted once, the height counted from the patch
- * holds its place, and afterwards the measured one does. A card with a
- * selection or an open composer in it is never unmounted.
- */
+/** The diff mounts near the viewport and unmounts when it leaves; the height
+ * counted from the patch holds its place until one was measured at this width. */
 function DiffBody({
   file,
   view,
@@ -336,10 +337,18 @@ function DiffBody({
   keepMounted,
 }: DiffBodyProps) {
   const holder = useRef<HTMLDivElement>(null);
-  const spacer = useRef(height);
   const [near, setNear] = useState(false);
   const busy = useRef(keepMounted);
   busy.current = keepMounted;
+
+  // A measurement belongs to the width it was taken at, so a new estimate drops
+  // it in the same render rather than after one the placeholder already used.
+  const [measured, setMeasured] = useState<number | null>(null);
+  const [estimate, setEstimate] = useState(height);
+  if (estimate !== height) {
+    setEstimate(height);
+    setMeasured(null);
+  }
 
   useEffect(() => {
     const element = holder.current;
@@ -353,7 +362,7 @@ function DiffBody({
           return;
         }
         if (busy.current) return;
-        spacer.current = element.getBoundingClientRect().height;
+        setMeasured(element.getBoundingClientRect().height);
         setNear(false);
       },
       { rootMargin: `${MOUNT_MARGIN}px 0px` },
@@ -362,15 +371,14 @@ function DiffBody({
     return () => observer.disconnect();
   }, []);
 
-  // The observer only speaks when the card crosses its margin, so a card that
-  // was held mounted while its composer was open would stay mounted for as long
-  // as nobody scrolled past it again. This is the crossing it missed.
+  // The crossing the observer missed: a card held mounted for its composer stays
+  // mounted until somebody scrolls past it again.
   useEffect(() => {
     const element = holder.current;
     if (keepMounted || element === null) return;
     const box = element.getBoundingClientRect();
     if (box.bottom > -MOUNT_MARGIN && box.top < window.innerHeight + MOUNT_MARGIN) return;
-    spacer.current = box.height;
+    setMeasured(box.height);
     setNear(false);
   }, [keepMounted]);
 
@@ -384,7 +392,7 @@ function DiffBody({
         mounted
           ? // The width of the widest line, so the table needs no intrinsic pass.
             ({ "--code-width": `${width}ch` } as CSSProperties)
-          : { height: spacer.current }
+          : { height: measured ?? height }
       }
     >
       {mounted ? (

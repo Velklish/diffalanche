@@ -4,6 +4,7 @@
  * height and the scrollbar does not drift while unseen files are scrolled past
  * ([ADR-008](../../docs/adr/adr-008-diff-rendering-verdict.md)).
  */
+import type { FileStatus } from "../core/types.ts";
 import type { DiffView } from "./store.ts";
 import type { Comment } from "./types.ts";
 
@@ -11,24 +12,66 @@ import type { Comment } from "./types.ts";
 export const ROW_HEIGHT = 22;
 export const HUNK_HEAD_HEIGHT = 26;
 
-/**
- * The height a card will have and the width its widest line needs. In split view
- * a deletion and the insertion beside it share a row; in unified they are two.
- * The width is the longest line of the patch, in characters, which the card
- * hands to the table so it never measures its own content.
- */
-export function measurePatch(patch: string, view: DiffView): { height: number; width: number } {
+/** The two side panels, and the narrowest the reading column is asked to be;
+ * `.app`'s floor is this plus whichever panels are shown (`styles.css`). */
+export const SIDEBAR_WIDTH = 308;
+export const RAIL_WIDTH = 392;
+export const MIN_CENTRE = 860;
+
+/** JetBrains Mono advances 0.6 em, so one character of the 12 px code is 7.2 px. */
+const CH_PX = 7.2;
+/** `.centre` pads 16 px each side and a file card carries a 1 px border. */
+const CARD_CHROME = 34;
+/** One gutter column, and the 10 px a code cell pads on each side. */
+const GUTTER = 42;
+const CELL_PADDING = 20;
+
+/** How wide the reading column is: the page the layout lives in — the viewport
+ * less a classic scrollbar — less the panels that are on the screen. */
+export function centreWidth(pageWidth: number, sidebar: boolean, rail: boolean): number {
+  const panels = (sidebar ? SIDEBAR_WIDTH : 0) + (rail ? RAIL_WIDTH : 0);
+  return Math.max(pageWidth - panels, MIN_CENTRE);
+}
+
+/** How many characters one code column holds, counted from the widths
+ * `styles.css` fixes ([08-ui.md](../../docs/reference/08-ui.md)). */
+export function codeColumnChars(view: DiffView, status: FileStatus, centre: number): number {
+  const single = view === "unified" || status === "added" || status === "deleted";
+  const gutters = view === "split" && single ? 1 : 2;
+  const code = (centre - CARD_CHROME - gutters * GUTTER) / (single ? 1 : 2) - CELL_PADDING;
+  return Math.max(1, Math.floor(code / CH_PX));
+}
+
+/** The height a card will have, and the widest line it holds; `columns` is the
+ * code column in characters, and `null` is the `scroll` toggle's no wrapping. */
+export function measurePatch(
+  patch: string,
+  view: DiffView,
+  columns: number | null = null,
+): { height: number; width: number } {
   let rows = 0;
   let heads = 0;
-  let deletions = 0;
-  let insertions = 0;
+  /** The rows each side of the current block takes, in the order `zip` pairs them. */
+  let deletions: number[] = [];
+  let insertions: number[] = [];
   let width = 0;
   let started = false;
 
+  const visual = (line: string) =>
+    columns === null ? 1 : Math.max(1, Math.ceil((line.length - 1) / columns));
+
   const closeBlock = () => {
-    rows += view === "split" ? Math.max(deletions, insertions) : deletions + insertions;
-    deletions = 0;
-    insertions = 0;
+    if (view === "split") {
+      const paired = Math.max(deletions.length, insertions.length);
+      for (let i = 0; i < paired; i += 1) {
+        rows += Math.max(deletions[i] ?? 0, insertions[i] ?? 0);
+      }
+    } else {
+      for (const one of deletions) rows += one;
+      for (const one of insertions) rows += one;
+    }
+    deletions = [];
+    insertions = [];
   };
 
   for (const line of patch.split("\n")) {
@@ -44,12 +87,12 @@ export function measurePatch(patch: string, view: DiffView): { height: number; w
     }
     if (line.length - 1 > width) width = line.length - 1;
     if (kind === "-") {
-      deletions += 1;
+      deletions.push(visual(line));
     } else if (kind === "+") {
-      insertions += 1;
+      insertions.push(visual(line));
     } else if (kind === " ") {
       closeBlock();
-      rows += 1;
+      rows += visual(line);
     }
   }
   closeBlock();

@@ -39,6 +39,45 @@ button:disabled {
   min-width: 1560px;
 }
 
+/* The floor is what the panels on the screen add up to: 860 px of reading
+   column plus 308 and 392 for whichever of them the reader has kept. */
+.app.sidebar-off {
+  min-width: 1252px;
+}
+
+.app.rail-off {
+  min-width: 1168px;
+}
+
+.app.sidebar-off.rail-off {
+  min-width: 860px;
+}
+
+/* The control that puts a panel away, and the stub in the header that brings it
+   back: a text symbol, like every other mark in the interface. */
+.panel-toggle {
+  padding: 0 5px;
+  border: 0;
+  background: none;
+  color: var(--tx3);
+  font-size: 13px;
+  line-height: 1;
+}
+
+.panel-toggle:hover {
+  color: var(--tx);
+}
+
+.panel-toggle:focus-visible {
+  outline: 1px solid var(--accBd);
+}
+
+/* The stub appears when its panel goes, so it arrives the way everything that
+   appears does (The Two-Keyframe Rule). The one in a panel is always there. */
+.header .panel-toggle {
+  animation: dcin 140ms ease-out;
+}
+
 /* header */
 
 .header {
@@ -249,6 +288,13 @@ button:disabled {
 .segment.on {
   background: var(--bd);
   color: var(--tx);
+}
+
+/* A segment has no border of its own to change, so the ring is an outline
+   (DESIGN.md, Inputs and fields). The theme's toggle is the same class. */
+.segment:focus-visible {
+  outline: 1px solid var(--accBd);
+  outline-offset: -1px;
 }
 
 /* workspace */
@@ -743,6 +789,10 @@ button:disabled {
   overflow-x: auto;
 }
 
+.app.wrap .file-body.mounted {
+  overflow-x: hidden;
+}
+
 /* skeleton */
 
 .failure {
@@ -1188,6 +1238,18 @@ button:disabled {
   word-wrap: normal;
 }
 
+/* Wrapping, the default: `break-all` fills the column exactly, which is what
+   makes the estimate of `measure.ts` the real row count (08-ui.md). */
+.app.wrap .diff,
+.app.wrap .diff.dc-unified {
+  width: 100%;
+}
+
+.app.wrap .diff-code {
+  white-space: pre-wrap;
+  word-break: break-all;
+}
+
 .diff-code-insert,
 .diff-gutter-insert {
   background: var(--add);
@@ -1305,6 +1367,14 @@ button:disabled {
 .file-head .segments .segment {
   width: auto;
   height: 22px;
+  padding: 0 8px;
+  font: 10.5px / 1 var(--mono);
+}
+
+/* The same control in words: a segment holding `wrap` or `scroll` is as wide as
+   what it says. */
+.segments.labelled .segment {
+  width: auto;
   padding: 0 8px;
   font: 10.5px / 1 var(--mono);
 }

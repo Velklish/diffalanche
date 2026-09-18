@@ -100,6 +100,81 @@ test("the panels keep their widths, and the page scrolls below the threshold", a
   ).toBe(true);
 });
 
+/** How wide the reading column is right now. */
+function centre(page: Page): Promise<number> {
+  return page.evaluate(() => document.querySelector(".centre")?.getBoundingClientRect().width ?? 0);
+}
+
+test("[ takes the sidebar off the screen and gives its width to the reading column", async ({
+  page,
+}) => {
+  await page.setViewportSize({ width: THRESHOLD, height: 900 });
+  await open(page);
+  const before = await centre(page);
+
+  await page.keyboard.press("[");
+  await expect(page.locator("nav.sidebar")).toHaveCount(0);
+  expect(await centre(page)).toBe(before + SIDEBAR);
+
+  await page.keyboard.press("[");
+  await expect(page.locator("nav.sidebar")).toHaveCount(1);
+  expect(await centre(page)).toBe(before);
+});
+
+test("] does the same for the thread rail", async ({ page }) => {
+  await page.setViewportSize({ width: THRESHOLD, height: 900 });
+  await open(page);
+  const before = await centre(page);
+
+  await page.keyboard.press("]");
+  await expect(page.locator("aside.rail")).toHaveCount(0);
+  expect(await centre(page)).toBe(before + RAIL);
+});
+
+test("a panel put away stays away across a reload, and the header brings it back", async ({
+  page,
+}) => {
+  await open(page);
+  await page.keyboard.press("[");
+  await page.keyboard.press("]");
+  await page.reload();
+  await page.waitForFunction(() => window.__perf?.ready === true);
+
+  await expect(page.locator("nav.sidebar")).toHaveCount(0);
+  await expect(page.locator("aside.rail")).toHaveCount(0);
+
+  await page.getByRole("button", { name: "show the navigation" }).click();
+  await expect(page.locator("nav.sidebar")).toHaveCount(1);
+  await page.getByRole("button", { name: "show the threads" }).click();
+  await expect(page.locator("aside.rail")).toHaveCount(1);
+});
+
+test("with both panels away a 1200 px window stops scrolling sideways", async ({ page }) => {
+  await page.setViewportSize({ width: 1200, height: 900 });
+  await open(page);
+  expect(
+    await page.evaluate(
+      () => document.documentElement.scrollWidth > document.documentElement.clientWidth,
+    ),
+  ).toBe(true);
+
+  await page.keyboard.press("[");
+  await page.keyboard.press("]");
+
+  expect(await page.evaluate(() => document.documentElement.scrollWidth)).toBe(
+    await page.evaluate(() => document.documentElement.clientWidth),
+  );
+});
+
+test("the panel keys are silent while a comment is being written", async ({ page }) => {
+  await open(page);
+  await page.getByRole("searchbox", { name: "filter" }).fill("");
+  await page.getByRole("searchbox", { name: "filter" }).press("[");
+
+  await expect(page.locator("nav.sidebar")).toHaveCount(1);
+  await expect(page.getByRole("searchbox", { name: "filter" })).toHaveValue("[");
+});
+
 test("the fonts are local: nothing is requested outside 127.0.0.1", async ({ page }) => {
   const foreign: string[] = [];
   page.on("request", (request) => {

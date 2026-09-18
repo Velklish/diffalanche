@@ -56,6 +56,9 @@ test("split and unified show the same line numbers", async ({ page }) => {
 
 test("a file has one horizontal scrollbar and two columns of the same width", async ({ page }) => {
   await open(page);
+  // The scrollbar is what `scroll` is for: with wrapping on — the default since
+  // DA-107 — the diff is as wide as the card and there is nothing to scroll.
+  await page.getByRole("button", { name: "scroll", exact: true }).click();
   const geometry = await page.evaluate(() => {
     const card = document.querySelector(".file-card") as HTMLElement;
     const scrollers = [...card.querySelectorAll("*")].filter((element) => {

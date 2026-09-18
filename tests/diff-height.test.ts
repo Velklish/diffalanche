@@ -1,5 +1,15 @@
 import { describe, expect, it } from "vitest";
-import { HUNK_HEAD_HEIGHT, hiddenLines, measurePatch, ROW_HEIGHT } from "../src/ui/measure.ts";
+import {
+  centreWidth,
+  codeColumnChars,
+  HUNK_HEAD_HEIGHT,
+  hiddenLines,
+  MIN_CENTRE,
+  measurePatch,
+  RAIL_WIDTH,
+  ROW_HEIGHT,
+  SIDEBAR_WIDTH,
+} from "../src/ui/measure.ts";
 
 /**
  * The height a file card claims before its diff is mounted. It is arithmetic
@@ -52,6 +62,92 @@ describe("the height of a file card", () => {
 
   it("gives a file listed without content no height at all", () => {
     expect(measurePatch("", "split")).toEqual({ height: 0, width: 0 });
+  });
+});
+
+/** With wrapping on, a line longer than its code column is several rows tall,
+ * and the estimate says so before the card is ever mounted (DA-107). */
+const long = [
+  "@@ -1,2 +1,3 @@",
+  ` ${"c".repeat(40)}`,
+  `-${"d".repeat(10)}`,
+  `+${"i".repeat(100)}`,
+  "",
+].join("\n");
+
+describe("the height of a file card with the lines wrapped", () => {
+  it("counts a wrapped line as the rows it really takes", () => {
+    // Context 40 / 20 → 2 rows; the block pairs a 10-character deletion (1 row)
+    // with a 100-character insertion (5 rows) and the taller one is the row.
+    const { height } = measurePatch(long, "split", 20);
+
+    expect(height).toBe(HUNK_HEAD_HEIGHT + 7 * ROW_HEIGHT);
+  });
+
+  it("gives each side its own rows in unified view", () => {
+    const { height } = measurePatch(long, "unified", 20);
+
+    expect(height).toBe(HUNK_HEAD_HEIGHT + (2 + 1 + 5) * ROW_HEIGHT);
+  });
+
+  it("is the unwrapped count when no column width is given", () => {
+    expect(measurePatch(long, "split")).toEqual(measurePatch(long, "split", null));
+    expect(measurePatch(long, "split").height).toBe(HUNK_HEAD_HEIGHT + 2 * ROW_HEIGHT);
+  });
+
+  it("keeps a line that fits its column one row", () => {
+    expect(measurePatch(long, "split", 100).height).toBe(HUNK_HEAD_HEIGHT + 2 * ROW_HEIGHT);
+  });
+});
+
+/** The width the count is made against: the page less the panels on the screen,
+ * less the gutters and the padding `styles.css` fixes. */
+describe("the width a wrapped line is counted against", () => {
+  it("is the page less the panels that are on the screen", () => {
+    expect(centreWidth(1560, true, true)).toBe(MIN_CENTRE);
+    expect(centreWidth(1560, false, true)).toBe(1560 - RAIL_WIDTH);
+    expect(centreWidth(1560, true, false)).toBe(1560 - SIDEBAR_WIDTH);
+    expect(centreWidth(1560, false, false)).toBe(1560);
+  });
+
+  it("never goes below the reading column the floor of `.app` is built on", () => {
+    expect(centreWidth(900, true, true)).toBe(MIN_CENTRE);
+    expect(centreWidth(400, false, false)).toBe(MIN_CENTRE);
+  });
+
+  it("gives a split column about half of what a unified one has", () => {
+    const centre = centreWidth(1560, true, true);
+    const split = codeColumnChars("split", "modified", centre);
+    const unified = codeColumnChars("unified", "modified", centre);
+
+    // A unified row pays for one code cell instead of two, so it keeps the
+    // 20 px of padding the second one would have taken and nothing else.
+    expect(split).toBeGreaterThan(0);
+    expect(unified).toBeGreaterThan(split * 2);
+    expect(unified).toBeLessThanOrEqual(split * 2 + 4);
+  });
+
+  it("gives an added or deleted file one column and one gutter in split view", () => {
+    const centre = centreWidth(1560, true, true);
+    const modified = codeColumnChars("split", "modified", centre);
+    const added = codeColumnChars("split", "added", centre);
+
+    // The library has one side to show, so it draws one of each; a whole gutter
+    // wider than the unified row of the same card.
+    expect(added).toBeGreaterThan(modified * 2);
+    expect(added).toBe(codeColumnChars("unified", "modified", centre) + Math.floor(42 / 7.2) + 1);
+    expect(codeColumnChars("split", "deleted", centre)).toBe(added);
+  });
+
+  it("grows when a panel is taken off the screen", () => {
+    const both = codeColumnChars("split", "modified", centreWidth(1900, true, true));
+    const alone = codeColumnChars("split", "modified", centreWidth(1900, false, false));
+
+    expect(alone - both).toBe(Math.floor((SIDEBAR_WIDTH + RAIL_WIDTH) / 2 / 7.2));
+  });
+
+  it("holds at least one character however narrow the column is", () => {
+    expect(codeColumnChars("split", "modified", 0)).toBe(1);
   });
 });
 

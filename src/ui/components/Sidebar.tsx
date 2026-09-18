@@ -5,6 +5,7 @@ import { countDraft, pathPicked, repoMark, scopeLabel } from "../scope.ts";
 import type { Connection, SidebarTab } from "../store.ts";
 import { useStore } from "../store.ts";
 import type { Counters } from "../types.ts";
+import { PanelAway } from "./PanelAway.tsx";
 import { Tick } from "./ScopeEditor.tsx";
 import { SidebarSkeleton } from "./Skeleton.tsx";
 
@@ -34,6 +35,8 @@ export function Sidebar() {
       <div className="sidebar-tabs">
         <Tab tab="changes" />
         <Tab tab="select" />
+        <span className="spacer" />
+        <PanelAway side="sidebar" />
       </div>
       <div className="sidebar-filter">
         <input

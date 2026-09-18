@@ -1,28 +1,5 @@
-/**
- * The keyboard map of `docs/design/HANDOFF.md`, in one place. The controller is
- * one listener on the document; what each key does is an action of the store,
- * so the map is a table of names rather than a place where behaviour lives.
- *
- * The handoff's rule about fields holds here: a letter typed into an `input` or
- * a `textarea` is text and not a command. `⌘⏎` and `esc` are commands wherever
- * they are pressed — the field is exactly where the reviewer is when they send
- * — and so is `⌘K`. `⇧⇧` is not: it is not in the handoff's exception list, and
- * a person typing capitals in a comment is not searching.
- *
- * | Key | What it does |
- * |---|---|
- * | `⌘K` / `Ctrl+K` | opens and closes global search |
- * | `⇧⇧` | the same, two presses inside 400 ms; outside a field, or in the modal's own |
- * | `↑` `↓` `⏎` in search | the modal's own field owns them ([components/GlobalSearch.tsx]) |
- * | `J` / `K` | the next and previous open thread of the whole review |
- * | `C` | the composer on the first added line of the file being read |
- * | `R` | resolves the focused thread |
- * | `B` | Phase 2 (DA-37): says so and does nothing |
- * | `↑` `↓` `TAB` in the composer | the suggestions they move through are Phase 2 (DA-35) |
- * | `⌘⏎` | sends the comment |
- * | `⏎` in the base picker | the picker owns its own field |
- * | `esc` | closes the topmost thing that is open |
- */
+/** The handoff's keyboard map in one listener; the table, the rule about fields
+ * and its exceptions are in [08-ui.md](../../docs/reference/08-ui.md). */
 import { useEffect } from "react";
 import { revealThread } from "./reveal.ts";
 import { useStore } from "./store.ts";
@@ -119,6 +96,14 @@ export function useKeys(): void {
         case "R":
           event.preventDefault();
           void store.resolveFocused();
+          return;
+        case "[":
+          event.preventDefault();
+          store.toggleSidebar();
+          return;
+        case "]":
+          event.preventDefault();
+          store.toggleRail();
           return;
         case "b":
         case "B":

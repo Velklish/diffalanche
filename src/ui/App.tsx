@@ -19,6 +19,9 @@ import { useStore } from "./store.ts";
 
 export function App() {
   const theme = useStore((store) => store.theme);
+  const sidebarOn = useStore((store) => store.sidebarOn);
+  const railOn = useStore((store) => store.railOn);
+  const wrap = useStore((store) => store.wrap);
   const status = useStore((store) => store.status);
   const files = useStore((store) => store.files);
   const dragging = useStore((store) => store.dragging);
@@ -33,6 +36,14 @@ export function App() {
   useEffect(() => {
     void loadReview();
   }, [loadReview]);
+
+  // The width the pre-mount estimate wraps against; the panels move it through
+  // their own toggles, and the window moves it here.
+  useEffect(() => {
+    const measure = () => useStore.getState().measureCentre();
+    window.addEventListener("resize", measure);
+    return () => window.removeEventListener("resize", measure);
+  }, []);
 
   // `?review=<name>` is what this window is on, so `Back` is a way through the
   // tasks it has shown. Switching pushes an entry; this is what walks it
@@ -122,8 +133,16 @@ export function App() {
     });
   }, [status, files.length, jumpToFile, openComposer, switchSession]);
 
+  // A hidden panel is a class rather than a style, because the floor `.app`
+  // keeps is the one the panels still on the screen add up to (DA-107).
+  const shape = ["app"];
+  if (dragging) shape.push("dragging");
+  if (!sidebarOn) shape.push("sidebar-off");
+  if (!railOn) shape.push("rail-off");
+  if (wrap) shape.push("wrap");
+
   return (
-    <div className={dragging ? "app dragging" : "app"}>
+    <div className={shape.join(" ")}>
       <Header />
       <WarningsBar />
       {/* A root with no session has no review to lay out: the screen that
@@ -132,9 +151,9 @@ export function App() {
         <FirstRun />
       ) : (
         <div className="workspace">
-          <Sidebar />
+          {sidebarOn ? <Sidebar /> : null}
           <CentrePanel />
-          <ThreadRail />
+          {railOn ? <ThreadRail /> : null}
         </div>
       )}
       <StatusBar />

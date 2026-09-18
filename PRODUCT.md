@@ -93,7 +93,7 @@ and the threads update live, without losing the reading position.
 - The name is `diffalanche`, lower case, always one word.
 - The mark is three 9x9 squares (2.5 px radius) stepped along a diagonal in the
   accent, warning, and nit colours, built in markup. No raster asset and no icon
-  font; icons are text symbols (`▾ ▸ ⌕ ☾ ☀ ✓ ↑ ↓ ↵ ⏎ ⌘ ⇧ ◆`).
+  font; icons are text symbols (`▾ ▸ ‹ › ⌕ ☾ ☀ ✓ ↑ ↓ ↵ ⏎ ⌘ ⇧ ◆`).
 - Two themes, dark by default, light on the header's toggle. The choice is
   remembered and applied before the first paint.
 - Instrument Sans for the interface, JetBrains Mono for code, identifiers,

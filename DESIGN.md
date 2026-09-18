@@ -268,8 +268,9 @@ in: dark by default, low in contrast everywhere except where it matters, and
 built out of instruments rather than pages. Everything countable — a path, a
 line number, a count, a hotkey, a severity — is set in monospace, so the eye can
 tell a measurement from a sentence without reading either. Panels have fixed
-widths and never move. Nothing spins, nothing blinks, and nothing reflows after
-data arrives.
+widths and never move; a reader who wants the room to themselves takes one off
+the screen rather than squeezing it. Nothing spins, nothing blinks, and nothing
+reflows after data arrives.
 
 The palette is deliberately quiet so that one thing can be loud. The accent is a
 muted periwinkle, not a saturated blue; added and removed lines are 15–17 %
@@ -290,8 +291,8 @@ switching themes changes the room rather than inverting the picture.
 - Dense: a 9.5–14.5 px type ramp, 1 px borders, a spacing core of 9–14 px.
 - Monospace carries everything countable; the sans carries what a human wrote.
 - Flat inside the workspace; shadows lift only modals and the toast.
-- Fixed panel widths (308 / flexible / 392) and a 1560 px floor — the layout
-  never compresses.
+- Fixed panel widths (308 / flexible / 392) that never compress — a panel is on
+  the screen at its width or off it entirely, and the floor follows.
 - Text symbols instead of icons; the mark is three squares built in markup.
 
 ## Colors
@@ -416,7 +417,10 @@ a finding.
 A vertical flex column at full height: header 52 px, an optional scanner
 warnings bar, the workspace, status bar 30 px. The workspace is three columns —
 sidebar 308 px, centre flexible, thread rail 392 px — with 1 px borders between
-them.
+them. Either side panel comes off the screen on `[` or `]`, or on the text
+symbol in its own top row; while it is gone the header keeps the stub that
+brings it back, and the centre column takes the whole of the freed width. The
+choice is the reader's and is kept in `localStorage`, like the theme.
 
 The page is one vertical scroll. The header, both side panels, and the status
 bar are `sticky`, so the document scrolls and a file card is reached with
@@ -424,27 +428,34 @@ bar are `sticky`, so the document scrolls and a file card is reached with
 at `top: 52px` and inside its own section, so each repository's bar is pushed
 out by the next one rather than stacking — 90 px is the whole of what is fixed
 to the top of the page, and everything measured from it counts both. Inside the
-centre panel, each file card owns one horizontal
-scroll at least 1080 px wide, so a long line moves the whole diff and the two
-columns stay aligned; the composer inside it is `position: sticky; left: 0` and
-stays in view while that scroll moves.
+centre panel, a line longer than its code column wraps inside that column and
+the diff is as wide as the card — which is the default. The header's
+`wrap` / `scroll` toggle, in the form of the theme's and kept the same way,
+gives back the other behaviour: one horizontal scroll per card, at least
+1080 px wide, where a long line moves the whole diff and the two columns stay
+aligned character by character. The composer inside it is
+`position: sticky; left: 0` and stays in view while that scroll moves.
 
 **Spacing** runs 4 · 6 · 7 · 8 · 9 · 10 · 11 · 12 · 14 · 16 · 18 · 22 px, with
 the core between 9 and 14. The header pads `0 15px` with a 13 px gap; the centre
 panel pads `12px 16px 60px`; a file card's header pads `7px 11px`; the diff
 gutter is 42 px wide, right-aligned, with 11 px of clearance before the code.
 
-**Responsive behaviour: there is none, deliberately.** `.app` has
-`min-width: 1560px`. Below that the window scrolls sideways and the panels keep
-their widths, because a two-column diff stops being readable before anything
-else on the screen does. This is a desktop tool for one person on `127.0.0.1`;
-it does not adapt to a phone and must not be made to.
+**Responsive behaviour: there is none, deliberately.** `.app` has a floor, and
+the floor is 860 px of reading column plus whichever panels are on the screen:
+1560 px with both, 1252 px without the sidebar, 1168 px without the rail, 860 px
+with neither. Below it the window scrolls sideways and the panels keep their
+widths, because a two-column diff stops being readable before anything else on
+the screen does. **Hiding a panel is a press, never a breakpoint**: nothing on
+this screen reacts to the width of the window. This is a desktop tool for one
+person on `127.0.0.1`; it does not adapt to a phone and must not be made to.
 
 ### Named Rules
 
-**The Panels-Do-Not-Shrink Rule.** 308 / flexible / 392 are fixed. Below
-1560 px the window scrolls; nothing compresses, nothing collapses, nothing
-becomes a drawer.
+**The Panels-Do-Not-Shrink Rule.** 308 / flexible / 392 are fixed. A panel is at
+its width or off the screen; nothing compresses, nothing becomes a narrow strip,
+and nothing becomes a drawer that slides over the reading column. Below the
+floor of the panels that are on the screen, the window scrolls.
 
 **The No-Jump Rule.** The panels hold their final widths while the server
 answers. Loading shows the real header, silhouette rows in the sidebar, and one
@@ -588,7 +599,10 @@ adjustment.
 
 The library renders the rows; the system dresses them. Two 50 % columns split by
 a `bd2` seam, a 42 px right-aligned gutter in `ln` with 11 px of clearance, code
-in `code` at 12 px / 22 px with `white-space: pre`. An added row is `addTx` on
+in `code` at 12 px / 22 px, wrapping inside its column (`pre-wrap` with
+`break-all`, so a wrapped line fills the column exactly and the card's height is
+known before it is drawn) or `white-space: pre` under `scroll`. A visual line is
+22 px either way. An added row is `addTx` on
 `add`, a removed row `delTx` on `del`, an empty split half is `gap`. A hunk
 header is `panel2`, 26 px tall, mono 11 px in `tx3`. A selected range is `accBg`
 with `inset 3px 0 0 var(--acc)`, and its line numbers turn `accTx` — a wash
@@ -620,8 +634,10 @@ same mark as an inline SVG data URI. There is no raster file.
 - **Do** show focus with `accBd` — a border change on a bordered control, a 1 px
   outline on a row that has none.
 - **Do** use `dcin` for anything that appears and `dcpulse` for anything alive.
-- **Do** keep panel widths fixed and let the window scroll below 1560 px.
-- **Do** use text symbols (`▾ ▸ ⌕ ☾ ☀ ✓ ↑ ↓ ↵ ⏎ ⌘ ⇧ ◆`) for iconography.
+- **Do** keep panel widths fixed and let the window scroll below the floor; a
+  panel that is in the way comes off the screen whole (The Panels-Do-Not-Shrink
+  Rule).
+- **Do** use text symbols (`▾ ▸ ‹ › ⌕ ☾ ☀ ✓ ↑ ↓ ↵ ⏎ ⌘ ⇧ ◆`) for iconography.
 
 ### Don't:
 
