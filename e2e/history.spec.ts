@@ -4,6 +4,7 @@ import { join } from "node:path";
 import { fileURLToPath } from "node:url";
 import type { APIRequestContext, Page } from "@playwright/test";
 import { expect, test } from "@playwright/test";
+import { dataDirOf } from "../src/core/storage/index.ts";
 
 /**
  * The history of review tasks (DA-56): the two groups of the sessions menu, the
@@ -18,8 +19,9 @@ import { expect, test } from "@playwright/test";
 const root = fileURLToPath(new URL("..", import.meta.url));
 const FIXTURE = ".perf/e2e";
 const SESSION = "synth";
-/** Follows `DIFFALANCHE_DATA_DIR`, the workaround DA-54.1 owns. */
-const DATA = join(root, FIXTURE, process.env.DIFFALANCHE_DATA_DIR ?? ".diffalanche");
+/** The default data directory under the root: the harness neutralised the
+ * configuration that could have named another one (DA-54.1). */
+const DATA = dataDirOf(join(root, FIXTURE));
 
 /**
  * The ceiling this suite holds the mark against: the 300 ms `docs/SPEC.md`

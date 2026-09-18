@@ -1,5 +1,6 @@
 import { execFileSync } from "node:child_process";
 import { defineConfig } from "@playwright/test";
+import { fixtureEnv } from "../src/core/config/index.ts";
 import { BINARY, FIXTURE } from "./binary.ts";
 
 /**
@@ -57,6 +58,10 @@ function checked(value: string): number {
 const PORT = checked(process.env.DIFFALANCHE_E2E_PORT ?? freePort());
 process.env.DIFFALANCHE_E2E_PORT = String(PORT);
 
+// Neither the developer's shell nor their user config may name the fixture's
+// data directory — the binary reads it, and so does every CLI a spec runs.
+Object.assign(process.env, fixtureEnv());
+
 export default defineConfig({
   testDir: ".",
   testMatch: /acceptance\.spec\.ts$/,
@@ -83,7 +88,9 @@ export default defineConfig({
       `${BINARY} serve --root ${FIXTURE} --port ${PORT}`,
     ].join(" && "),
     cwd: "..",
-    url: `http://127.0.0.1:${PORT}/api/review`,
+    // The page, not `/api/review`: that route answers 404 whenever the data
+    // directory resolved away from the fixture, and the wait reads as a hang.
+    url: `http://127.0.0.1:${PORT}/`,
     // Off by default, so a run always builds and serves what it is about to
     // test. `DIFFALANCHE_E2E_REUSE=1` beside a pinned port attaches to a server
     // already up, which is how the suite is debugged without a rebuild between

@@ -1,6 +1,11 @@
 import { defineConfig } from "@playwright/test";
+import { fixtureEnv } from "../src/core/config/index.ts";
 
 const PORT = 4881;
+
+// Neither the developer's shell nor their user config may name the fixture's
+// data directory — the server reads it, and so does every CLI a spec runs.
+Object.assign(process.env, fixtureEnv());
 
 /**
  * The UI tests: Playwright drives the built page, so they are not part of
@@ -29,7 +34,9 @@ export default defineConfig({
     command:
       "bun run build:ui && rm -rf .perf/e2e && bun run synth -- --out .perf/e2e --small && bun e2e/server.ts",
     cwd: "..",
-    url: `http://127.0.0.1:${PORT}/api/review`,
+    // The page, not `/api/review`: that route answers 404 whenever the data
+    // directory resolved away from the fixture, and the wait reads as a hang.
+    url: `http://127.0.0.1:${PORT}/`,
     reuseExistingServer: false,
     timeout: 120_000,
   },

@@ -7,9 +7,14 @@
 import { execFileSync } from "node:child_process";
 import { appendFileSync, existsSync, rmSync } from "node:fs";
 import { join } from "node:path";
+import { fixtureEnv } from "../src/core/config/index.ts";
 import { evaluate, formatTable, GATE_VARIANT, RUNNER_ALLOWANCE } from "./budgets.ts";
 import type { Measurement } from "./harness.ts";
 import { parseArgs } from "./harness.ts";
+
+/** What every child is given: the fixture's own environment, passed and not
+ * assigned — Bun hands a child the env the process started with (11-perf.md). */
+const ENV = { ...process.env, ...fixtureEnv() };
 
 /**
  * The fixture and the built UI are what the harness needs; make them if they
@@ -22,9 +27,9 @@ function prepare(fixture: string): void {
   const current = join(fixture, ".diffalanche", "current");
   if (!existsSync(fixture) || !existsSync(current)) {
     rmSync(fixture, { recursive: true, force: true });
-    execFileSync("bun", ["run", "synth", "--", "--out", fixture], { stdio: "inherit" });
+    execFileSync("bun", ["run", "synth", "--", "--out", fixture], { stdio: "inherit", env: ENV });
   }
-  execFileSync("bun", ["run", "build:ui"], { stdio: "inherit" });
+  execFileSync("bun", ["run", "build:ui"], { stdio: "inherit", env: ENV });
 }
 
 /**
@@ -39,7 +44,7 @@ function measureOnce(fixture: string): Measurement {
   const stdout = execFileSync(
     "bun",
     ["perf/run.ts", "--fixture", fixture, "--variant", GATE_VARIANT.name, "--runs", "1"],
-    { stdio: ["ignore", "pipe", "inherit"], encoding: "utf8" },
+    { stdio: ["ignore", "pipe", "inherit"], encoding: "utf8", env: ENV },
   );
   const results = JSON.parse(stdout) as Measurement[];
   const measurement = results[0];

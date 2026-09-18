@@ -188,6 +188,23 @@ and `bun run release` refuses a version that has no section. See
 
 ### Fixed
 
+- **A test fixture no longer inherits the developer's own data directory**
+  (DA-54.1). `bun run test:ui`, `bun run test:e2e` and `bun run perf` neutralise
+  `DIFFALANCHE_DATA_DIR` and `$XDG_CONFIG_HOME` the way `bun run test` already
+  did, from one place — `fixtureEnv()` of `src/core/config/index.ts` — rather
+  than from a line copied per harness. On a machine whose
+  `~/.config/diffalanche/config.json` sets a relative `dataDir` the fixture
+  server used to look for its session under that path, find none, and answer 404
+  about every route of the review; Playwright polled `/api/review` for two
+  minutes and reported a timeout that named the wait and not the cause. The
+  readiness probe is now `/`, which is up as soon as the server is, and the
+  fixture server prints the data directory it resolved. No suite needs
+  `DIFFALANCHE_DATA_DIR` or `--data-dir` on the command line any more. The gate
+  hands its children that environment explicitly rather than assigning it: Bun
+  gives a child the environment the process started with, so an assignment made
+  after start reaches nothing — measured, and written down in
+  [11-perf.md](docs/reference/11-perf.md).
+
 - **`diffalanche diff | head` no longer crashes the CLI** (DA-91). Nothing
   listened for errors on `process.stdout`, and the `try`/`catch` that maps every
   failure onto an exit code cannot see an `EPIPE`: it arrives later as an

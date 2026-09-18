@@ -107,6 +107,45 @@ itself is not comparable: object mtimes differ, and the sibling worktree's
 every git call, so a developer's own git configuration cannot change the
 fixture.
 
+## The fixture's environment
+
+The same argument holds for the data directory, and it is one function rather
+than three copies: `fixtureEnv()` of `src/core/config/index.ts` returns the pair
+every harness runs its fixture under — `DIFFALANCHE_DATA_DIR` empty, which
+counts as unset, and `XDG_CONFIG_HOME` pointing at a directory nothing writes
+to. `vitest.config.ts` puts it in `test.env`; `e2e/playwright.config.ts` and
+`e2e/acceptance.config.ts` put it on their own `process.env`, which both the
+server they start and the CLI a spec shells out to inherit; `perf/gate.ts`
+passes it to every child as an explicit `env`.
+
+**The gate passes it and does not assign it**, because the gate runs on Bun and
+the two runtimes disagree about what a child inherits. Measured here with a
+parent that sets `process.env.PROBE = "yes"` and then calls `execFileSync` with
+no `env` of its own:
+
+| Parent runtime | What the child saw |
+|---|---|
+| `node` | `PROBE=yes` |
+| `bun` 1.3.14 | `PROBE` unset |
+
+Bun hands a child the environment the process **started** with, so an assignment
+made after start reaches nothing: the gate assigned the pair, spawned
+`perf/run.ts`, and the repetition resolved the data directory from the user
+config after all — `no current review session` from a fixture that had one. The
+Playwright configurations are not exposed to this because Playwright builds
+`{ ...process.env, ...env }` itself at every spawn, so their assignment is read
+at the moment the child is made.
+
+Without it the fixture is not isolated from the person running it. `resolveDataDir`
+takes `dataDir` of `$XDG_CONFIG_HOME/diffalanche/config.json` relative to the
+root ([03-storage.md](03-storage.md)), which is right for a real root and wrong
+for a fixture: a user config holding `{ "dataDir": ".agents/diffalanche" }` sent
+the harness to `<fixture>/.agents/diffalanche`, where the generated session is
+not, and the suites of a machine with that file could not start while the same
+commit was green everywhere else. The variable and `--data-dir` on the command
+line were the two workarounds; neither is needed now, and `bun run perf`,
+`bun run test:ui` and `bun run test:e2e` take none.
+
 The generator reaches its line target in two passes. A planned edit of `d` old
 lines into `i` new ones does not yield `d + i` changed lines: realistic code
 repeats `}` and blank lines, git matches those across the replaced block and

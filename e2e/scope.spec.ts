@@ -4,6 +4,7 @@ import { join } from "node:path";
 import { fileURLToPath } from "node:url";
 import type { APIRequestContext, Page } from "@playwright/test";
 import { expect, test } from "@playwright/test";
+import { dataDirOf } from "../src/core/storage/index.ts";
 
 /**
  * The scope on the screen (DA-55): the `SCOPE` pill, the editor over the whole
@@ -18,12 +19,9 @@ import { expect, test } from "@playwright/test";
 const root = fileURLToPath(new URL("..", import.meta.url));
 const FIXTURE = ".perf/e2e";
 const SESSION = "synth";
-/**
- * Where the fixture's data directory is. It follows `DIFFALANCHE_DATA_DIR`,
- * which this suite needs on a machine whose user configuration sets a relative
- * `dataDir` — the workaround DA-54.1 owns.
- */
-const DATA = join(root, FIXTURE, process.env.DIFFALANCHE_DATA_DIR ?? ".diffalanche");
+/** Where the fixture's data directory is: the configuration the harness
+ * neutralised names none, so it is the default one under the root (DA-54.1). */
+const DATA = dataDirOf(join(root, FIXTURE));
 
 /**
  * Exactly this path and not one it is a prefix of. The fixture holds both

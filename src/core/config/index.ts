@@ -5,8 +5,8 @@
  */
 import { execFile } from "node:child_process";
 import { readFile } from "node:fs/promises";
-import { homedir, userInfo } from "node:os";
-import { resolve } from "node:path";
+import { homedir, tmpdir, userInfo } from "node:os";
+import { join, resolve } from "node:path";
 import { promisify } from "node:util";
 import { asObject, asString, asStrings, fail, parseJson } from "../storage/fields.ts";
 import { dataDirOf } from "../storage/index.ts";
@@ -66,6 +66,15 @@ export function userConfigPath(configHome: string): string {
 export function defaultConfigHome(env: NodeJS.ProcessEnv = process.env): string {
   const xdg = env.XDG_CONFIG_HOME;
   return xdg ? xdg : resolve(homedir(), ".config");
+}
+
+/** The environment a test fixture is served under, so that neither the shell
+ * nor the user config names its data directory (reference/11-perf.md). */
+export function fixtureEnv(): Record<string, string> {
+  return {
+    [DATA_DIR_ENV]: "",
+    XDG_CONFIG_HOME: join(tmpdir(), "diffalanche-fixture-config-home"),
+  };
 }
 
 /** Defaults without a config file: `docs/SPEC.md` section 7. */
