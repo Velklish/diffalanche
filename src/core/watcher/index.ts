@@ -41,10 +41,18 @@ export type { ActivityEvent, ActivityLog, ActivityVerb } from "./activity.ts";
 export { ACTIVITY_CAPACITY, createActivityLog, EDITING_WINDOW_MS } from "./activity.ts";
 export type { EventBus, Listener, WatcherEvent, WatcherEventType } from "./bus.ts";
 export { createEventBus } from "./bus.ts";
-export type { Ignore, PathKind, TreeSource, TreeWatcher, TreeWatcherOptions } from "./tree.ts";
+export type {
+  Ignore,
+  PathKind,
+  ProbeWrite,
+  TreeSource,
+  TreeWatcher,
+  TreeWatcherOptions,
+} from "./tree.ts";
 export {
   DEFAULT_POLL_INTERVAL_MS,
   PROBE_TIMEOUT_MS,
+  probeRecursiveWatch,
   supportsRecursiveWatch,
   watchTree,
 } from "./tree.ts";

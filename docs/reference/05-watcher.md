@@ -71,7 +71,10 @@ a second has passed. Writing once is not enough — Bun's watch arms a moment
 after `watch` returns, and a single write lands before it does, which would
 answer "this runtime cannot recurse" for the rest of the run. It runs once per
 process — the answer is a property of the runtime, not of a directory — and no
-reviewed repository is touched by it. Measured with that probe: Node 25.2 and
+reviewed repository is touched by it. Every write it makes is caught: a disk
+that fills between the `mkdir` and the write answers "no" at once instead of
+ending the process, because the probe's contract is a boolean and never a
+throw, and its one caller has no error path. Measured with that probe: Node 25.2 and
 Bun 1.3 on macOS both recurse and both report the path relative to the watched
 directory. A watch that fails after it started — an error from inotify or
 FSEvents — closes itself and the walk takes over, rather than ending the process

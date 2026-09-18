@@ -175,7 +175,9 @@ export function streamEvents(events: EventStream, heartbeatMs: number = HEARTBEA
         end: () => {
           closed = true;
           wake?.();
-          void stream.close();
+          // The client is already gone by every path that ends a stream; a
+          // close that rejects must not become an unhandled rejection.
+          void stream.close().catch(() => undefined);
         },
       };
 

@@ -46,6 +46,7 @@ import {
   dataIgnore,
   dropsVerdicts,
   IGNORE_CACHE_LIMIT,
+  probeRecursiveWatch,
   repositoryIgnore,
   rescanRepository,
   snapshotSessions,
@@ -801,6 +802,18 @@ describe("watching a tree", () => {
     // Node from 20.13 and Bun from 1.1 recurse on macOS, Linux, and Windows; a
     // runtime that does not is what the probe exists to catch.
     expect(await supportsRecursiveWatch(config.dataDir)).toBe(true);
+  }, 30_000);
+
+  it("answers instead of throwing when the probe's first write fails", async () => {
+    const dir = mkdtempSync(join(tmpdir(), "diffalanche-probe-"));
+    try {
+      // A disk that fills between `mkdir` and the write: detached from the
+      // promise the probe awaits, this rejection ends the process.
+      const answer = await probeRecursiveWatch(dir, () => Promise.reject(new Error("ENOSPC")));
+      expect(answer).toBe(false);
+    } finally {
+      rmSync(dir, { recursive: true, force: true });
+    }
   }, 30_000);
 
   it("takes its baseline before it says it is watching", async () => {

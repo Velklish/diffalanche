@@ -216,7 +216,14 @@ export async function supportsRecursiveWatch(dir: string): Promise<boolean> {
 /** The answer of this process, once it has one. */
 let probed: Promise<boolean> | null = null;
 
-async function probeRecursiveWatch(dir: string): Promise<boolean> {
+/** How the probe writes. A test that has to make the write fail brings its own. */
+export type ProbeWrite = (path: string, data: string) => Promise<void>;
+
+/** The probe itself, past the memo of `supportsRecursiveWatch`: answers, never throws. */
+export async function probeRecursiveWatch(
+  dir: string,
+  write: ProbeWrite = writeFile,
+): Promise<boolean> {
   let probe: string | null = null;
   try {
     await mkdir(dir, { recursive: true });
@@ -239,7 +246,7 @@ async function probeRecursiveWatch(dir: string): Promise<boolean> {
       // after `watch` returns — Bun's does — would miss a single write, and the
       // answer would be "this runtime cannot recurse" for the rest of the run.
       const writing = setInterval(() => {
-        void writeFile(join(nested, "deep"), `probe ${Date.now()}`).catch(() => undefined);
+        void write(join(nested, "deep"), `probe ${Date.now()}`).catch(() => undefined);
       }, PROBE_WRITE_MS);
       try {
         watcher = watch(probe as string, { recursive: true, persistent: false }, (_e, name) => {
@@ -252,7 +259,9 @@ async function probeRecursiveWatch(dir: string): Promise<boolean> {
         return;
       }
       watcher.on("error", () => done(false));
-      void writeFile(join(nested, "deep"), "probe");
+      // A filesystem already refusing writes answers now rather than after the
+      // timeout, and the probe still returns a boolean instead of throwing.
+      void write(join(nested, "deep"), "probe").catch(() => done(false));
     });
   } catch {
     return false;

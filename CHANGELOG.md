@@ -224,6 +224,17 @@ and `bun run release` refuses a version that has no section. See
   session. It now renames the lock aside first, the way a takeover does, and
   deletes the directory it read the token from — one rename more on a path that
   every write ends with. See [03-storage.md](docs/reference/03-storage.md).
+- **A failed write inside the recursive-watch probe no longer ends the server**
+  (DA-92). The probe writes into a temporary directory until the watch answers,
+  and the first of those writes was detached from the promise the probe awaits:
+  a rejection there — a full disk, `EIO`, a quota — escaped every `try` around
+  it and, with no `unhandledRejection` handler in the process, aborted
+  `diffalanche serve` mid-start instead of answering the question the probe
+  exists to answer. It is caught now and answers `false` at once rather than
+  after the timeout, so a filesystem that is already refusing writes starts the
+  server on the walk that much sooner. The same detached shape in the SSE
+  stream's `end` — `void stream.close()` in `src/server/events.ts` — is caught
+  too. See [05-watcher.md](docs/reference/05-watcher.md).
 - **A watch that dies mid-session no longer loses the window it dies in**
   (DA-85). When an error from inotify or FSEvents handed a tree to the walk, the
   walk opened with a silent baseline and every edit made between the failure and
