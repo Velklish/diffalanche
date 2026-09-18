@@ -114,11 +114,15 @@ $ diffalanche reply c_eft2jg \
 r_1 added to c_eft2jg
 ```
 
-`--body -` for anything with a newline in it:
+`--body -` for anything with a newline in it — here a decline, three sentences
+at the most, as the skill's reply rules require:
 
 ```
 $ diffalanche reply c_j6v2hl --author claude --role agent --body - <<'BODY'
-Declined, and here is why. …
+The retry stays: the 502 comes from the upstream balancer, not from our client,
+and one retry is what the SLA assumes. Removing it moves the failure to every
+caller instead of one place. A trace showing the retry masking a real fault
+would change this.
 BODY
 r_1 added to c_j6v2hl
 ```

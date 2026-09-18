@@ -41,8 +41,10 @@ gets it wrong on its own:
   not the skill's, so an agent that never read a skill cannot close a thread
   either; the skills exist so an agent does not spend a turn discovering that.
 
-Reply rules are `docs/SPEC.md` section 9: one or two sentences when the issue is
-fixed, the full reasoning when the agent declines. Several agents on one session
+Reply rules are `docs/SPEC.md` section 9: at most three sentences — one when the
+issue is fixed, three when the agent declines — with no restating of the
+comment, no greeting and no lists; the skill shows a paragraph-long reply beside
+its two-sentence form so the cap has something to imitate. Several agents on one session
 narrow with `--repo` and sign with their own `--author`; the session's lock lets
 their writes interleave without losing a message.
 

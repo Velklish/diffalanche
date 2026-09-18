@@ -97,8 +97,8 @@ declined, one `reply` each:
 
 ```sh
 diffalanche reply c_j6v2hl --body - --author claude --role agent <<'EOF'
-Typed the predicate: normalize187 now returns CargoItem | undefined and the
-filter is a type guard, so CargoSet187 no longer admits undefined.
+Typed the predicate: normalize187 returns CargoItem | undefined and the filter
+is a type guard, so CargoSet187 no longer admits undefined; cargos-api tests green.
 EOF
 ```
 
@@ -108,11 +108,35 @@ EOF
   defaults (`agent`, `agent`), but naming yourself is what lets a human tell two
   agents apart in the thread and in the activity feed.
 
-**Reply rules.** One or two sentences when the issue is fixed: what you changed,
-not how you feel about it. The full reasoning when you decline: what the comment
-asked, why the code is right as it stands or why the fix costs more than it
-saves, and what you would need to change your mind. A declined comment is a
-conversation, and the human reads only what you wrote.
+**Reply rules.** A reply is at most three sentences, and every sentence carries
+something the human does not already have. A fixed finding is one sentence — what
+changed — and a second only when the fix touched something the comment did not
+name. A declined finding is three: what stands, why, and what would change the
+answer. Nothing restates the comment, opens with a greeting or "I have", or
+closes with an offer; the check you ran is a clause ("tests green", "ran
+nothing"), not a paragraph; a reply body carries no headings and no lists. The
+human reads the thread to learn one thing — whether the finding is closed and by
+what — and a paragraph makes them look for it.
+
+The reply an agent writes on its own, and its two-sentence form:
+
+> I've reviewed the comment about the null check in normalize187. You're right
+> that the filter did not narrow the type, so CargoSet187 could still contain
+> undefined entries. I changed normalize187 to return CargoItem | undefined and
+> rewrote the filter as a type guard, which makes the set's element type
+> CargoItem. I ran the cargos-api unit tests and they pass. Let me know if you'd
+> like me to add a regression test as well.
+
+> Typed the predicate: normalize187 returns CargoItem | undefined and the filter
+> is a type guard, so CargoSet187 no longer admits undefined; cargos-api tests
+> green.
+
+A decline in its three:
+
+> The retry stays: the 502 comes from the upstream balancer, not from our
+> client, and one retry is what the SLA of loads-search assumes. Removing it
+> moves the failure to every caller instead of one place. A trace showing the
+> retry masking a real fault would change this.
 
 **7. Never close a thread, and never close the task.** `resolve` and `reopen`
 are the human's; they need `--role human` and refuse anything else with exit

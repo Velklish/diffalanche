@@ -104,6 +104,12 @@ and `bun run release` refuses a version that has no section. See
 
 ### Changed
 
+- **An agent's reply under a comment is at most three sentences** (DA-108). One
+  when the finding is fixed, three when it is declined, with no restating of the
+  comment, no greeting and no lists. `skills/diffalanche-apply` shows a
+  paragraph-long reply beside its two-sentence form, and the decline example in
+  its CLI reference has the three sentences; `docs/SPEC.md` section 9 carries
+  the cap.
 - **A comment in code is at most two lines** (DA-57, [ADR-011](docs/adr/adr-011-comment-length.md)).
   `//`, `/* */` and JSDoc alike, across `.ts`, `.tsx`, `.css`, `.yml` and shell.
   Knowledge that does not fit moves to its `docs/reference/` section, or to an ADR
