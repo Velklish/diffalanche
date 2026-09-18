@@ -34,6 +34,23 @@ export type PerfApi = {
    * budget have to be on one clock ([11-perf.md](../../docs/reference/11-perf.md)).
    */
   liveUpdate: { repo: string; at: number } | null;
+  /** What each `settle()` measured ([08-ui.md], DA-55.4). */
+  settles: Settled[];
+};
+
+/** One correction of the reading position; `grewAfter` is the growth that
+ * arrived after the measurement ([08-ui.md](../../docs/reference/08-ui.md)). */
+export type Settled = {
+  /** `null` when the probe found nothing to anchor to. */
+  delta: number | null;
+  heightBefore: number;
+  /** The first frame's height; kept for diagnosis, not for the verdict. */
+  heightAtMeasure: number;
+  /** The height on the frame the loop stopped at: what `grewAfter` counts from. */
+  heightAtEnd: number;
+  heightAfter: number;
+  grewAfter: number;
+  corrected: boolean;
 };
 
 const notReady = () => Promise.reject(new Error("the review has not rendered yet"));
@@ -49,6 +66,7 @@ export const perf: PerfApi = {
   jumpToFile: notReady,
   switchSession: notReady,
   liveUpdate: null,
+  settles: [],
 };
 
 /** Resolves after the browser has painted the frame the caller's work produced. */

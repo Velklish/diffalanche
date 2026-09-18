@@ -202,6 +202,16 @@ and `bun run release` refuses a version that has no section. See
 
 ### Fixed
 
+- **A live patch that lands late no longer costs the reader their place**
+  (DA-55.4). The scroll anchoring waited one frame and then measured; a store
+  write only schedules React's work, and under load React could land it after
+  that frame, so the measurement read a DOM without the patch, found nothing to
+  correct, and let the whole growth arrive unannounced. The anchor is watched
+  until the patch is really on the page — a move ends the wait, and so does the
+  page's own height changing, which is what tells a landed patch from one that
+  has not landed yet; a reader who scrolls during the wait ends it untouched.
+  `window.__perf.settles` is the record the mechanism was caught with and it
+  stays, so the next occurrence is readable instead of guessed at.
 - **A refused write no longer deletes an agent's reply that arrived while it was
   in flight** (DA-93). The rollback restored the thread as the write had found
   it, and a `reply-added` frame in the meantime had already replaced that thread

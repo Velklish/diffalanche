@@ -181,6 +181,12 @@ test("an edit patches its own card, holds the reading position, and leaves the c
     expect(after.mutations.untouched).toBe(0);
     // The reading position held: what was under the reader is still there.
     expect(Math.abs(after.top - marks.top)).toBeLessThan(ROW_HEIGHT);
+    // And the record says the correction was made against the patch and not
+    // past it: `grewAfter` counts from the frame the loop stopped on (08-ui.md).
+    const settled = await page.evaluate(() => window.__perf.settles.at(-1) ?? null);
+    expect(settled).not.toBeNull();
+    expect(settled?.corrected).toBe(true);
+    expect(settled?.grewAfter).toBe(0);
     // And the form on the other file is where it was, with what was typed in it.
     await expect(page.locator(".composer-field")).toHaveValue("half a sentence");
   } finally {

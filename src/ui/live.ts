@@ -24,6 +24,12 @@ export type Connection = "connecting" | "watching" | "reconnecting";
 /** A shift smaller than this is not worth a scroll: a sub-pixel jitter is not a jump. */
 const ANCHOR_EPSILON = 1;
 
+/** How many frames the anchor is watched for; one is what missed a late commit. */
+const SETTLE_FRAMES = 4;
+
+/** How many corrections the record keeps; the harness reads a handful. */
+const SETTLES_KEPT = 200;
+
 /** How far below the probe the search for the reading column goes, and by how much. */
 const PROBE_DEPTH = 240;
 const PROBE_STEP = 12;
@@ -33,7 +39,7 @@ const PROBE_STEP = 12;
  * applied. Content that changes above it moves it down the page; putting it
  * back where it was is what keeps the reading position through an agent's edit.
  */
-type Anchor = { element: Element; top: number } | null;
+type Anchor = { element: Element; top: number; scrollY: number } | null;
 
 export function startLive(): () => void {
   const store = () => useStore.getState();
@@ -206,16 +212,56 @@ function capture(): Anchor {
   for (let y = PROBE_Y; y < PROBE_Y + PROBE_DEPTH; y += PROBE_STEP) {
     const element = document.elementFromPoint(x, y);
     if (element?.closest(".centre")) {
-      return { element, top: element.getBoundingClientRect().top };
+      return { element, top: element.getBoundingClientRect().top, scrollY: window.scrollY };
     }
   }
   return null;
 }
 
-/** The patch is painted, and then the reading position is put back where it was. */
+/** The reading position, put back once the patch is really on the page and not
+ * merely a frame later ([08-ui.md](../../docs/reference/08-ui.md), DA-55.4). */
 async function settle(anchor: Anchor): Promise<void> {
-  await afterPaint();
-  if (anchor === null || !anchor.element.isConnected) return;
-  const delta = anchor.element.getBoundingClientRect().top - anchor.top;
-  if (Math.abs(delta) >= ANCHOR_EPSILON) window.scrollBy(0, delta);
+  const heightBefore = document.documentElement.scrollHeight;
+  let heightAtMeasure = heightBefore;
+  let heightAtEnd = heightBefore;
+  let corrected = false;
+  let delta: number | null = null;
+
+  for (let frame = 0; frame < SETTLE_FRAMES; frame += 1) {
+    await afterPaint();
+    const height = document.documentElement.scrollHeight;
+    heightAtEnd = height;
+    if (frame === 0) heightAtMeasure = height;
+    if (anchor === null || !anchor.element.isConnected) break;
+    // The reader scrolled while this was waiting. Their scroll is not the
+    // patch's, and taking it back out would be the page fighting them.
+    if (window.scrollY !== anchor.scrollY) break;
+    const moved = anchor.element.getBoundingClientRect().top - anchor.top;
+    delta = moved;
+    if (Math.abs(moved) >= ANCHOR_EPSILON) {
+      window.scrollBy(0, moved);
+      corrected = true;
+      break;
+    }
+    // Nothing moved: either the patch landed above nothing, or it has not
+    // landed — and the page's own height is what tells the two apart.
+    if (height !== heightBefore) break;
+  }
+  record({ delta, heightBefore, heightAtMeasure, heightAtEnd, corrected });
+}
+
+/** The record DA-55.4 asks for; `grewAfter` counts from where the loop stopped,
+ * so it is the growth `settle()` never saw ([08-ui.md](../../docs/reference/08-ui.md)). */
+function record(of: {
+  delta: number | null;
+  heightBefore: number;
+  heightAtMeasure: number;
+  heightAtEnd: number;
+  corrected: boolean;
+}): void {
+  if (perf.settles.length >= SETTLES_KEPT) return;
+  void afterPaint().then(() => {
+    const heightAfter = document.documentElement.scrollHeight;
+    perf.settles.push({ ...of, heightAfter, grewAfter: heightAfter - of.heightAtEnd });
+  });
 }
