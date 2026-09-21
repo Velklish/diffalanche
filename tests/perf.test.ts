@@ -246,7 +246,9 @@ describe("the fixture the gate may erase", () => {
     // rendered without the message, and the frame names which refusal fired.
     expect((run as { stderr?: string }).stderr ?? "").toMatch(/at assertErasable \(/);
     expect(readdirSync(foreign)).toEqual(["not-ours.txt"]);
-  });
+    // Spawning Bun and its import graph is seconds on a busy machine, and
+    // Vitest's own five are not enough: the child's 30 s cap is the real one.
+  }, 30_000);
 });
 
 describe("a line the gate has no number for", () => {
