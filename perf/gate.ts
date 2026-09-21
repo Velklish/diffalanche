@@ -9,6 +9,7 @@ import { appendFileSync, existsSync, rmSync } from "node:fs";
 import { join } from "node:path";
 import { fixtureEnv } from "../src/core/config/index.ts";
 import { evaluate, formatTable, GATE_VARIANT, RUNNER_ALLOWANCE } from "./budgets.ts";
+import { assertErasable } from "./fixture.ts";
 import type { Measurement } from "./harness.ts";
 import { parseArgs } from "./harness.ts";
 
@@ -22,8 +23,12 @@ const ENV = { ...process.env, ...fixtureEnv() };
  * without the `current` pointer has no review session, and the server would
  * refuse the review — which reads as a broken server rather than as a stale
  * directory. The check is the newest file the generator learned to write.
+ *
+ * What may be erased at all is decided first, by `assertErasable`: the gate is
+ * the process that deletes, so it is the process that asks (DA-63).
  */
 function prepare(fixture: string): void {
+  assertErasable(fixture);
   const current = join(fixture, ".diffalanche", "current");
   if (!existsSync(fixture) || !existsSync(current)) {
     rmSync(fixture, { recursive: true, force: true });

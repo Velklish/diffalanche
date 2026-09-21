@@ -1,8 +1,18 @@
-import { describe, expect, it } from "vitest";
+import { execFile } from "node:child_process";
+import { mkdirSync, mkdtempSync, readdirSync, rmSync, writeFileSync } from "node:fs";
+import { homedir, tmpdir } from "node:os";
+import { dirname, join, resolve } from "node:path";
+import { fileURLToPath } from "node:url";
+import { promisify } from "node:util";
+import { afterAll, beforeAll, describe, expect, it } from "vitest";
 import type { Budget } from "../perf/budgets.ts";
 import { BUDGETS, evaluate, formatTable, RUNNER_ALLOWANCE } from "../perf/budgets.ts";
+import { assertErasable } from "../perf/fixture.ts";
 import type { Measurement } from "../perf/harness.ts";
 import { parseArgs } from "../perf/harness.ts";
+
+const execFileAsync = promisify(execFile);
+const REPO_ROOT = resolve(dirname(fileURLToPath(import.meta.url)), "..");
 
 function measurement(over: Partial<Measurement> = {}): Measurement {
   return {
@@ -152,5 +162,64 @@ describe("perf gate", () => {
       "Opening the comment form",
     ]);
     expect(formatTable(rows, 2)).toContain("| 61 ms | FAIL |");
+  });
+});
+
+describe("the fixture the gate may erase", () => {
+  let work: string;
+
+  beforeAll(() => {
+    work = mkdtempSync(join(tmpdir(), "da-perf-fixture-"));
+  });
+
+  afterAll(() => {
+    rmSync(work, { recursive: true, force: true });
+  });
+
+  it("refuses the repository, its ancestors and the home directory", () => {
+    for (const path of [REPO_ROOT, dirname(REPO_ROOT), dirname(dirname(REPO_ROOT)), homedir()]) {
+      expect(() => assertErasable(path)).toThrow(/the repository, an ancestor of it, or the home/);
+    }
+    // The flag the entry names as the worst case: `.` resolved from the root.
+    expect(() => assertErasable(REPO_ROOT)).toThrow(/--fixture names a directory the gate owns/);
+  });
+
+  it("refuses a directory that is not empty and holds no .diffalanche, untouched", () => {
+    const foreign = join(work, "foreign");
+    mkdirSync(foreign);
+    writeFileSync(join(foreign, "not-ours.txt"), "keep me\n");
+    expect(() => assertErasable(foreign)).toThrow(/is not empty and holds no \.diffalanche/);
+    expect(readdirSync(foreign)).toEqual(["not-ours.txt"]);
+  });
+
+  it("allows a missing path, an empty directory, and an earlier run", () => {
+    expect(() => assertErasable(join(work, "not-there"))).not.toThrow();
+    const empty = join(work, "empty");
+    mkdirSync(empty);
+    expect(() => assertErasable(empty)).not.toThrow();
+    const stale = join(work, "stale");
+    mkdirSync(join(stale, ".diffalanche"), { recursive: true });
+    writeFileSync(join(stale, "leftover.txt"), "from an older generator\n");
+    expect(() => assertErasable(stale)).not.toThrow();
+  });
+
+  it("refuses a path that exists and is not a directory", () => {
+    const file = join(work, "a-file");
+    writeFileSync(file, "not a directory\n");
+    expect(() => assertErasable(file)).toThrow(/is not a directory/);
+  });
+
+  it("stops the gate itself before it deletes, not only the guard in isolation", async () => {
+    const foreign = join(work, "gate-run");
+    mkdirSync(foreign);
+    writeFileSync(join(foreign, "not-ours.txt"), "keep me\n");
+    const run = await execFileAsync("bun", ["perf/gate.ts", "--fixture", foreign], {
+      cwd: REPO_ROOT,
+      timeout: 30_000,
+      encoding: "utf8",
+    }).catch((error: { code?: number; stderr?: string }) => error);
+    expect((run as { code?: number }).code).toBe(1);
+    expect((run as { stderr?: string }).stderr ?? "").toMatch(/is not empty and holds no/);
+    expect(readdirSync(foreign)).toEqual(["not-ours.txt"]);
   });
 });

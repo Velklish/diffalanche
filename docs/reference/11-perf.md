@@ -370,6 +370,19 @@ bun run perf -- --runs 5           # more runs
 bun run perf -- --fixture /tmp/x   # another fixture
 ```
 
+**`--fixture` names a directory the gate owns and erases.** The gate empties it
+before regenerating, so it asks the generator's own question first, in the
+process that does the deleting: an existing path is accepted only when it is an
+empty directory or one holding a `.diffalanche/` from an earlier run, and a
+path that exists and is not a directory is refused. On top of that it refuses
+three paths whatever they contain — the repository, every directory above it,
+and the home directory — because none of them is ever a fixture. `bun run perf
+-- --fixture .` from the repository root is the case the rule exists for: the
+checkout has no `.diffalanche/`, and before the guard the gate would have taken
+the working tree and its `.git` with it. Refusal is one line on stderr naming
+the path, exit code 1, and nothing deleted. `perf/fixture.ts` holds the check;
+`scripts/synth.ts` keeps its own, because it is also run by hand.
+
 The gate makes the synthetic review if `.perf/fixture` is missing **or was made
 by an older generator** — a fixture without the `current` pointer has no review
 session, and the server refusing the review reads as a broken server rather than

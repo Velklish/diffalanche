@@ -202,6 +202,15 @@ and `bun run release` refuses a version that has no section. See
 
 ### Fixed
 
+- **The perf gate asks what it is about to erase** (DA-63). `--fixture` names a
+  directory the gate owns and empties, and the guard that makes that safe lived
+  in `scripts/synth.ts` — the process the gate spawns *after* deleting, so it
+  never saw the path. The gate now asks first: an existing path is accepted only
+  when it is an empty directory or one holding a `.diffalanche/` from an earlier
+  run, and the repository, every directory above it and the home directory are
+  refused whatever they contain. `bun run perf -- --fixture .` from the
+  repository root would have taken the working tree and its `.git`; it now exits
+  1 with the path named and nothing deleted.
 - **A live patch that lands late no longer costs the reader their place**
   (DA-55.4). The scroll anchoring waited one frame and then measured; a store
   write only schedules React's work, and under load React could land it after
