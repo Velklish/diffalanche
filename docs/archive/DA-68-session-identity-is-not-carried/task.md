@@ -21,7 +21,7 @@ Since DA-55 a window can be opened on a task that is not `current`, and decision
 
 They are emitted from `reloadComments`, which reads one session — `readCurrent`'s ([src/core/watcher/index.ts:288-291](../../../src/core/watcher/index.ts)), the stream is global with no per-connection filter ([src/server/events.ts](../../../src/server/events.ts)), and [src/ui/live.ts:78-86](../../../src/ui/live.ts) subscribes with no guard at all — unlike `session-changed` six lines further down, which does hold one: `const held = store().reviewName; if (held !== null && held !== event.name) return;` (live.ts:93-94). `thread()` then fetches `onTask('/api/comments/<id>')` (live.ts:166), `onTask` appends this window's `?review=` (store.ts:1700-1704), the domain refuses with `no-such-comment` ([src/core/domain/comments.ts:208](../../../src/core/domain/comments.ts)), `statusOf` maps it to 404 ([src/server/errors.ts:63-71](../../../src/server/errors.ts)), and the queue's catch turns the throw into a toast (live.ts:45-51). A window on `?review=ls-7` therefore shows *«the thread c_… could not be read: the server answered 404»* for every comment, reply and resolve an agent writes in the current session.
 
-The silent half of this — a window on a named task hearing nothing about its **own** threads — is already [DA-55.1](DA-55.1-watcher-follows-one-session.md), and [08-ui.md:166-170](../../reference/08-ui.md) documents it. That prose is slightly wrong in a way that matters here: it says the frames "never name a thread of another task", and what happens is that they do arrive and 404. Fixing DA-55.1 as it is written does not remove the toast: a watcher following several sessions emits more of these ids, not fewer, and the frames still say nothing about which session they came from.
+The silent half of this — a window on a named task hearing nothing about its **own** threads — is already [DA-55.1](../DA-55.1-watcher-follows-one-session/task.md), and [08-ui.md:166-170](../../reference/08-ui.md) documents it. That prose is slightly wrong in a way that matters here: it says the frames "never name a thread of another task", and what happens is that they do arrive and 404. Fixing DA-55.1 as it is written does not remove the toast: a watcher following several sessions emits more of these ids, not fewer, and the frames still say nothing about which session they came from.
 
 **The diff patch is applied to whoever is in the store when it lands.** `diffChanged` stamps the task at request time and never re-checks it (live.ts:143-152), and `applyRepositoryDiff` takes no session argument; when the repository is unknown to the review on screen it *appends* it (store.ts:1186-1189, `at < 0 ? [...repositories, merged].sort(...)`). There is no `AbortController` anywhere in `src/ui`. So a task switch while a repository diff is in flight merges the current session's change set into the task the reader switched to — a repository section that is not in that task's scope, computed against another base, with the composer usable on its lines.
 
@@ -36,9 +36,9 @@ The silent half of this — a window on a named task hearing nothing about its *
 
 ## Out of scope
 
-- Teaching the watcher to follow more than one session: that is [DA-55.1](DA-55.1-watcher-follows-one-session.md), and this task has to work whether or not it lands.
-- The stale change set a named task's document is built from, which is [DA-55.3](DA-55.3-named-task-document-is-stale.md).
-- The scope editor reading candidates from the wrong session, filed as [DA-77](DA-77-scope-editor-picks-from-the-wrong-session.md).
+- Teaching the watcher to follow more than one session: that is [DA-55.1](../DA-55.1-watcher-follows-one-session/task.md), and this task has to work whether or not it lands.
+- The stale change set a named task's document is built from, which is [DA-55.3](../DA-55.3-named-task-document-is-stale/task.md).
+- The scope editor reading candidates from the wrong session, filed as [DA-77](../DA-77-scope-editor-picks-from-the-wrong-session/task.md).
 
 ## Verification
 

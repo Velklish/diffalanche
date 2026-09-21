@@ -168,7 +168,7 @@ so the flag narrows nothing — it chooses the window. One thing it does not
 change is which session the watcher follows: that is the current one whatever
 the page asks for, so a window on another task hears no live event about *its*
 comments ([07-server.md](07-server.md),
-[DA-55.1](../backlog/queue/DA-55.1-watcher-follows-one-session.md)).
+[DA-55.1](../archive/DA-55.1-watcher-follows-one-session/task.md)).
 
 **`serve` exits non-zero only for what stops it from starting**, and everything
 after the socket opens is a line rather than an exit. A file of the data

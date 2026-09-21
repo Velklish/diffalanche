@@ -122,9 +122,9 @@ that part is a hypothesis about timing, not a measurement.
 ## Out of scope
 
 - The named task's own staleness, which is filed: the watcher follows one
-  session ([DA-55.1](DA-55.1-watcher-follows-one-session.md)) and the document of
+  session ([DA-55.1](../DA-55.1-watcher-follows-one-session/task.md)) and the document of
   a named task is built from a cache the watcher never refreshes
-  ([DA-55.3](DA-55.3-named-task-document-is-stale.md)). Those are about
+  ([DA-55.3](../DA-55.3-named-task-document-is-stale/task.md)). Those are about
   `?review=<name>`; this is about the session the watcher does follow.
 - The other branches of the `serve.ts` subscriber. Dropping `sessions-changed`
   (serve.ts:102) is a separate decision with its own comment, and nothing here

@@ -1,0 +1,9 @@
+# DA-77 · Result
+
+**Closed 2026-09-22.** Completed. The scope editor picks from its own task. `?review=<name>` is the task a window is on, and `docs/reference/08-ui.md` states the rule that the name is read once and from then on every request of the page carries it, reads and writes alike, so that a window cannot read one task and write into another. The scope editor broke that rule on the read side: `GET /api/sessions/candidates` computed the candidate list against the **current** session's base while the picked list was written into the window's own task, and the list had no session to be about all the way down. The route now carries the session the window names, and the candidates are read against the base of the task asked about.
+
+**Verification.** The track's gate rounds and the fifth review round; the accepted state is the integration gate on `e3224ca` — `gates 7, green 6`, `bun run test` and `bun run test:bun` each 39 files / 622 tests, `bun run test:ui` 95 passed. The full record is in [DA-24.1's result](../DA-24.1-session-switch-cold-path/result.md); this commit is `24f34aa` there, `patch-id` **identical** to `2b63de2` across the rebase.
+
+**A verdict name was replaced, and the replacement is what covers it.** `tests/scope.test.ts` lost "offers the whole root as candidates, whatever the task is about" and gained "offers the whole root, and reads it against the base of the task asked about". The half that is still true — the list is the whole root — is asserted by the replacement. The clause that went, "whatever the task is about", *was* the defect. Nothing the old verdict covered is left uncovered; it is named here because an earlier handover of this track reported `removed: []`.
+
+**Documentation in the same pass.** `docs/reference/07-server.md` for the candidates route, and a `### Fixed` entry in `CHANGELOG.md`.

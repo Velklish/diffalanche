@@ -30,7 +30,7 @@ That brackets the cause to the review round itself, whose diff is small: one ove
 ## Out of scope
 
 - The perf budget's own headroom off CI ([DA-54.3](../DA-54.3-perf-budget-headroom/task.md)).
-- The named-task routes, which this budget does not measure at all ([DA-55.3](../../backlog/queue/DA-55.3-named-task-document-is-stale.md)).
+- The named-task routes, which this budget does not measure at all ([DA-55.3](../DA-55.3-named-task-document-is-stale/task.md)).
 
 ## Verification
 
