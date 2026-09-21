@@ -20,10 +20,13 @@ notifications cannot be trusted ([05-watcher.md](05-watcher.md)). `close()` stop
 and the socket.
 
 Starting does four things before the socket opens: it creates the data directory
-if it is not there, scans the root, reads the change set of the current session
-into `diff.json`, and starts the watcher of
-[05-watcher.md](05-watcher.md). A root with no current session skips the third:
-the server starts anyway, and `GET /api/review` is what says so.
+if it is not there, scans the root, starts the watcher of
+[05-watcher.md](05-watcher.md), and reads the change set of the current session
+into `diff.json`. The watcher comes before that read, because it is the watcher
+that says which session's cache may be trusted
+([The review document](#the-review-document)). A root with no current session
+skips the last: the server starts anyway, and `GET /api/review` is what says
+so.
 
 The server listens on `127.0.0.1` and nowhere else. There is no host to pass and
 no flag that changes it (`docs/SPEC.md` section 11). A port that is taken, and a
@@ -193,6 +196,55 @@ every repository of the scope and writes it. A document is built once per
 session and serialised once per change — the review is megabytes, and
 re-serialising it per request would charge every reload for it.
 
+**A cache that matches on base and scope is not thereby fresh.** `sameBase` and
+`sameScope` say that `diff.json` answers the same *question* the session is
+asking; neither says it holds the current *answer*, and the working tree moves
+under it while nothing compares the two. The only thing that refreshes a change
+set is the watcher, and the watcher rescans one session — the current one
+([05-watcher.md](05-watcher.md)). So the server trusts `diff.json` for the
+session the watcher follows and reads the working tree for every other one. The
+cost of opening a task is its scope's repositories rather than the root's, and
+the read is written back, so anchor capture reads a file that says what the
+screen says ([04-domain.md](04-domain.md)).
+
+### Keeping a held document honest
+
+A held document's change set ages, because only the followed session's is
+refreshed by a rescan. Two different things can make it wrong, and only one of
+them has a signal today.
+
+**The working tree moved.** The watcher reports every repository that moved,
+whatever the current task is about ([05-watcher.md](05-watcher.md)) — its change
+set where the current task's scope covers it, its files where it does not — and
+the server drops every held document whose task could show that repository,
+decided from the scope the document already carries with no disk read. The
+followed session is passed over, because the rescan patches it in place. So a
+window reloaded after the code changed builds again and shows the change; a
+window on a task the change cannot appear in keeps its document and its warm
+switch.
+
+A document still **being built** has no scope to be judged by yet, so the names
+signalled during the build are kept and the question is asked when it resolves,
+against the scope the built document carries. Without that a write anywhere in
+the root would discard a build in flight, and a task under continuous unrelated
+writes would never hold a document at all — which is the opposite of what
+holding one is for.
+
+**The task's own `review.json` changed** — `review base --review X` from a
+terminal, say. There is no signal: the watcher keeps the metadata of one
+session, the current one. A window on X therefore goes on showing the base it
+was opened with until something else drops that document. Closing it is
+[DA-55.1](../backlog/queue/DA-55.1-watcher-follows-one-session.md), which teaches
+the watcher to follow the sessions windows are open on; until it lands, this
+half is open and is stated here rather than implied.
+
+**A comment write is neither.** `POST /api/comments` and the three routes beside
+it re-read the comments of that session and keep its change set, because a
+comment does not move the working tree. The document then carries the
+`session.updatedAt` of the moment it was built — the same thing the watcher's own
+metadata comparison leaves out, and for the same reason: a write bumps
+`updatedAt` without changing what the review *is*.
+
 ### How many documents are held
 
 `DOCUMENT_CACHE_LIMIT` is four. A document is megabytes and so is the string
@@ -219,7 +271,9 @@ for.
 `?review=<name>` answers with the document of that session instead of the
 current one: the address `review new --no-use` prints, so a window can open a
 task without becoming it ([ADR-010](../adr/adr-010-review-task-scope.md)). Its
-document is held like any other.
+document is held like any other, and its change set is read from the working
+tree when it is built, because the watcher refreshes no task but the current
+one.
 
 ### The task a request is about
 
@@ -280,10 +334,12 @@ The refusal is the answer the route already gives — `404` with
 path that leaves the root and a path the change set does not have are the same
 answer, and telling them apart would say which encodings got through.
 
-The *document* of a named task has the same cache under it and no such repair:
-`GET /api/review?review=<name>` trusts a `diff.json` whose base and scope still
-match, so a window reloaded after the code changed shows the change set of the
-last time that task was read. It is named here rather than fixed.
+The *document* of a named task is not served from that cache either:
+`GET /api/review?review=<name>` builds it from a read of the scope's
+repositories, so a window opened after the code changed shows the change it was
+opened to see. That read is paid once per session for as long as the document is
+held, and the document is held only until a repository it could show changes —
+see [Keeping a held document honest](#keeping-a-held-document-honest).
 
 The routes that name their session in the path — `PUT /api/sessions/:name/base`,
 `/scope`, `POST /api/sessions/:name/close`, `/reopen`, `/use` — need no
@@ -297,8 +353,11 @@ current one ([05-watcher.md](05-watcher.md)). `diff-changed` and
 `sessions-changed` are unaffected — the first is about a repository and the
 second walks every session. Closing that gap means teaching the watcher to
 follow more than one session: [DA-55.1](../backlog/queue/DA-55.1-watcher-follows-one-session.md).
-Until it lands, a named task's document goes stale while the window stays open;
-the live update repairs the repository an event names.
+Until it lands, a named task's document is right when it is built, and is
+dropped when a repository it could show changes, so a reload after an edit
+builds it again. What no reload repairs is a change to that task's own
+`review.json`, which nothing signals — see
+[Keeping a held document honest](#keeping-a-held-document-honest).
 
 ### The candidates
 

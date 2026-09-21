@@ -1191,6 +1191,116 @@ describe("a watcher whose watches die under it", () => {
   }, 60_000);
 });
 
+describe("the repository signal", () => {
+  it("names a repository outside the task, and does not rescan it", async () => {
+    // A watcher of its own, on a session scoped to one repository: the suite's
+    // watcher is about the whole root and could not tell the two apart.
+    const changed: string[] = [];
+    const own = createEventBus();
+    const seenHere: WatcherEvent[] = [];
+    own.subscribe((event) => seenHere.push(event));
+    const dataDir = mkdtempSync(join(tmpdir(), "diffalanche-signal-"));
+    mkdirSync(join(dataDir, "reviews", SESSION), { recursive: true });
+    for (const name of ["review.json", "comments.json", "diff.json"]) {
+      const from = join(config.dataDir, "reviews", SESSION, name);
+      if (existsSync(from)) copyFileSync(from, join(dataDir, "reviews", SESSION, name));
+    }
+    const review = JSON.parse(
+      readFileSync(join(dataDir, "reviews", SESSION, "review.json"), "utf8"),
+    ) as { scope: unknown };
+    review.scope = [{ repo: REPO, paths: null }];
+    writeFileSync(join(dataDir, "reviews", SESSION, "review.json"), JSON.stringify(review));
+    writeFileSync(join(dataDir, "current"), `${SESSION}\n`);
+
+    const watching = await startWatcher({
+      config: { ...config, dataDir },
+      scan: found,
+      ...(NATIVE_WATCH ? {} : { recursive: false, pollIntervalMs: 40 }),
+      bus: own,
+      activity: createActivityLog(),
+      onRepositoryChanged: (repo) => changed.push(repo),
+      onError: () => undefined,
+    });
+    const outside = join(root, OTHER_REPO, "signal-outside.ts");
+    const inside = join(root, REPO, "signal-inside.ts");
+    const until = async (holds: () => boolean): Promise<void> => {
+      const deadline = performance.now() + 20_000;
+      while (!holds() && performance.now() < deadline) {
+        await new Promise((done) => setTimeout(done, 5));
+      }
+    };
+    // This watcher is not the suite's, so the suite's `arm` says nothing about
+    // it: a freshly established watch can miss the first write to a tree, which
+    // is what `arm` exists for. Neither "it arrived" nor "it did not" means
+    // anything until the instrument is known to be live.
+    const armOwn = async (repo: string): Promise<void> => {
+      const deadline = performance.now() + 30_000;
+      for (let attempt = 0; ; attempt += 1) {
+        const file = join(root, repo, `signal-armed-${attempt}.ts`);
+        const before = changed.length;
+        await writeFile(file, `export const armed = ${attempt};\n`);
+        const patience = performance.now() + 2_000;
+        while (performance.now() < patience) {
+          if (changed.length > before) {
+            // The removal is a change of its own; waiting for it leaves the
+            // watcher with nothing in flight when the assertions start.
+            const seen = changed.length;
+            await rm(file, { force: true });
+            await until(() => changed.length > seen);
+            return;
+          }
+          await new Promise((done) => setTimeout(done, 5));
+        }
+        await rm(file, { force: true });
+        if (performance.now() > deadline) throw new Error(`the watch of ${repo} never armed`);
+      }
+    };
+    try {
+      await armOwn(REPO);
+      await armOwn(OTHER_REPO);
+      changed.length = 0;
+      seenHere.length = 0;
+
+      // Outside the scope: announced, and no rescan — the signal exists so a
+      // window on another task hears about it (07-server.md).
+      await writeFile(outside, "export const outside = 1;\n");
+      await until(() => changed.includes(OTHER_REPO));
+      expect(changed).toContain(OTHER_REPO);
+      expect(
+        seenHere.some((event) => event.type === "diff-changed" && event.repo === OTHER_REPO),
+      ).toBe(false);
+
+      // Inside it: both, and the signal comes from the rescan rather than from
+      // the burst, so it means the change set moved.
+      await writeFile(inside, "export const inside = 1;\n");
+      await until(() =>
+        seenHere.some((event) => event.type === "diff-changed" && event.repo === REPO),
+      );
+      expect(changed).toContain(REPO);
+
+      // The claim the two call sites exist for: a file written with the bytes
+      // it already had moved no line, so it announces nothing. Counted rather
+      // than looked for, because "nothing arrived" is only an answer once
+      // something else has.
+      const settledCount = changed.filter((repo) => repo === REPO).length;
+      await writeFile(inside, "export const inside = 1;\n");
+      // The barrier: a second write in the other repository, whose signal comes
+      // from the burst and therefore always comes. Waiting for it is what makes
+      // the count below a verdict instead of a race.
+      const barrier = changed.filter((repo) => repo === OTHER_REPO).length;
+      await writeFile(outside, "export const outside = 2;\n");
+      await until(() => changed.filter((repo) => repo === OTHER_REPO).length > barrier);
+      expect(changed.filter((repo) => repo === REPO).length).toBe(settledCount);
+    } finally {
+      await watching.close();
+      rmSync(dataDir, { recursive: true, force: true });
+      await rm(outside, { force: true });
+      await rm(inside, { force: true });
+      await settle();
+    }
+  }, 60_000);
+});
+
 describe("closing a watcher", () => {
   it("waits for the rescan in flight, so nothing is written after it resolves", async () => {
     const dataDir = mkdtempSync(join(tmpdir(), "diffalanche-drain-"));

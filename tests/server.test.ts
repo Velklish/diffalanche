@@ -2,7 +2,7 @@
  * The server of DA-16: the review in one document, the sessions, the settings,
  * the scan, and the built UI, on `127.0.0.1` and nowhere else.
  */
-import { mkdirSync, mkdtempSync, rmSync, writeFileSync } from "node:fs";
+import { mkdirSync, mkdtempSync, readFileSync, rmSync, writeFileSync } from "node:fs";
 import { networkInterfaces, tmpdir } from "node:os";
 import { join } from "node:path";
 import type { Hono } from "hono";
@@ -12,7 +12,8 @@ import { findRepositories } from "../src/core/change-set.ts";
 import type { Config } from "../src/core/config/index.ts";
 import { loadConfig } from "../src/core/config/index.ts";
 import { addComment, createSession } from "../src/core/domain/index.ts";
-import { readDiffCache } from "../src/core/storage/index.ts";
+import type { DiffCache } from "../src/core/storage/index.ts";
+import { readDiffCache, writeDiffCache } from "../src/core/storage/index.ts";
 import type { ReviewDocument } from "../src/core/types.ts";
 import { createActivityLog } from "../src/core/watcher/index.ts";
 import { createApp } from "../src/server/app.ts";
@@ -27,8 +28,9 @@ const SESSION = "synth";
 const NAMED = "named-task";
 /** A third, about one repository: what a scope keeps a signal away from. */
 const SCOPED = "scoped-task";
-/** The repository `SCOPED` is about. */
+/** The repository `SCOPED` is about, and one it is not. */
 let inScope = "";
+let outOfScope = "";
 const PAGE = "<!doctype html><title>diffalanche</title>";
 
 /** The UI as the two delivery channels hand it over: one file, or nothing. */
@@ -60,6 +62,7 @@ beforeAll(async () => {
   await createSession(config.dataDir, NAMED, { mode: "head" }, undefined, { use: false });
   const repositories = await findRepositories(config);
   inScope = repositories[0] as string;
+  outOfScope = repositories[1] as string;
   await createSession(config.dataDir, SCOPED, { mode: "head" }, undefined, {
     use: false,
     scope: [{ repo: inScope, paths: null }],
@@ -453,6 +456,82 @@ describe("starting the server", () => {
  * ([07-server.md](../docs/reference/07-server.md)).
  */
 describe("the change set a document is built from", () => {
+  const MARK = "// the rescan that had not reached the file yet";
+
+  /** The change set on disk with one file's patch marked: what a rescan hands
+   * over before `diff.json` has it. */
+  async function marked(session: string): Promise<DiffCache> {
+    const cache = await readDiffCache(config.dataDir, session);
+    if (cache === undefined || cache === null) throw new Error(`no cache for ${session}`);
+    const repositories = cache.repositories.map((repository, at) =>
+      at > 0
+        ? repository
+        : {
+            ...repository,
+            files: repository.files.map((file, index) =>
+              index > 0 ? file : { ...file, patch: `${file.patch}\n${MARK}\n` },
+            ),
+          },
+    );
+    return { ...cache, repositories };
+  }
+
+  /** The first file of the first repository of a change set, as the cache orders them. */
+  function firstFile(cache: { repositories: { path: string; files: { patch: string }[] }[] }): {
+    repo: string;
+    patch: string;
+  } {
+    const repository = cache.repositories[0];
+    const file = repository?.files[0];
+    if (repository === undefined || file === undefined) throw new Error("the change set is empty");
+    return { repo: repository.path, patch: file.patch };
+  }
+
+  it("says whether a rescan reached a document that was held", async () => {
+    const service = createReviewService(config);
+    await service.document(SESSION);
+    expect(service.adopt(SESSION, await marked(SESSION))).toBe(true);
+    const document = await service.document(SESSION);
+    expect(firstFile(document).patch).toContain(MARK);
+  });
+
+  it("keeps a rescan a cold document could not take, and builds from it", async () => {
+    // `watched` is what makes a handed-over cache this session's: the watcher
+    // rescans one session, and its cache is about that one.
+    const service = createReviewService(config, { watched: () => SESSION });
+    await service.document(SESSION);
+    // What every write through the API leaves behind: ten routes call it.
+    service.invalidate(SESSION);
+    const rescan = await marked(SESSION);
+    // Nothing is held to patch, and the answer says so rather than dropping it.
+    expect(service.adopt(SESSION, rescan)).toBe(false);
+
+    const change = await service.repository(firstFile(rescan).repo);
+    expect(change?.files[0]?.patch).toContain(MARK);
+  });
+
+  it("takes a rescan that landed while the document was still being built", async () => {
+    // Taken while the file is still there: the rescan this stands for is handed
+    // over from memory, not read back.
+    const rescan = await marked(SESSION);
+    // Without a cache the build has to read every repository of the root, which
+    // is what makes the window wide enough to land a rescan inside. `rebuild`
+    // writes the file back, so the fixture repairs itself.
+    rmSync(join(config.dataDir, "reviews", SESSION, "diff.json"));
+    const service = createReviewService(config, { watched: () => SESSION });
+    let settled = false;
+    const reading = service.document(SESSION).then((document) => {
+      settled = true;
+      return document;
+    });
+    // The assertion is what says the rescan really landed inside the build
+    // rather than after it: a probe that wins by timing is not a probe.
+    await new Promise((resolve) => setTimeout(resolve, 50));
+    expect(settled).toBe(false);
+    expect(service.adopt(SESSION, rescan)).toBe(false);
+    expect(firstFile(await reading).patch).toContain(MARK);
+  });
+
   it("holds one document per session, so a switch back builds nothing", async () => {
     const service = createReviewService(config);
     const first = await service.document(SESSION);
@@ -460,6 +539,86 @@ describe("the change set a document is built from", () => {
     const back = await service.document(SESSION);
     // The same object: a switch back is answered from memory, not from `diff.json`.
     expect(back).toBe(first);
+  });
+
+  it("trusts the cache of the session the watcher follows, and reads no repository for it", async () => {
+    // The true side of the rule, which nothing covered: with `watched` wired the
+    // document comes out of `diff.json`, so a mark that exists only in the file
+    // reaches the screen. Without the wiring the working tree is read and the
+    // mark is nowhere.
+    const kept = (await readDiffCache(config.dataDir, SESSION)) as DiffCache;
+    await writeDiffCache(config.dataDir, SESSION, await marked(SESSION));
+    try {
+      const followed = await createReviewService(config, {
+        watched: () => SESSION,
+      }).document(SESSION);
+      expect(firstFile(followed).patch).toContain(MARK);
+
+      const unwatched = await createReviewService(config).document(SESSION);
+      expect(firstFile(unwatched).patch).not.toContain(MARK);
+    } finally {
+      await writeDiffCache(config.dataDir, SESSION, kept);
+    }
+  });
+
+  it("drops a held document when a repository it could show has changed", async () => {
+    const service = createReviewService(config, { watched: () => SESSION });
+    const held = await service.document(NAMED);
+    const { repo } = firstFile(held);
+    // The session the watcher follows is patched by the rescan and is left alone.
+    const current = await service.document(SESSION);
+    service.repositoryChanged(repo);
+    expect(await service.document(SESSION)).toBe(current);
+    // The named task has no rescan behind it, so its document goes.
+    expect(await service.document(NAMED)).not.toBe(held);
+  });
+
+  it("leaves a held document alone when the repository is outside its task", async () => {
+    const service = createReviewService(config, { watched: () => SESSION });
+    const held = await service.document(SCOPED);
+    service.repositoryChanged(outOfScope);
+    // The task is about one repository, and nothing changed in it: a signal
+    // about another must not cost this window a rebuild.
+    expect(await service.document(SCOPED)).toBe(held);
+    service.repositoryChanged(inScope);
+    expect(await service.document(SCOPED)).not.toBe(held);
+  });
+
+  it("keeps a build whose signal was about a repository the task is not on", async () => {
+    const service = createReviewService(config, { watched: () => SESSION });
+    let settled = false;
+    const reading = service.document(SCOPED).then((document) => {
+      settled = true;
+      return document;
+    });
+    // A signal that lands before the build starts needs no answer: the build
+    // then reads the working tree after the change and is already right. Only a
+    // signal inside the build is the case this is about, and the assertion is
+    // what says it landed there.
+    await new Promise((resolve) => setTimeout(resolve, 10));
+    expect(settled).toBe(false);
+    service.repositoryChanged(outOfScope);
+    const built = await reading;
+    // The signal was about another repository, so the document stays: the cost
+    // of a build is paid once per session, not once per unrelated write.
+    expect(await service.document(SCOPED)).toBe(built);
+  });
+
+  it("drops a build whose signal was about a repository the task is on", async () => {
+    const service = createReviewService(config, { watched: () => SESSION });
+    let settled = false;
+    // The whole root, so the build is long enough to land a signal inside it.
+    const reading = service.document(NAMED).then((document) => {
+      settled = true;
+      return document;
+    });
+    await new Promise((resolve) => setTimeout(resolve, 50));
+    expect(settled).toBe(false);
+    service.repositoryChanged(inScope);
+    const built = await reading;
+    // Answered, and not kept: this build may have read the repository before
+    // the change, so the next request builds again.
+    expect(await service.document(NAMED)).not.toBe(built);
   });
 
   it("charges a comment write the comments and not the change set", async () => {
@@ -477,5 +636,28 @@ describe("the change set a document is built from", () => {
     // The same array: a comment must not charge the next reader for a read of
     // every repository of the scope.
     expect(after.repositories).toBe(before.repositories);
+  });
+
+  it("reads a named task from the working tree, not from a cache nothing refreshed", async () => {
+    const service = createReviewService(config);
+    const before = await service.document(NAMED);
+    const { repo, patch } = firstFile(before);
+    expect(patch).not.toContain(MARK);
+    const file = before.repositories[0]?.files[0]?.path;
+    if (file === undefined) throw new Error("the change set is empty");
+
+    const onDisk = join(root, repo, file);
+    const kept = readFileSync(onDisk, "utf8");
+    writeFileSync(onDisk, `${kept}${MARK}\n`);
+    try {
+      // The cache of that task still says what it said: nothing rewrote it.
+      const cache = await readDiffCache(config.dataDir, NAMED);
+      expect(firstFile(cache as DiffCache).patch).not.toContain(MARK);
+
+      const after = await createReviewService(config).document(NAMED);
+      expect(firstFile(after).patch).toContain(MARK);
+    } finally {
+      writeFileSync(onDisk, kept);
+    }
   });
 });

@@ -23,6 +23,7 @@ const watcher = await startWatcher({ config, scan, bus, activity });
 | `debounceMs` | how long a repository stays quiet before it is rescanned; 100 ms |
 | `pollIntervalMs` | how often a tree is walked where there is no recursive watch; 250 ms |
 | `onRescan` | the session the rescan was about and the change set as it left it, for a caller that keeps it in memory |
+| `onRepositoryChanged` | a repository that moved, **whatever the current task is about**: its change set inside the task's scope, its files outside |
 | `recursive` | `false` walks every tree instead of watching it; the default asks the runtime |
 | `onError` | a rescan that failed; without it the failure is silent |
 | `onFallback` | a recursive watch died and the walk took its place; said once |
@@ -273,6 +274,31 @@ the server runs take effect without a restart; reading it would cost four git
 processes to produce a change set nothing may show. The scope is re-read
 whenever `review.json` changes, so a scope edit is in force from the next burst
 on.
+
+**It is still announced**, because the current task is not the only one with a
+window open: a repository outside *its* scope is routinely inside the scope of a
+task opened with `?review=`, and a server holding that task's document has to
+know the repository moved ([07-server.md](07-server.md)).
+
+`onRepositoryChanged` therefore fires from **two places, and they do not mean
+quite the same thing**:
+
+- **Inside the current task's scope**, from within the rescan, beside
+  `diff-changed`. The rescan compares the recomputed entry with the cached one,
+  so reaching that point means the change set really moved: a file touched
+  without its content changing — a build output, a save with the same bytes —
+  announces nothing.
+- **Outside it**, from the burst itself, right after the ignore check. Nothing
+  reads that repository, so nothing can say whether its content changed; the
+  burst is the whole of what is known. A write that changes no line still
+  reports, and a reader of the signal has to be able to afford that.
+
+The price of the second is one `git check-ignore` per burst for repositories the
+current task is not about, where before there was none: the ignore question now
+comes first, so a build writing into an ignored directory of an unrelated
+repository still says nothing. One process against the four a rescan costs —
+the same trade the rescan path already makes, measured at about 20 ms over fifty
+paths in `tests/watcher.test.ts`, one process for the whole window.
 
 Comment events come from reading `comments.json` and comparing it with the last
 read, so a write from the UI, from one `diffalanche reply`, or from twenty of

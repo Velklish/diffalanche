@@ -93,6 +93,9 @@ export type WatcherOptions = {
   /** The change set as it now stands, with the session it belongs to, for a caller
    * that keeps it in memory ([05-watcher.md](../../../docs/reference/05-watcher.md)). */
   onRescan?: (session: string, cache: DiffCache) => void;
+  /** A repository that moved, whatever the current task is about: inside the
+   * task's scope it means the change set did, outside it means files were written. */
+  onRepositoryChanged?: (repo: string) => void;
   /** A rescan that failed. Without this the failure is silent. */
   onError?: (error: unknown) => void;
   /** A watch died and the walk took its place; said once (05-watcher.md). */
@@ -220,27 +223,31 @@ export async function startWatcher(options: WatcherOptions): Promise<Watcher> {
     // A build writing into a directory git ignores restarts the debounce for as
     // long as it runs, and the ceiling then forces a rescan a second that can
     // find nothing. Asking git first costs one process instead of four.
+    if (await burstIsIgnored(repository, files)) return;
     // Taken once: the rescan is about the session it started on, and `current`
     // may move under it while the four git processes run.
     const followed = session;
-    if (followed === null) return;
     // A repository the task is not about is watched but not read: the scope
     // decides what the review is, and reading it would cost four git processes
     // to produce a change set nothing may show
     // ([ADR-010](../../../docs/adr/adr-010-review-task-scope.md)). Watching it
     // anyway is what makes a scope that widens while the server runs take
     // effect without a restart.
-    if (!repositoryInScope(scope, repo)) return;
-    // A build writing into a directory git ignores restarts the debounce for as
-    // long as it runs, and the ceiling then forces a rescan a second that can
-    // find nothing. Asking git first costs one process instead of four.
-    if (await burstIsIgnored(repository, files)) return;
+    if (followed === null || !repositoryInScope(scope, repo)) {
+      // Nothing will read this repository, so nothing can say whether its
+      // content changed: the burst is all there is to report (05-watcher.md).
+      options.onRepositoryChanged?.(repo);
+      return;
+    }
     // Announced from inside the rescan, before `diff.json` is written: what the
     // person sees must not wait for a file of megabytes. A file that was
     // touched without its content changing — a build output, a save with the
     // same bytes — is not a change of the review and says nothing at all.
     await rescanRepository(config, followed, repo, scan, (outcome) => {
       options.onRescan?.(followed, outcome.cache);
+      // From inside the rescan, so it says the change set moved rather than
+      // that a file was written: a save with the same bytes reaches no one.
+      options.onRepositoryChanged?.(repo);
       bus.emit({ type: "diff-changed", repo, files });
       activity.diffChanged(repo);
       if (outcome.warningsChanged) bus.emit({ type: "warnings", list: outcome.cache.warnings });

@@ -280,6 +280,26 @@ and `bun run release` refuses a version that has no section. See
 
 ### Fixed
 
+- **A window opened on a named task shows the change set it was opened to see**
+  (DA-55.3). `GET /api/review?review=<name>` trusted `diff.json` whenever its
+  base and scope still matched the session's — and they match after an edit,
+  because only the code changed. The watcher rewrites that file for one session,
+  the current one, so a task that is not current held a change set frozen at the
+  moment it was last read, and a reload showed the diff of the previous visit.
+  **A cache that matches on base and scope answers the same question; it does
+  not thereby hold the current answer**, and the only thing that refreshes one
+  is the watcher. So the server trusts `diff.json` for the session the watcher
+  follows and reads the working tree for every other one — the scope's
+  repositories rather than the root's — and writes that read back, so anchor
+  capture sees what the screen sees. A document built that way is **held only
+  until a repository it could show changes**: the watcher now reports every
+  repository whose files moved, whatever the current task is about, and the
+  server drops the documents that change could appear in. **The other half is
+  not closed:** a change to a named task's own `review.json` — `review base
+  --review X` from a terminal — is signalled to nobody, so a window on X keeps
+  the base it was opened with. That needs the watcher to follow more than one
+  session, which is DA-55.1.
+
 - **A file that changed type is one entry again, carrying both halves** (DA-76.1).
   Git cannot write a tracked file becoming a symbolic link as one patch, so it
   writes two for the one path, and the de-duplication of DA-76 never saw them:

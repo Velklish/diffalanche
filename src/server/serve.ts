@@ -7,6 +7,7 @@ import type { Config } from "../core/config/index.ts";
 import { DomainError } from "../core/domain/index.ts";
 import { scan } from "../core/index.ts";
 import { ensureDataDir } from "../core/storage/index.ts";
+import type { Watcher } from "../core/watcher/index.ts";
 import { createActivityLog, createEventBus, startWatcher } from "../core/watcher/index.ts";
 import { createApp } from "./app.ts";
 import type { UiAssets } from "./assets.ts";
@@ -56,7 +57,10 @@ export async function startReviewServer(options: ReviewServerOptions): Promise<R
     exclude: config.exclude,
   });
 
-  const review = createReviewService(config);
+  // The watcher is what keeps a session's `diff.json` fresh, so the service asks
+  // it which session that is ([07-server.md](../../docs/reference/07-server.md)).
+  let watcher: Watcher | null = null;
+  const review = createReviewService(config, { watched: () => watcher?.session() ?? null });
   const bus = createEventBus();
   const events = createEventStream();
   const activity = createActivityLog({ onRecord: forwardActivity(events) });
@@ -69,6 +73,7 @@ export async function startReviewServer(options: ReviewServerOptions): Promise<R
     bus,
     activity,
     onRescan: review.adopt,
+    onRepositoryChanged: review.repositoryChanged,
     onError: (error) => {
       process.stderr.write(
         `rescan failed: ${error instanceof Error ? error.message : String(error)}\n`,
@@ -82,6 +87,7 @@ export async function startReviewServer(options: ReviewServerOptions): Promise<R
       );
     },
   });
+  watcher = running;
   // A rescan hands the change set to `adopt`, warnings and all, so neither of
   // its two events costs the next reader a re-read.
   bus.subscribe((event) => {

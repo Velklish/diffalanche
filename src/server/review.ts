@@ -96,6 +96,9 @@ export type ReviewService = {
   adopt: (session: string, cache: DiffCache) => void;
   /** Something changed underneath that session: its document is built again when next asked for. */
   invalidate: (session: string) => void;
+  /** A repository under the root changed: every held document that could show it,
+   * bar the followed session's, is dropped ([07-server.md](../../docs/reference/07-server.md)). */
+  repositoryChanged: (repo: string) => void;
   /** Only the comments of that session changed: a small file, where rebuilding the
    * document would charge the next reader for the whole change set. */
   invalidateComments: (session: string) => void;
@@ -112,6 +115,9 @@ type Held = {
   pending: Promise<ReviewDocument> | null;
   /** Bumped by every invalidation of this session, so a build that started before one is dropped. */
   version: number;
+  /** Repositories that changed while this session's document was being built, judged
+   * against its scope when the build resolves and it has one. */
+  signalled: string[];
   /** The write this session's comments were last known to be behind. */
   commentsWritten: number;
   /** The write the held comments are known to cover, taken when the read was asked for. */
@@ -122,7 +128,17 @@ type Held = {
  * ([07-server.md](../../docs/reference/07-server.md)). */
 export const DOCUMENT_CACHE_LIMIT = 4;
 
-export function createReviewService(config: Config): ReviewService {
+export type ReviewServiceOptions = {
+  /** The session the watcher keeps fresh. Any other one's `diff.json` is read
+   * from git instead ([07-server.md](../../docs/reference/07-server.md)). */
+  watched?: () => string | null;
+};
+
+export function createReviewService(
+  config: Config,
+  options: ReviewServiceOptions = {},
+): ReviewService {
+  const watched = options.watched ?? (() => null);
   const sessions = new Map<string, Held>();
   // One sequence over every session, so a read can be pinned to the moment it
   // was asked for and cannot clear a write that landed after that.
@@ -141,6 +157,7 @@ export function createReviewService(config: Config): ReviewService {
       payload: null,
       pending: null,
       version: 0,
+      signalled: [],
       commentsWritten: writes,
       staleComments: writes,
     };
@@ -170,10 +187,17 @@ export function createReviewService(config: Config): ReviewService {
     if (entry.pending === null) {
       const started = entry.version;
       const startedWrites = writes;
-      entry.pending = build(config, session).then(
+      entry.signalled = [];
+      entry.pending = build(config, session, watched() === session).then(
         (settled) => {
           entry.pending = null;
-          if (entry.version === started) {
+          // What changed while this was building is judged now, against the
+          // scope the built document carries: a repository this task is not
+          // about must not cost it its place.
+          const touched = entry.signalled;
+          entry.signalled = [];
+          const stale = touched.some((repo) => repositoryInScope(settled.session.scope, repo));
+          if (entry.version === started && !stale) {
             entry.document = settled;
             entry.payload = null;
             entry.staleComments = startedWrites;
@@ -234,6 +258,24 @@ export function createReviewService(config: Config): ReviewService {
       entry.document = null;
       entry.payload = null;
     },
+    repositoryChanged: (repo) => {
+      const followed = watched();
+      for (const [name, entry] of sessions) {
+        // The followed session's document is patched by the rescan itself.
+        if (name === followed) continue;
+        const document = entry.document;
+        if (document === null) {
+          // A build in flight has no scope to judge by yet, so the name is kept
+          // and the question asked again when it resolves.
+          if (entry.pending !== null) entry.signalled.push(repo);
+          continue;
+        }
+        if (!repositoryInScope(document.session.scope, repo)) continue;
+        entry.version += 1;
+        entry.document = null;
+        entry.payload = null;
+      }
+    },
     invalidateComments: (session) => {
       writes += 1;
       const entry = sessions.get(session);
@@ -260,9 +302,9 @@ function answers(cache: DiffCache, review: Review): boolean {
   return sameBase(cache.base, review.base) && sameScope(cache.scope, review.scope);
 }
 
-async function build(config: Config, session: string): Promise<ReviewDocument> {
+async function build(config: Config, session: string, followed: boolean): Promise<ReviewDocument> {
   const review = await readReview(config.dataDir, session);
-  const cache = await changeSet(config, session, review);
+  const cache = await changeSet(config, session, review, followed);
   const comments = await list(config.dataDir, session);
   return {
     root: config.root,
@@ -275,11 +317,20 @@ async function build(config: Config, session: string): Promise<ReviewDocument> {
   };
 }
 
-/** The change set of a session: the cache when it answers the question this session
- * asks, and a read of every repository of the scope when it does not. */
-async function changeSet(config: Config, session: string, review: Review): Promise<DiffCache> {
-  const cached = await readDiffCache(config.dataDir, session);
-  if (cached !== null && answers(cached, review)) return cached;
+/** The change set of a session: **a cache that matches on base and scope is not thereby
+ * fresh**, and only the followed session has one ([07-server.md](../../docs/reference/07-server.md)). */
+async function changeSet(
+  config: Config,
+  session: string,
+  review: Review,
+  followed: boolean,
+): Promise<DiffCache> {
+  // Only the followed session has a cache anything refreshes, because the
+  // watcher rescans one session.
+  if (followed) {
+    const cached = await readDiffCache(config.dataDir, session);
+    if (cached !== null && answers(cached, review)) return cached;
+  }
   return rebuild(config, session, review);
 }
 
