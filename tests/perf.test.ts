@@ -5,8 +5,8 @@ import { dirname, join, resolve } from "node:path";
 import { fileURLToPath } from "node:url";
 import { promisify } from "node:util";
 import { afterAll, beforeAll, describe, expect, it } from "vitest";
-import type { Budget } from "../perf/budgets.ts";
-import { BUDGETS, evaluate, formatTable, RUNNER_ALLOWANCE } from "../perf/budgets.ts";
+import type { Budget, GateRow } from "../perf/budgets.ts";
+import { BUDGETS, evaluate, fails, formatTable, RUNNER_ALLOWANCE } from "../perf/budgets.ts";
 import { assertErasable, fixtureDrift } from "../perf/fixture.ts";
 import type { Measurement } from "../perf/harness.ts";
 import { parseArgs, SCRATCH_SESSION, twoSessions } from "../perf/harness.ts";
@@ -144,7 +144,7 @@ describe("perf gate", () => {
     expect(evaluate([runner]).some((row) => row.failed)).toBe(true);
     const rows = evaluate([runner], { allowance: RUNNER_ALLOWANCE });
     expect(rows.filter((row) => row.failed)).toEqual([]);
-    expect(formatTable(rows, 1)).toContain("| 9.5 ms (23.8 on a runner) | 17.3 ms | ok |");
+    expect(formatTable(rows, 1)).toContain("| 9.5 ms (20 on a runner) | 17.3 ms | ok |");
     // The long-task line is a count of zero on every machine.
     const tasks = evaluate([measurement({ scrollLongTasks: 1 })], { allowance: RUNNER_ALLOWANCE });
     expect(tasks.find((row) => row.budget.field === "scrollLongTasks")?.failed).toBe(true);
@@ -160,8 +160,8 @@ describe("perf gate", () => {
     expect(twoTasks[0]?.ceiling).toBe(1);
     expect(twoTasks[0]?.failed).toBe(true);
     // The allowance widens the ceiling; it does not remove it. The runner read
-    // 17.3 on a good commit and its widened ceiling is 23.8: past that, red.
-    const slow = measurement({ cpuPerFrameMs: 24 });
+    // 17.3 on a good commit and its widened ceiling is 20: past that, red.
+    const slow = measurement({ cpuPerFrameMs: 21 });
     expect(evaluate([slow], { allowance: RUNNER_ALLOWANCE }).some((row) => row.failed)).toBe(true);
   });
 
@@ -196,23 +196,34 @@ describe("the fixture the gate may erase", () => {
     expect(() => assertErasable(REPO_ROOT)).toThrow(/--fixture names a directory the gate owns/);
   });
 
-  it("refuses a directory that is not empty and holds no .diffalanche, untouched", () => {
+  it("refuses a directory that is not empty and carries no synth.json, untouched", () => {
     const foreign = join(work, "foreign");
     mkdirSync(foreign);
     writeFileSync(join(foreign, "not-ours.txt"), "keep me\n");
-    expect(() => assertErasable(foreign)).toThrow(/is not empty and holds no \.diffalanche/);
+    expect(() => assertErasable(foreign)).toThrow(/is not empty and carries no synth\.json/);
     expect(readdirSync(foreign)).toEqual(["not-ours.txt"]);
   });
 
-  it("allows a missing path, an empty directory, and an earlier run", () => {
+  it("refuses a review's own data directory, which is what the guard is for", () => {
+    // `.diffalanche/` is what the tool writes into any folder somebody reviews.
+    // Reading it as the mark of a fixture aimed the guard at its own subject.
+    const review = join(work, "somebody-s-review");
+    mkdirSync(join(review, ".diffalanche", "reviews", "task"), { recursive: true });
+    writeFileSync(join(review, ".diffalanche", "current"), "task\n");
+    expect(() => assertErasable(review)).toThrow(/is not empty and carries no synth\.json/);
+    expect(readdirSync(review)).toEqual([".diffalanche"]);
+  });
+
+  it("allows a missing path, an empty directory, and a fixture this generator wrote", () => {
     expect(() => assertErasable(join(work, "not-there"))).not.toThrow();
     const empty = join(work, "empty");
     mkdirSync(empty);
     expect(() => assertErasable(empty)).not.toThrow();
-    const stale = join(work, "stale");
-    mkdirSync(join(stale, ".diffalanche"), { recursive: true });
-    writeFileSync(join(stale, "leftover.txt"), "from an older generator\n");
-    expect(() => assertErasable(stale)).not.toThrow();
+    const ours = join(work, "ours");
+    mkdirSync(join(ours, ".diffalanche"), { recursive: true });
+    writeFileSync(join(ours, STAMP_FILE), "{}\n");
+    writeFileSync(join(ours, "leftover.txt"), "from an earlier run\n");
+    expect(() => assertErasable(ours)).not.toThrow();
   });
 
   it("refuses a path that exists and is not a directory", () => {
@@ -231,9 +242,8 @@ describe("the fixture the gate may erase", () => {
       encoding: "utf8",
     }).catch((error: { code?: number; stderr?: string }) => error);
     expect((run as { code?: number }).code).toBe(1);
-    // The guard's own frame, not only its message: one run in this suite came
-    // back with a stack Bun had rendered without the message on it, and the
-    // frame is what says which of the gate's refusals fired.
+    // The frame, not the message: one run came back with a stack Bun had
+    // rendered without the message, and the frame names which refusal fired.
     expect((run as { stderr?: string }).stderr ?? "").toMatch(/at assertErasable \(/);
     expect(readdirSync(foreign)).toEqual(["not-ours.txt"]);
   });
@@ -289,6 +299,31 @@ describe("a line the gate has no number for", () => {
 
   it("leaves a good table alone", () => {
     expect(evaluate([measurement(), measurement()]).some((row) => row.unmeasured)).toBe(false);
+  });
+
+  it("prints a pending line without a number as unmeasured, and does not fail the build", () => {
+    // `pendingUntil` says this line does not stop the build, and that has to
+    // hold whether the number is over the ceiling or missing altogether.
+    const waiting: Budget[] = [
+      {
+        label: "waiting on a task",
+        field: "updateMs",
+        budget: 300,
+        unit: "ms",
+        pendingUntil: "DA-99",
+      },
+    ];
+    const rows = evaluate([measurement({ updateMs: Number.NaN })], { budgets: waiting });
+    expect(rows[0]?.unmeasured).toBe(true);
+    expect(fails(rows[0] as GateRow)).toBe(false);
+    expect(formatTable(rows, 1)).toContain("| not measured | UNMEASURED |");
+  });
+
+  it("stops the build for an unmeasured line that waits for nothing", () => {
+    const rows = evaluate([measurement({ composerOpenMs: Number.NaN })]);
+    const composer = rows.find((row) => row.budget.field === "composerOpenMs") as GateRow;
+    expect(composer.unmeasured).toBe(true);
+    expect(fails(composer)).toBe(true);
   });
 });
 

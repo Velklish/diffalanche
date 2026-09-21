@@ -222,12 +222,8 @@ async function measureUpdate(page: Page, baseUrl: string, fixture: string): Prom
   }
 }
 
-/**
- * Chromium's own accounting of time spent on tasks in the renderer, in seconds.
- * A missing metric throws where its name can be said: the `?? 0` this replaces
- * turned a feed that stopped reporting into a CPU-per-frame of 0.0 ms, which
- * the tightest line of the budget table then printed as `ok` (DA-69).
- */
+/** Chromium's own task time in the renderer, in seconds. A missing metric
+ * throws where its name can be said, rather than standing in as 0. */
 async function taskDuration(cdp: { send: (method: "Performance.getMetrics") => Promise<unknown> }) {
   const result = (await cdp.send("Performance.getMetrics")) as {
     metrics: { name: string; value: number }[];
@@ -263,10 +259,8 @@ export async function withServer<T>(
   const server = await startReviewServer({ config, ui: directoryAssets("dist/ui") });
   let sessions: Sessions | undefined;
   try {
-    // After the document, not before it: the scratch session copies the change
-    // set of the current one, and on a freshly generated fixture that cache is
-    // written by this very call. Built first, the scratch session came out
-    // empty on the first repetition and the switch measured an empty rail.
+    // After the document: the scratch session copies the change set this call
+    // writes, and built before it the first repetition switched to an empty rail.
     const { totals } = await server.review.document();
     sessions = await twoSessions(config);
     process.stderr.write(
@@ -286,12 +280,8 @@ export async function withServer<T>(
 /** How many comments the second session is given, spread over the change set. */
 const OTHER_COMMENTS = 40;
 
-/**
- * The scratch session's own name, which does not compose with itself. It was
- * `${current}-b`, and a run killed between `createSession` and the `finally`
- * below left `current` on it — so the next run made `synth-b-b`, and the one
- * after that a third, each reused for ever by the early return (DA-69).
- */
+/** The scratch session's own name, which does not compose with itself the way
+ * `${current}-b` did (`docs/reference/11-perf.md`). */
 const SCRATCH_SESSION = "perf-scratch";
 
 /**

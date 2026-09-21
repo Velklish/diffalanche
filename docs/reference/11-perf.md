@@ -17,10 +17,20 @@ bun run synth -- --out <dir> [--seed <n>] [--small]
 | `--small` | The small profile instead of the full one |
 
 The script prints the totals it measured and exits. It erases `--out` before
-filling it, so it refuses a directory that exists, is not empty, and has no
-`.diffalanche/` from an earlier run: without that check `--out .` in a checkout
-would take the working tree and its `.git` with it. Failure is one line on
-stderr and exit code 1.
+filling it, so it refuses a directory that exists, is not empty, and carries no
+`synth.json` of its own: without that check `--out .` in a checkout would take
+the working tree and its `.git` with it. Failure is one line on stderr and exit
+code 1.
+
+**The mark is `synth.json` and not `.diffalanche/`, and that difference is the
+whole safety of the check.** A `.diffalanche/` is what *this tool* writes into
+any folder somebody reviews, so treating it as the sign of a generated fixture
+pointed the guard at exactly the directories it exists to protect: an `--out` or
+a `--fixture` aimed at a real review's root would have passed the guard and
+taken its sessions and comments with it. `synth.json` is written by the
+generator and by nothing else. The cost is that a fixture made before the stamp
+existed is refused once; the message says so, and deleting it by hand is the
+answer.
 
 ## Profiles
 
@@ -382,8 +392,10 @@ bun run perf -- --fixture /tmp/x   # another fixture
 **`--fixture` names a directory the gate owns and erases.** The gate empties it
 before regenerating, so it asks the generator's own question first, in the
 process that does the deleting: an existing path is accepted only when it is an
-empty directory or one holding a `.diffalanche/` from an earlier run, and a
-path that exists and is not a directory is refused. On top of that it refuses
+empty directory or one carrying a `synth.json` this generator wrote — **not** a
+`.diffalanche/`, which is what the tool writes into any folder somebody reviews
+and is therefore the mark of the thing the guard protects rather than of a
+fixture — and a path that exists and is not a directory is refused. On top of that it refuses
 three paths whatever they contain — the repository, every directory above it,
 and the home directory — because none of them is ever a fixture. `bun run perf
 -- --fixture .` from the repository root is the case the rule exists for: the
@@ -409,20 +421,36 @@ over its ceiling. One slow run does not fail the build; two do.
 **Which numbers are enforced where.** On a development machine the ceilings
 are the specification's numbers, as the table prints them. On a GitHub-hosted
 runner (`GITHUB_ACTIONS=true`, the `perf` job) every `ms` ceiling is the
-specification's number times `RUNNER_ALLOWANCE` in `perf/budgets.ts` — 2.5 —
-and the long-task line stays at zero. The first run of the job on
-`ubuntu-latest` measured the same commit a little over twice as slow on every
-millisecond line as the machine the budgets were written on (CPU per frame
-17.3 ms against 7.8, the composer 50.5 against 22.6, first render 161 against
-87) with zero long tasks (DA-5.1); the allowance leaves about fifteen percent
-over that, so a regression of a runner's own size is still red there, and a
-smaller one is red on the development machine first. The table names the
-widened ceiling beside the budget — `9.5 ms (23.8 on a runner)` — so a green
-runner is never read as the strict number holding.
+budget times `RUNNER_ALLOWANCE` in `perf/budgets.ts` — 2.1 — and the long-task
+line stays at zero. The first run of the job on `ubuntu-latest` measured the
+same commit a little over twice as slow on every millisecond line as the
+machine the budgets were written on (CPU per frame 17.3 ms against 7.8, the
+composer 50.5 against 22.6, first render 161 against 87) with zero long tasks
+(DA-5.1); the allowance leaves about fifteen percent over that, so a regression
+of a runner's own size is still red there, and a smaller one is red on the
+development machine first. The table names the widened ceiling beside the
+budget — `9.5 ms (20 on a runner)` — so a green runner is never read as the
+strict number holding.
 
-**What `bun run perf` means off a runner, and when it declines to say.** The
-ceilings on a development machine are the specification's own numbers, and that
-only means something on a machine quiet enough to measure. It often is not, so
+**The allowance is a ratio to a measured runner reading, not a constant.** It
+exists to put the ceiling about fifteen percent over what `ubuntu-latest`
+actually delivers, and that target is what has to survive a change of budget —
+the multiplier itself does not. When DA-56.4 moved the CPU-per-frame budget from
+8.3 to 9.5, an allowance of 2.5 carried the runner ceiling from 20.8 to 23.8
+against the same measured 17.3, quietly turning fifteen percent of headroom into
+thirty-eight and letting a regression the size of the runner's own reading pass
+on CI unnoticed. The multiplier was recomputed to 2.1 to put the ceiling back
+near 20. **Anyone moving a millisecond budget recomputes it in the same pass**,
+against the runner readings above: the number in the code is the result of that
+sum and not an independent constant.
+
+**What `bun run perf` means off a runner, and when it declines to say.** Off a
+runner, and only there: `GITHUB_ACTIONS=true` turns the precondition off
+entirely, because a hosted runner's load is not anybody's to control and the
+allowance above is what stands in for it — a gate that declined on CI would be a
+red job with nothing in it to fix. On a development machine the ceilings are the
+specification's own numbers, and that only means something on a machine quiet
+enough to measure. It often is not, so
 the gate reads the one-minute load average per core — before the run, and again
 after it, taking the busier of the two, because a machine that got busy halfway
 through decided the numbers as much as one that started busy. Above
@@ -618,7 +646,7 @@ bar cost 0.8 ms. 10.0 ms would leave ten percent and catch almost nothing; 9.2
 would sit against the worst reading and bring back the flapping ADR-013 exists
 against. Closing the gap to 8.3 is its own work and has not been attempted.
 
-The gate is the last of the seven `gates` of `backslop.json`, so it runs before any task is
+The gate is the last of the seven `gates` of `backslop.json` — the seventh — so it runs before any task is
 reported, and it is the `perf` job of `.github/workflows/ci.yml`, which
 installs Chromium, generates the fixture, and runs the gate — the gate builds
 the UI itself, so the job does not; the table lands in the run summary through
@@ -657,9 +685,9 @@ screenshot baselines are per platform and the ones in the repository were taken
 on macOS, so the job runs `bun run test:ui:ci` — the same suite with
 `--ignore-snapshots`, which leaves the two comparisons of `shell.spec.ts` to the
 gate on a machine whose pixels they describe and runs everything else
-([08-ui.md](08-ui.md#ui-tests)). It is the seventh gate, placed between
-`bun run test:bun` and `bun run perf` so that the two browser gates are adjacent
-and a machine that has to serialise them serialises one window.
+([08-ui.md](08-ui.md#ui-tests)). It is the sixth of the seven, placed between
+`bun run test:bun` and `bun run perf` so that the two browser gates are
+adjacent and a machine that has to serialise them serialises one window.
 
 ## The release
 

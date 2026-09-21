@@ -127,8 +127,22 @@ of 20.75 would have passed almost any regression.
 - The threshold is one number on one machine, measured on few points. It is
   recorded with how it was obtained so the next reader can disagree with the
   measurement rather than with the mechanism.
-- CI is untouched: `GITHUB_ACTIONS=true` keeps `RUNNER_ALLOWANCE`, and a hosted
-  runner's load is not this machine's problem.
+- CI is untouched, and the code says so rather than the prose alone:
+  `GITHUB_ACTIONS=true` turns the precondition off and keeps `RUNNER_ALLOWANCE`.
+  A hosted runner's load is not anybody's to control, the allowance is what
+  stands in for it there, and a gate that declined on CI would be a red job with
+  nothing in it to fix — the `perf` job installs Chromium and generates a
+  21-repository fixture immediately before the gate, so its own preparation
+  would have tripped the check on four cores.
+- `RUNNER_ALLOWANCE` is a ratio to a measured runner reading and not a constant:
+  it exists to leave about fifteen percent over what `ubuntu-latest` delivers,
+  and that target is what survives a change of budget rather than the multiplier
+  itself. Moving a millisecond budget without recomputing it moves the runner
+  ceiling silently — raising CPU per frame from 8.3 to 9.5 took the ceiling from
+  20.8 to 23.8 against the same measured 17.3, turning fifteen percent of
+  headroom into thirty-eight — so **a budget change recomputes the multiplier in
+  the same pass**, and the readings to compute it from are in
+  [11-perf.md](../reference/11-perf.md).
 - `DIFFALANCHE_PERF_IGNORE_LOAD` is a contract outside the code and is
   documented with the other environment variables; it cannot be removed without
   a successor to this record.

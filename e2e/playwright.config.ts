@@ -1,7 +1,26 @@
+import { execFileSync } from "node:child_process";
 import { defineConfig } from "@playwright/test";
 import { fixtureEnv } from "../src/core/config/index.ts";
 
-const PORT = 4881;
+/** A free port, chosen as `acceptance.config.ts` chooses one and for the same
+ * reason; why this suite cannot hold a fixed one is in `08-ui.md`. */
+function freePort(): string {
+  return execFileSync(
+    process.execPath,
+    [
+      "-e",
+      "const s=require('net').createServer();s.listen(0,'127.0.0.1',()=>{process.stdout.write(String(s.address().port));s.close()})",
+    ],
+    { encoding: "utf8" },
+  ).trim();
+}
+
+/** Playwright reads this file once per worker it forks; the first read pins it. */
+const PORT = Number(process.env.DIFFALANCHE_UI_PORT ?? freePort());
+if (!Number.isInteger(PORT) || PORT <= 0) {
+  throw new Error(`not a port: ${JSON.stringify(process.env.DIFFALANCHE_UI_PORT)}`);
+}
+process.env.DIFFALANCHE_UI_PORT = String(PORT);
 
 // Neither the developer's shell nor their user config may name the fixture's
 // data directory — the server reads it, and so does every CLI a spec runs.
@@ -34,6 +53,9 @@ export default defineConfig({
     command:
       "bun run build:ui && rm -rf .perf/e2e && bun run synth -- --out .perf/e2e --small && bun e2e/server.ts",
     cwd: "..",
+    // `e2e/server.ts` reads `PORT`; without this it would keep its own default
+    // and the suite would wait on a port nothing bound.
+    env: { PORT: String(PORT) },
     // The page, not `/api/review`: that route answers 404 whenever the data
     // directory resolved away from the fixture, and the wait reads as a hang.
     url: `http://127.0.0.1:${PORT}/`,

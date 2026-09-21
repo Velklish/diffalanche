@@ -54,27 +54,14 @@ export const BUDGETS: Budget[] = [
  */
 export const GATE_VARIANT: VariantSpec = { name: "default", query: "" };
 
-/**
- * Frame rate is not measurable headless. The frame of 120 fps is 8.3 ms and
- * stays the goal in `docs/SPEC.md` section 6; the gate is set on what this
- * machine reaches (DA-56.4, `docs/reference/11-perf.md`).
- */
+/** The gate is set on what this machine reaches; 8.3 ms, the frame of 120 fps,
+ * stays the goal of `docs/SPEC.md` section 6 (`docs/reference/11-perf.md`). */
 export const CPU_PER_FRAME_NOTE =
   "9.5 ms is what the gate enforces; 8.3 ms, the frame of 120 fps, is the goal of docs/SPEC.md section 6";
 
-/**
- * The allowance of a GitHub-hosted runner. The budgets are the specification's
- * numbers and the development machine (Apple M1 Pro) meets them; `ubuntu-latest`
- * measured a little over twice as slow on every millisecond line of the same
- * commit — CPU per frame 17.3 ms against 7.8, the composer 50.5 against 22.6,
- * first render 161 against 87 (DA-5.1) — with zero long tasks. So on a runner
- * every `ms` ceiling is multiplied by this, the `tasks` line is not, and the
- * local run keeps the strict numbers: a budget that only CI enforces stops
- * being a budget developers meet. The ratio leaves about fifteen percent over
- * what the runner measured; a regression of that size on the development
- * machine is caught there first.
- */
-export const RUNNER_ALLOWANCE = 2.5;
+/** The allowance of a GitHub-hosted runner: derived from what a runner
+ * measured, and it moves when a budget moves (`docs/reference/11-perf.md`). */
+export const RUNNER_ALLOWANCE = 2.1;
 
 export type GateRow = {
   budget: Budget;
@@ -83,10 +70,8 @@ export type GateRow = {
   /** What the median was held against: the budget, times the allowance for `ms` lines. */
   ceiling: number;
   failed: boolean;
-  /**
-   * The gate had no number it could compare. A third verdict beside `ok`, `FAIL`
-   * and pending, because a line nobody measured is not a line that passed.
-   */
+  /** No number the gate could compare: a third verdict beside `ok`, `FAIL` and
+   * pending. `fails()` says whether it also stops the build. */
   unmeasured: boolean;
 };
 
@@ -97,16 +82,8 @@ export type EvaluateOptions = {
   allowance?: number;
 };
 
-/**
- * A line fails when the median is over its ceiling: one slow run does not fail
- * a build. `budgets` is the table above unless a caller brings its own, which
- * is how the rules here are tested without a pending line having to exist in
- * it; `allowance` widens the `ms` ceilings and never the `tasks` one.
- *
- * A line whose samples cannot be trusted is reported unmeasured rather than
- * compared: `NaN > 500` and `0 > 8.3` are both false, so comparing one would
- * print `ok` for a metric that disappeared (DA-69).
- */
+/** A line fails when the MEDIAN is over its ceiling; `allowance` widens the
+ * `ms` ceilings only, and an untrustworthy sample is unmeasured, not compared. */
 export function evaluate(measurements: Measurement[], options: EvaluateOptions = {}): GateRow[] {
   const budgets = options.budgets ?? BUDGETS;
   const allowance = options.allowance ?? 1;
@@ -127,15 +104,17 @@ export function evaluate(measurements: Measurement[], options: EvaluateOptions =
   });
 }
 
-/**
- * A sample the gate may compare. Absent and non-finite are the obvious halves;
- * an exact zero on a millisecond line is the quiet one — no step of this
- * harness takes no time, so a `0.0` there is a feed that stopped reporting, the
- * way `TaskDuration` did. A count of zero long tasks is the goal, not a gap.
- */
+/** A sample the gate may compare: absent, non-finite, or — on a millisecond
+ * line only — an exact zero are not (`docs/reference/11-perf.md`). */
 function trustworthy(value: number | undefined, unit: Budget["unit"]): boolean {
   if (value === undefined || !Number.isFinite(value)) return false;
   return unit !== "ms" || value !== 0;
+}
+
+/** Whether a row stops the build: a line waiting for its own task is printed
+ * and not failed, over its ceiling or without a number alike. */
+export function fails(row: GateRow): boolean {
+  return row.budget.pendingUntil === undefined && (row.failed || row.unmeasured);
 }
 
 function round(value: number): number {

@@ -1,13 +1,5 @@
-/**
- * What the npm tarball is allowed to carry out of `dist/`, checked against what
- * `npm pack` would actually pack (DA-106).
- *
- *   bun run check:package
- *
- * `files` in `package.json` says `dist` minus the binaries, so every future
- * by-product of a build or a release step lands in the tarball unless something
- * asks. This is that something.
- */
+/** `bun run check:package`: what the npm tarball may carry out of `dist/`,
+ * against what `npm pack` would pack (`docs/reference/11-perf.md`). */
 import { execFileSync } from "node:child_process";
 import { resolve } from "node:path";
 import { argv, exit, stderr, stdout } from "node:process";
@@ -17,11 +9,8 @@ import { fileURLToPath } from "node:url";
 const ALLOWED = ["dist/cli.js"];
 const ALLOWED_TREES = ["dist/ui/"];
 
-/**
- * Entries of `dist/` the tarball must not carry: the six binaries, which are
- * release assets, and anything else a step left behind — a checksums manifest
- * listing files the tarball does not contain, above all.
- */
+/** Entries of `dist/` the tarball must not carry: the binaries, and whatever
+ * else a build or a release step left behind. */
 export function unexpected(files: string[]): string[] {
   return files.filter(
     (file) =>
@@ -50,6 +39,15 @@ function isMain(): boolean {
 if (isMain()) {
   const root = resolve(fileURLToPath(import.meta.url), "../..");
   const files = packed(root);
+  // An unbuilt `dist/` has nothing to be unexpected in, and the check would
+  // pass by having looked at nothing.
+  if (!files.includes("dist/cli.js")) {
+    stderr.write(
+      "check:package: the tarball carries no dist/cli.js, so there is nothing to check. " +
+        "Run `bun run build:cli && bun run build:ui` first.\n",
+    );
+    exit(1);
+  }
   const strays = unexpected(files);
   if (strays.length > 0) {
     stderr.write(

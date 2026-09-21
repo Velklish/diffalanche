@@ -46,10 +46,8 @@ export interface SynthOptions {
   profile?: Profile;
 }
 
-/**
- * The file the generator stamps at the root of what it wrote, so a reader can
- * tell this fixture from one that drifted under it (DA-69).
- */
+/** The stamp at the root of what the generator wrote, so a reader can tell
+ * this fixture from one that drifted under it (`docs/reference/11-perf.md`). */
 export const STAMP_FILE = "synth.json";
 
 export interface FixtureStamp {
@@ -682,12 +680,8 @@ function writeWork(out: string, repos: RepoPlan[]): void {
   }
 }
 
-/**
- * Refuses an `--out` that was not written by this generator. The directory is
- * erased before it is filled, and `--out .` in a checkout would take the working
- * tree and its `.git` with it; a `.diffalanche/` from an earlier run is the only
- * thing that makes erasing safe.
- */
+/** Refuses an `--out` this generator did not write; the mark is `synth.json`
+ * and why is in `docs/reference/11-perf.md`. */
 function assertOverwritable(out: string): void {
   if (!existsSync(out)) {
     return;
@@ -696,10 +690,15 @@ function assertOverwritable(out: string): void {
     throw new Error(`${out} is not a directory`);
   }
   const entries = readdirSync(out);
-  if (entries.length === 0 || entries.includes(".diffalanche")) {
+  if (entries.length === 0 || entries.includes(STAMP_FILE)) {
     return;
   }
-  throw new Error(`${out} is not empty and holds no .diffalanche/ from an earlier run`);
+  throw new Error(
+    `${out} is not empty and carries no ${STAMP_FILE} from this generator. ` +
+      "A review's own data directory looks like a fixture from the outside and is not one; " +
+      `a fixture from a generator older than ${STAMP_FILE} is refused once, and deleting it by hand ` +
+      "is the answer.",
+  );
 }
 
 export function generate(options: SynthOptions): SynthReport {

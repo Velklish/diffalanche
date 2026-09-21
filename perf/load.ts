@@ -1,21 +1,12 @@
-/**
- * The load precondition of the gate (ADR-013). `bun run perf` holds a
- * development machine to the specification's numbers, and on a busy machine
- * those numbers are decided by the machine rather than by the code — so the
- * gate declines to produce a verdict instead of producing a wrong one.
- *
- * The threshold, the evidence behind it, and the bypass are in
- * `docs/reference/11-perf.md`.
- */
+/** The load precondition of the gate: the decision is ADR-013, the threshold
+ * and the bypass are in `docs/reference/11-perf.md`. */
 import { cpus, loadavg } from "node:os";
 
 /** Measuring anyway, deliberately, with the table saying the verdict is not evidence. */
 export const IGNORE_LOAD = "DIFFALANCHE_PERF_IGNORE_LOAD";
 
-/**
- * Runnable work per core above which the gate declines. Measured, not chosen —
- * the fifteen readings it comes from are in `docs/reference/11-perf.md`.
- */
+/** Runnable work per core above which the gate declines: measured, and the
+ * readings are in `docs/reference/11-perf.md`. */
 export const LOAD_CEILING = 2.5;
 
 export type Load = {

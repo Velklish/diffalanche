@@ -1,13 +1,5 @@
-/**
- * The two questions `perf/gate.ts` asks its `--fixture` before it measures it:
- * may this directory be erased (DA-63), and is what is in it still what the
- * generator wrote (DA-69).
- *
- * The erase guard is the one `scripts/synth.ts` has, moved to whoever deletes:
- * the gate empties the path before spawning the generator, so delegating the
- * question by spawning was delegating it to nobody. The generator keeps its own
- * copy, because it is also run by hand.
- */
+/** The two questions `perf/gate.ts` asks its `--fixture`: may this be erased,
+ * and is it still what the generator wrote (`docs/reference/11-perf.md`). */
 import { existsSync, readdirSync, readFileSync, statSync } from "node:fs";
 import { homedir } from "node:os";
 import { dirname, join, resolve } from "node:path";
@@ -18,10 +10,8 @@ import { PROFILES, STAMP_FILE } from "../scripts/synth.ts";
 /** This file is `<repository>/perf/fixture.ts`. */
 const REPO_ROOT = resolve(dirname(fileURLToPath(import.meta.url)), "..");
 
-/**
- * Paths that are never a fixture whatever they hold: the repository, everything
- * above it up to the filesystem root, and the home directory.
- */
+/** Never a fixture whatever they hold: the repository, everything above it,
+ * and the home directory. */
 function neverAFixture(): Set<string> {
   const paths = new Set<string>([homedir()]);
   for (let at = REPO_ROOT; ; at = dirname(at)) {
@@ -30,11 +20,8 @@ function neverAFixture(): Set<string> {
   }
 }
 
-/**
- * Refuses a `--fixture` the gate must not erase, before anything is erased.
- * Missing is fine — the gate makes it; existing is fine only when it is an
- * empty directory or one holding a `.diffalanche/` from an earlier run.
- */
+/** Refuses a `--fixture` the gate must not erase, before anything is erased;
+ * the mark is `synth.json` and why is in `docs/reference/11-perf.md`. */
 export function assertErasable(fixture: string): void {
   const path = resolve(fixture);
   if (neverAFixture().has(path)) {
@@ -48,16 +35,17 @@ export function assertErasable(fixture: string): void {
     throw new Error(`${path} is not a directory`);
   }
   const entries = readdirSync(path);
-  if (entries.length === 0 || entries.includes(".diffalanche")) return;
-  throw new Error(`${path} is not empty and holds no .diffalanche/ from an earlier run`);
+  if (entries.length === 0 || entries.includes(STAMP_FILE)) return;
+  throw new Error(
+    `${path} is not empty and carries no ${STAMP_FILE} from this generator. ` +
+      "A review's own data directory looks like a fixture from the outside and is not one; " +
+      `a fixture from a generator older than ${STAMP_FILE} is refused once, and deleting it by hand ` +
+      "is the answer.",
+  );
 }
 
-/**
- * Why the gate cannot measure this fixture, or `null` when it is what the
- * generator wrote (DA-69). `current` exists whatever it points at, and the
- * harness's own scratch session is what made it point elsewhere, so the check
- * is the stamp read back rather than one file's existence.
- */
+/** Why the gate cannot measure this fixture, or `null` when it is what the
+ * generator wrote; what is compared is in `docs/reference/11-perf.md`. */
 export function fixtureDrift(fixture: string, profile: Profile = PROFILES.full): string | null {
   if (!existsSync(fixture)) return "is missing";
   const stamp = readJson(join(fixture, STAMP_FILE));

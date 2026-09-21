@@ -112,13 +112,24 @@ and `bun run release` refuses a version that has no section. See
   budget no commit meets gates nothing, so the gate now enforces 9.5 ms: about
   four percent over the worst reading taken where the load precondition lets it
   answer at all, which still catches a regression the size the line was written
-  for. `docs/SPEC.md` section 6 keeps 8.3 ms as the target with the measured
+  for. `RUNNER_ALLOWANCE` was recomputed from 2.5 to 2.1 in the same pass: it is
+  a ratio to what a runner measured, so a budget moving without it would have
+  carried the CI ceiling from 20.8 to 23.8 against an unchanged 17.3 and turned
+  fifteen percent of headroom into thirty-eight. `docs/SPEC.md` section 6 keeps 8.3 ms as the target with the measured
   number and its date beside it, and closing the gap is DA-56.5.
+- **The UI suite asks the operating system for its port** (DA-54.2). It held a
+  fixed 4881 with `reuseExistingServer` off, which is right for one person
+  running it by hand and wrong for a gate: two workers on one machine could not
+  both pass it, the second getting `port is already used` and a red gate with
+  nothing behind it. A worktree per worker separates `dist/`; the loopback
+  interface belongs to the machine. It now binds port 0 in a child process the
+  way `e2e/acceptance.config.ts` does, pins the number in `DIFFALANCHE_UI_PORT`
+  for the workers Playwright forks, and passes it to `e2e/server.ts`.
 - **The Playwright UI suite runs in a gate and in CI** (DA-54.2). Its
   ninety-five tests — the sidebar, the thread rail, live update, the repository
   bar — ran only when somebody typed `bun run test:ui`, so a UI regression
   reached the main branch through six green gates and a green CI. It is now the
-  seventh entry of `gates` in `backslop.json`, between `bun run test:bun` and
+  sixth entry of `gates` in `backslop.json`, between `bun run test:bun` and
   `bun run perf` so the two browser gates are adjacent, and the `ui` job of CI
   runs `bun run test:ui:ci` — the same suite with `--ignore-snapshots`, because
   the screenshot baselines were taken on macOS and a Linux runner draws other
@@ -136,7 +147,10 @@ and `bun run release` refuses a version that has no section. See
   the difference flipped both ways. The gate now reads the one-minute load
   average per core at both ends of the run and, above 2.5 per core, prints
   `unable to measure` with the load named and exits 1 without a budget verdict —
-  before the run, without measuring at all. A red `bun run perf` is therefore one
+  before the run, without measuring at all. On a GitHub-hosted runner it is off:
+  a runner's load is nobody's to control, `RUNNER_ALLOWANCE` stands in for it
+  there, and the `perf` job's own fixture generation would otherwise trip the
+  check on four cores. A red `bun run perf` is therefore one
   of three things and the output says which: `over budget`, `not measured`, or
   `unable to measure`. `DIFFALANCHE_PERF_IGNORE_LOAD=1` measures anyway and
   prints **Not evidence.** with the load above the table; a bypass invisible in
@@ -280,8 +294,10 @@ and `bun run release` refuses a version that has no section. See
   directory the gate owns and empties, and the guard that makes that safe lived
   in `scripts/synth.ts` — the process the gate spawns *after* deleting, so it
   never saw the path. The gate now asks first: an existing path is accepted only
-  when it is an empty directory or one holding a `.diffalanche/` from an earlier
-  run, and the repository, every directory above it and the home directory are
+  when it is an empty directory or one carrying a `synth.json` this generator
+  wrote — **not** a `.diffalanche/`, which is what the tool writes into any
+  folder somebody reviews and so is the mark of the thing the guard protects —
+  and the repository, every directory above it and the home directory are
   refused whatever they contain. `bun run perf -- --fixture .` from the
   repository root would have taken the working tree and its `.git`; it now exits
   1 with the path named and nothing deleted.

@@ -11,7 +11,7 @@ import {
 import { tmpdir } from "node:os";
 import { join, relative } from "node:path";
 import { afterAll, beforeAll, describe, expect, it } from "vitest";
-import { generate, PROFILES, type SynthReport } from "../scripts/synth.ts";
+import { generate, PROFILES, STAMP_FILE, type SynthReport } from "../scripts/synth.ts";
 
 const SMALL = PROFILES.small;
 const REPOS = "repos/core/cargos-api";
@@ -120,7 +120,7 @@ describe("synthetic review", () => {
     const foreign = mkdtempSync(join(tmpdir(), "diffalanche-foreign-"));
     writeFileSync(join(foreign, "not-ours.txt"), "keep me");
     try {
-      expect(() => generate({ out: foreign, profile: SMALL })).toThrow(/no \.diffalanche/);
+      expect(() => generate({ out: foreign, profile: SMALL })).toThrow(/no synth\.json/);
       expect(readdirSync(foreign)).toEqual(["not-ours.txt"]);
       expect(readFileSync(join(foreign, "not-ours.txt"), "utf8")).toBe("keep me");
     } finally {
@@ -128,9 +128,22 @@ describe("synthetic review", () => {
     }
   });
 
+  it("refuses a review's own data directory, which is not a fixture", () => {
+    // `.diffalanche/` is what the tool writes into any folder somebody reviews;
+    // reading it as the marker of a fixture aimed the guard at its own subject.
+    const review = mkdtempSync(join(tmpdir(), "diffalanche-review-"));
+    mkdirSync(join(review, ".diffalanche"));
+    try {
+      expect(() => generate({ out: review, profile: SMALL })).toThrow(/no synth\.json/);
+      expect(readdirSync(review)).toEqual([".diffalanche"]);
+    } finally {
+      rmSync(review, { recursive: true, force: true });
+    }
+  });
+
   it("overwrites a directory carrying the marker of an earlier run", () => {
     const stale = mkdtempSync(join(tmpdir(), "diffalanche-stale-"));
-    mkdirSync(join(stale, ".diffalanche"));
+    writeFileSync(join(stale, STAMP_FILE), "{}\n");
     writeFileSync(join(stale, "leftover.txt"), "from the run before");
     try {
       const again = generate({ out: stale, seed: 42, profile: SMALL });
