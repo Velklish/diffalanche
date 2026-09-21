@@ -468,6 +468,28 @@ fifteen points, and one run below the ceiling that still produced a stray long
 task. It is enough to separate "the machine decided this" from "the code did"
 and not enough to defend the second decimal.
 
+**What this machine measures today.** In the quietest window this session could
+get — no other work on the machine, one-minute average 5.2 at the start, which is
+this machine's own floor — CPU per frame came out **8.6 to 9.0 ms against a
+budget of 8.3, on all three trees including `1193ab3`, which predates every task
+of the DA-53…56 package.** The lowest single repetition of the whole window was
+8.5.
+
+What that says is about the page, not about the laptop: `cpuPerFrameMs` is the
+application's own processor time per frame while scrolling, and the machine is
+the instrument. At rest, on an M1 Pro, the scroll does not fit inside the frame
+of 120 fps. What the window settles is narrower and is the part DA-56.3 owes:
+**the line is not attributable to any task of this wave — it is red before the
+package as well, at rest, on all three trees.** Whether an 8.3 ms budget is the
+right one is a question about the budget and belongs to its owner.
+
+The update line is the opposite case, and the same window attributes it. `1193ab3`
+measured 244 ms and 267 ms — inside the 300 ms budget, twice; `ed81928`, after
+the package, measured 352 ms and 392 ms, over it, twice. The runs alternated
+between the trees under one lock, so the machine state is the same on both
+sides. The step DA-55.2 suspected and could not prove is real and arrived with
+the package; which of its four tasks carries it is not settled here.
+
 **And what the gate guarantees about the thing it measured.** A green table used
 to mean two weaker things than it looked like, and both are closed (DA-69).
 

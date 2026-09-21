@@ -216,6 +216,17 @@ and `bun run release` refuses a version that has no section. See
 
 ### Fixed
 
+- **The step in the update budget is real, and it arrived with the DA-53…56
+  package** (DA-56.3, folding in DA-55.2). The deferred measurement was taken on
+  2026-09-21 in a quiet window, three trees alternating under one lock:
+  `1193ab3`, before the package, measured 244 ms and 267 ms inside the 300 ms
+  budget; `ed81928`, after it, measured 352 ms and 392 ms outside it. DA-55.2
+  suspected the step and could not prove it because the two sides were never
+  measured beside each other; they now have been. Which of the package's tasks
+  carries it is not settled here. The same window found `Scrolling the diff: CPU
+  per frame` over budget on all three trees at rest, `1193ab3` included, which
+  makes it attributable to no task of this wave (DA-56.4), and the long-task
+  count flipping its verdict with the machine rather than the code (DA-69.1).
 - **The perf gate no longer reports green on what it did not measure** (DA-69).
   Two ways it could. The freshness check was the existence of
   `.diffalanche/current`, and `current` exists whatever it points at — the
