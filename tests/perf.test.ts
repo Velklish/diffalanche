@@ -231,7 +231,10 @@ describe("the fixture the gate may erase", () => {
       encoding: "utf8",
     }).catch((error: { code?: number; stderr?: string }) => error);
     expect((run as { code?: number }).code).toBe(1);
-    expect((run as { stderr?: string }).stderr ?? "").toMatch(/is not empty and holds no/);
+    // The guard's own frame, not only its message: one run in this suite came
+    // back with a stack Bun had rendered without the message on it, and the
+    // frame is what says which of the gate's refusals fired.
+    expect((run as { stderr?: string }).stderr ?? "").toMatch(/at assertErasable \(/);
     expect(readdirSync(foreign)).toEqual(["not-ours.txt"]);
   });
 });
