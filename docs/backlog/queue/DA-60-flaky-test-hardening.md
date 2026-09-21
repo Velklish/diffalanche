@@ -172,6 +172,22 @@ load. Inside the full suite the same verdict went red three times in one evening
 6.0, 120.2 and 16.8 ms; run alone on a quiet machine it was green twelve times
 out of twelve, four by verdict and eight instrumented.
 
+**A tenth entry, and the cleanest instance of the family.**
+`e2e/live.spec.ts` "an edit patches its own card, holds the reading position,
+and leaves the composer open" was proved environmental by three full `test:ui`
+runs under one lock — the branch tip, the base `ed81928`, the tip again —
+giving green, red, green, with `git diff --stat ed81928 <tip> -- e2e/` empty:
+the file is byte-identical on both sides.
+
+The assertion that failed differs between occurrences: at `:187`
+`expect(settled).not.toBeNull()` inside a gate chain, at `:183`
+`expect(Math.abs(after.top - marks.top)).toBeLessThan(ROW_HEIGHT)` on the base.
+Two statements in one test, both asking whether the patch had settled before
+the test looked. A defect reddens the same assertion every time; a race takes
+whichever one the machine reaches first, and that is what makes the pair a
+signature rather than a coincidence. Over six runs the test was green four
+times and red twice, and never red on a machine that was quiet.
+
 **A wall-clock precondition that is assumed rather than asserted cannot be
 seen to have failed.** The lock-writers suite added by DA-76.1 waits a fixed
 budget for a racing scan to finish and then asserts that the cache was not
