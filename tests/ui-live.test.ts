@@ -122,11 +122,17 @@ afterEach(() => {
 });
 
 /** The store as a loaded review left it, with one repository of two files. */
+/** The task the fixture's window is on. */
+const SHOWN = "ls-1";
+
 function loaded(): { untouched: FileChange; edited: FileChange } {
   const untouched = file({ path: "src/keep.ts", patch: TWO_HUNKS });
   const edited = file();
   useStore.setState({
     status: "ready",
+    // A window always has a task once the review is read, and the patch is
+    // dropped when it is not this one's — so the fixture has to have one.
+    session: document(SHOWN).session as never,
     repositories: [repository([untouched, edited])],
     files: [
       { id: "repos/a/src/keep.ts", index: 0, repo: "repos/a", file: untouched },
@@ -192,6 +198,33 @@ describe("a repository the stream brought again", () => {
   });
 });
 
+describe("a patch that belongs to a task the window has left", () => {
+  it("is dropped rather than merged into the task on screen", () => {
+    const { untouched } = loaded();
+    const before = useStore.getState().repositories;
+    // The window switched while the diff was in flight: the answer belongs to
+    // the task it was asked for, and that is no longer the one on screen.
+    useStore
+      .getState()
+      .applyRepositoryDiff(
+        "repos/a",
+        repository([file({ path: "src/keep.ts", patch: TWO_HUNKS }), file({ patch: ONE_EDITED })]),
+        "ls-other",
+      );
+    expect(useStore.getState().repositories).toBe(before);
+    expect(useStore.getState().files[0]?.file).toBe(untouched);
+  });
+
+  it("is dropped even when the repository is one this task has never had", () => {
+    loaded();
+    const before = useStore.getState().repositories;
+    // The branch that does the visible damage: an unknown repository is
+    // appended, so another task's scope and base would arrive whole.
+    useStore.getState().applyRepositoryDiff("repos/elsewhere", repository([file()]), "ls-other");
+    expect(useStore.getState().repositories).toBe(before);
+  });
+});
+
 describe("a diff-changed event", () => {
   it("leaves the other cards the objects they were rendered from", () => {
     const { untouched } = loaded();
@@ -203,6 +236,7 @@ describe("a diff-changed event", () => {
           file({ path: "src/keep.ts", patch: TWO_HUNKS }),
           file({ patch: ONE_EDITED, additions: 2 }),
         ]),
+        SHOWN,
       );
 
     const files = useStore.getState().files;
@@ -218,6 +252,7 @@ describe("a diff-changed event", () => {
       .applyRepositoryDiff(
         "repos/a",
         repository([file({ path: "src/keep.ts", patch: TWO_HUNKS }), file()]),
+        SHOWN,
       );
     expect(useStore.getState().repositories).toBe(before);
   });
@@ -232,6 +267,7 @@ describe("a diff-changed event", () => {
           file({ path: "src/keep.ts", patch: TWO_HUNKS_SECOND_EDITED }),
           file({ patch: ONE }),
         ]),
+        SHOWN,
       );
 
     const marks = useStore.getState().changed;
@@ -241,7 +277,7 @@ describe("a diff-changed event", () => {
 
   it("takes a repository that has no changes left out of the review", () => {
     loaded();
-    useStore.getState().applyRepositoryDiff("repos/a", null);
+    useStore.getState().applyRepositoryDiff("repos/a", null, SHOWN);
     expect(useStore.getState().repositories).toEqual([]);
     expect(useStore.getState().files).toEqual([]);
   });
@@ -249,7 +285,7 @@ describe("a diff-changed event", () => {
   it("closes a form the repository took with it, and says so", () => {
     loaded();
     useStore.getState().openComposer({ repo: "repos/a", path: "src/a.ts", side: "new", line: 2 });
-    useStore.getState().applyRepositoryDiff("repos/a", null);
+    useStore.getState().applyRepositoryDiff("repos/a", null, SHOWN);
 
     const after = useStore.getState();
     // There is no anchor left to move it to: the repository has no card either.
@@ -274,6 +310,7 @@ describe("the composer while the file under it changes", () => {
         file({ path: "src/keep.ts", patch: TWO_HUNKS_SECOND_EDITED }),
         file({ patch: ONE }),
       ]),
+      SHOWN,
     );
 
     const after = useStore.getState();
@@ -303,6 +340,7 @@ describe("the composer while the file under it changes", () => {
           ].join("\n"),
         }),
       ]),
+      SHOWN,
     );
 
     const after = useStore.getState();

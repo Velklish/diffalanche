@@ -533,7 +533,7 @@ type LiveSlice = {
    * the review. Every file that says the same thing keeps the object it was
    * rendered from, so its card is not re-rendered and its DOM survives.
    */
-  applyRepositoryDiff: (path: string, next: RepositoryChange | null) => void;
+  applyRepositoryDiff: (path: string, next: RepositoryChange | null, session: string) => void;
   /** One thread as the server now has it: added when it is new, replaced when it is not. */
   patchThread: (comment: Comment) => void;
 };
@@ -553,6 +553,10 @@ export type Store = ReviewSlice &
   LiveSlice &
   FirstRunSlice;
 
+/** Bumped by every read of the review, so a response for a task the window has
+ * left is dropped instead of applied ([08-ui.md](../../docs/reference/08-ui.md)). */
+let reading = 0;
+
 export const useStore = create<Store>()((set, get) => ({
   // review
   status: "loading",
@@ -568,10 +572,17 @@ export const useStore = create<Store>()((set, get) => ({
   threadsByFile: new Map(),
   user: "",
   loadReview: async () => {
+    // A response for a task the window has left is dropped rather than applied:
+    // `switching` gates the menu, and nothing gates `syncTaskFromUrl` or the two
+    // stream handlers ([08-ui.md](../../docs/reference/08-ui.md)).
+    reading += 1;
+    const generation = reading;
     try {
       const response = await fetch(onTask("/api/review"));
+      if (generation !== reading) return;
       if (!response.ok) {
         const refused = await refusal(response);
+        if (generation !== reading) return;
         // A root nobody has opened a session in is not a failure: it is the
         // first-run screen, and the scan behind its metrics is asked for here.
         if (refused.code === "no-current-session") {
@@ -582,11 +593,13 @@ export const useStore = create<Store>()((set, get) => ({
         throw new Error(refused.message);
       }
       const document = (await response.json()) as ReviewDocument;
+      if (generation !== reading) return;
       // Stamped here, not after the render: the harness measures from the moment
       // the response was parsed to the frame that showed it.
       perf.responseAt = performance.now();
       set(fromDocument(document, get().diffView, get().session?.name ?? null, get().warnings));
     } catch (error) {
+      if (generation !== reading) return;
       set({ status: "failed", failure: reason(error) });
       return;
     }
@@ -1211,7 +1224,12 @@ export const useStore = create<Store>()((set, get) => ({
   connection: "connecting",
   changed: new Map(),
   setConnection: (connection) => set({ connection }),
-  applyRepositoryDiff: (path, next) => {
+  applyRepositoryDiff: (path, next, session) => {
+    // The diff was fetched for the task that was on screen when the event
+    // arrived; if the window has left it, merging would put one task's change
+    // set into another's — and an unknown repository is *appended*, scope and
+    // base and all ([08-ui.md](../../docs/reference/08-ui.md)).
+    if (get().session?.name !== session) return;
     const repositories = get().repositories;
     const at = repositories.findIndex((one) => one.path === path);
     if (next === null) {
@@ -1755,7 +1773,7 @@ function asQuestion(store: Store, scope: Scope, ids: string[]): ScopeConfirm {
 async function loadCandidates(set: (partial: Partial<Store>) => void): Promise<void> {
   set({ candidatesStatus: "loading" });
   try {
-    const response = await fetch("/api/sessions/candidates");
+    const response = await fetch(onTask("/api/sessions/candidates"));
     if (!response.ok) throw new Error((await refusal(response)).message);
     const list = (await response.json()) as CandidateSet;
     set({ candidates: list.repositories, candidatesStatus: "ready" });

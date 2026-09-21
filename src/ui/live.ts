@@ -42,8 +42,26 @@ const PROBE_STEP = 12;
 type Anchor = { element: Element; top: number; scrollY: number } | null;
 
 export function startLive(): () => void {
+  let stop = connect();
+  // An open `EventSource` keeps the address it was made with, so a task switch
+  // has to make a new one or the window goes on declaring the task it left.
+  const unsubscribe = useStore.subscribe((state, before) => {
+    if (state.reviewName === before.reviewName) return;
+    stop();
+    stop = connect();
+  });
+  return () => {
+    unsubscribe();
+    stop();
+  };
+}
+
+function connect(): () => void {
   const store = () => useStore.getState();
-  const source = new EventSource("/api/events");
+  // The task this window is on, so the server knows whose comments to follow.
+  // A **registry and not a filter**: the frames are still one broadcast on one
+  // sequence of ids ([07-server.md](../../docs/reference/07-server.md)).
+  const source = new EventSource(onTask("/api/events"));
 
   // One queue: two events arriving together are two patches, and a patch that
   // reads the store while another is halfway through it would write back a
@@ -81,26 +99,37 @@ export function startLive(): () => void {
   on<Extract<WatcherEvent, { type: "diff-changed" }>>("diff-changed", (event) =>
     diffChanged(event.repo),
   );
+  // The three comment frames name the task their thread belongs to, and the
+  // stream is one broadcast, so a window drops what is not its own: reading it
+  // would answer `no-such-comment` and put a toast up for somebody else's write.
   on<Extract<WatcherEvent, { type: "comment-added" }>>("comment-added", (event) =>
-    thread(event.id),
+    onScreen(event.session) ? thread(event.id) : undefined,
   );
   on<Extract<WatcherEvent, { type: "reply-added" }>>("reply-added", (event) =>
-    thread(event.commentId, event.id),
+    onScreen(event.session) ? thread(event.commentId, event.id) : undefined,
   );
   on<Extract<WatcherEvent, { type: "comment-status" }>>("comment-status", (event) =>
-    thread(event.id),
+    onScreen(event.session) ? thread(event.id) : undefined,
   );
+  // The metadata of a task changed — its base, scope, title or status. Only the
+  // window showing that task cares: re-reading megabytes for another task's
+  // change would take the reader's own away and put it back
+  // ([ADR-010](../../docs/adr/adr-010-review-task-scope.md)).
   on<Extract<WatcherEvent, { type: "session-changed" }>>("session-changed", (event) => {
-    // The frame is about the current session, which is not what this window is
-    // on when it was opened on a task of its own: `current` moving is then
-    // somebody else's business, and re-reading megabytes for it would take the
-    // reader's own task away and put it back
-    // ([ADR-010](../../docs/adr/adr-010-review-task-scope.md)).
-    const held = store().reviewName;
-    if (held !== null && held !== event.name) return;
+    if (!onScreen(event.name)) return;
     // The page's own base change comes back through the watcher like anyone
     // else's. It has already read the review it names, and reading it again
     // would cost megabytes for nothing.
+    if (store().claimSelf("review", event.name)) return;
+    return store().loadReview();
+  });
+  // `current` moved. A window with no `?review=` shows whatever `current` is and
+  // writes there too, so it has to follow the pointer or it would show one task
+  // and write into another ([08-ui.md](../../docs/reference/08-ui.md)). A window
+  // opened on a task of its own does not follow: that is the whole point of the
+  // address.
+  on<Extract<WatcherEvent, { type: "current-changed" }>>("current-changed", (event) => {
+    if (store().reviewName !== null) return;
     if (store().claimSelf("review", event.name)) return;
     return store().loadReview();
   });
@@ -130,6 +159,13 @@ export function startLive(): () => void {
   };
 }
 
+/** Whether a frame is about the review this window is showing. Before the first
+ * read nothing is on screen, and nothing is dropped. */
+function onScreen(session: string): boolean {
+  const shown = useStore.getState().session?.name ?? null;
+  return shown === null || shown === session;
+}
+
 /**
  * The feed as the server has it since it started, merged by id: a reconnect
  * replays the frames it missed as well, and a line that arrives twice is one
@@ -147,6 +183,9 @@ async function readActivity(): Promise<void> {
  * has no changes left — and is as much of an update as a new diff is.
  */
 async function diffChanged(repo: string): Promise<void> {
+  // Stamped at request time: what the window is on when the answer lands may
+  // not be what it was on when the question went out.
+  const asked = useStore.getState().session?.name ?? null;
   const response = await fetch(onTask(`/api/repos/${repo}/diff`));
   if (!response.ok && response.status !== 404) {
     throw new Error(
@@ -154,8 +193,9 @@ async function diffChanged(repo: string): Promise<void> {
     );
   }
   const next = response.ok ? ((await response.json()) as RepositoryChange) : null;
+  if (asked === null) return;
   const anchor = capture();
-  useStore.getState().applyRepositoryDiff(repo, next);
+  useStore.getState().applyRepositoryDiff(repo, next, asked);
   await settle(anchor);
   // The frame that showed the new diff, on the wall clock the harness edits the
   // file by: this is the far end of the 300 ms budget of `docs/SPEC.md`
