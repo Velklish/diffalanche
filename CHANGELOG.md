@@ -216,6 +216,18 @@ and `bun run release` refuses a version that has no section. See
 
 ### Fixed
 
+- **The release no longer ships its checksums manifest inside the npm package**
+  (DA-106). The checksums step wrote `SHA256SUMS.txt` into `dist/`, and the same
+  job publishes to npm from that tree with no rebuild in between: `files` in
+  `package.json` excludes the binaries and not the manifest, so every tarball
+  carried a six-line list of platform binaries it does not contain. The manifest
+  now goes to `$RUNNER_TEMP` and the release uploads it from there under the
+  same name, which keeps `dist/` exactly what the npm channel ships instead of
+  adding a second exclusion to keep in sync. Both checks the step exists for —
+  the six-line count and the `sha256sum -c` re-read from inside `dist/` — are
+  unchanged. `bun run check:package` runs `npm pack --dry-run --json` and
+  refuses anything under `dist/` that is not `dist/cli.js` or under `dist/ui/`;
+  the `check` job of CI runs it, so a stray file stops a merge and not a tag.
 - **The step in the update budget is real, and it arrived with the DA-53…56
   package** (DA-56.3, folding in DA-55.2). The deferred measurement was taken on
   2026-09-21 in a quiet window, three trees alternating under one lock:

@@ -31,6 +31,7 @@
     "build:cli": "bun build src/cli/index.ts --target node --outfile dist/cli.js",
     "release": "bun run scripts/release.ts",
     "perf": "bun perf/gate.ts",
+    "check:package": "bun run scripts/check-package.ts",
     "test:ui": "playwright test --config e2e/playwright.config.ts",
     "test:e2e": "playwright test --config e2e/acceptance.config.ts"
   },

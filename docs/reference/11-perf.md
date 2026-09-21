@@ -666,12 +666,30 @@ The workflow does the rest, on the commit the tag names.
   which would otherwise produce a release quietly short of a platform; what it
   does not do is authenticate the download, which is the provenance
   attestation's job on the npm side and the release page's on this one.
+  **The manifest is written to `$RUNNER_TEMP` and never into `dist/`**, and the
+  release uploads it from there under the same name — that name is what a
+  downloader is told to look for. `dist/` is what `npm publish` packs and this
+  job publishes from the same tree with no rebuild in between, so a manifest
+  left in it shipped in the tarball, listing binaries the tarball does not
+  contain (DA-106). Writing it elsewhere makes that structural rather than a
+  second exclusion in `files` to keep in sync. `sha256sum -c` resolves the
+  manifest's paths against the current directory, so the re-read still happens
+  from inside `dist/`.
 - **npm is published with provenance:** `npm publish --provenance --access
   public` from the repository secret `NPM_TOKEN`, with `id-token: write` so npm
   can sign the attestation naming the commit and the run. The binaries stay out
   of the tarball — `files` in `package.json` lists `dist` and `skills` and
   excludes `dist/diffalanche-*`, which are release assets and about 490 MB of
-  them. Without the secret the step says so in a notice and stops green: the
+  them. What the tarball does carry is seventeen files: `package.json`, the
+  readme, the licence, the changelog, `dist/cli.js`, the built UI, and the
+  agent skills. **`bun run check:package` is what keeps it that way** — it runs
+  `npm pack --dry-run --json` and refuses anything under `dist/` that is not
+  `dist/cli.js` or under `dist/ui/`, so a by-product of a build or a release
+  step cannot ride along unnoticed. `scripts/check-package.ts` holds the rule,
+  `tests/package.test.ts` holds it to what the release workflow actually does,
+  and the `check` job of `ci.yml` runs it over a real tarball: a stray file
+  should stop a merge, not a tag, which is why the check is not in the release
+  job. Without the secret the step says so in a notice and stops green: the
   GitHub release is then the whole release, which is how a tag is published
   before the npm channel is opened.
 

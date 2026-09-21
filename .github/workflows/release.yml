@@ -90,18 +90,25 @@ jobs:
       - name: checksums
         # Six lines, one per target: a build that emitted fewer binaries would
         # otherwise produce a release short one platform and say nothing. The
-        # `-c` re-reads the files the release is about to upload.
+        # `-c` re-reads the files the release is about to upload, from inside
+        # `dist/`, because it resolves the manifest's paths against the current
+        # directory.
+        #
+        # The manifest goes to $RUNNER_TEMP and never into `dist/`: that
+        # directory is what `npm publish` packs, and this job publishes from the
+        # same tree with no rebuild in between (DA-106, 11-perf.md).
         run: |
           set -eu
+          manifest="$RUNNER_TEMP/SHA256SUMS.txt"
           cd dist
-          sha256sum diffalanche-* > SHA256SUMS.txt
-          lines=$(wc -l < SHA256SUMS.txt | tr -d " ")
+          sha256sum diffalanche-* > "$manifest"
+          lines=$(wc -l < "$manifest" | tr -d " ")
           if [ "$lines" -ne 6 ]; then
             echo "::error::SHA256SUMS.txt has $lines lines, one per binary built; six targets were expected"
             exit 1
           fi
-          sha256sum -c SHA256SUMS.txt
-          cat SHA256SUMS.txt
+          sha256sum -c "$manifest"
+          cat "$manifest"
 
       # The GitHub release first, npm second: a published npm version cannot be
       # taken back, and this step can be run again. Which is the point of the
@@ -126,7 +133,7 @@ jobs:
             --notes-file "$RUNNER_TEMP/notes.md" \
             $PRERELEASE
           gh release upload "$GITHUB_REF_NAME" \
-            dist/diffalanche-* dist/SHA256SUMS.txt \
+            dist/diffalanche-* "$RUNNER_TEMP/SHA256SUMS.txt" \
             --clobber
           gh release edit "$GITHUB_REF_NAME" --draft=false
 

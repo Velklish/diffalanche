@@ -61,6 +61,15 @@ jobs:
       - name: the runtime of this job
         run: node --version && node -e 'console.log(process.versions)'
       - run: bun run test
+      # Over the real tarball, on a merge rather than on a tag: the release job
+      # is the wrong place for a check whose failure should stop the one and not
+      # the other (DA-106). The two cheap halves of `build` are enough — the
+      # check is about what `dist/` carries, not about the binaries.
+      - name: the npm tarball carries nothing unexpected
+        run: |
+          bun run build:cli
+          bun run build:ui
+          bun run check:package
 
   test-bun:
     name: unit suite on Bun
