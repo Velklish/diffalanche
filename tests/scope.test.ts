@@ -43,6 +43,7 @@ import type { UiAssets } from "../src/server/assets.ts";
 import { createEventStream } from "../src/server/events.ts";
 import type { CandidateSet } from "../src/server/review.ts";
 import { createReviewService } from "../src/server/review.ts";
+import { untouched } from "./helpers/untouched.ts";
 
 const noUi: UiAssets = { read: async () => null };
 
@@ -399,7 +400,7 @@ describe("narrowing a scope", () => {
       "a finding under the path being removed",
     );
     expect(written, written.err).toMatchObject({ code: 0 });
-    const before = readFileSync(commentsPath(config.dataDir, "t6"), "utf8");
+    const unwritten = untouched(commentsPath(config.dataDir, "t6"));
 
     const refused = await cli(
       "review",
@@ -413,7 +414,7 @@ describe("narrowing a scope", () => {
     expect(refused.code).toBe(1);
     expect(refused.err).toContain("1 comment is anchored under what this removes");
     expect(refused.err).toContain("--drop-comments");
-    expect(readFileSync(commentsPath(config.dataDir, "t6"), "utf8")).toBe(before);
+    unwritten();
     expect((await readReview(config.dataDir, "t6")).scope).toHaveLength(2);
 
     const dropped = await cli(

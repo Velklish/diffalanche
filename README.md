@@ -368,6 +368,12 @@ both execute the suite. `tests/runtime.test.ts` says which one it got.
 code without the browser's globals, `src/ui` without Node's, and the tests and
 harnesses with both.
 
+A test that asserts a file **was not** written says it with
+`tests/helpers/untouched.ts` rather than by comparing the content: a rewrite
+that puts the same bytes back is what the comparison cannot see, and the helper
+stamps the mtime before the command and checks the stamp and the bytes after it
+([06-cli.md](docs/reference/06-cli.md)).
+
 `bun run dev` runs the CLI from source. The same lint, typecheck, and test
 commands run in CI on pushes to `main` and on pull requests. Biome skips `backslop.json`:
 the backslop CLI rewrites that file in its own style, so formatting it here

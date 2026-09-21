@@ -368,6 +368,17 @@ were the one refusal of `comment` that did rewrite `diff.json` on its way out â€
 a forgotten `--path` spawned the git processes for that repository and left the
 watcher and every open window a write from a command that wrote no comment.
 
+**"It did not rewrite `diff.json`" is asserted by the time of the write, not by
+the bytes.** `refreshRepository` puts the *same* bytes back when the repository
+has not changed since the last scan, which is the state a fixture is in, so a
+byte comparison holds whether the refusal rescanned or not and the test named
+after the invariant cannot fail. `tests/helpers/untouched.ts` is the one way the
+suite says it: it stamps the file's mtime to a fixed instant in 2020 before the
+command and asserts both the stamp and the bytes after it. Measured: with
+`assertAnchorLevels` replaced by `void assertAnchorLevels;`, the byte comparison
+alone exited 0 on all 17 checks while the refusal did rescan, and the stamped
+one exited 1 naming the file that was written.
+
 `list --repo` is checked against something else â€” the repositories the session's
 comments name. A repository that was renamed or removed still has everything
 that was ever said about it, and `list` is how that is read back; asking the

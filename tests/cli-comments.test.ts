@@ -4,7 +4,7 @@
  * 9, [ADR-004](../docs/adr/adr-004-agent-contract.md)).
  */
 import { execFile } from "node:child_process";
-import { readFileSync, rmSync, statSync, utimesSync, writeFileSync } from "node:fs";
+import { readFileSync, rmSync, writeFileSync } from "node:fs";
 import { join } from "node:path";
 import { promisify } from "node:util";
 import { afterAll, beforeAll, beforeEach, describe, expect, it } from "vitest";
@@ -20,6 +20,7 @@ import {
   REPOS,
   resetWorkingTrees,
 } from "./helpers/fixture-root.ts";
+import { untouched } from "./helpers/untouched.ts";
 
 const execFileAsync = promisify(execFile);
 const noUi: UiAssets = { read: async () => null };
@@ -142,14 +143,17 @@ describe("comment", () => {
   });
 
   it("refuses a --repo no repository is at, before it writes anything", async () => {
-    const before = readFileSync(
-      join(root, ".diffalanche", "reviews", "alpha", "diff.json"),
-      "utf8",
-    );
+    // A line anchor, so the refusal stands in front of the one thing that would
+    // rewrite the cache: without it the refresh is never reached at all.
+    const unwritten = untouched(join(root, ".diffalanche", "reviews", "alpha", "diff.json"));
     const result = await invoke([
       "comment",
       "--repo",
       "repos/group/gamma",
+      "--path",
+      "file.txt",
+      "--line",
+      String(EDITED_LINE),
       "--severity",
       "nit",
       "--body",
@@ -159,9 +163,7 @@ describe("comment", () => {
     expect(result.err).toContain('no repository "repos/group/gamma" under the root');
     expect(comments()).toHaveLength(0);
     // Nothing was rewritten on the way out, and no bogus warning was recorded.
-    expect(readFileSync(join(root, ".diffalanche", "reviews", "alpha", "diff.json"), "utf8")).toBe(
-      before,
-    );
+    unwritten();
   });
 
   it("refuses an anchor that is not a level, before it reads the repository again", async () => {
@@ -183,17 +185,11 @@ describe("comment", () => {
     ];
 
     for (const one of cases) {
-      const before = readFileSync(path, "utf8");
-      // The rewrite this refusal used to make puts the same bytes back, so what
-      // says whether it happened is the time of the write, not the content.
-      const stamp = new Date("2020-01-01T00:00:00.000Z");
-      utimesSync(path, stamp, stamp);
-
+      const unwritten = untouched(path);
       const result = await invoke(["comment", ...one.argv, "--severity", "nit", "--body", "x"]);
       expect(result.code).toBe(1);
       expect(result.err).toContain(one.message);
-      expect(statSync(path).mtimeMs).toBe(stamp.getTime());
-      expect(readFileSync(path, "utf8")).toBe(before);
+      unwritten();
       expect(comments()).toHaveLength(0);
     }
   });

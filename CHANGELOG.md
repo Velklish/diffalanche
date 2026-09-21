@@ -264,6 +264,13 @@ and `bun run release` refuses a version that has no section. See
 
 ### Fixed
 
+- **"This file was not written" is asserted by the time of the write** (DA-88.1).
+  A byte comparison cannot see a rewrite that puts the same bytes back, which is
+  exactly what a rescan of an unchanged repository does, so the checks named
+  after the invariant could not fail. `tests/helpers/untouched.ts` is now the one
+  way the suite says it — the mtime stamped back before the command and asserted
+  after it, with the bytes beside it — and the four places that asserted it by
+  content alone use it.
 - **Two writes that skipped the session's lock now take it** (DA-67). A comment
   checked the scope before the lock and wrote inside it, so a `review scope set`
   narrowing in between left a comment on a path the scope no longer had — stored,

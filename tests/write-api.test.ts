@@ -4,7 +4,7 @@
  * the CLI to read a moment later.
  */
 import { execFile, execFileSync } from "node:child_process";
-import { mkdirSync, mkdtempSync, readFileSync, rmSync, writeFileSync } from "node:fs";
+import { mkdirSync, mkdtempSync, rmSync, writeFileSync } from "node:fs";
 import { tmpdir } from "node:os";
 import { join, relative } from "node:path";
 import { fileURLToPath } from "node:url";
@@ -25,6 +25,7 @@ import type { UiAssets } from "../src/server/assets.ts";
 import { createEventStream } from "../src/server/events.ts";
 import { createReviewService } from "../src/server/review.ts";
 import { startReviewServer } from "../src/server/serve.ts";
+import { untouched } from "./helpers/untouched.ts";
 
 const run = promisify(execFile);
 const appendReply = fileURLToPath(new URL("./helpers/append-reply.ts", import.meta.url));
@@ -335,8 +336,7 @@ describe("a window on a named task", () => {
     // person was shown ([04-domain.md](../docs/reference/04-domain.md)).
     expect((await app.request("/api/review?review=on-task")).status).toBe(200);
 
-    const currentComments = join(config.dataDir, "reviews", SESSION, "comments.json");
-    const before = readFileSync(currentComments);
+    const unwritten = untouched(join(config.dataDir, "reviews", SESSION, "comments.json"));
 
     const written = await app.request("/api/comments?review=on-task", {
       method: "POST",
@@ -347,7 +347,7 @@ describe("a window on a named task", () => {
     const comment = (await written.json()) as Comment;
 
     expect((await list(config.dataDir, "on-task")).map((one) => one.id)).toEqual([comment.id]);
-    expect(readFileSync(currentComments).equals(before)).toBe(true);
+    unwritten();
   });
 
   it("reads that task's threads, warnings, diff and export, and the current one's without it", async () => {
