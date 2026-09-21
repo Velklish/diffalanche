@@ -109,6 +109,54 @@ next run starts". The path being waited out is the one the harness measures:
 takes longer than the sleep, the next run's measurement starts with the previous
 run's rescan still in flight.
 
+### What run 0921 recorded
+
+Three tracks ran gates on this tree through the evening of 2026-09-21, each on
+its own worktree and each declaring its environmental reds against the base
+commit `ed81928`. The records are the first live evidence for this list, and
+they change two of its items.
+
+**Item 1 fired, and the margin was 1%.** `tests/watcher.test.ts` "rescans the
+edited repository alone and has the new hunk in diff.json in time" went red with
+`expected 605.6702079999995 to be less than 599.8497499999994` — the median of
+the timed edits against `BUDGET_MS + baseline()`, both timed in the same run,
+red on the base commit as well. Six milliseconds over a ceiling the test
+computes for itself after the window it is compensating for. The sweep called
+this the lead suspect on reasoning alone; it does not need the reasoning any
+more.
+
+**Item 5's cause is one line lower than this list says.** The readiness barrier
+at [src/core/watcher/index.ts](../../../src/core/watcher/index.ts) awaits
+`Promise.all(watchers.map((w) => w.ready))` honestly — but
+[src/core/watcher/tree.ts](../../../src/core/watcher/tree.ts) returns
+`ready: Promise.resolve()` for the native path, so on that path the barrier
+awaits nothing at all. The polling path builds a real baseline from its first
+walk. That asymmetry is why `arm()` exists, and it applies to every `watchTree`
+caller, including watches of the data directory rather than of a repository.
+
+**Two more verdicts of the same family, seen by two tracks independently.**
+`tests/watcher.test.ts` "a comments.json that cannot be read → stops the comment
+events and leaves the rest of the chain running" fails as
+`Error: the watcher never caught up` from the `settle()` deadline poll, and
+`tests/events.test.ts` reddened on "replays what a client missed while it was
+away" and on "carries a reply written by the CLI". All three are deadline polls
+over an event that arrives late under load rather than not at all.
+
+**A wall-clock precondition that is assumed rather than asserted cannot be
+seen to have failed.** The lock-writers suite added by DA-76.1 waits a fixed
+budget for a racing scan to finish and then asserts that the cache was not
+written through the lock. Made to measure its own precondition, it failed
+immediately on this machine: a scan of the fixture took 467 ms against a 400 ms
+budget while the gates chain was running. Every earlier green of that verdict
+had been reached without the writer arriving — a pass that proves nothing, and
+that nothing distinguishes from a pass that proves something. The fix there
+turned the constant into a floor under a multiple of the scan the same test
+already times; the residual is that the multiple is a heuristic, not a bound.
+
+This is the general shape behind items 1, 5, 7 and 8: each holds a number that
+the machine, not the code, decides, and each reports the same green whether it
+checked or never reached the check.
+
 ## Work to do
 
 - Fix each of the eight. The shape of the fix differs: (1) and (8) need the wait
@@ -122,6 +170,12 @@ run's rescan still in flight.
 - Sweep the remaining fixed waits by the same rule: a wait is either a
   condition with a generous deadline or a documented sleep with a reason. Write
   the rule down in `docs/reference/11-perf.md`, next to what the gate measures.
+- Make every remaining fixed wait say whether it was enough. A sleep that was
+  long enough and a sleep that was not print the same green, and the verdict
+  behind the short one has not run; the lock-writers case above is the measured
+  instance of that. Where a wait guards an assertion, the test can time the
+  thing it waits for and derive the budget from it or check the budget against
+  it.
 - Where a budget is asserted outside the gate, say in the reference which
   assertion owns which number. Two places holding one budget to two rules is how
   a red test stops meaning anything.
