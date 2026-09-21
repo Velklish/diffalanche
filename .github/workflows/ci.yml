@@ -62,10 +62,8 @@ jobs:
       - name: the runtime of this job
         run: node --version && node -e 'console.log(process.versions)'
       - run: bun run test
-      # Over the real tarball, on a merge rather than on a tag: the release job
-      # is the wrong place for a check whose failure should stop the one and not
-      # the other (DA-106). The two cheap halves of `build` are enough — the
-      # check is about what `dist/` carries, not about the binaries.
+      # Over the real tarball, and on a merge rather than on a tag
+      # (11-perf.md). The two cheap halves of `build` are enough.
       - name: the npm tarball carries nothing unexpected
         run: |
           bun run build:cli
@@ -109,15 +107,8 @@ jobs:
           bun-version: 1.3.14
       - run: bun install --frozen-lockfile
       - run: bunx playwright install --with-deps chromium
-      # A job of its own, on a runner of its own: this suite and `e2e` share
-      # `dist/`, and a build under one takes the page out from under the other
-      # (08-ui.md). Separate runners is what makes that structural rather than a
-      # rule somebody has to remember.
-      #
-      # `test:ui:ci` is `test:ui` with `--ignore-snapshots`: the baselines in the
-      # repository were taken on macOS and a Linux runner draws other pixels, so
-      # the two screenshot comparisons of `shell.spec.ts` stay with the gate on a
-      # developer's own machine while the rest of that spec still runs here.
+      # Its own runner, because this suite and `e2e` share `dist/`; and
+      # `test:ui:ci` skips the macOS-only screenshots (08-ui.md).
       - run: bun run test:ui:ci
 
   smoke:

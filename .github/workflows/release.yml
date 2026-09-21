@@ -88,15 +88,8 @@ jobs:
         run: bun run build
 
       - name: checksums
-        # Six lines, one per target: a build that emitted fewer binaries would
-        # otherwise produce a release short one platform and say nothing. The
-        # `-c` re-reads the files the release is about to upload, from inside
-        # `dist/`, because it resolves the manifest's paths against the current
-        # directory.
-        #
-        # The manifest goes to $RUNNER_TEMP and never into `dist/`: that
-        # directory is what `npm publish` packs, and this job publishes from the
-        # same tree with no rebuild in between (DA-106, 11-perf.md).
+        # Six lines, one per target; `-c` re-reads them from inside `dist/`.
+        # The manifest stays out of `dist/`, which npm packs (11-perf.md).
         run: |
           set -eu
           manifest="$RUNNER_TEMP/SHA256SUMS.txt"

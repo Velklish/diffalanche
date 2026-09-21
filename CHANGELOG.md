@@ -115,7 +115,9 @@ and `bun run release` refuses a version that has no section. See
   for. `RUNNER_ALLOWANCE` was recomputed from 2.5 to 2.1 in the same pass: it is
   a ratio to what a runner measured, so a budget moving without it would have
   carried the CI ceiling from 20.8 to 23.8 against an unchanged 17.3 and turned
-  fifteen percent of headroom into thirty-eight. `docs/SPEC.md` section 6 keeps 8.3 ms as the target with the measured
+  fifteen percent of headroom into thirty-eight. The multiplier is tuned to this
+  one row, the tightest, and the other six get whatever it produces — so moving
+  any other millisecond budget does not touch it. `docs/SPEC.md` section 6 keeps 8.3 ms as the target with the measured
   number and its date beside it, and closing the gap is DA-56.5.
 - **The shell's two screenshots mask the sidebar footer** (DA-54.2). The footer
   prints `127.0.0.1:<port>`, so the free port above moved four digits of
@@ -262,6 +264,15 @@ and `bun run release` refuses a version that has no section. See
 
 ### Fixed
 
+- **The generator claims its stamp before it writes anything** (DA-69). It wrote
+  `synth.json` last, so `bun run perf` interrupted inside `synth` left the
+  fixture directory non-empty and unstamped — and the erase guard, which now
+  reads that stamp, then refused every later run instead of regenerating a
+  directory the gate had created itself. The stamp is written immediately after
+  the directory is made, carrying the generator, the seed and the profile, and
+  rewritten whole at the end with the session and its counts. A stamp without
+  the counts is a run that did not finish: `fixtureDrift` says so and the gate
+  regenerates, which is what the guard is supposed to allow.
 - **The release no longer ships its checksums manifest inside the npm package**
   (DA-106). The checksums step wrote `SHA256SUMS.txt` into `dist/`, and the same
   job publishes to npm from that tree with no rebuild in between: `files` in

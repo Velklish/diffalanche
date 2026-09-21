@@ -75,10 +75,12 @@ named bypass.**
 The gate reads the one-minute load average per core before the run and again
 after it, and takes the busier of the two — a machine that got busy halfway
 through decided the numbers as much as one that started busy. Above the ceiling
-it prints `unable to measure`, names the load, and exits non-zero without a
-budget verdict; before the run it does that without measuring at all, because a
-minute of browser time that cannot produce a verdict is a minute spent on
-nothing.
+it prints `unable to measure`, names the load, and exits non-zero. Before the
+run it does that without measuring at all, because a minute of browser time
+that cannot produce a verdict is a minute spent on nothing. Declining *after*
+the run, when the load rose during it, still prints the table — the numbers are
+worth seeing — but under a `**Not evidence.**` banner and without the
+`over budget:` line, so nothing in the output reads as a verdict.
 
 `bun run perf` therefore has three reds and says which: a line **over budget**, a
 line the gate has **no number it can trust** (`UNMEASURED`, from
@@ -134,15 +136,17 @@ of 20.75 would have passed almost any regression.
   nothing in it to fix — the `perf` job installs Chromium and generates a
   21-repository fixture immediately before the gate, so its own preparation
   would have tripped the check on four cores.
-- `RUNNER_ALLOWANCE` is a ratio to a measured runner reading and not a constant:
-  it exists to leave about fifteen percent over what `ubuntu-latest` delivers,
-  and that target is what survives a change of budget rather than the multiplier
-  itself. Moving a millisecond budget without recomputing it moves the runner
-  ceiling silently — raising CPU per frame from 8.3 to 9.5 took the ceiling from
-  20.8 to 23.8 against the same measured 17.3, turning fifteen percent of
-  headroom into thirty-eight — so **a budget change recomputes the multiplier in
-  the same pass**, and the readings to compute it from are in
-  [11-perf.md](../reference/11-perf.md).
+- `RUNNER_ALLOWANCE` is a ratio to a measured runner reading, and it is tuned to
+  **one row: CPU per frame**, the tightest. One multiplier cannot leave the same
+  headroom on seven rows that are not slow in the same proportion, and the other
+  six get whatever it happens to produce — first render several times over what
+  a runner measured. That is accepted: seven hand-maintained ceilings from the
+  DA-5.1 readings cost more than they are worth. So **moving the CPU-per-frame
+  budget recomputes the multiplier in the same pass, and moving any other
+  millisecond budget does not touch it.** The rule exists because DA-56.4 moved
+  that budget from 8.3 to 9.5 while the allowance stayed 2.5, carrying the
+  runner ceiling from 20.8 to 23.8 against an unchanged measured 17.3. The
+  readings are in [11-perf.md](../reference/11-perf.md).
 - `DIFFALANCHE_PERF_IGNORE_LOAD` is a contract outside the code and is
   documented with the other environment variables; it cannot be removed without
   a successor to this record.

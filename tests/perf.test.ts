@@ -382,6 +382,21 @@ describe("the provenance of the fixture the gate measures", () => {
     expect(fixtureDrift(fixture, PROFILES.small)).toBeNull();
   });
 
+  it("refuses a stamp a killed run left half written, and would regenerate it", () => {
+    // The generator claims the stamp first so an interrupted run leaves a
+    // directory the gate still recognises; it must not read as a good fixture.
+    const was = readFileSync(stamp, "utf8");
+    const half = JSON.parse(was) as Record<string, unknown>;
+    for (const key of ["session", "threads", "replies"]) delete half[key];
+    writeFileSync(stamp, JSON.stringify(half));
+    expect(fixtureDrift(fixture, PROFILES.small)).toMatch(/run that did not finish/);
+    // And the guard still lets the gate erase it, which is what makes the
+    // regeneration possible rather than a dead end.
+    expect(() => assertErasable(fixture)).not.toThrow();
+    writeFileSync(stamp, was);
+    expect(fixtureDrift(fixture, PROFILES.small)).toBeNull();
+  });
+
   it("refuses a fixture with no stamp, and one that is missing altogether", () => {
     const was = readFileSync(stamp, "utf8");
     rmSync(stamp);

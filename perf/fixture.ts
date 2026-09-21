@@ -51,6 +51,11 @@ export function fixtureDrift(fixture: string, profile: Profile = PROFILES.full):
   const stamp = readJson(join(fixture, STAMP_FILE));
   if ("failed" in stamp) return `has no readable ${STAMP_FILE} (${stamp.failed})`;
   const wrote = stamp.value as FixtureStamp;
+  // The generator claims the stamp before it writes anything and completes it
+  // last, so a stamp without the counts is a run that was killed part way.
+  if (wrote.session === undefined || wrote.threads === undefined) {
+    return `carries a ${STAMP_FILE} from a generator run that did not finish`;
+  }
   if (!sameProfile(wrote.profile, profile)) {
     return `was generated at ${describe(wrote.profile)}, the gate measures ${describe(profile)}`;
   }

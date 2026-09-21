@@ -53,13 +53,16 @@ export const STAMP_FILE = "synth.json";
 export interface FixtureStamp {
   generator: string;
   seed: number;
-  /** The session `current` names; the harness's scratch session is not it. */
-  session: string;
   profile: Profile;
-  /** Comment threads written into the session, and replies inside them. */
-  threads: number;
-  replies: number;
+  /** The session `current` names; absent until the run that writes it finishes. */
+  session?: string;
+  /** Threads written into that session and replies inside them; absent likewise. */
+  threads?: number;
+  replies?: number;
 }
+
+/** What writes the stamp, named in it so a reader knows whose file it is. */
+const GENERATOR = "scripts/synth.ts";
 
 export interface SynthReport {
   /** Repositories under `repos/`, including the clean sibling worktree. */
@@ -711,6 +714,12 @@ export function generate(options: SynthOptions): SynthReport {
   assertOverwritable(out);
   rmSync(out, { recursive: true, force: true });
   mkdirSync(out, { recursive: true });
+  // The stamp before the contents, so a run killed inside this function leaves
+  // a directory the gate can still recognise and regenerate (11-perf.md).
+  write(
+    join(out, STAMP_FILE),
+    json({ generator: GENERATOR, seed, profile } satisfies FixtureStamp),
+  );
 
   const repos = planRepos(rnd, profile, seq);
 
@@ -791,12 +800,12 @@ export function generate(options: SynthOptions): SynthReport {
   write(join(data, "reviews", SESSION_NAME, "comments.json"), json({ version: 1, comments }));
   write(join(data, "current"), `${SESSION_NAME}\n`);
 
-  // What was written, so a reader can tell this fixture from one that drifted
-  // under it — the perf gate checks it and regenerates otherwise (DA-69).
+  // Rewritten whole now that the session exists: the counts are what the gate
+  // checks a fixture against, and only a finished run can state them.
   write(
     join(out, STAMP_FILE),
     json({
-      generator: "scripts/synth.ts",
+      generator: GENERATOR,
       seed,
       session: SESSION_NAME,
       profile,

@@ -432,17 +432,23 @@ development machine first. The table names the widened ceiling beside the
 budget — `9.5 ms (20 on a runner)` — so a green runner is never read as the
 strict number holding.
 
-**The allowance is a ratio to a measured runner reading, not a constant.** It
-exists to put the ceiling about fifteen percent over what `ubuntu-latest`
-actually delivers, and that target is what has to survive a change of budget —
-the multiplier itself does not. When DA-56.4 moved the CPU-per-frame budget from
-8.3 to 9.5, an allowance of 2.5 carried the runner ceiling from 20.8 to 23.8
-against the same measured 17.3, quietly turning fifteen percent of headroom into
-thirty-eight and letting a regression the size of the runner's own reading pass
-on CI unnoticed. The multiplier was recomputed to 2.1 to put the ceiling back
-near 20. **Anyone moving a millisecond budget recomputes it in the same pass**,
-against the runner readings above: the number in the code is the result of that
-sum and not an independent constant.
+**The allowance is one multiplier, and it is tuned to one line.** It exists to
+put a ceiling about fifteen percent over what `ubuntu-latest` actually
+delivers, and it can only do that exactly for one row, because the rows are not
+slow in the same proportion. **The row it is tuned to is CPU per frame**, which
+is the tightest: 9.5 ms against a measured 17.3 gives 2.1, and a ceiling of
+about 20. Every other row gets whatever 2.1 happens to produce — first render
+ends up several times over what a runner measured, and that is accepted rather
+than fixed. Seven per-row ceilings, all derived from the DA-5.1 readings of
+2026-09-10 and all maintained by hand, cost more than they are worth.
+
+So the rule is narrower than it looks: **moving the CPU-per-frame budget
+recomputes the multiplier in the same pass; moving any other millisecond budget
+does not touch it.** DA-56.4 is why the rule exists at all — it took CPU per
+frame from 8.3 to 9.5 while the allowance stayed 2.5, which carried the runner
+ceiling from 20.8 to 23.8 against the same measured 17.3 and turned fifteen
+percent of headroom into thirty-eight, letting a regression the size of the
+runner's own reading pass on CI unnoticed.
 
 **What `bun run perf` means off a runner, and when it declines to say.** Off a
 runner, and only there: `GITHUB_ACTIONS=true` turns the precondition off
