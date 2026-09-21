@@ -49,7 +49,7 @@ Nothing in CI covers it: `BUDGETS` in [perf/budgets.ts](../../../perf/budgets.ts
 
 - The error taxonomy of the git layer — `git()` versus `gitOrNull()`, and what a spawn failure means — which is [DA-66](../DA-66-git-errors-have-no-taxonomy/task.md).
 - Caching the scan, or making it incremental. This entry bounds what the route spawns; it does not change the decision in [07-server.md](../../reference/07-server.md) that the scan reads git per request.
-- Whether the perf gate should grow a line for the scan routes at all: what the gate measures and what it silently passes is [DA-69](../../backlog/queue/DA-69-perf-gate-reports-green-unmeasured.md).
+- Whether the perf gate should grow a line for the scan routes at all: what the gate measures and what it silently passes is [DA-69](../DA-69-perf-gate-reports-green-unmeasured/task.md).
 
 ## Verification
 

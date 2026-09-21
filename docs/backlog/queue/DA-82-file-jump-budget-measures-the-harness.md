@@ -51,9 +51,9 @@ One further consequence is a hypothesis and is written as one: the harness jumps
 ## Out of scope
 
 - The e2e assertion's single sample and missing allowance, which is item 6 of [DA-60-flaky-test-hardening.md](DA-60-flaky-test-hardening.md).
-- The value of the budget itself and its headroom off CI, [DA-54.3-perf-budget-headroom.md](DA-54.3-perf-budget-headroom.md).
+- The value of the budget itself and its headroom off CI, [DA-54.3-perf-budget-headroom.md](../../archive/DA-54.3-perf-budget-headroom/task.md).
 - `afterPaint`'s definition of a painted frame, which the same argument touches for other rows and is [DA-55.4-settle-measures-before-paint.md](../../archive/DA-55.4-settle-measures-before-paint/task.md).
-- Whether a metric that was never produced can pass the gate, [DA-69-perf-gate-reports-green-unmeasured.md](DA-69-perf-gate-reports-green-unmeasured.md).
+- Whether a metric that was never produced can pass the gate, [DA-69-perf-gate-reports-green-unmeasured.md](../../archive/DA-69-perf-gate-reports-green-unmeasured/task.md).
 
 ## Verification
 

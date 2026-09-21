@@ -38,7 +38,7 @@ and its own base flipped both ways. A gate whose verdict does not move with the
 code is not gating the code.
 
 The same shape was measured again on 2026-09-21 while three workers shared this
-machine ([DA-56.3](../backlog/queue/DA-56.3-perf-pass-over-the-package.md)): the
+machine ([DA-56.3](../archive/DA-56.3-perf-pass-over-the-package/task.md)): the
 `Scrolling the diff: long tasks` line came out 4 at a load average of 37, 0 at
 33, and 1 at 15 — the count followed the machine and not the tree, on two
 different commits.
@@ -84,7 +84,7 @@ worth seeing — but under a `**Not evidence.**` banner and without the
 
 `bun run perf` therefore has three reds and says which: a line **over budget**, a
 line the gate has **no number it can trust** (`UNMEASURED`, from
-[DA-69](../backlog/queue/DA-69-perf-gate-reports-green-unmeasured.md)), and a
+[DA-69](../archive/DA-69-perf-gate-reports-green-unmeasured/task.md)), and a
 machine too busy for any number off it to be about the code. Before this, all
 three came out as the same exit code and the same table.
 

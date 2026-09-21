@@ -16,20 +16,20 @@ What is known, and what it is worth:
 
 - DA-53 and DA-54 were each measured before the decision. On the merge commit that carried both, the whole gate passed: CPU per frame **7.8 ms** against the 8.3 ms budget, every line inside, at a load average of 20.5.
 - DA-55 measured itself against its own base and came out better on every line — CPU per frame 8.0 against the base's 8.3, session switching 89.8 against 109.3. That comparison also caught a real regression it had introduced and fixed: the skeleton was being mounted between two reviews, costing 40 ms on a switch.
-- Between DA-55's two commits the update line stepped from 260 ms to 341 against a 300 ms budget, held across three machine states, and the cause was never found. That is [DA-55.2](../../archive/DA-55.2-update-budget-step-up/task.md), and it is the one number that was over budget when anybody last looked.
+- Between DA-55's two commits the update line stepped from 260 ms to 341 against a 300 ms budget, held across three machine states, and the cause was never found. That is [DA-55.2](../DA-55.2-update-budget-step-up/task.md), and it is the one number that was over budget when anybody last looked.
 - DA-56 was never measured at all. Its own report says so plainly: the history row grew heavier — up to six chips, a filter on every render, `data-session-status` and a focus restore on each press — and "I cannot claim it is free, I did not measure it."
 
 ## Work to do
 
-- Run `bun run perf` on the merged main and record every line with the load average beside it. On this machine that needs `DIFFALANCHE_DATA_DIR=.diffalanche` until [DA-54.1](../../archive/DA-54.1-e2e-fixture-ignores-user-config/task.md) lands.
-- Read the result against the numbers above rather than against the budget alone: `updateMs` is the line already known to be over, and `cpuPerFrameMs` has about half a millisecond of headroom on a quiet machine ([DA-54.3](DA-54.3-perf-budget-headroom.md)).
+- Run `bun run perf` on the merged main and record every line with the load average beside it. On this machine that needs `DIFFALANCHE_DATA_DIR=.diffalanche` until [DA-54.1](../DA-54.1-e2e-fixture-ignores-user-config/task.md) lands.
+- Read the result against the numbers above rather than against the budget alone: `updateMs` is the line already known to be over, and `cpuPerFrameMs` has about half a millisecond of headroom on a quiet machine ([DA-54.3](../DA-54.3-perf-budget-headroom/task.md)).
 - Whatever is over, attribute it before fixing it. Four tasks are merged now, so a red line does not say whose it is; the base to compare against is `1193ab3`, the commit the package started from.
-- [DA-55.2](../../archive/DA-55.2-update-budget-step-up/task.md) folds into this pass if the step is still there: its own entry exists because the measurement was deferred, and this is the deferred measurement.
+- [DA-55.2](../DA-55.2-update-budget-step-up/task.md) folds into this pass if the step is still there: its own entry exists because the measurement was deferred, and this is the deferred measurement.
 
 ## Out of scope
 
-- Making `perf` cheaper or giving a development machine an allowance ([DA-54.3](DA-54.3-perf-budget-headroom.md)).
-- Adding a budget for `sessions-changed` ([DA-56.1](../minor/DA-56.1-sessions-changed-has-no-budget.md)) — a different question, though this pass is a natural moment to settle it.
+- Making `perf` cheaper or giving a development machine an allowance ([DA-54.3](../DA-54.3-perf-budget-headroom/task.md)).
+- Adding a budget for `sessions-changed` ([DA-56.1](../../backlog/minor/DA-56.1-sessions-changed-has-no-budget.md)) — a different question, though this pass is a natural moment to settle it.
 
 ## Verification
 
@@ -64,8 +64,8 @@ That brackets the cause to the review round itself, whose diff is small: one ove
 
 ### Out of scope
 
-- The perf budget's own headroom off CI ([DA-54.3](DA-54.3-perf-budget-headroom.md)).
-- The named-task routes, which this budget does not measure at all ([DA-55.3](DA-55.3-named-task-document-is-stale.md)).
+- The perf budget's own headroom off CI ([DA-54.3](../DA-54.3-perf-budget-headroom/task.md)).
+- The named-task routes, which this budget does not measure at all ([DA-55.3](../../backlog/queue/DA-55.3-named-task-document-is-stale.md)).
 
 ### Verification
 

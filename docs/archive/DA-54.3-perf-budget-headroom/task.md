@@ -29,13 +29,13 @@ The last row is the point sharpened rather than blunted: the same suite passed a
 
 **Under load the gate no longer measures the code.** With the sticky bar taken out entirely — the same commit, the same machine, one line changed — the run still failed at 9.0 ms. Removing the whole subject of the task did not make the gate pass, and across four paired runs the sign of the difference between a change and its own base flipped both ways. A gate whose verdict does not move with the code is not gating the code.
 
-[perf/gate.ts:66](../../../perf/gate.ts) gives the named allowance of [DA-5.1](../../archive/DA-5.1-perf-gate-on-ci-runner/task.md) only under `GITHUB_ACTIONS`; a development machine gets the raw budget. That was a deliberate decision when a development machine meant a quiet one. An orchestrated run with several workers is not quiet, and neither is a laptop with a browser open.
+[perf/gate.ts:66](../../../perf/gate.ts) gives the named allowance of [DA-5.1](../DA-5.1-perf-gate-on-ci-runner/task.md) only under `GITHUB_ACTIONS`; a development machine gets the raw budget. That was a deliberate decision when a development machine meant a quiet one. An orchestrated run with several workers is not quiet, and neither is a laptop with a browser open.
 
 Measured again on 2026-09-11, on the same machine, on a tree whose only difference
 from `a8d673b` is markdown (`git diff --stat HEAD -- src perf scripts package.json
 .perf e2e` is empty). Two consecutive `bun run perf` invocations, with the
 developer's user config neutralised so the gate could start at all (that half is
-[DA-54.1](../../archive/DA-54.1-e2e-fixture-ignores-user-config/task.md)):
+[DA-54.1](../DA-54.1-e2e-fixture-ignores-user-config/task.md)):
 
 | Metric | Budget | Run A | Run B |
 |---|---|---|---|
@@ -49,7 +49,7 @@ measurement rather than an inference: the same binary on the same fixture gives
 27.2 ms and 60.5 ms twenty minutes apart, so which side of the 50 ms bound it
 lands on is decided by the machine's load and not by the code. The update line is
 a different question and belongs to
-[DA-55.2](../../archive/DA-55.2-update-budget-step-up/task.md).
+[DA-55.2](../DA-55.2-update-budget-step-up/task.md).
 
 ## Work to do
 
@@ -62,7 +62,7 @@ a different question and belongs to
 ## Out of scope
 
 - The CI allowance itself (DA-5.1). This is about what the same command means on a development machine.
-- The fixture not starting when a user config sets a relative `dataDir` — that is [DA-54.1](../../archive/DA-54.1-e2e-fixture-ignores-user-config/task.md), a separate and independent reason the same command fails.
+- The fixture not starting when a user config sets a relative `dataDir` — that is [DA-54.1](../DA-54.1-e2e-fixture-ignores-user-config/task.md), a separate and independent reason the same command fails.
 
 ## Verification
 

@@ -57,7 +57,7 @@ Nothing asserts the value is finite, and `0 > 8.3` and `NaN > 500` are both fals
 
 ## Out of scope
 
-- `prepare`'s `rmSync` of any `--fixture` directory, filed as [DA-63](DA-63-perf-gate-erases-fixture.md). It is the same eight lines and the same function, and whichever lands first will touch the other's context, but they are different defects: one deletes what it was pointed at, this one fails to notice what it kept.
+- `prepare`'s `rmSync` of any `--fixture` directory, filed as [DA-63](../DA-63-perf-gate-erases-fixture/task.md). It is the same eight lines and the same function, and whichever lands first will touch the other's context, but they are different defects: one deletes what it was pointed at, this one fails to notice what it kept.
 - Repairing the drifted `.perf/fixture` on this machine. That is one `bun run synth -- --out .perf/fixture`; the entry is about the run not telling anyone.
 - The budgets themselves, and `sessionSwitchMs`, which is pending on DA-24.1.
 

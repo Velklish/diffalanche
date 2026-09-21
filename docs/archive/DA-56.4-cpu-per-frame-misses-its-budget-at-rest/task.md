@@ -85,9 +85,9 @@ nothing in the range moved it.
 
 - The update line, which the same window did attribute: `1193ab3` measured 244
   and 267 ms inside its 300 ms budget, `ed81928` 352 and 392 outside it. That is
-  [DA-56.3](../queue/DA-56.3-perf-pass-over-the-package.md)'s own finding.
+  [DA-56.3](../DA-56.3-perf-pass-over-the-package/task.md)'s own finding.
 - The long-task line, whose verdict follows the machine — that is DA-69.1.
-- The load precondition ([DA-54.3](../queue/DA-54.3-perf-budget-headroom.md)),
+- The load precondition ([DA-54.3](../DA-54.3-perf-budget-headroom/task.md)),
   which is landed and which does not help here: this line is red at rest.
 
 ## Verification
