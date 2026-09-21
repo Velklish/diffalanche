@@ -8,9 +8,10 @@ import { join } from "node:path";
 import type { Hono } from "hono";
 import { afterAll, beforeAll, describe, expect, it } from "vitest";
 import { generate, PROFILES } from "../scripts/synth.ts";
+import { findRepositories } from "../src/core/change-set.ts";
 import type { Config } from "../src/core/config/index.ts";
 import { loadConfig } from "../src/core/config/index.ts";
-import { addComment } from "../src/core/domain/index.ts";
+import { addComment, createSession } from "../src/core/domain/index.ts";
 import { readDiffCache } from "../src/core/storage/index.ts";
 import type { ReviewDocument } from "../src/core/types.ts";
 import { createActivityLog } from "../src/core/watcher/index.ts";
@@ -22,6 +23,12 @@ import { startReviewServer } from "../src/server/serve.ts";
 
 const SMALL = PROFILES.small;
 const SESSION = "synth";
+/** A second task, never current: what a window opened on `?review=` is on. */
+const NAMED = "named-task";
+/** A third, about one repository: what a scope keeps a signal away from. */
+const SCOPED = "scoped-task";
+/** The repository `SCOPED` is about. */
+let inScope = "";
 const PAGE = "<!doctype html><title>diffalanche</title>";
 
 /** The UI as the two delivery channels hand it over: one file, or nothing. */
@@ -47,6 +54,15 @@ beforeAll(async () => {
     events: createEventStream(),
     review: createReviewService(config),
     ui,
+  });
+  // Fixtures rather than the leavings of an earlier test: a file run on its own
+  // must fail on its subject, not on `no-such-session`.
+  await createSession(config.dataDir, NAMED, { mode: "head" }, undefined, { use: false });
+  const repositories = await findRepositories(config);
+  inScope = repositories[0] as string;
+  await createSession(config.dataDir, SCOPED, { mode: "head" }, undefined, {
+    use: false,
+    scope: [{ repo: inScope, paths: null }],
   });
 }, 120_000);
 
@@ -104,10 +120,10 @@ describe("what a write costs the next reader", () => {
     const service = createReviewService(config);
     await service.document();
 
-    service.invalidateComments();
+    service.invalidateComments(SESSION);
     const reading = service.document();
     // While that read is in flight — the write itself is what follows it.
-    service.invalidateComments();
+    service.invalidateComments(SESSION);
     await reading;
 
     const written = await addComment(config.dataDir, SESSION, {
@@ -132,7 +148,7 @@ describe("what a write costs the next reader", () => {
       role: "human",
     });
 
-    service.invalidateComments();
+    service.invalidateComments(SESSION);
     const after = await service.document();
     expect(after.comments.length).toBe(before.comments.length + 1);
     expect(after.counters.counters.total).toBe(before.counters.counters.total + 1);
@@ -149,8 +165,13 @@ describe("the other routes", () => {
       sessions: { name: string; current: boolean; open: number }[];
       warnings: string[];
     };
-    expect(list.sessions.map((session) => session.name)).toEqual([SESSION]);
-    expect(list.sessions[0]).toMatchObject({ current: true });
+    // Three: the fixture's own, and the two tasks the change-set tests are about.
+    expect(list.sessions.map((session) => session.name).sort()).toEqual(
+      [SESSION, NAMED, SCOPED].sort(),
+    );
+    expect(list.sessions.find((session) => session.name === SESSION)).toMatchObject({
+      current: true,
+    });
     expect(list.warnings).toEqual([]);
   });
 
@@ -423,4 +444,38 @@ describe("starting the server", () => {
       await first.close();
     }
   }, 120_000);
+});
+
+/**
+ * The change set behind the documents: which session's cache may be trusted,
+ * what a switch back costs, and what a rescan announced before it was written
+ * does to a document that is not there yet
+ * ([07-server.md](../docs/reference/07-server.md)).
+ */
+describe("the change set a document is built from", () => {
+  it("holds one document per session, so a switch back builds nothing", async () => {
+    const service = createReviewService(config);
+    const first = await service.document(SESSION);
+    await service.document(NAMED);
+    const back = await service.document(SESSION);
+    // The same object: a switch back is answered from memory, not from `diff.json`.
+    expect(back).toBe(first);
+  });
+
+  it("charges a comment write the comments and not the change set", async () => {
+    const service = createReviewService(config);
+    const before = await service.document(NAMED);
+    await addComment(config.dataDir, NAMED, {
+      severity: "nit",
+      body: "written on a task the watcher does not follow",
+      author: "kim.p",
+      role: "human",
+    });
+    service.invalidateComments(NAMED);
+    const after = await service.document(NAMED);
+    expect(after.comments.length).toBe(before.comments.length + 1);
+    // The same array: a comment must not charge the next reader for a read of
+    // every repository of the scope.
+    expect(after.repositories).toBe(before.repositories);
+  });
 });

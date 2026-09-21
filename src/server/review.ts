@@ -1,9 +1,5 @@
-/**
- * The review the server hands out: the change set of the current session with
- * its comments and counters. It is built once, kept in memory, and rebuilt when
- * something says it changed — the whole document arrives in one response and
- * nothing is loaded lazily afterwards (`docs/SPEC.md` section 6).
- */
+/** The review the server hands out, one built document per session
+ * ([07-server.md](../../docs/reference/07-server.md), `docs/SPEC.md` section 6). */
 import { isAbsolute, relative, resolve, sep } from "node:path";
 import {
   filterChange,
@@ -16,7 +12,7 @@ import {
 import type { Config } from "../core/config/index.ts";
 import { countReview, list, repositoryInScope, resolveSessionName } from "../core/domain/index.ts";
 import { readRepositoryChange, scan } from "../core/index.ts";
-import type { Base, DiffCache } from "../core/storage/index.ts";
+import type { Base, DiffCache, Review } from "../core/storage/index.ts";
 import {
   readDiffCache,
   readReview,
@@ -84,12 +80,8 @@ export type ReviewService = {
    * domain's own `no-current-session` or `no-such-session` when there is none.
    */
   document: (session?: string) => Promise<ReviewDocument>;
-  /**
-   * The same document serialised. The current session's is built once per
-   * change and kept; a named one is built for the request that asked, because
-   * a window opening another task must not evict the review everyone else is
-   * reading.
-   */
+  /** The same document serialised: one per session, serialised once per change
+   * ([07-server.md](../../docs/reference/07-server.md)). */
   payload: (session?: string) => Promise<string>;
   /**
    * One repository of the change set, or `null` when it has no changes. The
@@ -100,151 +92,200 @@ export type ReviewService = {
    * watcher does not keep fresh — see `freshRepository` below.
    */
   repository: (repo: string, session?: string) => Promise<RepositoryChange | null>;
-  /** The change set as a rescan left it on disk, taken as the document's own. */
-  adopt: (cache: DiffCache) => void;
-  /** Something changed underneath: the document is built again when next asked for. */
-  invalidate: () => void;
-  /**
-   * Only the comments changed. Re-reading them costs a small file; rebuilding
-   * the document would cost `diff.json`, which every comment write would then
-   * charge the next reader for.
-   */
-  invalidateComments: () => void;
+  /** The change set as a rescan of that session left it, taken as its document's own. */
+  adopt: (session: string, cache: DiffCache) => void;
+  /** Something changed underneath that session: its document is built again when next asked for. */
+  invalidate: (session: string) => void;
+  /** Only the comments of that session changed: a small file, where rebuilding the
+   * document would charge the next reader for the whole change set. */
+  invalidateComments: (session: string) => void;
   /** Every repository under the root with whether it has changes: the first-run screen. */
   summary: () => Promise<ScanSummary>;
   /** The change set of the whole root, scope ignored: what a scope is picked from. */
   candidates: () => Promise<CandidateSet>;
 };
 
-type State = { session: string; document: ReviewDocument; payload: string | null };
+/** What the server holds for one session: its document, and what is known to be newer. */
+type Held = {
+  document: ReviewDocument | null;
+  payload: string | null;
+  pending: Promise<ReviewDocument> | null;
+  /** Bumped by every invalidation of this session, so a build that started before one is dropped. */
+  version: number;
+  /** The write this session's comments were last known to be behind. */
+  commentsWritten: number;
+  /** The write the held comments are known to cover, taken when the read was asked for. */
+  staleComments: number;
+};
+
+/** How many sessions keep a built document at once; each one is megabytes
+ * ([07-server.md](../../docs/reference/07-server.md)). */
+export const DOCUMENT_CACHE_LIMIT = 4;
 
 export function createReviewService(config: Config): ReviewService {
-  let state: State | null = null;
-  let pending: Promise<State> | null = null;
-  /** Bumped by every invalidation, so a build that started before one is dropped. */
-  let version = 0;
-  /** Bumped by every write of the comments, so a read cannot clear a newer one. */
-  let commentsWritten = 0;
-  let staleComments = 0;
+  const sessions = new Map<string, Held>();
+  // One sequence over every session, so a read can be pinned to the moment it
+  // was asked for and cannot clear a write that landed after that.
+  let writes = 0;
 
-  async function current(): Promise<State> {
-    const cached = state;
-    if (cached !== null) {
-      if (staleComments !== commentsWritten) {
-        const reading = commentsWritten;
-        const comments = await list(config.dataDir, cached.session);
-        // A write that landed while the file was being read is not covered by
-        // what was read, so the flag it set stays set.
-        staleComments = reading;
-        cached.document = { ...cached.document, comments, counters: countReview(comments) };
-        cached.payload = null;
-      }
-      return cached;
+  /** The entry of a session, made when it is new; asking for one makes it the newest. */
+  function entryOf(session: string): Held {
+    const found = sessions.get(session);
+    if (found !== undefined) {
+      sessions.delete(session);
+      sessions.set(session, found);
+      return found;
     }
-    if (pending === null) {
-      const started = version;
-      pending = build(config).then(
-        (built) => {
-          pending = null;
-          if (version === started) state = built;
-          return built;
+    const made: Held = {
+      document: null,
+      payload: null,
+      pending: null,
+      version: 0,
+      commentsWritten: writes,
+      staleComments: writes,
+    };
+    sessions.set(session, made);
+    trim(sessions);
+    return made;
+  }
+
+  async function documentOf(session: string, asked: number): Promise<ReviewDocument> {
+    const entry = entryOf(session);
+    const cached = entry.document;
+    if (cached !== null) {
+      if (entry.commentsWritten <= entry.staleComments) return cached;
+      const started = entry.version;
+      const comments = await list(config.dataDir, session);
+      const reread = { ...cached, comments, counters: countReview(comments) };
+      // An invalidation that landed during the read threw this document away,
+      // and a re-read of its comments must not put it back.
+      if (entry.version !== started) return reread;
+      // The read covers the writes up to the moment it was asked for; one that
+      // landed after that is not covered, so the flag it set stays set.
+      if (asked > entry.staleComments) entry.staleComments = asked;
+      entry.document = reread;
+      entry.payload = null;
+      return reread;
+    }
+    if (entry.pending === null) {
+      const started = entry.version;
+      const startedWrites = writes;
+      entry.pending = build(config, session).then(
+        (settled) => {
+          entry.pending = null;
+          if (entry.version === started) {
+            entry.document = settled;
+            entry.payload = null;
+            entry.staleComments = startedWrites;
+          }
+          return settled;
         },
         (error: unknown) => {
-          pending = null;
+          entry.pending = null;
           throw error;
         },
       );
     }
-    return pending;
-  }
-
-  /**
-   * The document of a session that is not the current one. It is built for the
-   * request and not kept: the one document in memory is the review the page is
-   * on, and a window that opens another task — from a link an agent printed —
-   * must not take that away from it.
-   */
-  async function other(session: string): Promise<State> {
-    const cached = state;
-    if (cached !== null && cached.session === session) return current();
-    return build(config, session);
+    return entry.pending;
   }
 
   return {
-    document: async (session) =>
-      (session === undefined ? await current() : await other(session)).document,
-    payload: async (session) => {
-      if (session !== undefined) {
-        const held = await other(session);
-        held.payload ??= JSON.stringify(held.document);
-        return held.payload;
-      }
-      const held = await current();
-      held.payload ??= JSON.stringify(held.document);
-      return held.payload;
+    document: async (session) => {
+      // Taken before the name is read from disk: a write that lands while it is
+      // being read must not pass for one this read covers.
+      const asked = writes;
+      return documentOf(await resolveSessionName(config.dataDir, session), asked);
     },
-    repository: async (repo, session) =>
-      session === undefined
-        ? ((await current()).document.repositories.find((one) => one.path === repo) ?? null)
-        : freshRepository(config, session, repo),
-    adopt: (cache) => {
-      if (state === null) return;
-      state.document = {
-        ...state.document,
+    payload: async (session) => {
+      const asked = writes;
+      const name = await resolveSessionName(config.dataDir, session);
+      const document = await documentOf(name, asked);
+      const entry = sessions.get(name);
+      // A document an invalidation kept out of the cache is serialised for the
+      // request that asked and not kept.
+      if (entry === undefined || entry.document !== document) return JSON.stringify(document);
+      entry.payload ??= JSON.stringify(document);
+      return entry.payload;
+    },
+    repository: async (repo, session) => {
+      if (session !== undefined) return freshRepository(config, session, repo);
+      const asked = writes;
+      const document = await documentOf(await resolveSessionName(config.dataDir), asked);
+      return document.repositories.find((one) => one.path === repo) ?? null;
+    },
+    adopt: (session, cache) => {
+      const entry = entryOf(session);
+      const document = entry.document;
+      if (document === null) return;
+      // The hunks go no further than `diff.json`, here as in the document: the
+      // renderer reads `patch` and anchor capture reads the file.
+      entry.document = {
+        ...document,
         repositories: cache.repositories.map(withoutHunks),
         totals: cache.totals,
         warnings: cache.warnings,
       };
-      state.payload = null;
+      entry.payload = null;
     },
-    invalidate: () => {
-      version += 1;
-      state = null;
+    invalidate: (session) => {
+      const entry = sessions.get(session);
+      if (entry === undefined) return;
+      entry.version += 1;
+      entry.document = null;
+      entry.payload = null;
     },
-    invalidateComments: () => {
-      commentsWritten += 1;
-      if (state !== null) state.payload = null;
+    invalidateComments: (session) => {
+      writes += 1;
+      const entry = sessions.get(session);
+      if (entry === undefined) return;
+      entry.commentsWritten = writes;
+      entry.payload = null;
     },
     summary: async () => summarise(config),
     candidates: async () => candidatesOf(config),
   };
 }
 
-async function build(config: Config, named?: string): Promise<State> {
-  const session = await resolveSessionName(config.dataDir, named);
+/** Drops the least recently asked-for sessions until the map is inside the limit;
+ * one with a build in flight stays, so nothing loses the version it started on. */
+function trim(sessions: Map<string, Held>): void {
+  for (const [name, entry] of sessions) {
+    if (sessions.size <= DOCUMENT_CACHE_LIMIT) break;
+    if (entry.pending === null) sessions.delete(name);
+  }
+}
+
+/** Whether a cache answers the question this session asks — which is not whether it is fresh. */
+function answers(cache: DiffCache, review: Review): boolean {
+  return sameBase(cache.base, review.base) && sameScope(cache.scope, review.scope);
+}
+
+async function build(config: Config, session: string): Promise<ReviewDocument> {
   const review = await readReview(config.dataDir, session);
-  // The cache is the change set of the last scan. One computed against another
-  // base — or for another scope — answers a different question, and `review
-  // base` and a scope edit are what put it there, so it is read again rather
-  // than trusted.
-  const cached = await readDiffCache(config.dataDir, session);
-  const cache =
-    cached !== null && sameBase(cached.base, review.base) && sameScope(cached.scope, review.scope)
-      ? cached
-      : await rebuild(config, session);
+  const cache = await changeSet(config, session, review);
   const comments = await list(config.dataDir, session);
   return {
-    session,
-    payload: null,
-    document: {
-      root: config.root,
-      repositories: cache.repositories.map(withoutHunks),
-      totals: cache.totals,
-      warnings: cache.warnings,
-      session: review,
-      comments,
-      counters: countReview(comments),
-    },
+    root: config.root,
+    repositories: cache.repositories.map(withoutHunks),
+    totals: cache.totals,
+    warnings: cache.warnings,
+    session: review,
+    comments,
+    counters: countReview(comments),
   };
 }
 
-/**
- * Reads every repository and writes `diff.json`. The hunks are read here and
- * kept only in the file: anchor capture is the one reader that needs them, and
- * the response drops them.
- */
-async function rebuild(config: Config, session: string): Promise<DiffCache> {
-  const review = await readReview(config.dataDir, session);
+/** The change set of a session: the cache when it answers the question this session
+ * asks, and a read of every repository of the scope when it does not. */
+async function changeSet(config: Config, session: string, review: Review): Promise<DiffCache> {
+  const cached = await readDiffCache(config.dataDir, session);
+  if (cached !== null && answers(cached, review)) return cached;
+  return rebuild(config, session, review);
+}
+
+/** Reads every repository of the scope and writes `diff.json`; the hunks stay in the
+ * file, where anchor capture is the one reader that needs them. */
+async function rebuild(config: Config, session: string, review: Review): Promise<DiffCache> {
   const { cache } = await scanReview(config, review.base, review.scope);
   await withLock(sessionDir(config.dataDir, session), async (held) => {
     await held.assertHeld();

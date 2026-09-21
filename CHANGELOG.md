@@ -104,6 +104,22 @@ and `bun run release` refuses a version that has no section. See
 
 ### Changed
 
+- **The server holds one built review document per session** (DA-24.1), instead
+  of one at a time. The first build of a session is paid once and a switch back
+  to it is answered from memory: `POST /api/sessions/:name/use` now invalidates
+  nothing, because moving `current` changes which document a request without
+  `?review=` resolves to and not what any document says, and every other write
+  names the session it changed. Four documents are held at a time — each one is
+  megabytes — and the least recently asked-for is dropped. **A comment, a reply,
+  a resolve and a reopen now re-read the comments of that session alone** rather
+  than dropping its document: a comment does not move the working tree, and on a
+  task the watcher does not follow rebuilding meant reading every repository of
+  the scope for every write. The perf gate's
+  **Switching review sessions** line loses its `pendingUntil` and becomes the
+  budget of a return visit: the harness makes the first, cold switch of a
+  session before the measured pair and prints it, so the path no budget covers
+  is named rather than warmed away.
+
 - **The CPU-per-frame gate is set on what the machine reaches, and 120 fps stays
   the goal** (DA-56.4). `Scrolling the diff: CPU per frame` was budgeted at
   8.3 ms, the frame of 120 fps, and measured 8.5–9.1 ms over nine commits of the

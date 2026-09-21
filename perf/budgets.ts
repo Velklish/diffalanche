@@ -43,7 +43,6 @@ export const BUDGETS: Budget[] = [
     field: "sessionSwitchMs",
     budget: 100,
     unit: "ms",
-    pendingUntil: "DA-24.1",
   },
   { label: "Update after an edit in one repository", field: "updateMs", budget: 300, unit: "ms" },
 ];

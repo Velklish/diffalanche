@@ -94,16 +94,22 @@ describe("perf gate", () => {
     expect(formatTable(rows, 1)).toContain("| pending | DA-99 |");
   });
 
-  it("measures the session switch, and waits for DA-24.1 before failing on it", () => {
+  it("fails the session switch on its own number, with no task left to wait for", () => {
     const rows = evaluate([measurement({ sessionSwitchMs: 140 })]);
     const switching = rows.find((row) => row.budget.label === "Switching review sessions");
     expect(switching?.measured).toBe(140);
-    // Measured over the whole wait since DA-25's review round, and over budget
-    // on the cold path; where the built document is cached is DA-24.1's
-    // question and the owner's call, so the number is printed with the task
-    // named rather than failing the build.
+    // DA-24.1 made the line the budget of a return visit — the document is held
+    // per session, so a switch back is warm — and it is a verdict from then on.
+    expect(switching?.budget.pendingUntil).toBeUndefined();
+    expect(switching?.failed).toBe(true);
+    expect(formatTable(rows, 1)).toContain("| 140 ms | FAIL |");
+  });
+
+  it("passes the session switch when it is inside the budget", () => {
+    const rows = evaluate([measurement({ sessionSwitchMs: 95 })]);
+    const switching = rows.find((row) => row.budget.label === "Switching review sessions");
     expect(switching?.failed).toBe(false);
-    expect(formatTable(rows, 1)).toContain("| 140 ms | DA-24.1 |");
+    expect(formatTable(rows, 1)).toContain("| 95 ms | ok |");
   });
 
   it("prints a line that is measured but still waiting for its task, and does not fail it", () => {

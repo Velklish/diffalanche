@@ -209,9 +209,9 @@ export function createApp({ activity, config, events, review, ui, verbose }: App
   // Every write goes through the domain with the name from the configuration
   // and `role: human`: the UI is the human, and the CLI is where an agent
   // writes ([ADR-004](../../docs/adr/adr-004-agent-contract.md)). The watcher
-  // turns the file that changed into the events the UI listens for; the
-  // document is dropped here as well, so the next read of it is the new state
-  // and not the state of a moment ago.
+  // turns the file that changed into the events the UI listens for. A write to
+  // the comments re-reads the comments alone; a write to the review itself
+  // drops that session's document ([07-server.md](../../docs/reference/07-server.md)).
 
   app.post("/api/comments", async (c) => {
     const body = await readBody(c);
@@ -235,7 +235,7 @@ export function createApp({ activity, config, events, review, ui, verbose }: App
       body: text(body, "body"),
       ...author,
     });
-    review.invalidate();
+    review.invalidateComments(session);
     return c.json(comment, 201);
   });
 
@@ -246,21 +246,17 @@ export function createApp({ activity, config, events, review, ui, verbose }: App
       body: text(body, "body"),
       ...author,
     });
-    review.invalidate();
+    review.invalidateComments(session);
     return c.json(comment, 201);
   });
 
-  app.post("/api/comments/:id/resolve", async (c) => {
-    const comment = await verdict(c, c.req.param("id"), resolve);
-    review.invalidate();
-    return c.json(comment);
-  });
+  app.post("/api/comments/:id/resolve", async (c) =>
+    c.json(await verdict(c, c.req.param("id"), resolve)),
+  );
 
-  app.post("/api/comments/:id/reopen", async (c) => {
-    const comment = await verdict(c, c.req.param("id"), reopen);
-    review.invalidate();
-    return c.json(comment);
-  });
+  app.post("/api/comments/:id/reopen", async (c) =>
+    c.json(await verdict(c, c.req.param("id"), reopen)),
+  );
 
   /** `resolve` and `reopen` differ only in which of them is called. */
   async function verdict(
@@ -276,10 +272,12 @@ export function createApp({ activity, config, events, review, ui, verbose }: App
     const body = await readBody(c);
     const note = optionalText(body, "note");
     const session = await resolveSessionName(config.dataDir, named(c));
-    return close(config.dataDir, session, id, {
+    const comment = await close(config.dataDir, session, id, {
       ...author,
       ...(note === undefined ? {} : { note }),
     });
+    review.invalidateComments(session);
+    return comment;
   }
 
   // A session, and a review task is one with a scope: `scope` builds it in the
@@ -297,15 +295,15 @@ export function createApp({ activity, config, events, review, ui, verbose }: App
       ...(wanted === null ? {} : { scope: wanted }),
       ...(body.use === undefined ? {} : { use: consent(body, "use") }),
     });
-    review.invalidate();
+    review.invalidate(created.name);
     return c.json(created, 201);
   });
 
-  app.post("/api/sessions/:name/use", async (c) => {
-    const session = await useSession(config.dataDir, c.req.param("name"));
-    review.invalidate();
-    return c.json(session);
-  });
+  // The route invalidates nothing: the documents are held per session, so
+  // moving `current` only changes which one a bare request resolves to.
+  app.post("/api/sessions/:name/use", async (c) =>
+    c.json(await useSession(config.dataDir, c.req.param("name"))),
+  );
 
   // The scope is replaced whole rather than edited entry by entry: the editor
   // of DA-55 holds the list the person sees, and one write is one state. What
@@ -322,7 +320,7 @@ export function createApp({ activity, config, events, review, ui, verbose }: App
       await findRepositories(config),
       { dropComments: consent(body, "dropComments") },
     );
-    review.invalidate();
+    review.invalidate(name);
     return c.json(updated.review);
   });
 
@@ -332,13 +330,13 @@ export function createApp({ activity, config, events, review, ui, verbose }: App
     // ([ADR-010](../../docs/adr/adr-010-review-task-scope.md)). Nothing in the
     // request can say otherwise.
     const session = await closeSession(config.dataDir, c.req.param("name"), author);
-    review.invalidate();
+    review.invalidate(session.name);
     return c.json(session);
   });
 
   app.post("/api/sessions/:name/reopen", async (c) => {
     const session = await reopenSession(config.dataDir, c.req.param("name"), author);
-    review.invalidate();
+    review.invalidate(session.name);
     return c.json(session);
   });
 
@@ -349,7 +347,7 @@ export function createApp({ activity, config, events, review, ui, verbose }: App
     // `diff.json` records the base it was computed with, so the next reader —
     // the UI, the CLI, or an agent — sees that it answers a different question
     // and scans instead of trusting it.
-    review.invalidate();
+    review.invalidate(name);
     return c.json(session);
   });
 

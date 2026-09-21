@@ -598,17 +598,24 @@ different and the gate says which — `over budget: …` and `not measured: …`
 | Scrolling the diff: CPU per frame | 9.5 ms | 8.7 ms | ok |
 | Opening the comment form | 50 ms | 13.9 ms | ok |
 | Jumping to a file from the navigation | 50 ms | 7.7 ms | ok |
-| Switching review sessions | 100 ms | 104.2 ms | DA-24.1 |
+| Switching review sessions | 100 ms | 70.9 ms | ok |
 | Update after an edit in one repository | 300 ms | 221 ms | ok |
 ```
 
-**Switching review sessions** is measured and printed with the task named
-instead of a verdict: the number covers the whole wait, and what it says is that
-a warm switch is just over the budget and a cold one — the first switch to a
-session whose document the server has never built — is about five times over.
-That is a question about where the built document is cached, not about the page,
-and it is DA-24.1; until it is settled the line does not fail the build, which
-is what `pendingUntil` is for.
+The switch row is from the run that made that line warm (DA-24.1); the rest of
+the sample is the older capture it was written with, and the two are not one
+run.
+
+**Switching review sessions** covers the whole wait — the press, the request,
+the read, the render — and fails the build like any other line. **It is the
+budget of a return visit.** The server holds one built document per session
+([07-server.md](07-server.md)), so the first switch to a session it has never
+built is a cold path: the change set is read, counted and serialised with
+nothing to answer from, and that switch is several times the budget. The harness
+makes that first pass before the measured pair and prints it on stderr —
+`first switch to a session, cold: <n> ms` — so the cold number is named rather
+than warmed away silently; no budget line covers it, and it is paid once per
+session per server lifetime.
 **Update after an edit** covers the whole path — the watcher, the debounce, the
 rescan, the stream, the fetch, the patch, and the paint — and fails the build
 like any other line; on the machine this was written on it lands around 221 ms
@@ -623,17 +630,24 @@ The session switch became measurable with DA-24. The fixture the generator
 writes carries one review session and switching needs two, so the harness makes
 the second itself, in `withServer`: a session with the same base, the first
 one's change set copied into its `diff.json` — the same base is the same answer,
-and copying it spares the run a rescan — and forty comments of its own, so the
-swap really is a different set of threads. **Since DA-69 that is what every
+and the copy is what the CLI reads there — and forty comments of its own, so
+the swap really is a different set of threads. **Since DA-69 that is what every
 repetition measures**: the scratch session is called `perf-scratch`, is built
 after the current session's change set exists rather than before, and is rebuilt
 when it does not hold those forty comments — before that fix the first
 repetition on a freshly generated fixture switched to a session with none, and
-the line said `ok` about an empty rail. A run switches to it and back and
-reports the slower of the two, which also leaves the fixture on the session it
-found it on. What is timed is the whole swap: from the press to the frame that
-shows the other review — the `POST` that makes it current, the read of the
-review that follows it, and the render. Only the first-render row of
+the line said `ok` about an empty rail. **The copy no longer spares the run a
+scan.** The server trusts `diff.json` only for the session the watcher follows
+([07-server.md](07-server.md)), and that is never this one, so the first build
+of it reads the whole root from the working tree: that is the cold number above,
+and it is why the cold path is slower than the 513 ms DA-24.1 measured against
+the copied cache. A run switches to it and back once without measuring, to pay
+that build, then switches to it and back again and reports the slower of the
+two, which also leaves the fixture on the session it found it on. What is timed
+is the whole swap: from the press to the frame that shows the other review — the
+read of that review, which the page asks for as `?review=<name>` rather than by
+moving `current` ([ADR-010](../adr/adr-010-review-task-scope.md)), and the
+render. Only the first-render row of
 `docs/SPEC.md` section 6 is qualified with "after the server responds"; this one
 is not, and a session whose change set still has to be computed is part of what
 the reader waits for.

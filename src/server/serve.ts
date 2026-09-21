@@ -62,23 +62,7 @@ export async function startReviewServer(options: ReviewServerOptions): Promise<R
   const activity = createActivityLog({ onRecord: forwardActivity(events) });
   forwardEvents(bus, events);
 
-  // The change set is read and `diff.json` written before the socket opens, so
-  // the review opens from the cache and a rescan has something to replace one
-  // repository of. This is a warm-up and not a gate: a root with no current
-  // session has none of it and opens the first-run screen instead, and a file
-  // that cannot be read is a refusal the request gets as its own answer — a
-  // server that refused to start would leave the person with no way to see why.
-  try {
-    await review.document();
-  } catch (error) {
-    if (!(error instanceof DomainError)) {
-      process.stderr.write(
-        `the review could not be read: ${error instanceof Error ? error.message : String(error)}\n`,
-      );
-    }
-  }
-
-  const watcher = await startWatcher({
+  const running = await startWatcher({
     config,
     scan: found,
     ...(options.recursive === undefined ? {} : { recursive: options.recursive }),
@@ -98,18 +82,39 @@ export async function startReviewServer(options: ReviewServerOptions): Promise<R
       );
     },
   });
-  // A rescan has already patched the document through `onRescan`. A comment
-  // event changes one small file, and re-reading the whole change set for it
-  // would charge the next reader of the review for every comment written.
+  // A rescan hands the change set to `adopt`, warnings and all, so neither of
+  // its two events costs the next reader a re-read.
   bus.subscribe((event) => {
-    if (event.type === "diff-changed") return;
+    if (event.type === "diff-changed" || event.type === "warnings") return;
     // A task that appeared or was closed elsewhere in the data directory is
     // news for the page, not for this document: the sessions are read per
     // request and the review the page is on has not changed.
     if (event.type === "sessions-changed") return;
-    if (event.type === "session-changed" || event.type === "warnings") review.invalidate();
-    else review.invalidateComments();
+    if (event.type === "session-changed") {
+      review.invalidate(event.name);
+      return;
+    }
+    // A comment event is about the session the watcher snapshots, which is the
+    // one it follows ([05-watcher.md](../../docs/reference/05-watcher.md)).
+    const followed = running.session();
+    if (followed !== null) review.invalidateComments(followed);
   });
+
+  // The change set is read and `diff.json` written before the socket opens, so
+  // the review opens from the cache and a rescan has something to replace one
+  // repository of. This is a warm-up and not a gate: a root with no current
+  // session has none of it and opens the first-run screen instead, and a file
+  // that cannot be read is a refusal the request gets as its own answer — a
+  // server that refused to start would leave the person with no way to see why.
+  try {
+    await review.document();
+  } catch (error) {
+    if (!(error instanceof DomainError)) {
+      process.stderr.write(
+        `the review could not be read: ${error instanceof Error ? error.message : String(error)}\n`,
+      );
+    }
+  }
 
   const app = createApp({
     activity,
@@ -124,7 +129,7 @@ export async function startReviewServer(options: ReviewServerOptions): Promise<R
   try {
     server = await startServer(app, config.port);
   } catch (error) {
-    await watcher.close();
+    await running.close();
     throw listenError(error, config.port);
   }
 
@@ -136,7 +141,7 @@ export async function startReviewServer(options: ReviewServerOptions): Promise<R
       // The streams end first: a socket that waits for an open connection to
       // finish would wait for one that never does.
       events.close();
-      await watcher.close();
+      await running.close();
       await server.close();
     },
   };

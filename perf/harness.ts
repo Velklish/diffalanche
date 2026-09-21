@@ -119,6 +119,15 @@ export async function measure(
       );
     }
 
+    // One pass first, printed and not budgeted: the line is about a return
+    // visit, and the first build of a session is a cold path (11-perf.md).
+    const cold = (await page.evaluate(
+      (name: string) => window.__perf.switchSession(name),
+      sessions.other,
+    )) as number;
+    await page.evaluate((name: string) => window.__perf.switchSession(name), sessions.current);
+    process.stderr.write(`first switch to a session, cold: ${round(cold)} ms\n`);
+
     // Both ways, and the slower of them counts: the run has to leave the
     // fixture on the session it found it on, so the switch back happens either
     // way and there is no reason to measure only one of the two.

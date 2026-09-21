@@ -189,11 +189,24 @@ per scrolled frame than the budget of `docs/SPEC.md` section 6 has
 
 The change set comes from `diff.json`; without one — or with one computed
 against a base or for a scope that is no longer the session's — the server reads
-every repository of the scope and writes it. The document is built once and serialised once — the
-review is megabytes, and re-serialising it per request would charge every reload
-for it. What rebuilds it is the watcher: a rescan hands over the change set as
-it now stands, and every other event drops the document so the next request
-builds it again.
+every repository of the scope and writes it. A document is built once per
+session and serialised once per change — the review is megabytes, and
+re-serialising it per request would charge every reload for it.
+
+### How many documents are held
+
+`DOCUMENT_CACHE_LIMIT` is four. A document is megabytes and so is the string
+beside it, so the server keeps a few and drops the least recently asked-for,
+passing over one with a build in flight. Holding one per session is what makes a
+switch back to a session the server has already built cost nothing on the server
+([11-perf.md](11-perf.md)). `POST /api/sessions/:name/use` invalidates nothing
+itself: moving `current` changes which document a request without `?review=`
+resolves to, not what any document says. **The switch the UI makes is the one
+that costs nothing** — it writes `?review=` and never calls `use`
+([08-ui.md](08-ui.md)). A switch through `use` does pay: the watcher sees
+`current` move and sends `session-changed` for the session switched to, and that
+drops its document. Every other write names the session it changed, and only
+that session's document is dropped.
 
 `warnings` is everything the scan and the reads had to say — `ScanWarning[]`,
 the directories that could not be read and the bases that did not resolve
@@ -205,10 +218,8 @@ for.
 
 `?review=<name>` answers with the document of that session instead of the
 current one: the address `review new --no-use` prints, so a window can open a
-task without becoming it ([ADR-010](../adr/adr-010-review-task-scope.md)). The
-current session's document is the one built and kept; a named one is built for
-the request that asked, because a window opening another task must not evict the
-review everyone else is reading.
+task without becoming it ([ADR-010](../adr/adr-010-review-task-scope.md)). Its
+document is held like any other.
 
 ### The task a request is about
 
@@ -272,8 +283,7 @@ answer, and telling them apart would say which encodings got through.
 The *document* of a named task has the same cache under it and no such repair:
 `GET /api/review?review=<name>` trusts a `diff.json` whose base and scope still
 match, so a window reloaded after the code changed shows the change set of the
-last time that task was read. Rebuilding it would read every repository of the
-scope, which is not what one event is worth; it is named here rather than fixed.
+last time that task was read. It is named here rather than fixed.
 
 The routes that name their session in the path — `PUT /api/sessions/:name/base`,
 `/scope`, `POST /api/sessions/:name/close`, `/reopen`, `/use` — need no
@@ -287,9 +297,8 @@ current one ([05-watcher.md](05-watcher.md)). `diff-changed` and
 `sessions-changed` are unaffected — the first is about a repository and the
 second walks every session. Closing that gap means teaching the watcher to
 follow more than one session: [DA-55.1](../backlog/queue/DA-55.1-watcher-follows-one-session.md).
-The document of a named task has a second, separate staleness — it is built
-from a cache the watcher never refreshes, so opening a task can show the change
-set of the previous read: [DA-55.3](../backlog/queue/DA-55.3-named-task-document-is-stale.md).
+Until it lands, a named task's document goes stale while the window stays open;
+the live update repairs the repository an event names.
 
 ### The candidates
 

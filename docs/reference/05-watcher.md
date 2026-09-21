@@ -22,7 +22,7 @@ const watcher = await startWatcher({ config, scan, bus, activity });
 | `activity` | the feed the events are recorded in |
 | `debounceMs` | how long a repository stays quiet before it is rescanned; 100 ms |
 | `pollIntervalMs` | how often a tree is walked where there is no recursive watch; 250 ms |
-| `onRescan` | the change set as the rescan left it on disk, for a caller that keeps it in memory |
+| `onRescan` | the session the rescan was about and the change set as it left it, for a caller that keeps it in memory |
 | `recursive` | `false` walks every tree instead of watching it; the default asks the runtime |
 | `onError` | a rescan that failed; without it the failure is silent |
 | `onFallback` | a recursive watch died and the walk took its place; said once |
@@ -298,6 +298,13 @@ The new change set is handed over the moment it exists and before it is written:
 `diff.json` of a real review is megabytes, and writing it is the slowest step of
 a rescan, so the update the person is waiting for does not wait for it. The file
 follows a moment later, and a write that fails is repaired by the next rescan.
+
+It is handed over **with the name of the session it is about**, which is the
+session the watcher was following when the rescan started rather than whatever
+`current` says by the time it ends. Between the hand-over and the write there is
+a moment when the caller's memory is newer than the file, and that is the
+caller's to hold: what the server does with it is in
+[07-server.md](07-server.md).
 
 A rescan replaces one repository's entry in `diff.json` and leaves the rest
 alone. A repository left with no changes drops out of the cache, the way a scan
