@@ -142,6 +142,36 @@ events and leaves the rest of the chain running" fails as
 away" and on "carries a reply written by the CLI". All three are deadline polls
 over an event that arrives late under load rather than not at all.
 
+**Two runners, one tree, two different verdicts — and that pair is a cheaper
+proof than the procedure this run uses.** The final gate run of the
+storage-cli-git branch, on a clean tree at entry load 11.27, reddened
+`bun run test` on `tests/watcher.test.ts` "rescans the edited repository alone"
+(`expected 580.2531250000002 to be less than 460.0728330000002`) and
+`bun run test:bun` on `tests/synth.test.ts` "produces byte-identical trees for
+the same seed" (timed out in 5000 ms). Same tree, same minute, different
+verdicts. A defect in the code reddens the same verdict on both runners; only
+the machine picks a different one each time. Where that pair appears, it
+settles the question without the re-runs and the base-commit measurement the
+run otherwise demands.
+
+`tests/synth.test.ts` is a ninth member of this list and was not in the sweep:
+its budget is a 5 s test timeout over the generation of the synthetic fixture,
+with no precondition of any kind.
+
+**The ceiling this verdict computes for itself moved threefold in one evening.**
+`baseline()` is a median of three rescans, taken in the same run as the
+measurement it bounds. Eight interleaved runs of `tests/watcher.test.ts` on a
+quiet machine gave 59.6, 67.7, 75.1, 78.3, 77.6, 78.4, 109.0 and 126.9 ms; the
+two readings taken inside a full gate chain, read out of the text of the failing
+assertion, were 160.07 and 193.98 ms. No code changed between them. The
+assertion is `median(elapsed) < BUDGET_MS + baseline()`, so the right-hand side
+varies by more than the budget it adds to — and the first run of each series is
+visibly a warm-up, which makes the ceiling depend on run order as well as on
+load. Inside the full suite the same verdict went red three times in one evening —
+605.67 against 599.85, 580.25 against 460.07, 510.78 against 493.98, gaps of
+6.0, 120.2 and 16.8 ms; run alone on a quiet machine it was green twelve times
+out of twelve, four by verdict and eight instrumented.
+
 **A wall-clock precondition that is assumed rather than asserted cannot be
 seen to have failed.** The lock-writers suite added by DA-76.1 waits a fixed
 budget for a racing scan to finish and then asserts that the cache was not
