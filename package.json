@@ -33,6 +33,7 @@
     "perf": "bun perf/gate.ts",
     "check:package": "bun run scripts/check-package.ts",
     "test:ui": "playwright test --config e2e/playwright.config.ts",
+    "test:ui:ci": "playwright test --config e2e/playwright.config.ts --ignore-snapshots",
     "test:e2e": "playwright test --config e2e/acceptance.config.ts"
   },
   "devDependencies": {

@@ -8,6 +8,7 @@
     "bun run typecheck",
     "bun run test",
     "bun run test:bun",
+    "bun run test:ui",
     "bun run perf"
   ],
   "version": "0.9.0",

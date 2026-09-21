@@ -104,6 +104,20 @@ and `bun run release` refuses a version that has no section. See
 
 ### Changed
 
+- **The Playwright UI suite runs in a gate and in CI** (DA-54.2). Its
+  ninety-five tests — the sidebar, the thread rail, live update, the repository
+  bar — ran only when somebody typed `bun run test:ui`, so a UI regression
+  reached the main branch through six green gates and a green CI. It is now the
+  seventh entry of `gates` in `backslop.json`, between `bun run test:bun` and
+  `bun run perf` so the two browser gates are adjacent, and the `ui` job of CI
+  runs `bun run test:ui:ci` — the same suite with `--ignore-snapshots`, because
+  the screenshot baselines were taken on macOS and a Linux runner draws other
+  pixels. The collision the two Playwright configurations document is handled
+  structurally: each worker has its own worktree and therefore its own `dist/`,
+  `backslop gates` runs its commands one after another, `test:e2e` is not among
+  them, and in CI the two are separate jobs on separate runners. The command
+  costs 71–78 seconds, which is the UI build, the fixture, the server and the
+  tests together.
 - **Off CI the perf gate declines to answer on a busy machine instead of
   answering wrongly** (DA-54.3, [ADR-013](docs/adr/adr-013-perf-gate-off-ci.md)).
   `bun run perf` holds a development machine to the specification's numbers, and

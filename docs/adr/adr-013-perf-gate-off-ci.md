@@ -6,7 +6,7 @@
 
 ## Context
 
-`bun run perf` is one of the six gates of `backslop.json`, run before any task is
+`bun run perf` is one of the gates of `backslop.json`, run before any task is
 reported. On a GitHub-hosted runner every millisecond ceiling is widened by
 `RUNNER_ALLOWANCE` ([DA-5.1](../archive/DA-5.1-perf-gate-on-ci-runner/task.md));
 on a development machine the ceilings are the specification's own numbers, and

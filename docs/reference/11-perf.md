@@ -570,7 +570,7 @@ the reader waits for.
 headless runner cannot measure frame rate, so the gate checks the two things it
 can: no long task at all, and CPU time per frame under one frame.
 
-The gate is one of the `gates` of `backslop.json`, so it runs before any task is
+The gate is the last of the seven `gates` of `backslop.json`, so it runs before any task is
 reported, and it is the `perf` job of `.github/workflows/ci.yml`, which
 installs Chromium, generates the fixture, and runs the gate — the gate builds
 the UI itself, so the job does not; the table lands in the run summary through
@@ -579,7 +579,7 @@ an M1 Pro, plus 4 seconds when the fixture has to be generated first.
 
 ## The CI jobs
 
-`.github/workflows/ci.yml` holds five jobs, and each of them is described in
+`.github/workflows/ci.yml` holds six jobs, and each of them is described in
 full where its subject is:
 
 | Job | What it runs | Runners | Where it is described |
@@ -587,6 +587,7 @@ full where its subject is:
 | `check` | `lint`, `typecheck`, and the unit suite on Node | ubuntu | [the runtime the unit suite runs on](#the-runtime-the-unit-suite-runs-on) |
 | `test-bun` | the same unit suite on Bun's own runtime | ubuntu | [the runtime the unit suite runs on](#the-runtime-the-unit-suite-runs-on) |
 | `perf` | the budget table on the synthetic review | ubuntu | [the gate](#the-gate) |
+| `ui` | the Playwright UI suite, without the screenshot comparisons | ubuntu | [08-ui.md](08-ui.md#ui-tests) |
 | `smoke` | one review end to end through one delivery channel | ubuntu, macOS, Windows | [the job](#the-job) |
 | `e2e` | the acceptance list of specification section 10, against the binary | ubuntu, macOS | [08-ui.md](08-ui.md#the-acceptance-suite) |
 
@@ -603,10 +604,14 @@ seconds, and the same criteria are checked in CI on two platforms rather than on
 whichever one the author happened to have. Run it before a change to the server,
 the CLI, or the scanner; the gates stay the fast ones.
 
-`bun run test:ui` is not a job. Its screenshot baselines are per platform and
-the ones in the repository were taken on macOS, so a Linux runner would compare
-against pixels it never draws; the acceptance suite, which takes no screenshots,
-is what CI runs instead ([08-ui.md](08-ui.md#ui-tests)).
+`bun run test:ui` **is** a gate and the `ui` job both, since DA-54.2. Its
+screenshot baselines are per platform and the ones in the repository were taken
+on macOS, so the job runs `bun run test:ui:ci` — the same suite with
+`--ignore-snapshots`, which leaves the two comparisons of `shell.spec.ts` to the
+gate on a machine whose pixels they describe and runs everything else
+([08-ui.md](08-ui.md#ui-tests)). It is the seventh gate, placed between
+`bun run test:bun` and `bun run perf` so that the two browser gates are adjacent
+and a machine that has to serialise them serialises one window.
 
 ## The release
 
