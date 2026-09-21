@@ -60,6 +60,7 @@ counts them. The change set totals are exact, not approximate.
   repos/core/cargos-api-worktree/   a worktree of the first repository, checked out clean
   repos/core/cargos-api/vendor/lib/ a submodule nested inside the first repository
   sources/vendor-lib/            the submodule's source, outside repos/ so a scan never sees it
+  synth.json                     what the generator wrote, for a reader to check against
   .diffalanche/                  the data directory
 ```
 
@@ -94,6 +95,14 @@ the generated fixture on disk as it was generated
 Comments are spread over all four anchor levels (review, repository, file, line)
 and all four severities; a line comment's anchor names a line inside the block
 its file actually changed, with its real context and hunk header.
+
+`synth.json` at the root is the generator's stamp: the seed, the session name
+`current` points at, the profile, and the thread and reply counts written into
+that session. It is not read by the tool — `roots: ["repos"]` keeps it out of
+every scan — and it exists so that a reader can tell this fixture from one that
+drifted under it. The perf gate is that reader; see **The gate** below. It is
+derived entirely from the seed and the profile, so it does not break the
+byte-identical promise above.
 
 ## Determinism
 
@@ -383,11 +392,10 @@ the working tree and its `.git` with it. Refusal is one line on stderr naming
 the path, exit code 1, and nothing deleted. `perf/fixture.ts` holds the check;
 `scripts/synth.ts` keeps its own, because it is also run by hand.
 
-The gate makes the synthetic review if `.perf/fixture` is missing **or was made
-by an older generator** — a fixture without the `current` pointer has no review
-session, and the server refusing the review reads as a broken server rather than
-as a stale directory — always rebuilds the UI, since a gate that measures a
-stale build measures nothing, and then runs the harness three times on the page
+The gate makes the synthetic review when `.perf/fixture` is not what the
+generator wrote — checked against `synth.json` rather than assumed, and the
+reason is printed before the regeneration — always rebuilds the UI, since a gate
+that measures a stale build measures nothing, and then runs the harness three times on the page
 as it ships — **each repetition in a process of its own**, `perf/run.ts --runs 1`
 with its own server and browser, the number read back from its stdout. The
 second browser one process launches after a whole measurement stalls on Bun:
@@ -411,6 +419,34 @@ over that, so a regression of a runner's own size is still red there, and a
 smaller one is red on the development machine first. The table names the
 widened ceiling beside the budget — `8.3 ms (20.8 on a runner)` — so a green
 runner is never read as the strict number holding.
+
+**And what the gate guarantees about the thing it measured.** A green table used
+to mean two weaker things than it looked like, and both are closed (DA-69).
+
+*The fixture is the one the generator wrote.* The old check was the existence of
+`.diffalanche/current`, and `current` exists whatever it points at: the harness
+makes its own second session for the switch, `createSession` makes that session
+current, and a run killed before the pointer was put back left the fixture on it
+for good. The gate now reads `synth.json` back and compares three things against
+it — the profile, the session `current` names, and the thread and reply counts
+in that session's `comments.json` — prints why they differ, and regenerates. The
+harness's scratch session is called `perf-scratch`: a name of its own, which
+cannot compose with itself the way `${current}-b` did, and which the check can
+never mistake for the generated one. A scratch session that does not hold what
+this run would write is rebuilt rather than reused, so one killed run costs one
+run and not every run after it.
+
+*A line the gate had no number for said `ok`.* `NaN > 500` is false and so is
+`0 > 8.3`, so a metric that disappeared printed as an ordinary number. A line
+whose samples cannot be trusted is now a third verdict beside `ok`, `FAIL` and
+pending — `UNMEASURED` — which prints and exits 1, so the rest of the table
+stays readable when one metric goes. Untrusted means absent, not finite, or — on
+a millisecond line only — exactly zero: no step of this harness takes no time, so
+a `0.0` there is a feed that stopped reporting. A count of zero long tasks is the
+goal of that line and is trusted. The feed that could produce such a zero is
+fixed at its source as well: `TaskDuration` missing from Chromium's metrics
+throws where it can be named instead of standing in as `0`. The two reds are
+different and the gate says which — `over budget: …` and `not measured: …`.
 
 ```
 | Metric | Budget | Median of 3 | |
@@ -446,7 +482,12 @@ writes carries one review session and switching needs two, so the harness makes
 the second itself, in `withServer`: a session with the same base, the first
 one's change set copied into its `diff.json` — the same base is the same answer,
 and copying it spares the run a rescan — and forty comments of its own, so the
-swap really is a different set of threads. A run switches to it and back and
+swap really is a different set of threads. **Since DA-69 that is what every
+repetition measures**: the scratch session is called `perf-scratch`, is built
+after the current session's change set exists rather than before, and is rebuilt
+when it does not hold those forty comments — before that fix the first
+repetition on a freshly generated fixture switched to a session with none, and
+the line said `ok` about an empty rail. A run switches to it and back and
 reports the slower of the two, which also leaves the fixture on the session it
 found it on. What is timed is the whole swap: from the press to the frame that
 shows the other review — the `POST` that makes it current, the read of the

@@ -1,5 +1,5 @@
 import { execFile } from "node:child_process";
-import { mkdirSync, mkdtempSync, readdirSync, rmSync, writeFileSync } from "node:fs";
+import { mkdirSync, mkdtempSync, readdirSync, readFileSync, rmSync, writeFileSync } from "node:fs";
 import { homedir, tmpdir } from "node:os";
 import { dirname, join, resolve } from "node:path";
 import { fileURLToPath } from "node:url";
@@ -7,9 +7,11 @@ import { promisify } from "node:util";
 import { afterAll, beforeAll, describe, expect, it } from "vitest";
 import type { Budget } from "../perf/budgets.ts";
 import { BUDGETS, evaluate, formatTable, RUNNER_ALLOWANCE } from "../perf/budgets.ts";
-import { assertErasable } from "../perf/fixture.ts";
+import { assertErasable, fixtureDrift } from "../perf/fixture.ts";
 import type { Measurement } from "../perf/harness.ts";
-import { parseArgs } from "../perf/harness.ts";
+import { parseArgs, SCRATCH_SESSION, twoSessions } from "../perf/harness.ts";
+import { generate, PROFILES, STAMP_FILE } from "../scripts/synth.ts";
+import { loadConfig } from "../src/core/config/index.ts";
 
 const execFileAsync = promisify(execFile);
 const REPO_ROOT = resolve(dirname(fileURLToPath(import.meta.url)), "..");
@@ -221,5 +223,159 @@ describe("the fixture the gate may erase", () => {
     expect((run as { code?: number }).code).toBe(1);
     expect((run as { stderr?: string }).stderr ?? "").toMatch(/is not empty and holds no/);
     expect(readdirSync(foreign)).toEqual(["not-ours.txt"]);
+  });
+});
+
+describe("a line the gate has no number for", () => {
+  it("reports the line as not measured instead of comparing it", () => {
+    for (const value of [Number.NaN, Number.POSITIVE_INFINITY]) {
+      const rows = evaluate([measurement({ cpuPerFrameMs: value })]);
+      const cpu = rows.find((row) => row.budget.field === "cpuPerFrameMs");
+      expect(cpu?.unmeasured).toBe(true);
+      expect(cpu?.measured).toBeNull();
+      expect(cpu?.failed).toBe(false);
+      expect(formatTable(rows, 1)).toContain("| not measured | UNMEASURED |");
+    }
+  });
+
+  it("does not trust an exact zero on a millisecond line, and does trust one on a count", () => {
+    // `TaskDuration` going missing made this line 0.0 ms, and `0 > 8.3` is
+    // false: the tightest line of the table printed `ok` for ever (DA-69).
+    const zero = evaluate([measurement({ cpuPerFrameMs: 0 })]);
+    expect(zero.find((row) => row.budget.field === "cpuPerFrameMs")?.unmeasured).toBe(true);
+    // Zero long tasks is the goal of that line, not a gap in it.
+    const none = evaluate([measurement({ scrollLongTasks: 0 })]);
+    const tasks = none.find((row) => row.budget.field === "scrollLongTasks");
+    expect(tasks?.unmeasured).toBe(false);
+    expect(tasks?.measured).toBe(0);
+    expect(tasks?.failed).toBe(false);
+  });
+
+  it("refuses a field the measurement does not carry at all", () => {
+    const without = measurement();
+    delete (without as Partial<Measurement>).composerOpenMs;
+    const rows = evaluate([without]);
+    expect(rows.find((row) => row.budget.field === "composerOpenMs")?.unmeasured).toBe(true);
+  });
+
+  it("is not rescued by the median: one bad sample out of three is enough", () => {
+    const rows = evaluate([
+      measurement(),
+      measurement({ firstRenderMs: Number.NaN }),
+      measurement(),
+    ]);
+    expect(rows.find((row) => row.budget.field === "firstRenderMs")?.unmeasured).toBe(true);
+  });
+
+  it("reports every measurable line as not measured when there are no runs at all", () => {
+    const rows = evaluate([]);
+    expect(rows.filter((row) => row.budget.field !== null).every((row) => row.unmeasured)).toBe(
+      true,
+    );
+  });
+
+  it("leaves a good table alone", () => {
+    expect(evaluate([measurement(), measurement()]).some((row) => row.unmeasured)).toBe(false);
+  });
+});
+
+describe("the provenance of the fixture the gate measures", () => {
+  let fixture: string;
+  let stamp: string;
+  let current: string;
+  let comments: string;
+
+  beforeAll(() => {
+    fixture = mkdtempSync(join(tmpdir(), "da-perf-provenance-"));
+    generate({ out: fixture, profile: PROFILES.small });
+    stamp = join(fixture, STAMP_FILE);
+    current = join(fixture, ".diffalanche", "current");
+    comments = join(fixture, ".diffalanche", "reviews", "synth", "comments.json");
+  });
+
+  afterAll(() => {
+    rmSync(fixture, { recursive: true, force: true });
+  });
+
+  it("accepts what the generator just wrote, and says what it wrote", () => {
+    expect(fixtureDrift(fixture, PROFILES.small)).toBeNull();
+    const wrote = JSON.parse(readFileSync(stamp, "utf8")) as {
+      session: string;
+      threads: number;
+      replies: number;
+    };
+    expect(wrote.session).toBe("synth");
+    expect(wrote.threads).toBe(PROFILES.small.comments);
+    expect(wrote.replies).toBeGreaterThan(0);
+  });
+
+  it("refuses a fixture generated at another profile: the gate measures the full one", () => {
+    expect(fixtureDrift(fixture)).toMatch(/was generated at 3 repositories/);
+  });
+
+  it("refuses a current that names the harness's scratch session", () => {
+    const was = readFileSync(current, "utf8");
+    writeFileSync(current, `${SCRATCH_SESSION}\n`);
+    expect(fixtureDrift(fixture, PROFILES.small)).toMatch(
+      new RegExp(`points current at ${SCRATCH_SESSION}, the generator wrote synth`),
+    );
+    writeFileSync(current, was);
+    expect(fixtureDrift(fixture, PROFILES.small)).toBeNull();
+  });
+
+  it("refuses a session whose comment counts are not the ones the generator wrote", () => {
+    const was = readFileSync(comments, "utf8");
+    const held = JSON.parse(was) as { version: number; comments: unknown[] };
+    writeFileSync(comments, JSON.stringify({ ...held, comments: held.comments.slice(0, 5) }));
+    expect(fixtureDrift(fixture, PROFILES.small)).toMatch(/holds 5 threads and \d+ replies/);
+    writeFileSync(comments, was);
+    expect(fixtureDrift(fixture, PROFILES.small)).toBeNull();
+  });
+
+  it("refuses a fixture with no stamp, and one that is missing altogether", () => {
+    const was = readFileSync(stamp, "utf8");
+    rmSync(stamp);
+    expect(fixtureDrift(fixture, PROFILES.small)).toMatch(
+      /has no readable synth\.json \(missing\)/,
+    );
+    writeFileSync(stamp, "{ not json");
+    expect(fixtureDrift(fixture, PROFILES.small)).toMatch(/has no readable synth\.json \(/);
+    writeFileSync(stamp, was);
+    expect(fixtureDrift(join(fixture, "not-there"), PROFILES.small)).toBe("is missing");
+  });
+});
+
+describe("the harness's scratch session", () => {
+  let fixture: string;
+
+  beforeAll(() => {
+    fixture = mkdtempSync(join(tmpdir(), "da-perf-scratch-"));
+    generate({ out: fixture, profile: PROFILES.small });
+  });
+
+  afterAll(() => {
+    rmSync(fixture, { recursive: true, force: true });
+  });
+
+  it("has a name of its own that cannot compose with itself, and leaves current alone", async () => {
+    const config = await loadConfig({ root: fixture });
+    const first = await twoSessions(config);
+    expect(first).toEqual({ current: "synth", other: SCRATCH_SESSION });
+    expect(readFileSync(join(fixture, ".diffalanche", "current"), "utf8").trim()).toBe("synth");
+    const again = await twoSessions(config);
+    expect(again).toEqual(first);
+    expect(readdirSync(join(fixture, ".diffalanche", "reviews")).sort()).toEqual([
+      SCRATCH_SESSION,
+      "synth",
+    ]);
+  });
+
+  it("refuses to run on a fixture a killed run left pointing at the scratch session", async () => {
+    const current = join(fixture, ".diffalanche", "current");
+    const was = readFileSync(current, "utf8");
+    writeFileSync(current, `${SCRATCH_SESSION}\n`);
+    const config = await loadConfig({ root: fixture });
+    await expect(twoSessions(config)).rejects.toThrow(/the harness's own scratch session/);
+    writeFileSync(current, was);
   });
 });

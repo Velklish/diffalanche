@@ -202,6 +202,19 @@ and `bun run release` refuses a version that has no section. See
 
 ### Fixed
 
+- **The perf gate no longer reports green on what it did not measure** (DA-69).
+  Two ways it could. The freshness check was the existence of
+  `.diffalanche/current`, and `current` exists whatever it points at — the
+  harness's own scratch session made it point at itself, and one killed run left
+  the fixture measuring a fifth of the specified comment load for ever. The
+  generator now stamps `synth.json` with what it wrote, the gate reads it back —
+  the profile, the session `current` names, the thread and reply counts — prints
+  why they differ and regenerates; the scratch session is called `perf-scratch`,
+  a name that cannot compose with itself, and is rebuilt when it does not hold
+  what the run would write. And a line whose samples cannot be trusted said
+  `ok`, because `NaN > 500` and `0 > 8.3` are both false: it is now a third
+  verdict, `UNMEASURED`, which prints and exits 1, and a missing `TaskDuration`
+  throws where it can be named instead of standing in as a CPU-per-frame of 0.
 - **The perf gate asks what it is about to erase** (DA-63). `--fixture` names a
   directory the gate owns and empties, and the guard that makes that safe lived
   in `scripts/synth.ts` — the process the gate spawns *after* deleting, so it

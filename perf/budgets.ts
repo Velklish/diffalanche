@@ -73,11 +73,16 @@ export const RUNNER_ALLOWANCE = 2.5;
 
 export type GateRow = {
   budget: Budget;
-  /** Median over the runs, or `null` for a line that is still pending. */
+  /** Median over the runs, or `null` for a pending line and for an unmeasured one. */
   measured: number | null;
   /** What the median was held against: the budget, times the allowance for `ms` lines. */
   ceiling: number;
   failed: boolean;
+  /**
+   * The gate had no number it could compare. A third verdict beside `ok`, `FAIL`
+   * and pending, because a line nobody measured is not a line that passed.
+   */
+  unmeasured: boolean;
 };
 
 export type EvaluateOptions = {
@@ -92,6 +97,10 @@ export type EvaluateOptions = {
  * a build. `budgets` is the table above unless a caller brings its own, which
  * is how the rules here are tested without a pending line having to exist in
  * it; `allowance` widens the `ms` ceilings and never the `tasks` one.
+ *
+ * A line whose samples cannot be trusted is reported unmeasured rather than
+ * compared: `NaN > 500` and `0 > 8.3` are both false, so comparing one would
+ * print `ok` for a metric that disappeared (DA-69).
  */
 export function evaluate(measurements: Measurement[], options: EvaluateOptions = {}): GateRow[] {
   const budgets = options.budgets ?? BUDGETS;
@@ -99,13 +108,29 @@ export function evaluate(measurements: Measurement[], options: EvaluateOptions =
   return budgets.map((budget) => {
     const field = budget.field;
     const ceiling = budget.unit === "ms" ? round(budget.budget * allowance) : budget.budget;
-    if (field === null) return { budget, measured: null, ceiling, failed: false };
-    const measured = median(measurements.map((one) => one[field]));
+    const row = { budget, measured: null, ceiling, failed: false, unmeasured: false };
+    if (field === null) return row;
+    const samples = measurements.map((one) => one[field]);
+    if (samples.length === 0 || !samples.every((value) => trustworthy(value, budget.unit))) {
+      return { ...row, unmeasured: true };
+    }
+    const measured = median(samples);
     // A line still waiting for the task that completes it is printed, not
     // failed: what it measures is a part of what the budget is about.
     const failed = budget.pendingUntil === undefined && measured > ceiling;
-    return { budget, measured, ceiling, failed };
+    return { ...row, measured, failed };
   });
+}
+
+/**
+ * A sample the gate may compare. Absent and non-finite are the obvious halves;
+ * an exact zero on a millisecond line is the quiet one — no step of this
+ * harness takes no time, so a `0.0` there is a feed that stopped reporting, the
+ * way `TaskDuration` did. A count of zero long tasks is the goal, not a gap.
+ */
+function trustworthy(value: number | undefined, unit: Budget["unit"]): boolean {
+  if (value === undefined || !Number.isFinite(value)) return false;
+  return unit !== "ms" || value !== 0;
 }
 
 function round(value: number): number {
@@ -121,6 +146,9 @@ export function formatTable(rows: GateRow[], runs: number): string {
       const budget = widened
         ? `${row.budget.budget} ${row.budget.unit} (${row.ceiling} on a runner)`
         : `${row.budget.budget} ${row.budget.unit}`;
+      if (row.unmeasured) {
+        return `| ${row.budget.label} | ${budget} | not measured | UNMEASURED |`;
+      }
       if (row.measured === null) {
         return `| ${row.budget.label} | ${budget} | pending | ${row.budget.pendingUntil} |`;
       }

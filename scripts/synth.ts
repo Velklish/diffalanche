@@ -46,6 +46,23 @@ export interface SynthOptions {
   profile?: Profile;
 }
 
+/**
+ * The file the generator stamps at the root of what it wrote, so a reader can
+ * tell this fixture from one that drifted under it (DA-69).
+ */
+export const STAMP_FILE = "synth.json";
+
+export interface FixtureStamp {
+  generator: string;
+  seed: number;
+  /** The session `current` names; the harness's scratch session is not it. */
+  session: string;
+  profile: Profile;
+  /** Comment threads written into the session, and replies inside them. */
+  threads: number;
+  replies: number;
+}
+
 export interface SynthReport {
   /** Repositories under `repos/`, including the clean sibling worktree. */
   repositories: number;
@@ -508,7 +525,12 @@ function anchorOf(file: FilePlan, line: number): Anchor {
   };
 }
 
-function buildComments(rnd: Random, repos: RepoPlan[], count: number): unknown[] {
+/** The comments and how many replies are in them: the stamp counts both (DA-69). */
+function buildComments(
+  rnd: Random,
+  repos: RepoPlan[],
+  count: number,
+): { comments: unknown[]; replies: number } {
   const targets: { repo: RepoPlan; file: FilePlan }[] = [];
   for (const repo of repos) {
     for (const file of repo.files) {
@@ -517,6 +539,7 @@ function buildComments(rnd: Random, repos: RepoPlan[], count: number): unknown[]
   }
 
   const comments: unknown[] = [];
+  let replyCount = 0;
   for (let i = 0; i < count; i += 1) {
     const id = commentId(rnd);
     const created = stamp(i * 3);
@@ -542,6 +565,7 @@ function buildComments(rnd: Random, repos: RepoPlan[], count: number): unknown[]
             },
           ]
         : [];
+    replyCount += replies.length;
     const resolved = i % 7 === 0;
 
     const common = {
@@ -597,7 +621,7 @@ function buildComments(rnd: Random, repos: RepoPlan[], count: number): unknown[]
       anchor: anchorOf(target.file, line),
     });
   }
-  return comments;
+  return { comments, replies: replyCount };
 }
 
 // ---------------------------------------------------------------------------
@@ -740,7 +764,7 @@ export function generate(options: SynthOptions): SynthReport {
     );
   }
 
-  const comments = buildComments(rnd, repos, profile.comments);
+  const { comments, replies } = buildComments(rnd, repos, profile.comments);
   const data = join(out, ".diffalanche");
   // The two session files are written at version 1 on purpose, and stay there:
   // the fixture is what every read of a data directory written before DA-53
@@ -767,6 +791,20 @@ export function generate(options: SynthOptions): SynthReport {
   );
   write(join(data, "reviews", SESSION_NAME, "comments.json"), json({ version: 1, comments }));
   write(join(data, "current"), `${SESSION_NAME}\n`);
+
+  // What was written, so a reader can tell this fixture from one that drifted
+  // under it — the perf gate checks it and regenerates otherwise (DA-69).
+  write(
+    join(out, STAMP_FILE),
+    json({
+      generator: "scripts/synth.ts",
+      seed,
+      session: SESSION_NAME,
+      profile,
+      threads: comments.length,
+      replies,
+    } satisfies FixtureStamp),
+  );
 
   return result;
 }

@@ -3,7 +3,7 @@
  * Chromium over the synthetic review and reports the numbers of the budget
  * table.
  */
-import { appendFile, readFile, writeFile } from "node:fs/promises";
+import { appendFile, readFile, rm, writeFile } from "node:fs/promises";
 import { join } from "node:path";
 import type { Page } from "@playwright/test";
 import { chromium } from "@playwright/test";
@@ -18,6 +18,7 @@ import {
   resolveSessionName,
 } from "../src/core/domain/index.ts";
 import {
+  readComments,
   readDiffCache,
   sessionDir,
   sessionExists,
@@ -221,12 +222,23 @@ async function measureUpdate(page: Page, baseUrl: string, fixture: string): Prom
   }
 }
 
-/** Chromium's own accounting of time spent on tasks in the renderer, in seconds. */
+/**
+ * Chromium's own accounting of time spent on tasks in the renderer, in seconds.
+ * A missing metric throws where its name can be said: the `?? 0` this replaces
+ * turned a feed that stopped reporting into a CPU-per-frame of 0.0 ms, which
+ * the tightest line of the budget table then printed as `ok` (DA-69).
+ */
 async function taskDuration(cdp: { send: (method: "Performance.getMetrics") => Promise<unknown> }) {
   const result = (await cdp.send("Performance.getMetrics")) as {
     metrics: { name: string; value: number }[];
   };
-  return result.metrics.find((metric) => metric.name === "TaskDuration")?.value ?? 0;
+  const metric = result.metrics.find((one) => one.name === "TaskDuration");
+  if (metric === undefined) {
+    throw new Error(
+      "Chromium reported no TaskDuration metric, so cpuPerFrameMs cannot be measured",
+    );
+  }
+  return metric.value;
 }
 
 export function median(values: number[]): number {
@@ -248,10 +260,15 @@ export async function withServer<T>(
   // Port 0 is not a port a configuration may name, so it is set here rather
   // than through `loadConfig`: the harness takes whatever is free.
   const config = { ...(await loadConfig({ root: fixture })), port: 0 };
-  const sessions = await twoSessions(config);
   const server = await startReviewServer({ config, ui: directoryAssets("dist/ui") });
+  let sessions: Sessions | undefined;
   try {
+    // After the document, not before it: the scratch session copies the change
+    // set of the current one, and on a freshly generated fixture that cache is
+    // written by this very call. Built first, the scratch session came out
+    // empty on the first repetition and the switch measured an empty rail.
     const { totals } = await server.review.document();
+    sessions = await twoSessions(config);
     process.stderr.write(
       `fixture ${fixture}: ${totals.repositories} repositories, ` +
         `${totals.files} files, ${totals.lines} lines, ` +
@@ -261,13 +278,21 @@ export async function withServer<T>(
   } finally {
     // A run that threw between the two switches would leave the fixture on the
     // other session, and the next run would measure that one.
-    await makeCurrent(config.dataDir, sessions.current);
+    if (sessions !== undefined) await makeCurrent(config.dataDir, sessions.current);
     await server.close();
   }
 }
 
 /** How many comments the second session is given, spread over the change set. */
 const OTHER_COMMENTS = 40;
+
+/**
+ * The scratch session's own name, which does not compose with itself. It was
+ * `${current}-b`, and a run killed between `createSession` and the `finally`
+ * below left `current` on it — so the next run made `synth-b-b`, and the one
+ * after that a third, each reused for ever by the early return (DA-69).
+ */
+const SCRATCH_SESSION = "perf-scratch";
 
 /**
  * The fixture carries one review session; switching between sessions needs two.
@@ -280,21 +305,34 @@ const OTHER_COMMENTS = 40;
  */
 async function twoSessions(config: Config): Promise<Sessions> {
   const current = await resolveSessionName(config.dataDir);
-  const other = `${current}-b`;
-  if (await sessionExists(config.dataDir, other)) return { current, other };
+  const other = SCRATCH_SESSION;
+  if (current === other) {
+    throw new Error(
+      `${config.dataDir}: current names ${other}, the harness's own scratch session; ` +
+        "a run was killed with the pointer on it and the fixture has to be regenerated",
+    );
+  }
+  const cache = await readDiffCache(config.dataDir, current);
+  const files = (cache?.repositories ?? []).flatMap((repo) =>
+    repo.files.map((file) => ({ repo: repo.path, path: file.path })),
+  );
+  const wanted = Math.min(OTHER_COMMENTS, files.length);
+
+  // A scratch session that does not hold what this one would write is rebuilt
+  // rather than reused: reusing it is what made one killed run permanent.
+  if (await sessionExists(config.dataDir, other)) {
+    if ((await readComments(config.dataDir, other)).length === wanted) return { current, other };
+    await rm(sessionDir(config.dataDir, other), { recursive: true, force: true });
+  }
 
   try {
     await createSession(config.dataDir, other, { mode: "head" }, "The other session");
-    const cache = await readDiffCache(config.dataDir, current);
     if (cache !== null) {
       await withLock(sessionDir(config.dataDir, other), async (held) => {
         await held.assertHeld();
         await writeDiffCache(config.dataDir, other, cache);
       });
-      const files = cache.repositories.flatMap((repo) =>
-        repo.files.map((file) => ({ repo: repo.path, path: file.path })),
-      );
-      for (let i = 0; i < Math.min(OTHER_COMMENTS, files.length); i += 1) {
+      for (let i = 0; i < wanted; i += 1) {
         const at = files[i];
         if (at === undefined) continue;
         await addComment(config.dataDir, other, {
@@ -316,6 +354,8 @@ async function twoSessions(config: Config): Promise<Sessions> {
   }
   return { current, other };
 }
+
+export { SCRATCH_SESSION, twoSessions };
 
 export type Options = { fixture: string; variants: string[]; runs: number };
 
