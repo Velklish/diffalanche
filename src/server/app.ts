@@ -151,7 +151,7 @@ export function createApp({ activity, config, events, review, ui, verbose }: App
   // scope editor offers to pick from. It is the one answer a scoped session
   // gives about anything outside its scope, and it is a picker's list rather
   // than a review — no patch, no hunks.
-  app.get("/api/sessions/candidates", async (c) => c.json(await review.candidates()));
+  app.get("/api/sessions/candidates", async (c) => c.json(await review.candidates(named(c))));
 
   app.get("/api/config", (c) => c.json<ClientConfig>({ user: config.user, port: config.port }));
 

@@ -127,7 +127,7 @@ alike** — and answers for the current session without it. See
 |---|---|
 | `GET /api/review[?review=<name>]` | the review document: the change set, the session, its comments and counters; without the parameter, of the current session |
 | `GET /api/sessions` | every review session with its counters, its scope, and its status, most recently updated first |
-| `GET /api/sessions/candidates` | the change set of the whole root, scope ignored: what a scope is picked from |
+| `GET /api/sessions/candidates[?review=]` | the change set of the whole root, the task's scope ignored and its base kept |
 | `GET /api/config` | `{ user, port }` — what the UI signs comments with, and where it is |
 | `GET /api/scan` | every repository under the root, with whether it has changes |
 | `GET /api/repos/branches` | every branch of the root, for the base picker |
@@ -359,9 +359,9 @@ see [Keeping a held document honest](#keeping-a-held-document-honest).
 
 The routes that name their session in the path — `PUT /api/sessions/:name/base`,
 `/scope`, `POST /api/sessions/:name/close`, `/reopen`, `/use` — need no
-parameter, and the three answers about the whole root — `GET /api/scan`,
-`GET /api/sessions`, `GET /api/sessions/candidates` — are about no session at
-all.
+parameter, and two answers are about no session at all: `GET /api/scan` and
+`GET /api/sessions`. `GET /api/sessions/candidates` used to be the third and is
+not: its list is the whole root, but the base it is read against is a task's.
 
 **A window on any task hears about that task's comments**, because the watcher
 follows the tasks windows are open on rather than `current` alone
@@ -386,8 +386,12 @@ session it is about.
 ### The candidates
 
 `GET /api/sessions/candidates` is the change set of the **whole** root, whatever
-the session is about: the scope editor has to offer what the task is not about
-yet. It is the third route that reads git per request, and it carries names
+the session is *about* — the scope editor has to offer what the task is not about
+yet — but read against **that task's base**. The scope is ignored and the base is
+not: a picker showing a change set computed against another task's base would
+offer files the task will never display, and would hide files it does. So the
+route takes `?review=` like every other read of the page, and without it answers
+for `current` as before. It is the third route that reads git per request, and it carries names
 rather than diffs — no `patch`, no `hunks` — because a picker shows paths and
 the diff of a whole root is megabytes.
 

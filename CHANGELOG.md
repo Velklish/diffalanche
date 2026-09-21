@@ -314,6 +314,13 @@ and `bun run release` refuses a version that has no section. See
   *appended*, so another task's change set arrived whole, against another base,
   with the composer usable on its lines. Switching a task also reopens the
   stream, because an open `EventSource` keeps the address it was made with.
+- **The scope editor picks from its own task** (DA-77). Its candidate list is the
+  whole root, as it must be — the editor offers what the task is not about yet —
+  but it was read against the **current** session's base while being written into
+  the window's own task. A window on a task with another base was offered files
+  that task will never show, and not offered files it does. The route now takes
+  `?review=` like every other read of the page.
+
 - **A rescan the server was told about before it reached disk is no longer
   dropped** (DA-75). `adopt` returned without doing anything whenever the
   document was cold — which is what every write through the API leaves behind,

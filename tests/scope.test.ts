@@ -613,7 +613,11 @@ describe("the routes the UI reads a task through", () => {
     expect(current.session.name).toBe("synth");
   });
 
-  it("offers the whole root as candidates, whatever the task is about", async () => {
+  it("offers the whole root, and reads it against the base of the task asked about", async () => {
+    // The scope of a task is ignored here — the editor has to offer what the
+    // task is *not* about yet — but its base is not: a picker that showed a
+    // change set computed against another task's base would offer files this
+    // task will never display (DA-77).
     const response = await app.request("/api/sessions/candidates");
     expect(response.status).toBe(200);
     const candidates = (await response.json()) as CandidateSet;
@@ -624,6 +628,24 @@ describe("the routes the UI reads a task through", () => {
     const first = candidates.repositories[0]?.files[0];
     expect(first).toMatchObject({ path: expect.any(String), status: expect.any(String) });
     expect(first).not.toHaveProperty("patch");
+
+    // A second task whose base resolves to nothing. Its change set is empty and
+    // its warnings are not, and that is the difference the parameter carries:
+    // the same request without it answers for `current`, whose base is `head`.
+    const made = await cli("review", "new", "t-base", "--base", "no-such-ref", "--no-use");
+    expect(made, made.err).toMatchObject({ code: 0 });
+    const named = (await (
+      await app.request("/api/sessions/candidates?review=t-base")
+    ).json()) as CandidateSet;
+    expect(named.repositories).toEqual([]);
+    expect(named.warnings.length).toBeGreaterThan(0);
+
+    // And the current session still answers for itself, so the difference is
+    // the task and not the moment.
+    const again = (await (await app.request("/api/sessions/candidates")).json()) as CandidateSet;
+    expect(again.repositories.map((one) => one.path).sort()).toEqual(
+      [WHOLE, PARTIAL, THIRD].sort(),
+    );
   });
 
   it("refuses a scope edit that would delete comments, and says how many", async () => {

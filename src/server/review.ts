@@ -10,7 +10,13 @@ import {
   scanReview,
 } from "../core/change-set.ts";
 import type { Config } from "../core/config/index.ts";
-import { countReview, list, repositoryInScope, resolveSessionName } from "../core/domain/index.ts";
+import {
+  countReview,
+  DomainError,
+  list,
+  repositoryInScope,
+  resolveSessionName,
+} from "../core/domain/index.ts";
 import { readRepositoryChange, scan } from "../core/index.ts";
 import type { Base, DiffCache, Review } from "../core/storage/index.ts";
 import {
@@ -105,8 +111,9 @@ export type ReviewService = {
   invalidateComments: (session: string) => void;
   /** Every repository under the root with whether it has changes: the first-run screen. */
   summary: () => Promise<ScanSummary>;
-  /** The change set of the whole root, scope ignored: what a scope is picked from. */
-  candidates: () => Promise<CandidateSet>;
+  /** The change set of the whole root, the task's scope ignored but its **base**
+   * kept: what a scope is picked from ([07-server.md](../../docs/reference/07-server.md)). */
+  candidates: (session?: string) => Promise<CandidateSet>;
 };
 
 /** What the server holds for one session: its document, and what is known to be newer. */
@@ -301,7 +308,7 @@ export function createReviewService(
       entry.payload = null;
     },
     summary: async () => summarise(config),
-    candidates: async () => candidatesOf(config),
+    candidates: async (session) => candidatesOf(config, session),
   };
 }
 
@@ -467,13 +474,13 @@ async function summarise(config: Config): Promise<ScanSummary> {
  * the scan does and carries names rather than diffs: the patch of a whole root
  * is megabytes, and a picker shows paths.
  */
-async function candidatesOf(config: Config): Promise<CandidateSet> {
+async function candidatesOf(config: Config, named?: string): Promise<CandidateSet> {
   const found = await scan(config.root, {
     roots: config.roots,
     depth: config.depth,
     exclude: config.exclude,
   });
-  const base = await sessionBase(config);
+  const base = await sessionBase(config, named);
   const read = await mapWithLimit(found.repositories, SCAN_CONCURRENCY, (repository) =>
     readRepositoryChange(config.root, repository.path, base, { hunks: false }),
   );
@@ -503,13 +510,18 @@ async function candidatesOf(config: Config): Promise<CandidateSet> {
   };
 }
 
-/** Without a session there is no base to read against; the default one is HEAD. */
-async function sessionBase(config: Config): Promise<Base> {
+/** The base of the task asked about, or of the current session. Only *no session
+ * at all* falls back to HEAD: a name the data directory has not is a refusal
+ * here, as it is on every other read that takes `?review=`. */
+async function sessionBase(config: Config, named?: string): Promise<Base> {
   try {
-    const session = await resolveSessionName(config.dataDir);
+    const session = await resolveSessionName(config.dataDir, named);
     return (await readReview(config.dataDir, session)).base;
-  } catch {
-    return { mode: "head" };
+  } catch (error) {
+    if (error instanceof DomainError && error.code === "no-current-session") {
+      return { mode: "head" };
+    }
+    throw error;
   }
 }
 
