@@ -264,6 +264,22 @@ and `bun run release` refuses a version that has no section. See
 
 ### Fixed
 
+- **Two writes that skipped the session's lock now take it** (DA-67). A comment
+  checked the scope before the lock and wrote inside it, so a `review scope set`
+  narrowing in between left a comment on a path the scope no longer had — stored,
+  refused by `get`, `reply`, `resolve` and `reopen`, absent from `list`, and
+  announced as written on exit 0. `addComment` now checks the scope inside the
+  lock against the metadata read there, and that refusal has a message of its
+  own — a scope that narrowed under a comment being written is a different fact
+  from a comment that was outside the task all along, and the same
+  `out-of-scope` code would not have said which. The anchor capture stays
+  outside the lock, so a comment write does not hold the session for a parse of
+  `diff.json`. And
+  `diffalanche diff` wrote `diff.json` bare where the other five writers take the
+  lock first: a watcher that read the cache before that write and patched one
+  repository into it afterwards dropped everything the scan had found for the
+  rest, and the cache answered for the same base and scope, so the server served
+  it stale until an fs event fired.
 - **The generator claims its stamp before it writes anything** (DA-69). It wrote
   `synth.json` last, so `bun run perf` interrupted inside `synth` left the
   fixture directory non-empty and unstamped — and the erase guard, which now

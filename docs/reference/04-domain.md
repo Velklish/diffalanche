@@ -163,6 +163,36 @@ of the other four says `no-such-comment` — one question, one answer. Nothing
 writes such a comment; a `comments.json` edited by hand is where it comes from.
 They read `review.json` for the scope, one small file per call.
 
+That "nothing writes such a comment" is held by where `addComment` checks the
+scope, and it takes two checks to hold it. **Both refuse with `out-of-scope`,
+and they say different things**, because the person reading the refusal is
+answering a different question in each case.
+
+The first is before the anchor is captured. It fires when the comment was
+outside the task all along, and it says so — *"… is not in the scope of review
+task X, which is about Y: widen the scope or open a task of its own"* — which is
+the answer to "why was my comment refused". Being first is what makes the
+refusal cheap (no change set is read for it) and what keeps `out-of-scope` ahead
+of `line-not-in-diff` for an anchor that is both.
+
+The second is inside the lock, against `draft.review`. It fires only when the
+scope was wide enough when the comment was written and is not any more, and its
+message is about that and nothing else — *"the scope of review task X narrowed
+while this comment was being written: … is no longer in it … Nothing was
+written"* — because "widen the scope or open a task of its own" would be advice
+about a task that has just changed under the writer, and the useful fact is that
+somebody else changed it and that nothing was kept. It is the one that is the
+guarantee: between the first check and the write sit the anchor
+capture and the wait for the lock, and a `review scope set` that narrows in that
+window would otherwise leave the comment on a path the scope no longer has, seen
+by nothing and reported as written. The anchor capture stays **outside** the
+lock: it reads `diff.json`, the largest file in the session directory, and
+holding the session for the length of that read would make every comment write
+cost a parse of the whole change set to the watcher and the server that contend
+for the same lock. What the anchor is captured from can go stale either way —
+the cache is a cache — while the scope is a rule about whether the comment may
+exist at all, and only the rule needs the lock.
+
 **The status of a task.** `closeSession` and `reopenSession` set `status`,
 `closedAt`, and `closedBy`, and both refuse any role but `human` through the
 same `assertHuman` that `resolve` and `reopen` use — the rule of

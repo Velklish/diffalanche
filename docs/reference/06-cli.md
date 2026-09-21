@@ -258,6 +258,23 @@ too-large, listed without content` — the two omissions of
 reading, not for `git apply`: the files of every repository are all `a/…` and
 `b/…`, so two repositories in one patch would collide.
 
+The write goes through the session's lock, like every other writer of
+`diff.json`. The interleaving it is there for is the one `assertHeld` cannot
+catch, because the command never contends for the lock at all: a watcher takes
+the lock and reads the cache, `diff` finishes its scan and writes a fresh one
+over it, and the watcher then writes back what it read with one repository
+patched into it — holding the lock honestly the whole time. Everything the scan
+found for the other repositories is gone, and because the cache still answers for
+the same base and the same scope, the server serves it unchanged until an fs
+event fires ([03-storage.md](03-storage.md), [05-watcher.md](05-watcher.md)).
+
+That lock is a third way `diff` exits 1, beside the two refusals above. A lock a
+running `serve` or another `diff` still holds when `timeoutMs` runs out is a
+`StorageError` naming the holder and the instant its lease runs to, and the scan
+is thrown away with `diff.json` left exactly as it was: the run prints nothing
+and writes nothing. So the header of the command — every run rescans the root and
+rewrites the cache — holds for a run that exits 0.
+
 `--repo <path>` narrows what is printed — its repository, its warnings, and
 totals counted again for it — and never narrows what is written: a cache with
 one repository in it would tell the UI and the next `comment` that the rest of

@@ -1,12 +1,14 @@
 /**
  * `diff`: the change set of the current review session, the same one the UI
- * shows. Every run scans the whole root and rewrites `diff.json`, so an agent
- * without a running server reads the review here (`docs/SPEC.md` section 8).
+ * shows. A run that exits 0 has rescanned the root and rewritten `diff.json`,
+ * so an agent without a running server reads the review here (`docs/SPEC.md`
+ * section 8); a run that cannot take the session's lock writes nothing
+ * ([06-cli.md](../../../docs/reference/06-cli.md)).
  */
 import { formatScope, readSession, repositoryInScope } from "../../core/domain/index.ts";
 import { scanReview, totalsOf } from "../../core/index.ts";
 import type { DiffCache } from "../../core/storage/index.ts";
-import { writeDiffCache } from "../../core/storage/index.ts";
+import { sessionDir, withLock, writeDiffCache } from "../../core/storage/index.ts";
 import { flag, noExtra, text } from "../args.ts";
 import type { Command } from "../command.ts";
 import { repositoryNotFound, UsageError } from "../errors.ts";
@@ -96,7 +98,12 @@ export const diff: Command = {
           `which is about ${formatScope(review.scope)}`,
       );
     }
-    await writeDiffCache(config.dataDir, session, scanned.cache);
+    // Under the session's lock, like every other writer of this file: a write
+    // between the watcher's read and its write is gone without a trace.
+    await withLock(sessionDir(config.dataDir, session), async (held) => {
+      await held.assertHeld();
+      await writeDiffCache(config.dataDir, session, scanned.cache);
+    });
 
     const shown = narrow(scanned.cache, repo);
 

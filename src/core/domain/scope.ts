@@ -145,18 +145,24 @@ export function assertAnchorInScope(
   repo: string | null,
   path: string | null,
 ): void {
-  if (review.scope === null || repo === null) return;
-  if (
-    !repositoryInScope(review.scope, repo) ||
-    (path !== null && !pathInScope(review.scope, repo, path))
-  ) {
-    throw new DomainError(
-      "out-of-scope",
-      `${path === null ? repo : `${repo}/${path}`} is not in the scope of review task ` +
-        `"${review.name}", which is about ${formatScope(review.scope)}: widen the scope or ` +
-        "open a task of its own",
-    );
-  }
+  if (anchorInScope(review.scope, repo, path)) return;
+  throw new DomainError(
+    "out-of-scope",
+    `${anchorName(repo, path)} is not in the scope of review task ` +
+      `"${review.name}", which is about ${formatScope(review.scope)}: widen the scope or ` +
+      "open a task of its own",
+  );
+}
+
+/** The condition of that refusal on its own: `addComment` asks it twice and answers differently. */
+export function anchorInScope(scope: Scope, repo: string | null, path: string | null): boolean {
+  if (scope === null || repo === null) return true;
+  return repositoryInScope(scope, repo) && (path === null || pathInScope(scope, repo, path));
+}
+
+/** A repository, or a file inside one, as a refusal names it. */
+export function anchorName(repo: string | null, path: string | null): string {
+  return path === null ? (repo ?? "the review") : `${repo}/${path}`;
 }
 
 // ---------------------------------------------------------------------------

@@ -245,7 +245,12 @@ call returns.
   lock, so two creates of one name cannot both pass it.
 
 `updateComments(dataDir, name, update)` is `updateSession` with only the
-comments in view, and is what every comment writer calls.
+comments in view, and is what `reply`, `resolve`, and `reopen` call. `addComment`
+is the one comment writer that goes to `updateSession` instead, because it checks
+the scope and the scope lives in `review.json`: read outside the lock it is the
+scope of a moment that has passed, and a narrowing landing between the read and
+the write leaves a comment nothing reads back
+([04-domain.md](04-domain.md)).
 
 The lock options go through as well, which is how the lease is tested: a change
 that outruns `staleMs` and has the lock taken from it is refused and writes

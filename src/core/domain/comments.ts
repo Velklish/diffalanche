@@ -11,6 +11,7 @@ import {
   sessionExists,
   timestamp,
   updateComments,
+  updateSession,
 } from "../storage/index.ts";
 import type { RepositoryChange } from "../types.ts";
 import { captureAnchor } from "./anchors.ts";
@@ -18,7 +19,13 @@ import { isAwaiting, isUnanswered } from "./counters.ts";
 import { DomainError } from "./errors.ts";
 import type { Actor } from "./roles.ts";
 import { assertHuman } from "./roles.ts";
-import { assertAnchorInScope, commentInScope } from "./scope.ts";
+import {
+  anchorInScope,
+  anchorName,
+  assertAnchorInScope,
+  commentInScope,
+  formatScope,
+} from "./scope.ts";
 
 const ID_ALPHABET = "0123456789abcdefghijklmnopqrstuvwxyz";
 /** `c_` plus six base36 characters ([ADR-002](../../../docs/adr/adr-002-stack-and-delivery.md)). */
@@ -174,7 +181,19 @@ export async function addComment(
       ? null
       : captureAnchor(await changeSet(dataDir, session), repo, path, side, line);
 
-  return updateComments(dataDir, session, (comments) => {
+  return updateSession(dataDir, session, (draft) => {
+    // The guarantee, not a repeat of the cheap refusal above, and it says so:
+    // this one fires on a narrowing that landed while the comment was written.
+    if (!anchorInScope(draft.review.scope, repo, path)) {
+      throw new DomainError(
+        "out-of-scope",
+        `the scope of review task "${draft.review.name}" narrowed while this comment was being ` +
+          `written: ${anchorName(repo, path)} is no longer in it, and the task is now about ` +
+          `${formatScope(draft.review.scope)}. Nothing was written; widen the scope or open a ` +
+          "task of its own",
+      );
+    }
+    const comments = draft.comments;
     const comment: Comment = {
       id: newId(new Set(comments.map((one) => one.id))),
       repo,
