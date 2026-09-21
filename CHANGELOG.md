@@ -117,6 +117,14 @@ and `bun run release` refuses a version that has no section. See
   carried the CI ceiling from 20.8 to 23.8 against an unchanged 17.3 and turned
   fifteen percent of headroom into thirty-eight. `docs/SPEC.md` section 6 keeps 8.3 ms as the target with the measured
   number and its date beside it, and closing the gap is DA-56.5.
+- **The shell's two screenshots mask the sidebar footer** (DA-54.2). The footer
+  prints `127.0.0.1:<port>`, so the free port above moved four digits of
+  monospace text and both baselines failed on 33 pixels of 1.4 million — a
+  regression of the suite introduced by the fix beside it, invisible on CI
+  because the `ui` job runs with `--ignore-snapshots`. Masked for the reason
+  `/api/activity` is stubbed in the same file: a baseline may only carry what
+  does not vary. The footer's text stays covered by direct assertions in six
+  specs, `shell.spec.ts` among them.
 - **The UI suite asks the operating system for its port** (DA-54.2). It held a
   fixed 4881 with `reuseExistingServer` off, which is right for one person
   running it by hand and wrong for a gate: two workers on one machine could not

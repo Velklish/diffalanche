@@ -38,16 +38,26 @@ async function open(page: Page) {
   await page.evaluate(() => document.fonts.ready);
 }
 
+/** The footer prints the server's port, and the suite stopped running on a
+ * fixed one (DA-54.2): masked for the reason `/api/activity` is stubbed. */
+const varies = (page: Page) => [page.locator(".sidebar-foot")];
+
 test("the empty shell in the dark theme", async ({ page }) => {
   await open(page);
-  await expect(page).toHaveScreenshot("shell-dark.png", { fullPage: true });
+  await expect(page).toHaveScreenshot("shell-dark.png", {
+    fullPage: true,
+    mask: varies(page),
+  });
 });
 
 test("the empty shell in the light theme", async ({ page }) => {
   await open(page);
   await page.getByRole("button", { name: "light theme" }).click();
   await expect(page.locator(":root")).toHaveAttribute("data-theme", "light");
-  await expect(page).toHaveScreenshot("shell-light.png", { fullPage: true });
+  await expect(page).toHaveScreenshot("shell-light.png", {
+    fullPage: true,
+    mask: varies(page),
+  });
 });
 
 test("nothing pulses for a reader who asked for less motion", async ({ page }) => {
