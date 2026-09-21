@@ -207,6 +207,26 @@ cost of opening a task is its scope's repositories rather than the root's, and
 the read is written back, so anchor capture reads a file that says what the
 screen says ([04-domain.md](04-domain.md)).
 
+**What a rescan does to a document that is not there.** The watcher hands the
+change set over *before* it writes `diff.json` — an update the person is waiting
+for must not wait for a file of megabytes ([05-watcher.md](05-watcher.md)) — so
+between the two there is a moment when memory is newer than the file. `adopt`
+therefore records the change set on that session whether or not a document is
+held for it to patch, and its answer says which of the two happened; a build
+that started before that moment takes the recorded change set on its way out
+instead of installing what it read from the file. **After a rescan of the
+followed session, the next read of that session's document carries that
+rescan** — with the document held, with it cold, and with a build in flight.
+An invalidation drops the document and its bytes and leaves the recorded change
+set alone: a write to the data directory is not a change of the working tree.
+
+That recorded change set is **the followed session's and no other's**. The
+watcher rescans one session, so a cache it handed over is about the session it
+was following at the time; once `current` moves on, what it holds is as frozen
+as the file, and it is dropped rather than served. Both doors are the same rule:
+a build consults it only when it is building the followed session, and so does
+the reconciliation on the way out.
+
 ### Keeping a held document honest
 
 A held document's change set ages, because only the followed session's is

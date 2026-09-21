@@ -280,6 +280,21 @@ and `bun run release` refuses a version that has no section. See
 
 ### Fixed
 
+- **A rescan the server was told about before it reached disk is no longer
+  dropped** (DA-75). `adopt` returned without doing anything whenever the
+  document was cold — which is what every write through the API leaves behind,
+  and what the whole duration of a build is — while the watcher announces a
+  rescan *before* it writes `diff.json`, so that a person does not wait for a
+  file of megabytes. In that window a build could read the pre-edit file and
+  cache it with nothing to invalidate it, and the card of the edited file kept
+  the diff of a moment ago. `adopt` now records the change set on that session
+  whether or not a document is held for it to patch, and answers which of the
+  two happened rather than failing silently; a build that started before the
+  rescan takes the recorded change set on its way out instead of installing
+  what it read; the recorded cache belongs to the followed session alone, and is
+  dropped rather than served once `current` has moved on. The `warnings` event
+  no longer forces a re-read: it rides on the rescan the document already has.
+
 - **A window opened on a named task shows the change set it was opened to see**
   (DA-55.3). `GET /api/review?review=<name>` trusted `diff.json` whenever its
   base and scope still matched the session's — and they match after an edit,

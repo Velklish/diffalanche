@@ -92,8 +92,9 @@ export type ReviewService = {
    * watcher does not keep fresh — see `freshRepository` below.
    */
   repository: (repo: string, session?: string) => Promise<RepositoryChange | null>;
-  /** The change set as a rescan of that session left it, taken as its document's own. */
-  adopt: (session: string, cache: DiffCache) => void;
+  /** The change set a rescan of that session left. It is recorded either way, and
+   * the answer says whether a document was held for it to patch. */
+  adopt: (session: string, cache: DiffCache) => boolean;
   /** Something changed underneath that session: its document is built again when next asked for. */
   invalidate: (session: string) => void;
   /** A repository under the root changed: every held document that could show it,
@@ -115,6 +116,8 @@ type Held = {
   pending: Promise<ReviewDocument> | null;
   /** Bumped by every invalidation of this session, so a build that started before one is dropped. */
   version: number;
+  /** The change set the last rescan handed over; it reaches memory before it reaches the file. */
+  adopted: DiffCache | null;
   /** Repositories that changed while this session's document was being built, judged
    * against its scope when the build resolves and it has one. */
   signalled: string[];
@@ -157,6 +160,7 @@ export function createReviewService(
       payload: null,
       pending: null,
       version: 0,
+      adopted: null,
       signalled: [],
       commentsWritten: writes,
       staleComments: writes,
@@ -187,10 +191,17 @@ export function createReviewService(
     if (entry.pending === null) {
       const started = entry.version;
       const startedWrites = writes;
+      const followed = watched() === session;
+      // What the watcher handed over is about the session it was following;
+      // once it has moved on, that cache is as frozen as the file.
+      if (!followed) entry.adopted = null;
       entry.signalled = [];
-      entry.pending = build(config, session, watched() === session).then(
-        (settled) => {
+      entry.pending = build(config, session, entry, followed).then(
+        (built) => {
           entry.pending = null;
+          // A rescan may have landed while this was building: what it handed
+          // over is newer than the file this read, so it settles the change set.
+          const settled = followed ? withAdopted(built, entry) : built;
           // What changed while this was building is judged now, against the
           // scope the built document carries: a repository this task is not
           // about must not cost it its place.
@@ -239,17 +250,20 @@ export function createReviewService(
     },
     adopt: (session, cache) => {
       const entry = entryOf(session);
-      const document = entry.document;
-      if (document === null) return;
       // The hunks go no further than `diff.json`, here as in the document: the
       // renderer reads `patch` and anchor capture reads the file.
+      const taken: DiffCache = { ...cache, repositories: cache.repositories.map(withoutHunks) };
+      entry.adopted = taken;
+      const document = entry.document;
+      if (document === null) return false;
       entry.document = {
         ...document,
-        repositories: cache.repositories.map(withoutHunks),
-        totals: cache.totals,
-        warnings: cache.warnings,
+        repositories: taken.repositories,
+        totals: taken.totals,
+        warnings: taken.warnings,
       };
       entry.payload = null;
+      return true;
     },
     invalidate: (session) => {
       const entry = sessions.get(session);
@@ -257,6 +271,8 @@ export function createReviewService(
       entry.version += 1;
       entry.document = null;
       entry.payload = null;
+      // `adopted` stands: a write to the data directory is not a change of the
+      // working tree, and the rescan's change set is still the newest there is.
     },
     repositoryChanged: (repo) => {
       const followed = watched();
@@ -274,6 +290,7 @@ export function createReviewService(
         entry.version += 1;
         entry.document = null;
         entry.payload = null;
+        entry.adopted = null;
       }
     },
     invalidateComments: (session) => {
@@ -302,9 +319,27 @@ function answers(cache: DiffCache, review: Review): boolean {
   return sameBase(cache.base, review.base) && sameScope(cache.scope, review.scope);
 }
 
-async function build(config: Config, session: string, followed: boolean): Promise<ReviewDocument> {
+/** The document with the change set of the last rescan, when that rescan still
+ * answers what this session asks. */
+function withAdopted(document: ReviewDocument, entry: Held): ReviewDocument {
+  const cache = entry.adopted;
+  if (cache === null || !answers(cache, document.session)) return document;
+  return {
+    ...document,
+    repositories: cache.repositories,
+    totals: cache.totals,
+    warnings: cache.warnings,
+  };
+}
+
+async function build(
+  config: Config,
+  session: string,
+  entry: Held,
+  followed: boolean,
+): Promise<ReviewDocument> {
   const review = await readReview(config.dataDir, session);
-  const cache = await changeSet(config, session, review, followed);
+  const cache = await changeSet(config, session, entry, review, followed);
   const comments = await list(config.dataDir, session);
   return {
     root: config.root,
@@ -322,12 +357,15 @@ async function build(config: Config, session: string, followed: boolean): Promis
 async function changeSet(
   config: Config,
   session: string,
+  entry: Held,
   review: Review,
   followed: boolean,
 ): Promise<DiffCache> {
-  // Only the followed session has a cache anything refreshes, because the
-  // watcher rescans one session.
+  // Memory and file alike: only the followed session has a change set anything
+  // refreshes, because the watcher rescans one session.
   if (followed) {
+    const adopted = entry.adopted;
+    if (adopted !== null && answers(adopted, review)) return adopted;
     const cached = await readDiffCache(config.dataDir, session);
     if (cached !== null && answers(cached, review)) return cached;
   }
