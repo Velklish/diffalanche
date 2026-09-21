@@ -301,6 +301,28 @@ describe("the stream itself", () => {
     }
   });
 
+  it("names the tasks its windows are on, once each", async () => {
+    const events = createEventStream();
+    const app = new Hono();
+    app.get("/api/events", streamEvents(events, 5_000));
+    // Three windows on two tasks, and one on the current session.
+    const opened = [
+      await app.request("/api/events?review=ls-1"),
+      await app.request("/api/events?review=ls-2"),
+      await app.request("/api/events?review=ls-1"),
+      await app.request("/api/events"),
+    ];
+    try {
+      expect(events.open()).toBe(4);
+      // Once each: the set is about tasks, not about how many windows each has,
+      // and the window on `current` names no task at all.
+      expect([...events.sessions()].sort()).toEqual(["ls-1", "ls-2"]);
+    } finally {
+      events.close();
+      for (const response of opened) await (response.body as ReadableStream).cancel();
+    }
+  });
+
   it("ends every open stream when the server stops", async () => {
     const events = createEventStream();
     const app = new Hono();

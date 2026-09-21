@@ -14,12 +14,16 @@ import type { ScanWarning } from "../types.ts";
 export type WatcherEvent =
   /** One repository's change set was recomputed; `files` are the paths that woke the watcher. */
   | { type: "diff-changed"; repo: string; files: string[] }
-  | { type: "comment-added"; id: string }
+  /** `session` is the task the thread belongs to: a window on another one drops it. */
+  | { type: "comment-added"; session: string; id: string }
   /** `id` is the reply, `commentId` the thread it landed in. */
-  | { type: "reply-added"; id: string; commentId: string }
-  | { type: "comment-status"; id: string }
-  /** The current session changed, or the metadata of the current one did. */
+  | { type: "reply-added"; session: string; id: string; commentId: string }
+  | { type: "comment-status"; session: string; id: string }
+  /** The metadata of a followed session changed: its base, title, name, scope or status. */
   | { type: "session-changed"; name: string }
+  /** `current` now points at this session. A window with no `?review=` follows
+   * that pointer and re-reads; one on a task of its own does not. */
+  | { type: "current-changed"; name: string }
   /**
    * A review task appeared in the data directory, or a task's status changed —
    * whichever session it is, current or not. An open window says a new task is

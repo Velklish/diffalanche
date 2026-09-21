@@ -251,12 +251,10 @@ writes would never hold a document at all — which is the opposite of what
 holding one is for.
 
 **The task's own `review.json` changed** — `review base --review X` from a
-terminal, say. There is no signal: the watcher keeps the metadata of one
-session, the current one. A window on X therefore goes on showing the base it
-was opened with until something else drops that document. Closing it is
-[DA-55.1](../backlog/queue/DA-55.1-watcher-follows-one-session.md), which teaches
-the watcher to follow the sessions windows are open on; until it lands, this
-half is open and is stated here rather than implied.
+terminal, say. The watcher compares the metadata of every session a window is
+open on, so `session-changed` arrives naming X and that document is dropped. It
+is the second half of what a held document needs, and it is why a task with no
+window on it is not followed: nothing would read the result.
 
 **A comment write is neither.** `POST /api/comments` and the three routes beside
 it re-read the comments of that session and keep its change set, because a
@@ -271,14 +269,12 @@ metadata comparison leaves out, and for the same reason: a write bumps
 beside it, so the server keeps a few and drops the least recently asked-for,
 passing over one with a build in flight. Holding one per session is what makes a
 switch back to a session the server has already built cost nothing on the server
-([11-perf.md](11-perf.md)). `POST /api/sessions/:name/use` invalidates nothing
-itself: moving `current` changes which document a request without `?review=`
-resolves to, not what any document says. **The switch the UI makes is the one
-that costs nothing** — it writes `?review=` and never calls `use`
-([08-ui.md](08-ui.md)). A switch through `use` does pay: the watcher sees
-`current` move and sends `session-changed` for the session switched to, and that
-drops its document. Every other write names the session it changed, and only
-that session's document is dropped.
+([11-perf.md](11-perf.md)). `POST /api/sessions/:name/use` invalidates nothing:
+moving `current` changes which document a request without `?review=` resolves
+to, not what any document says, and the watcher announces it as `current-changed`
+— which drops no document, precisely because nothing about that session changed
+([05-watcher.md](05-watcher.md)). Every other write names the session it changed,
+and only that session's document is dropped.
 
 `warnings` is everything the scan and the reads had to say — `ScanWarning[]`,
 the directories that could not be read and the bases that did not resolve
@@ -367,17 +363,25 @@ parameter, and the three answers about the whole root — `GET /api/scan`,
 `GET /api/sessions`, `GET /api/sessions/candidates` — are about no session at
 all.
 
-A window on a task the watcher is not following gets no live event about that
-task's **comments**: the watcher snapshots the comments of one session, the
-current one ([05-watcher.md](05-watcher.md)). `diff-changed` and
-`sessions-changed` are unaffected — the first is about a repository and the
-second walks every session. Closing that gap means teaching the watcher to
-follow more than one session: [DA-55.1](../backlog/queue/DA-55.1-watcher-follows-one-session.md).
-Until it lands, a named task's document is right when it is built, and is
-dropped when a repository it could show changes, so a reload after an edit
-builds it again. What no reload repairs is a change to that task's own
-`review.json`, which nothing signals — see
-[Keeping a held document honest](#keeping-a-held-document-honest).
+**A window on any task hears about that task's comments**, because the watcher
+follows the tasks windows are open on rather than `current` alone
+([05-watcher.md](05-watcher.md)). The set comes from the live streams:
+`GET /api/events?review=<name>` carries the task its window is on, and
+`EventStream.sessions()` is the distinct names of the open connections.
+
+**That parameter is a registry, not a filter.** The frames stay one broadcast
+with one sequence of ids and `Last-Event-ID` is untouched; it tells the server
+only which tasks have windows, so the watcher knows whose comments to read.
+Filtering is the client's, by the session name the frame carries. The two
+mechanisms look alike and are not the same one, and a per-connection filter was
+rejected for a concrete reason: the ring and its ids are one per server
+([The live stream](#the-live-stream)), so filtering per connection would make a
+client's ids non-contiguous and leave "what did I miss" unanswerable from one
+ring.
+
+A change to a task's own `review.json` now reaches its window too: the metadata
+of every followed session is compared each burst, and `session-changed` names the
+session it is about.
 
 ### The candidates
 
@@ -498,10 +502,11 @@ browser fetches what an event names rather than being sent it.
 | Event | Data |
 |---|---|
 | `diff-changed` | `{ type, repo, files }` — `files` are the paths that woke the watcher |
-| `comment-added` | `{ type, id }` |
-| `reply-added` | `{ type, id, commentId }` — `id` is the reply |
-| `comment-status` | `{ type, id }` |
-| `session-changed` | `{ type, name }` — the current session, or the metadata of it |
+| `comment-added` | `{ type, session, id }` — `session` is the task the thread belongs to |
+| `reply-added` | `{ type, session, id, commentId }` — `id` is the reply |
+| `comment-status` | `{ type, session, id }` |
+| `session-changed` | `{ type, name }` — the base, title, name, scope or status of a followed session changed |
+| `current-changed` | `{ type, name }` — the `current` pointer moved to this session |
 | `sessions-changed` | `{ type, name, status }` — a review task appeared, or a task's status changed |
 | `warnings` | `{ type, list }` |
 | `activity` | `{ id, verb, author, repo, path, at }` — one line of the feed |

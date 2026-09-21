@@ -663,15 +663,16 @@ describe("watcher", () => {
   it("follows the current session when the pointer changes", async () => {
     const mark = performance.now();
     await writeFile(join(config.dataDir, "current"), `${SESSION}-other\n`);
-    // The session does not exist, so nothing is announced; the pointer is read
-    // and the watcher stops writing into a session that is no longer current.
+    // The pointer moved, which is not a change to what any session *is*: a
+    // window on a task of its own must not re-read on somebody else's switch.
     await new Promise((done) => setTimeout(done, 4 * BUDGET_MS));
     expect(watcher.session()).toBe(`${SESSION}-other`);
     expect(
-      since(mark, "session-changed").map((one) => (one.event as { name: string }).name),
+      since(mark, "current-changed").map((one) => (one.event as { name: string }).name),
     ).toEqual([`${SESSION}-other`]);
+    expect(since(mark, "session-changed")).toEqual([]);
     await writeFile(join(config.dataDir, "current"), `${SESSION}\n`);
-    await waitFor("session-changed", performance.now() - 1);
+    await waitFor("current-changed", performance.now() - 1);
   }, 30_000);
 
   it("announces a task that appeared and a task whose status changed", async () => {
@@ -702,7 +703,7 @@ describe("a rescan that fails", () => {
     await writeFile(pointer, "ghost\n");
     // The pointer has to be read before the edit, or the rescan still finds
     // the session that was current when it was scheduled.
-    await waitFor("session-changed", switched);
+    await waitFor("current-changed", switched);
     const failed = performance.now();
     await writeFile(file, "export const broken = 1;\n");
     // The session named by the pointer is not there, so the rescan refuses;
@@ -715,7 +716,7 @@ describe("a rescan that fails", () => {
     expect(since(failed, "diff-changed")).toEqual([]);
 
     await writeFile(pointer, `${SESSION}\n`);
-    await waitFor("session-changed", performance.now() - 1);
+    await waitFor("current-changed", performance.now() - 1);
     const mark = performance.now();
     await writeFile(file, "export const broken = 2;\n");
     const hit = await waitFor("diff-changed", mark);
@@ -1110,13 +1111,13 @@ describe("a comments.json that cannot be read", () => {
     const switched = performance.now();
     try {
       await writeFile(join(config.dataDir, "current"), `${task}\n`);
-      await waitFor("session-changed", switched);
+      await waitFor("current-changed", switched);
       // The baseline of the session switched to is read like any other, so a
       // file that cannot be read there is the same transition as a broken write.
       expect(failures.length).toBe(before + 1);
     } finally {
       await writeFile(join(config.dataDir, "current"), `${SESSION}\n`);
-      await waitFor("session-changed", performance.now() - 1);
+      await waitFor("current-changed", performance.now() - 1);
     }
   }, 60_000);
 });
@@ -1297,6 +1298,119 @@ describe("the repository signal", () => {
       await rm(outside, { force: true });
       await rm(inside, { force: true });
       await settle();
+    }
+  }, 60_000);
+});
+
+/** One comment as `comments.json` stores it, for a test that writes the file by hand. */
+function comment(id: string, body: string): unknown {
+  return {
+    id,
+    version: 2,
+    repo: null,
+    path: null,
+    line: null,
+    endLine: null,
+    side: "new",
+    severity: "nit",
+    body,
+    author: "kim.p",
+    role: "agent",
+    status: "open",
+    createdAt: new Date().toISOString(),
+    resolvedAt: null,
+    resolvedBy: null,
+    replies: [],
+  };
+}
+
+describe("the sessions a watcher follows", () => {
+  it("hears a second task's comments, and does not replay the ones it opened on", async () => {
+    const own = createEventBus();
+    const seenHere: WatcherEvent[] = [];
+    own.subscribe((event) => seenHere.push(event));
+    const dataDir = mkdtempSync(join(tmpdir(), "diffalanche-follow-"));
+    // Two tasks: the current one, and one no window would have reached before.
+    for (const name of [SESSION, "followed"]) {
+      mkdirSync(join(dataDir, "reviews", name), { recursive: true });
+      for (const file of ["review.json", "comments.json", "diff.json"]) {
+        const from = join(config.dataDir, "reviews", SESSION, file);
+        if (existsSync(from)) copyFileSync(from, join(dataDir, "reviews", name, file));
+      }
+    }
+    // The second task opens with comments already in it: that history is the
+    // baseline, not news, or a window would get all of it as new threads.
+    const theirs = join(dataDir, "reviews", "followed", "comments.json");
+    const held = JSON.parse(readFileSync(theirs, "utf8")) as { comments: unknown[] };
+    expect(held.comments.length).toBeGreaterThan(0);
+    writeFileSync(join(dataDir, "current"), `${SESSION}\n`);
+
+    let watched: string[] = [];
+    const watching = await startWatcher({
+      config: { ...config, dataDir },
+      scan: found,
+      ...(NATIVE_WATCH ? {} : { recursive: false, pollIntervalMs: 40 }),
+      bus: own,
+      activity: createActivityLog(),
+      sessions: () => watched,
+      onError: () => undefined,
+    });
+    const commentsOf = (session: string): WatcherEvent[] =>
+      seenHere.filter((event) => event.type === "comment-added" && event.session === session);
+    const until = async (holds: () => boolean): Promise<void> => {
+      const deadline = performance.now() + 20_000;
+      while (!holds() && performance.now() < deadline) {
+        await new Promise((done) => setTimeout(done, 5));
+      }
+    };
+    // The data directory's watch is the same `watchTree` the repositories get,
+    // and on the native path its `ready` is `Promise.resolve()` — it says
+    // nothing about when the OS starts delivering. So this watcher is armed
+    // too: a write is made and waited for before anything is measured.
+    const armData = async (): Promise<void> => {
+      const file = join(dataDir, "reviews", SESSION, "comments.json");
+      const deadline = performance.now() + 30_000;
+      for (let attempt = 0; ; attempt += 1) {
+        const list = JSON.parse(readFileSync(file, "utf8")) as { comments: unknown[] };
+        list.comments.push(comment(`c_arm${attempt}`, "arming the data watch"));
+        writeFileSync(file, JSON.stringify(list));
+        const patience = performance.now() + 2_000;
+        while (performance.now() < patience) {
+          if (commentsOf(SESSION).length > 0) return;
+          await new Promise((done) => setTimeout(done, 5));
+        }
+        if (performance.now() > deadline)
+          throw new Error("the watch of the data directory never armed");
+      }
+    };
+    try {
+      await armData();
+      seenHere.length = 0;
+
+      // The task joins the watched set carrying history. Nothing is announced
+      // for it: the burst that notices it reads the file as the baseline.
+      watched = ["followed"];
+      writeFileSync(
+        join(dataDir, "reviews", "followed", "review.json"),
+        readFileSync(join(dataDir, "reviews", "followed", "review.json"), "utf8"),
+      );
+      await new Promise((done) => setTimeout(done, 400));
+      expect(commentsOf("followed")).toEqual([]);
+
+      // Now a real write into it, which is the thing DA-55.1 exists for.
+      const file = join(dataDir, "reviews", "followed", "comments.json");
+      const list = JSON.parse(readFileSync(file, "utf8")) as { comments: unknown[] };
+      list.comments.push(comment("c_followed", "written into a task that is not current"));
+      writeFileSync(file, JSON.stringify(list));
+      await until(() => commentsOf("followed").length > 0);
+      expect(commentsOf("followed")).toHaveLength(1);
+      // And the frame says whose it is, which is what lets a window drop it.
+      expect(commentsOf("followed")[0]).toMatchObject({ session: "followed", id: "c_followed" });
+      // The current session heard nothing: the write was not in its file.
+      expect(commentsOf(SESSION)).toEqual([]);
+    } finally {
+      await watching.close();
+      rmSync(dataDir, { recursive: true, force: true });
     }
   }, 60_000);
 });

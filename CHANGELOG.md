@@ -280,6 +280,20 @@ and `bun run release` refuses a version that has no section. See
 
 ### Fixed
 
+- **A window on any task now hears about that task's comments** (DA-55.1). The
+  watcher followed one session — the current one — so `comment-added`,
+  `reply-added` and `comment-status` never named a thread of a task opened with
+  `?review=`, and an agent's answer in it reached the screen only on the next
+  reload. It now follows the tasks windows are actually open on: the live stream
+  carries `?review=` so the server knows which those are, and a session entering
+  the set is snapshotted **without announcing anything**, or a window opening on
+  a task with history would be told its whole history is new. The cost is bounded
+  by open windows rather than by sessions in the data directory, and
+  `review.json` costs nothing extra — the session listing already read every one
+  of them each burst, and that single read now serves both. A burst whose listing
+  of `reviews/` fails still reads and compares the followed sessions one by one,
+  so a change that lands in it is announced rather than silently absorbed into
+  the next baseline.
 - **A rescan the server was told about before it reached disk is no longer
   dropped** (DA-75). `adopt` returned without doing anything whenever the
   document was cold — which is what every write through the API leaves behind,
@@ -307,13 +321,15 @@ and `bun run release` refuses a version that has no section. See
   follows and reads the working tree for every other one — the scope's
   repositories rather than the root's — and writes that read back, so anchor
   capture sees what the screen sees. A document built that way is **held only
-  until a repository it could show changes**: the watcher now reports every
-  repository whose files moved, whatever the current task is about, and the
-  server drops the documents that change could appear in. **The other half is
-  not closed:** a change to a named task's own `review.json` — `review base
-  --review X` from a terminal — is signalled to nobody, so a window on X keeps
-  the base it was opened with. That needs the watcher to follow more than one
-  session, which is DA-55.1.
+  until a repository it could show changes**: the watcher reports a repository
+  that moved whatever the current task is about — its change set when the
+  repository is inside the followed task's scope, its files when it is outside —
+  and the server drops the documents that change could appear in. **The other
+  half is closed by DA-55.1 in this same release:** a change to a named task's
+  own `review.json` — `review base --review X` from a terminal — used to be
+  signalled to nobody, so a window on X kept the base it was opened with. The
+  watcher now follows every task a window is open on, so `session-changed`
+  arrives naming X and that document is dropped.
 
 - **A file that changed type is one entry again, carrying both halves** (DA-76.1).
   Git cannot write a tracked file becoming a symbolic link as one patch, so it

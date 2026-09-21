@@ -24,6 +24,7 @@ const watcher = await startWatcher({ config, scan, bus, activity });
 | `pollIntervalMs` | how often a tree is walked where there is no recursive watch; 250 ms |
 | `onRescan` | the session the rescan was about and the change set as it left it, for a caller that keeps it in memory |
 | `onRepositoryChanged` | a repository that moved, **whatever the current task is about**: its change set inside the task's scope, its files outside |
+| `sessions` | the tasks windows are open on, asked on every burst of the data directory |
 | `recursive` | `false` walks every tree instead of watching it; the default asks the runtime |
 | `onError` | a rescan that failed; without it the failure is silent |
 | `onFallback` | a recursive watch died and the walk took its place; said once |
@@ -237,10 +238,11 @@ the same, because the CLI writes the same directory.
 | Event | Data | When |
 |---|---|---|
 | `diff-changed` | `{ repo, files }` | a repository was rescanned and its entry is not what it was; `files` are the paths that woke the watcher, not the files of the new change set, and it is **empty** when what woke it was the walk taking over a dead watch — that names no path |
-| `comment-added` | `{ id }` | a comment appeared in `comments.json` |
-| `reply-added` | `{ id, commentId }` | a reply appeared in a thread; `id` is the reply |
-| `comment-status` | `{ id }` | a comment was resolved or reopened |
-| `session-changed` | `{ name }` | the `current` pointer moved, or the base, title, name, scope, or status of the current session changed |
+| `comment-added` | `{ session, id }` | a comment appeared in the `comments.json` of a followed session |
+| `reply-added` | `{ session, id, commentId }` | a reply appeared in a thread; `id` is the reply |
+| `comment-status` | `{ session, id }` | a comment was resolved or reopened |
+| `session-changed` | `{ name }` | the base, title, name, scope or status of a **followed** session changed |
+| `current-changed` | `{ name }` | the `current` pointer moved to this session |
 | `sessions-changed` | `{ name, status }` | a review task appeared in the data directory, or a task's status changed — whichever session it is |
 | `warnings` | `{ list }` | the warnings of the change set are not what they were |
 
@@ -250,6 +252,14 @@ is compared with the cached one, patch by patch, and nothing is announced when
 they agree. `session-changed` is the same kind of answer: every write to a
 session bumps `updatedAt` in `review.json`, and only a change to what the review
 *is* counts — its base, title, name, scope, or status.
+
+**`current-changed` is a different piece of news and therefore a different
+event.** One says a task changed; the other says the pointer moved to a task that
+changed in no way. They used to share a name, and a window could not tell which
+had happened: a window with no `?review=` must follow the pointer, because it
+shows and writes to whatever `current` is, while a window on a task of its own
+must ignore it. One name could not answer both, and the frame that means two
+things carries no identity ([08-ui.md](08-ui.md)).
 
 `sessions-changed` is the other half of that, and it is not the same event: a
 task created by `review new --no-use` never becomes current, so nothing about
@@ -299,6 +309,32 @@ comes first, so a build writing into an ignored directory of an unrelated
 repository still says nothing. One process against the four a rescan costs —
 the same trade the rescan path already makes, measured at about 20 ms over fifty
 paths in `tests/watcher.test.ts`, one process for the whole window.
+
+**The watcher follows the sessions windows are open on**, not `current` alone. It
+keeps the comments and the metadata of each, and rescans none of them but the
+current one: following a session is not scanning it, which is why a named task's
+change set is still *built* from the working tree rather than kept fresh by a
+rescan ([07-server.md](07-server.md)).
+
+The set is `{current} ∪ the tasks live connections are on`, and it comes from the
+live stream rather than from the server's document cache. A cache is a cache: its
+eviction policy answers a question about memory, so it would drop a session whose
+window is still open and keep one whose window has closed. A connection's
+appearance *is* a window opening and its disappearance *is* that window going
+away — the property the set needs, by definition rather than by proxy.
+
+**A session entering the set is snapshotted without announcing anything**, and
+its entry is dropped when it leaves. Otherwise a window opening on a task with
+history would be told its whole history is new; a reconnect therefore costs one
+silent snapshot rather than a burst. The three comment events carry the name of
+the session their thread belongs to, so a window can drop what is not its own
+([07-server.md](07-server.md)).
+
+The cost is bounded by the number of open windows rather than by the number of
+sessions in the data directory: `comments.json` is read for the followed ones
+only. `review.json` costs nothing extra at all — the session listing reads every
+one of them on the same burst anyway, and that single read is now handed to both
+the metadata comparison and the listing.
 
 Comment events come from reading `comments.json` and comparing it with the last
 read, so a write from the UI, from one `diffalanche reply`, or from twenty of

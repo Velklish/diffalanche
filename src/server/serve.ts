@@ -74,6 +74,10 @@ export async function startReviewServer(options: ReviewServerOptions): Promise<R
     activity,
     onRescan: review.adopt,
     onRepositoryChanged: review.repositoryChanged,
+    // The tasks windows are open on, taken from the live streams rather than
+    // from the document cache: a connection exists exactly while a window does,
+    // and a cache's eviction answers a question about memory (05-watcher.md).
+    sessions: () => events.sessions(),
     onError: (error) => {
       process.stderr.write(
         `rescan failed: ${error instanceof Error ? error.message : String(error)}\n`,
@@ -96,14 +100,16 @@ export async function startReviewServer(options: ReviewServerOptions): Promise<R
     // news for the page, not for this document: the sessions are read per
     // request and the review the page is on has not changed.
     if (event.type === "sessions-changed") return;
+    // `current` moving changes which document a bare request resolves to and
+    // not what any document says, so nothing is dropped for it.
+    if (event.type === "current-changed") return;
     if (event.type === "session-changed") {
       review.invalidate(event.name);
       return;
     }
-    // A comment event is about the session the watcher snapshots, which is the
-    // one it follows ([05-watcher.md](../../docs/reference/05-watcher.md)).
-    const followed = running.session();
-    if (followed !== null) review.invalidateComments(followed);
+    // The frame names the session its thread belongs to, and the watcher now
+    // follows more than one ([05-watcher.md](../../docs/reference/05-watcher.md)).
+    review.invalidateComments(event.session);
   });
 
   // The change set is read and `diff.json` written before the socket opens, so

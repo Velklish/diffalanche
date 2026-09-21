@@ -96,6 +96,9 @@ export type WatcherOptions = {
   /** A repository that moved, whatever the current task is about: inside the
    * task's scope it means the change set did, outside it means files were written. */
   onRepositoryChanged?: (repo: string) => void;
+  /** The tasks windows are open on, asked on every burst of the data directory
+   * ([05-watcher.md](../../../docs/reference/05-watcher.md)). */
+  sessions?: () => string[];
   /** A rescan that failed. Without this the failure is silent. */
   onError?: (error: unknown) => void;
   /** A watch died and the walk took its place; said once (05-watcher.md). */
@@ -128,8 +131,14 @@ export async function startWatcher(options: WatcherOptions): Promise<Watcher> {
   // already knows the answer is not asked to prove it.
   const recursive = options.recursive ?? (await supportsRecursiveWatch(config.dataDir));
   let session = await readCurrent(config.dataDir);
-  let comments: Map<string, CommentState> | null = await snapshotComments(config, session);
-  let metadata = await readMetadata(config, session);
+  // Per session, because a window open on a task hears about that task's
+  // comments and not only about the current one's (DA-55.1).
+  const comments = new Map<string, Map<string, CommentState> | null>();
+  const metadata = new Map<string, string | null>();
+  if (session !== null) {
+    comments.set(session, await snapshotComments(config, session));
+    metadata.set(session, await readMetadata(config, session));
+  }
   // What the current session is about, so a repository the task is not about
   // costs it no git process when its files change.
   let scope: Scope = (await readSessionOrNull(config, session))?.scope ?? null;
@@ -254,24 +263,47 @@ export async function startWatcher(options: WatcherOptions): Promise<Watcher> {
     });
   }
 
+  /** The tasks followed: the current one, and the ones windows are open on. */
+  function followedSessions(): string[] {
+    const named = new Set<string>(options.sessions?.() ?? []);
+    if (session !== null) named.add(session);
+    return [...named];
+  }
+
   /** The three files of the data directory, in the order a change of one affects the others. */
   async function reloadData(): Promise<void> {
     await reloadCurrent();
-    await reloadComments();
-    await reloadMetadata();
-    await reloadSessions();
+    const followed = followedSessions();
+    await reloadComments(followed);
+    // One read of every `review.json` for the whole burst, handed to both the
+    // metadata comparison and the session listing: the listing read them all
+    // anyway, so following more sessions costs no extra read (05-watcher.md).
+    const listed = await readSessions(config);
+    // The listing failed, which is not an empty data directory. The followed
+    // sessions are read one by one and go through the *same* comparison, or a
+    // change that landed in this burst would never be announced at all: the next
+    // readable burst would find no difference and say nothing.
+    const reviews = listed ?? (await readFollowed(config, followed));
+    reloadMetadata(followed, reviews);
+    if (listed !== null) reloadSessions(listed);
   }
 
   async function reloadCurrent(): Promise<void> {
     const next = await readCurrent(config.dataDir);
     if (next === session) return;
     session = next;
+    if (session === null) return;
     // The comments of the session switched to are not news: they are the new
     // baseline, and a file that cannot be read is the same transition as below.
-    comments = await snapshotComments(config, session, report);
-    metadata = await readMetadata(config, session);
+    // A session a window was already on keeps the snapshot it has.
+    if (!comments.has(session)) {
+      comments.set(session, await snapshotComments(config, session, report));
+    }
+    metadata.set(session, await readMetadata(config, session));
     scope = (await readSessionOrNull(config, session))?.scope ?? null;
-    if (session !== null) bus.emit({ type: "session-changed", name: session });
+    // The pointer moved; what the session *is* has not changed, and the two are
+    // different news for different windows ([08-ui.md](../../../docs/reference/08-ui.md)).
+    bus.emit({ type: "current-changed", name: session });
   }
 
   /**
@@ -280,13 +312,12 @@ export async function startWatcher(options: WatcherOptions): Promise<Watcher> {
    * appeared without becoming it (`docs/SPEC.md` section 5). A session that
    * disappears says nothing — deleting one is Phase 2 (DA-40).
    */
-  async function reloadSessions(): Promise<void> {
-    const next = await snapshotSessions(config, sessions);
-    // The directory could not be listed. What was known stays known: replacing
-    // it with an empty snapshot would make every session news again on the next
-    // readable pass, and a few hundred of those would push the replay out of
-    // the stream's ring ([07-server.md](../../../docs/reference/07-server.md)).
-    if (next === null) return;
+  function reloadSessions(reviews: Map<string, Review | null>): void {
+    // A listing that failed never reaches here: what was known stays known,
+    // because replacing it with an empty snapshot would make every session news
+    // again on the next readable pass, and a few hundred of those would push the
+    // replay out of the stream's ring ([07-server.md](../../../docs/reference/07-server.md)).
+    const next = statusesOf(reviews, sessions);
     if (sessions === null) {
       sessions = next;
       return;
@@ -297,41 +328,52 @@ export async function startWatcher(options: WatcherOptions): Promise<Watcher> {
     sessions = next;
   }
 
-  async function reloadComments(): Promise<void> {
-    if (session === null) return;
+  async function reloadComments(followed: string[]): Promise<void> {
+    // A session that no window is on stops being read, and its snapshot goes:
+    // opening it again reads the file as the new baseline rather than replaying
+    // what is already in it.
+    for (const name of [...comments.keys()]) {
+      if (!followed.includes(name)) comments.delete(name);
+    }
+    for (const name of followed) await reloadCommentsOf(name);
+  }
+
+  async function reloadCommentsOf(name: string): Promise<void> {
+    const before = comments.get(name);
     let list: Comment[];
     try {
-      list = await readComments(config.dataDir, session);
+      list = await readComments(config.dataDir, name);
     } catch (error) {
       // The rest of the chain still runs: a file broken by hand stops the
       // comment events, not the metadata and session-list ones.
-      if (comments !== null) report(error);
-      comments = null;
+      if (before !== undefined && before !== null) report(error);
+      comments.set(name, null);
       return;
     }
-    // Nothing was read the last time — a file being written as it was read, or
-    // one broken by hand and since repaired. What is in it now is the baseline,
-    // not two hundred comments that were all just added.
-    if (comments === null) {
-      comments = snapshotOf(list);
+    // Nothing was read the last time — a file being written as it was read, one
+    // broken by hand and since repaired, or a task a window has just opened.
+    // What is in it now is the baseline, not two hundred comments that were all
+    // just added.
+    if (before === undefined || before === null) {
+      comments.set(name, snapshotOf(list));
       return;
     }
     for (const comment of list) {
-      const before = comments.get(comment.id);
-      if (before === undefined) {
-        bus.emit({ type: "comment-added", id: comment.id });
+      const was = before.get(comment.id);
+      if (was === undefined) {
+        bus.emit({ type: "comment-added", session: name, id: comment.id });
         recordWrite(activity, "commented", comment.role, comment.author, comment);
         continue;
       }
-      if (before.status !== comment.status) {
-        bus.emit({ type: "comment-status", id: comment.id });
+      if (was.status !== comment.status) {
+        bus.emit({ type: "comment-status", session: name, id: comment.id });
       }
-      for (const reply of comment.replies.slice(before.replies)) {
-        bus.emit({ type: "reply-added", id: reply.id, commentId: comment.id });
+      for (const reply of comment.replies.slice(was.replies)) {
+        bus.emit({ type: "reply-added", session: name, id: reply.id, commentId: comment.id });
         recordWrite(activity, "replied", reply.role, reply.author, comment);
       }
     }
-    comments = snapshotOf(list);
+    comments.set(name, snapshotOf(list));
   }
 
   /**
@@ -339,13 +381,22 @@ export async function startWatcher(options: WatcherOptions): Promise<Watcher> {
    * `updatedAt`. Only a change to what the review is — its base, its title, its
    * name — is a session change.
    */
-  async function reloadMetadata(): Promise<void> {
-    if (session === null) return;
-    const next = await readMetadata(config, session);
-    if (next === metadata) return;
-    metadata = next;
-    scope = (await readSessionOrNull(config, session))?.scope ?? null;
-    bus.emit({ type: "session-changed", name: session });
+  function reloadMetadata(followed: string[], reviews: Map<string, Review | null>): void {
+    for (const name of [...metadata.keys()]) {
+      if (!followed.includes(name)) metadata.delete(name);
+    }
+    for (const name of followed) {
+      const review = reviews.get(name) ?? null;
+      const next = review === null ? null : metadataOf(review);
+      if (metadata.has(name) && metadata.get(name) === next) continue;
+      const known = metadata.has(name);
+      metadata.set(name, next);
+      // A task a window has just opened is not a task that changed: its
+      // metadata is read as the baseline, the way its comments are.
+      if (!known) continue;
+      if (name === session) scope = review?.scope ?? null;
+      bus.emit({ type: "session-changed", name });
+    }
   }
 
   for (const repository of scan.repositories) {
@@ -628,23 +679,53 @@ async function readSessionOrNull(config: Config, session: string | null): Promis
  * A session whose `review.json` could not be read this time keeps the status it
  * had, for the same reason: a file caught mid-write is not a task that changed.
  */
-export async function snapshotSessions(
-  config: Config,
-  previous: Map<string, ReviewStatus> | null,
-): Promise<Map<string, ReviewStatus> | null> {
+/** Every session's `review.json` in one pass, or `null` when `reviews/` itself could
+ * not be listed — a failed read, which an empty data directory is not. */
+export async function readSessions(config: Config): Promise<Map<string, Review | null> | null> {
   let names: string[];
   try {
     ({ names } = await listSessionNames(config.dataDir));
   } catch {
     return null;
   }
+  const reviews = new Map<string, Review | null>();
+  for (const name of names) reviews.set(name, await readSessionOrNull(config, name));
+  return reviews;
+}
+
+/** The `review.json` of the followed sessions alone, for a burst whose listing of
+ * `reviews/` failed: what is followed is still read and still compared. */
+async function readFollowed(
+  config: Config,
+  followed: string[],
+): Promise<Map<string, Review | null>> {
+  const reviews = new Map<string, Review | null>();
+  for (const name of followed) reviews.set(name, await readSessionOrNull(config, name));
+  return reviews;
+}
+
+/** The status of every session read this burst. A session whose file could not be
+ * read keeps the status it had: a file caught mid-write is not a task that changed. */
+export function statusesOf(
+  reviews: Map<string, Review | null>,
+  previous: Map<string, ReviewStatus> | null,
+): Map<string, ReviewStatus> {
   const snapshot = new Map<string, ReviewStatus>();
-  for (const name of names) {
-    const review = await readSessionOrNull(config, name);
+  for (const [name, review] of reviews) {
     const status = review?.status ?? previous?.get(name);
     if (status !== undefined) snapshot.set(name, status);
   }
   return snapshot;
+}
+
+/** The status of every session in the data directory, read for a caller that has
+ * no burst of its own to share ([04-domain.md](../../../docs/reference/04-domain.md)). */
+export async function snapshotSessions(
+  config: Config,
+  previous: Map<string, ReviewStatus> | null,
+): Promise<Map<string, ReviewStatus> | null> {
+  const reviews = await readSessions(config);
+  return reviews === null ? null : statusesOf(reviews, previous);
 }
 
 /**

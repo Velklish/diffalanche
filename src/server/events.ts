@@ -46,6 +46,9 @@ export const HELLO = ": connected\n\n";
 export type Client = {
   send: (frame: EventFrame) => void;
   end: () => void;
+  /** The task this window is on, `null` for the current session. A **registry**
+   * and not a filter: every client still gets every frame (07-server.md). */
+  session: string | null;
 };
 
 /**
@@ -64,6 +67,9 @@ export type EventStream = {
   subscribe: (client: Client) => () => void;
   /** How many streams are open; the tests and the shutdown ask. */
   open: () => number;
+  /** The distinct tasks open windows are on. Several windows on one task are one
+   * entry: the set is about tasks, not about how many windows each has. */
+  sessions: () => string[];
   /** Ends every open stream: the server is stopping. */
   close: () => void;
 };
@@ -113,6 +119,11 @@ export function createEventStream(capacity: number = REPLAY_CAPACITY): EventStre
       };
     },
     open: () => clients.size,
+    sessions: () => [
+      ...new Set(
+        [...clients].flatMap((client) => (client.session === null ? [] : [client.session])),
+      ),
+    ],
     close() {
       for (const client of [...clients]) {
         clients.delete(client);
@@ -167,6 +178,7 @@ export function streamEvents(events: EventStream, heartbeatMs: number = HEARTBEA
       };
 
       const client: Client = {
+        session: c.req.query("review") || null,
         send: (frame) => {
           void write(() =>
             stream.writeSSE({ id: String(frame.id), event: frame.event, data: frame.data }),
