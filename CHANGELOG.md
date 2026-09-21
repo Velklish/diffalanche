@@ -264,6 +264,23 @@ and `bun run release` refuses a version that has no section. See
 
 ### Fixed
 
+- **A file that changed type is one entry again, carrying both halves** (DA-76.1).
+  Git cannot write a tracked file becoming a symbolic link as one patch, so it
+  writes two for the one path, and the de-duplication of DA-76 never saw them:
+  both come from the diff itself. The counters doubled the path, the card and the
+  sidebar row repeated a React key, and a comment on the new side of the link
+  anchored against the deletion. The pair is now one entry with **both** patches
+  and both hunk lists, status `modified` — the path is on both sides of the
+  change, so neither `deleted` nor `added` is true of it — and the reviewer keeps
+  what they came for: the content that left and the link that arrived. Only a
+  deletion beside an addition on one path is joined; any other repeat stays two
+  entries where it can be seen. Where one half is listed without content — a
+  binary file or one over the size limit, replaced by a link — the patch comes
+  from the half that has one and the skipped side is named in the repository's
+  warnings, because an entry that took the omission for the whole would hide the
+  link it exists to show. The UI's patch readers learned the same qualification —
+  a `diff --git` line ends a patch, so the second one's header stopped being
+  counted as diff rows.
 - **"This file was not written" is asserted by the time of the write** (DA-88.1).
   A byte comparison cannot see a rewrite that puts the same bytes back, which is
   exactly what a rescan of an unchanged repository does, so the checks named

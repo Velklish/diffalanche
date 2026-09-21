@@ -17,6 +17,11 @@ export function firstAddedLine(patch: string): number {
   let first: number | null = null;
   let inHunk = false;
   for (const row of patch.split("\n")) {
+    // `+++ b/…` of the other half of a type change starts with a plus too.
+    if (row.startsWith("diff --git ")) {
+      inHunk = false;
+      continue;
+    }
     if (row.startsWith("@@")) {
       const start = /\+(\d+)/.exec(row)?.[1];
       line = start === undefined ? 1 : Number(start);

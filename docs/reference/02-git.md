@@ -161,10 +161,55 @@ rather than a second entry:
 creds.txt is deleted from the base and still on disk: it was untracked out of it
 ```
 
-One case is not covered by that: a file that changes type — a tracked file
-replaced by a symbolic link — is two patches for one path from the diff alone,
-so the loop above never sees it. That is
-[DA-76.1](../backlog/queue/DA-76.1-type-change-is-two-entries-for-one-path.md).
+**The qualification to "one path is one entry" is what the entry carries, not
+how many there are.** A file that changes type — a tracked file replaced by a
+symbolic link — is two patches for one path from the diff alone, because git
+cannot write that change as one: it writes a deletion of the old mode and an
+addition of the new, adjacent and in that order. The de-duplication above never
+sees them, since both come from the same source.
+
+They are joined, and the joined entry carries **both**. This is where the pair
+parts company with `git rm --cached`: that one is the same file named twice and
+keeping one naming is right, while a type change is two real halves of one
+change, and dropping either loses what the reviewer came for — the content that
+left, or the link that arrived. For a tracked file replaced by a link to
+`/etc/hosts`, the link is the finding and the old content is what says what was
+lost; a change set that showed one of them would be showing half a security
+review.
+
+So `parseDiff` folds an adjacent deleted-plus-added pair on one path into one
+entry: both patches in the order git wrote them, both hunk lists, the additions
+and deletions summed, and status **`modified`** — the path is on both sides of
+the change, which is what makes `deleted` and `added` each untrue about it.
+
+**When one half is listed without content, the other half's patch is what the
+entry carries.** A binary file or one over the size limit, replaced by a link,
+gives a deletion with no patch beside an addition with one; taking the omission
+for the whole entry would hide the link, which is the one thing the entry exists
+to show. So the counts are still summed, the patch and the hunks come from the
+half that has them, and the side that could not be shown is said out loud in the
+repository's warnings rather than left to be inferred from a card with content on
+one side only. That warning travels through `notes` in `PatchOptions`, which the
+caller supplies and `readRepositoryChange` does: a caller that wants the warning
+has to pass the array, and one that does not simply does not hear about it.
+
+```
+thing.bin changed type and its old side is binary: only the other side is listed
+```
+
+Both halves omitted is the only case where the entry is omitted too. The
+condition for joining at all is deliberately narrow:
+**only** a deletion beside an addition on the same path is joined, so any other
+repeat of a path stays two entries where it can be seen rather than being
+silently merged into one nobody diagnosed.
+
+Both patches in one `patch` string is a shape the UI's readers had to learn:
+every one of them skipped to the first `@@` and then read to the end, so the
+second patch's `--- /dev/null` and `+++ b/…` counted as a deletion and an
+addition. They now stop at a `diff --git` line — `measurePatch` and `hiddenLines`
+([08-ui.md](08-ui.md)), `splitHunks` and `hasNewLine`, `firstAddedLine`, and
+`preview` — and the file card parses every patch of the entry rather than the
+first.
 
 Keeping one entry per path is what makes every consumer right at once: the
 anchor lookup, the sidebar and the card key all take the first match

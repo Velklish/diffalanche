@@ -1,9 +1,6 @@
 /**
- * `diff`: the change set of the current review session, the same one the UI
- * shows. A run that exits 0 has rescanned the root and rewritten `diff.json`,
- * so an agent without a running server reads the review here (`docs/SPEC.md`
- * section 8); a run that cannot take the session's lock writes nothing
- * ([06-cli.md](../../../docs/reference/06-cli.md)).
+ * `diff`: the change set of the session, rescanned and rewritten by every run
+ * that exits 0 ([06-cli.md](../../../docs/reference/06-cli.md)).
  */
 import { formatScope, readSession, repositoryInScope } from "../../core/domain/index.ts";
 import { scanReview, totalsOf } from "../../core/index.ts";

@@ -26,7 +26,10 @@ const noUi: UiAssets = { read: async () => null };
 /** Long enough for the racing writer to reach the lock; short enough not to
  * redden the wall-clock budget of `tests/watcher.test.ts` beside it. */
 const REACH_LOCK_MS = 150;
+/** The floor of the wait; the machine raises it when its own scan is slower. */
 const AFTER_SCAN_MS = 400;
+/** How much longer than the scan it timed the wait has to be to guard anything. */
+const SCAN_MARGIN = 2;
 
 let root: string;
 let config: Config;
@@ -92,7 +95,11 @@ describe("`diff` writing its cache while a watcher holds the lock", () => {
 
   it("loses no repository out of diff.json", async () => {
     expect(await cli("review", "new", SESSION)).toBe(0);
+    // The scan the locked writer below has to outrun, measured rather than
+    // assumed: how long one takes is the machine's answer, not ours.
+    const scanAt = performance.now();
     expect(await cli("diff")).toBe(0);
+    const waitMs = Math.max(AFTER_SCAN_MS, Math.ceil((performance.now() - scanAt) * SCAN_MARGIN));
     const full = await readDiffCache(config.dataDir, SESSION);
     expect(full?.repositories.map((one) => one.path).sort()).toEqual([...REPOS].sort());
 
@@ -107,8 +114,9 @@ describe("`diff` writing its cache while a watcher holds the lock", () => {
     await withLock(sessionDir(config.dataDir, SESSION), async (held) => {
       const previous = await readDiffCache(config.dataDir, SESSION);
       running = cli("diff");
-      // Long enough for the scan of the fixture to finish behind the lock.
-      await sleep(AFTER_SCAN_MS);
+      // Twice the scan measured above, so a writer going past the lock has
+      // written by now and the assertion below sees it.
+      await sleep(waitMs);
       await held.assertHeld();
       // Still the cache this lock was taken over: a `diff` that wrote through
       // the lock would be here, and the assertion below would never see it.

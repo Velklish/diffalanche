@@ -75,6 +75,13 @@ export function measurePatch(
   };
 
   for (const line of patch.split("\n")) {
+    // A second `diff --git` is the other half of a type change, and its header
+    // lines are not rows: `--- /dev/null` and `+++ b/…` would count as two.
+    if (line.startsWith("diff --git ")) {
+      closeBlock();
+      started = false;
+      continue;
+    }
     if (!started) {
       if (!line.startsWith("@@")) continue;
       started = true;
@@ -148,6 +155,8 @@ export function hiddenLines(patch: string, collapsed: Record<number, boolean>): 
   if (Object.values(collapsed).every((one) => one !== true)) return hidden;
 
   let hunk = -1;
+  /** Whether a hunk is open: a file header sits between two of them in a type change. */
+  let inHunk = false;
   let line = 0;
   /** The context lines seen since the last change of this hunk, in new-side numbers. */
   let leading: number[] = [];
@@ -165,16 +174,22 @@ export function hiddenLines(patch: string, collapsed: Record<number, boolean>): 
   };
 
   for (const row of patch.split("\n")) {
+    if (row.startsWith("diff --git ")) {
+      closeHunk();
+      inHunk = false;
+      continue;
+    }
     if (row.startsWith("@@")) {
       closeHunk();
       hunk += 1;
+      inHunk = true;
       line = Number(/\+(\d+)/.exec(row)?.[1] ?? 1);
       leading = [];
       trailing = [];
       changed = false;
       continue;
     }
-    if (hunk < 0) continue;
+    if (!inHunk) continue;
     const kind = row[0];
     if (kind === "-") {
       changed = true;

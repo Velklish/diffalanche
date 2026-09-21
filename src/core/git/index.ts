@@ -137,8 +137,9 @@ async function readOne(
     diff(cwd, resolution.base.sha, drivers),
     untrackedFiles(cwd),
   ]);
-  const files = parseDiff(raw, options);
-  const warnings = [...resolution.warnings];
+  const notes: string[] = [];
+  const files = parseDiff(raw, { ...options, notes });
+  const warnings = [...resolution.warnings, ...notes];
   const tracked = new Set(files.map((file) => file.path));
   for (const path of untracked) {
     // `git rm --cached` leaves both sources naming it: the diff has the deletion

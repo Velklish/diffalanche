@@ -7,7 +7,6 @@ import {
   Diff,
   getChangeKey,
   Hunk,
-  parseDiff,
   tokenize,
 } from "react-diff-view";
 import "react-diff-view/style/index.css";
@@ -23,6 +22,7 @@ import tsx from "refractor/tsx";
 import typescript from "refractor/typescript";
 import type { FileChange } from "../../core/types.ts";
 import type { ChangedHunks } from "../patch.ts";
+import { mergedPatch } from "../patch.ts";
 import type { DiffView } from "../store.ts";
 import { useStore } from "../store.ts";
 import { elapsed } from "../time.ts";
@@ -131,10 +131,9 @@ export function ReactDiffFile({
    * `zip` pairs a deletion with the insertion beside it, so the two columns of
    * the split view line up instead of running one block after the other.
    */
-  const parsed = useMemo(
-    () => parseDiff(file.patch, { nearbySequences: "zip" })[0] ?? null,
-    [file.patch],
-  );
+  // Every patch of the entry, not the first: this card is the one place both
+  // halves of a file that changed type are shown.
+  const parsed = useMemo(() => mergedPatch(file.patch), [file.patch]);
 
   const shown = useMemo(
     () => (parsed?.hunks ?? []).map((hunk, index) => trimContext(hunk, collapsed[index] === true)),

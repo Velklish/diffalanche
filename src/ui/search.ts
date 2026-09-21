@@ -140,6 +140,12 @@ export function preview(patch: string, target: number | null, span = PREVIEW_LIN
   let firstChange = -1;
 
   for (const row of patch.split("\n")) {
+    // The header of the other half of a type change: `--- /dev/null` and
+    // `+++ b/…` would read as a deletion and an addition.
+    if (row.startsWith("diff --git ")) {
+      started = false;
+      continue;
+    }
     if (row.startsWith("@@")) {
       at = Number(/\+(\d+)/.exec(row)?.[1] ?? 1);
       started = true;

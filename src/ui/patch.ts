@@ -5,7 +5,19 @@
  * did not change keeps the object it was rendered from — and with it its DOM,
  * its tokens, and the reader's place in it.
  */
+import type { FileData } from "react-diff-view";
+import { parseDiff } from "react-diff-view";
 import type { FileChange, RepositoryChange } from "../core/types.ts";
+
+/** Every patch of one entry as one file to render ([02-git.md](../../docs/reference/02-git.md)). */
+export function mergedPatch(patch: string): FileData | null {
+  const files = parseDiff(patch, { nearbySequences: "zip" });
+  const first = files[0];
+  if (first === undefined) return null;
+  if (files.length === 1) return first;
+  // `modify`, like the entry itself: the path is on both sides of the change.
+  return { ...first, type: "modify", hunks: files.flatMap((one) => one.hunks) };
+}
 
 /** One hunk of a patch: the `@@` line it is headed by, and everything under it. */
 export type PatchHunk = { header: string; body: string };
@@ -91,6 +103,14 @@ export function splitHunks(patch: string): PatchHunk[] {
   let header: string | null = null;
   let body: string[] = [];
   for (const line of patch.split("\n")) {
+    // The header of the other half of a type change, not the body of the hunk
+    // above it ([02-git.md](../../docs/reference/02-git.md)).
+    if (line.startsWith("diff --git ")) {
+      if (header !== null) hunks.push({ header, body: body.join("\n") });
+      header = null;
+      body = [];
+      continue;
+    }
     if (line.startsWith("@@")) {
       if (header !== null) hunks.push({ header, body: body.join("\n") });
       header = line;
@@ -113,6 +133,11 @@ export function hasNewLine(patch: string, line: number): boolean {
   let at = 0;
   let started = false;
   for (const row of patch.split("\n")) {
+    // `+++ b/…` of the other half of a type change is a header, not a new line.
+    if (row.startsWith("diff --git ")) {
+      started = false;
+      continue;
+    }
     if (row.startsWith("@@")) {
       at = Number(/\+(\d+)/.exec(row)?.[1] ?? 1);
       started = true;

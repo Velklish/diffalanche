@@ -268,6 +268,18 @@ found for the other repositories is gone, and because the cache still answers fo
 the same base and the same scope, the server serves it unchanged until an fs
 event fires ([03-storage.md](03-storage.md), [05-watcher.md](05-watcher.md)).
 
+**What the lock does not close is the other order.** It brackets the write, not
+the scan: a `diff` whose scan finished before a watcher patched the cache takes
+the lock afterwards and writes its own older picture over the patch, holding the
+lock honestly the whole time. `assertHeld` cannot see that either — the scan is
+simply older than what it overwrites. The damage is bounded in a way the closed
+direction's was not: what is lost is one repository's patch rather than every
+repository the scan found, and the next fs event or the next `comment` on that
+repository brings it back ([05-watcher.md](05-watcher.md)). Closing it would mean
+re-reading the cache inside the lock and merging rather than replacing, which is
+the one-repository patch logic DA-80 is about; until then this is the side that
+stays open, and it is written here rather than left to be rediscovered.
+
 That lock is a third way `diff` exits 1, beside the two refusals above. A lock a
 running `serve` or another `diff` still holds when `timeoutMs` runs out is a
 `StorageError` naming the holder and the instant its lease runs to, and the scan

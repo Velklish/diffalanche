@@ -634,6 +634,102 @@ describe("a file untracked with git rm --cached", () => {
   });
 });
 
+describe("a file that changes type", () => {
+  it("is one entry carrying both patches git wrote for the path", async () => {
+    const repo = join(root, "repos/g/typechange");
+    mkdirSync(repo, { recursive: true });
+    git(repo, ["init", "--quiet", "-b", "main"]);
+    writeFileSync(join(repo, "thing.txt"), "real content\n");
+    writeFileSync(join(repo, "keep.txt"), "keep\n");
+    commit(repo, "base");
+    unlinkSync(join(repo, "thing.txt"));
+    symlinkSync("/etc/hosts", join(repo, "thing.txt"));
+    try {
+      const change = await read("repos/g/typechange", { mode: "head" }, { hunks: true });
+      // Git writes two `diff --git` for the one path — a deletion of the old
+      // mode and an addition of the new — and one path is one entry.
+      expect(change.files.map((file) => file.path)).toEqual(["thing.txt"]);
+      const entry = change.files[0];
+      // `modified`, because the path is on both sides of the change: `deleted`
+      // and `added` each say something untrue about it.
+      expect(entry).toMatchObject({ status: "modified", oldPath: null, omitted: null });
+      // Both halves are in it: the content that left and the link that arrived.
+      expect(entry?.hunks).toHaveLength(2);
+      expect(entry?.deletions).toBe(1);
+      expect(entry?.additions).toBe(1);
+      expect(entry?.patch).toContain("deleted file mode 100644");
+      expect(entry?.patch).toContain("new file mode 120000");
+      expect(entry?.patch).toContain("-real content");
+      expect(entry?.patch).toContain("+/etc/hosts");
+      // And an anchor reaches either side, which two entries did not allow:
+      // the lookup takes the first match and it had only the old side.
+      expect(captureAnchor([change], "repos/g/typechange", "thing.txt", "old", 1)).toMatchObject({
+        lineContent: "real content",
+      });
+      expect(captureAnchor([change], "repos/g/typechange", "thing.txt", "new", 1)).toMatchObject({
+        lineContent: "/etc/hosts",
+      });
+    } finally {
+      rmSync(repo, { recursive: true, force: true });
+    }
+  });
+
+  it("keeps the half that has content when the other is listed without it", async () => {
+    // A binary file replaced by a link: the deletion half carries no patch, and
+    // dropping the addition would hide the one thing worth seeing (DA-76.1).
+    const repo = join(root, "repos/g/typebinary");
+    mkdirSync(repo, { recursive: true });
+    git(repo, ["init", "--quiet", "-b", "main"]);
+    writeFileSync(join(repo, "thing.bin"), Buffer.from([0, 1, 2, 0, 3, 4, 0]));
+    writeFileSync(join(repo, "keep.txt"), "keep\n");
+    commit(repo, "base");
+    unlinkSync(join(repo, "thing.bin"));
+    symlinkSync("/etc/hosts", join(repo, "thing.bin"));
+    try {
+      const change = await read("repos/g/typebinary", { mode: "head" }, { hunks: true });
+      expect(change.files.map((file) => file.path)).toEqual(["thing.bin"]);
+      const entry = change.files[0];
+      expect(entry).toMatchObject({ status: "modified", omitted: null });
+      // The link is there to read, which two entries also gave and the first
+      // version of this merge took away.
+      expect(entry?.patch).toContain("+/etc/hosts");
+      expect(entry?.hunks).toHaveLength(1);
+      // And the side that could not be shown is said out loud rather than lost.
+      expect(change.warnings).toEqual([
+        "thing.bin changed type and its old side is binary: only the other side is listed",
+      ]);
+      expect(captureAnchor([change], "repos/g/typebinary", "thing.bin", "new", 1)).toMatchObject({
+        lineContent: "/etc/hosts",
+      });
+    } finally {
+      rmSync(repo, { recursive: true, force: true });
+    }
+  });
+
+  it("leaves any other repeat of a path as two entries rather than joining it", () => {
+    // Two modifications of one path are not a type change, and nothing merges
+    // them: a silent join would hide a case nobody has diagnosed yet.
+    const twice = [
+      "diff --git a/x.ts b/x.ts",
+      "index 1111111..2222222 100644",
+      "--- a/x.ts",
+      "+++ b/x.ts",
+      "@@ -1,1 +1,1 @@",
+      "-one",
+      "+two",
+      "diff --git a/x.ts b/x.ts",
+      "index 2222222..3333333 100644",
+      "--- a/x.ts",
+      "+++ b/x.ts",
+      "@@ -5,1 +5,1 @@",
+      "-five",
+      "+six",
+      "",
+    ].join("\n");
+    expect(parseDiff(twice).map((file) => file.status)).toEqual(["modified", "modified"]);
+  });
+});
+
 describe("a patch git writes without hunks", () => {
   let change: RepositoryChange;
 

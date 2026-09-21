@@ -19,6 +19,8 @@ export type PatchOptions = {
    * `diff --json` and `diff.json` ask for them.
    */
   hunks?: boolean | undefined;
+  /** Facts the parse learns that the caller reports: `readRepositoryChange` warns with them. */
+  notes?: string[] | undefined;
 };
 
 /**
@@ -34,7 +36,53 @@ export type PatchOptions = {
 export function parseDiff(raw: string, options: PatchOptions = {}): FileChange[] {
   const maxFileBytes = options.maxFileBytes ?? DEFAULT_MAX_FILE_BYTES;
   const structured = options.hunks ?? true;
-  return split(raw).map((patch) => parseFile(patch, maxFileBytes, structured));
+  const parsed = split(raw).map((patch) => parseFile(patch, maxFileBytes, structured));
+  return mergeTypeChanges(parsed, options.notes ?? []);
+}
+
+/**
+ * The two patches git writes for a path that changed type, as one entry
+ * ([02-git.md](../../../docs/reference/02-git.md)).
+ */
+function mergeTypeChanges(files: FileChange[], notes: string[]): FileChange[] {
+  const merged: FileChange[] = [];
+  for (const file of files) {
+    const previous = merged.at(-1);
+    if (previous === undefined || previous.path !== file.path || !typeChange(previous, file)) {
+      merged.push(file);
+      continue;
+    }
+    // The half that has content wins the patch: dropping it would hide the very
+    // thing the entry exists to show, and the other half had none to give.
+    const kept = previous.omitted === null ? previous : file;
+    const skipped = previous.omitted === null ? file : previous;
+    if (skipped.omitted !== null) {
+      notes.push(
+        `${file.path} changed type and its ${skipped.status === "deleted" ? "old" : "new"} ` +
+          `side is ${skipped.omitted}: only the other side is listed`,
+      );
+    }
+    const both = previous.omitted === null && file.omitted === null;
+    merged[merged.length - 1] = {
+      path: previous.path,
+      oldPath: null,
+      status: "modified",
+      additions: previous.additions + file.additions,
+      deletions: previous.deletions + file.deletions,
+      patch: both ? previous.patch + file.patch : kept.patch,
+      hunks: both ? [...previous.hunks, ...file.hunks] : kept.hunks,
+      omitted: kept.omitted,
+    };
+  }
+  return merged;
+}
+
+/** A deletion beside an addition, in either order: the two patches of one type change. */
+function typeChange(one: FileChange, other: FileChange): boolean {
+  return (
+    (one.status === "deleted" && other.status === "added") ||
+    (one.status === "added" && other.status === "deleted")
+  );
 }
 
 /** One patch per file. Only a real header starts a line with `diff --git `. */
