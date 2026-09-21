@@ -97,11 +97,25 @@ this record is.
 
 **What this does not do.** The precondition separates a number decided by the
 machine from a number decided by the code. It does not make a line green that is
-red on a quiet machine, and one line is: `Scrolling the diff: CPU per frame`
+red on a quiet machine, and one line was: `Scrolling the diff: CPU per frame`
 measured 8.6–9.0 ms against its 8.3 ms budget in the quietest window available
 on 2026-09-21, on three trees including `1193ab3`, which predates the whole
-DA-53…56 package. That line is not what this record fixes, and a reader who
-expects it to go green here will be disappointed on purpose.
+DA-53…56 package, and 8.5–9.1 ms over nine commits of that range with no trend.
+
+That line was settled separately and by the same rule — measure, then choose the
+number. The owner set the gate at **9.5 ms** on 2026-09-21 and kept 8.3 ms, the
+frame of 120 fps, as the goal in `docs/SPEC.md` section 6 with the current
+reading written beside it. Where 9.5 comes from: twenty-four readings on one
+8-core M1 Pro, of which the ones taken below this record's ceiling — where the
+gate produces a verdict at all — run 8.5 to 9.1 ms, worst 9.1. 9.5 leaves about
+four percent over that worst trusted reading and still catches a regression the
+size of the one the line was written for, which was 0.8 ms; 10.0 leaves ten
+percent and catches almost nothing, and 9.2 sits against the worst reading and
+brings back the flapping this record exists against. The two rejected
+alternatives were keeping 8.3 as the gate and opening a task to meet it — which
+makes `perf` red for everybody until that task lands — and measuring without
+failing locally, which leaves the line guarded nowhere, since a runner ceiling
+of 20.75 would have passed almost any regression.
 
 ## Consequences
 

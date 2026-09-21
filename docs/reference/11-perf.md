@@ -417,7 +417,7 @@ millisecond line as the machine the budgets were written on (CPU per frame
 87) with zero long tasks (DA-5.1); the allowance leaves about fifteen percent
 over that, so a regression of a runner's own size is still red there, and a
 smaller one is red on the development machine first. The table names the
-widened ceiling beside the budget — `8.3 ms (20.8 on a runner)` — so a green
+widened ceiling beside the budget — `9.5 ms (23.8 on a runner)` — so a green
 runner is never read as the strict number holding.
 
 **What `bun run perf` means off a runner, and when it declines to say.** The
@@ -480,15 +480,53 @@ application's own processor time per frame while scrolling, and the machine is
 the instrument. At rest, on an M1 Pro, the scroll does not fit inside the frame
 of 120 fps. What the window settles is narrower and is the part DA-56.3 owes:
 **the line is not attributable to any task of this wave — it is red before the
-package as well, at rest, on all three trees.** Whether an 8.3 ms budget is the
-right one is a question about the budget and belongs to its owner.
+package as well, at rest, on all three trees.** The owner settled what follows
+from that on 2026-09-21: the gate is set on a number this machine reaches while
+8.3 ms stays the goal of `docs/SPEC.md` section 6 — see **The CPU-per-frame
+ceiling** below.
 
 The update line is the opposite case, and the same window attributes it. `1193ab3`
 measured 244 ms and 267 ms — inside the 300 ms budget, twice; `ed81928`, after
 the package, measured 352 ms and 392 ms, over it, twice. The runs alternated
 between the trees under one lock, so the machine state is the same on both
-sides. The step DA-55.2 suspected and could not prove is real and arrived with
-the package; which of its four tasks carries it is not settled here.
+sides. The step DA-55.2 suspected and could not prove is real.
+
+**A second window narrowed it to one commit.** Nine points over
+`1193ab3..ed81928` — which is fourteen closed tasks and not the package's four —
+one `bun run perf` each, one shared fixture, load average 7.6 to 10.8
+throughout:
+
+| commit | task | CPU per frame | update after an edit |
+|---|---|---|---|
+| `1193ab3` | before the package | 8.5 ms | **244 ms** ok |
+| `2925a19` | DA-54 | 8.8 ms | **283 ms** ok |
+| `4be4936` | DA-53 | 9.1 ms | **297 ms** ok |
+| `1079222` | **DA-55** | 8.9 ms | **334 ms** FAIL |
+| `a8d673b` | DA-56 | 8.9 ms | 344 ms FAIL |
+| `c9305e1` | DA-57 | 8.8 ms | 315 ms FAIL |
+| `fa004df` | DA-78 | 8.7 ms | 323 ms FAIL |
+| `7308efa` | DA-90 | 8.8 ms | 334 ms FAIL |
+| `ed81928` | the tip | 8.7 ms | 347 ms FAIL |
+
+Everything up to and including DA-53 is at or under 297 ms; everything from
+DA-55 on is at or over 315. **The step is `1079222`, DA-55.** That is consistent
+with DA-55.2, which bracketed it to DA-55's own review round — both of that
+round's commits are inside this one. `DA-90`, whose title names an added
+directory flush on every atomic write, is innocent: the step is already there
+four commits before it.
+
+Two things about the method, because the window was not uniform. Every point
+needs `DIFFALANCHE_DATA_DIR=.diffalanche`, not only the oldest: `fixtureEnv()`
+arrived with DA-54.1, late in this range. And the two oldest points could not
+read a `diff.json` the shared fixture carried from a newer schema — DA-53 is in
+this range — so they were re-measured with the fixture reset to what the
+generator writes. The reset does not flatter the number: `1193ab3` gave 244 ms
+reset and 286 ms unreset, and `updateMs` is measured after the document is
+built, so the first scan is not inside the window it times.
+
+CPU per frame over the same nine points is 8.5 to 9.1 with no trend, which says
+there is no scroll regression in this range — the line is simply above 8.3
+everywhere, which is DA-56.4.
 
 **And what the gate guarantees about the thing it measured.** A green table used
 to mean two weaker things than it looked like, and both are closed (DA-69).
@@ -523,7 +561,7 @@ different and the gate says which — `over budget: …` and `not measured: …`
 |---|---|---|---|
 | First render of the review after the server responds | 500 ms | 32.3 ms | ok |
 | Scrolling the diff: long tasks | 0 tasks | 0 tasks | ok |
-| Scrolling the diff: CPU per frame | 8.3 ms | 6.4 ms | ok |
+| Scrolling the diff: CPU per frame | 9.5 ms | 8.7 ms | ok |
 | Opening the comment form | 50 ms | 13.9 ms | ok |
 | Jumping to a file from the navigation | 50 ms | 7.7 ms | ok |
 | Switching review sessions | 100 ms | 104.2 ms | DA-24.1 |
@@ -566,9 +604,19 @@ review that follows it, and the render. Only the first-render row of
 is not, and a session whose change set still has to be computed is part of what
 the reader waits for.
 
-`8.3 ms` is the frame of 120 fps. The specification asks for 120 fps and a
-headless runner cannot measure frame rate, so the gate checks the two things it
-can: no long task at all, and CPU time per frame under one frame.
+**The CPU-per-frame ceiling is 9.5 ms, and 8.3 ms is the goal it is measured
+against.** The specification asks for 120 fps and a headless runner cannot
+measure frame rate, so the gate checks the two things it can: no long task at
+all, and CPU time per frame. One frame of 120 fps is 8.3 ms, and that is what
+`docs/SPEC.md` section 6 asks for — but on 2026-09-21 this machine measured
+8.5 to 9.1 ms over nine commits of the main branch, with no trend and no commit
+of that range responsible (DA-56.4). A budget no commit meets gates nothing, so
+the number the gate enforces is 9.5: about four percent over the worst reading
+taken where ADR-013's precondition lets the gate answer at all, which still
+catches a regression of the size the line was written for — removing the sticky
+bar cost 0.8 ms. 10.0 ms would leave ten percent and catch almost nothing; 9.2
+would sit against the worst reading and bring back the flapping ADR-013 exists
+against. Closing the gap to 8.3 is its own work and has not been attempted.
 
 The gate is the last of the seven `gates` of `backslop.json`, so it runs before any task is
 reported, and it is the `perf` job of `.github/workflows/ci.yml`, which

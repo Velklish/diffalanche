@@ -144,7 +144,7 @@ describe("perf gate", () => {
     expect(evaluate([runner]).some((row) => row.failed)).toBe(true);
     const rows = evaluate([runner], { allowance: RUNNER_ALLOWANCE });
     expect(rows.filter((row) => row.failed)).toEqual([]);
-    expect(formatTable(rows, 1)).toContain("| 8.3 ms (20.8 on a runner) | 17.3 ms | ok |");
+    expect(formatTable(rows, 1)).toContain("| 9.5 ms (23.8 on a runner) | 17.3 ms | ok |");
     // The long-task line is a count of zero on every machine.
     const tasks = evaluate([measurement({ scrollLongTasks: 1 })], { allowance: RUNNER_ALLOWANCE });
     expect(tasks.find((row) => row.budget.field === "scrollLongTasks")?.failed).toBe(true);
@@ -159,8 +159,9 @@ describe("perf gate", () => {
     });
     expect(twoTasks[0]?.ceiling).toBe(1);
     expect(twoTasks[0]?.failed).toBe(true);
-    // Twice the runner's own reading is a regression the allowance does not hide.
-    const slow = measurement({ cpuPerFrameMs: 21 });
+    // The allowance widens the ceiling; it does not remove it. The runner read
+    // 17.3 on a good commit and its widened ceiling is 23.8: past that, red.
+    const slow = measurement({ cpuPerFrameMs: 24 });
     expect(evaluate([slow], { allowance: RUNNER_ALLOWANCE }).some((row) => row.failed)).toBe(true);
   });
 

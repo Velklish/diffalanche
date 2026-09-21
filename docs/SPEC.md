@@ -126,6 +126,8 @@ Synthetic review used for measurement: 21 repositories, 300 files, 30,000 diff l
 
 Nothing loads lazily while the user works: everything needed arrives when the review opens. A performance test on the synthetic review runs in CI and fails the build on regression. A headless runner cannot measure frame rate, so CI checks the CPU budget per frame and long tasks; 120 fps is verified by hand on a 120 Hz display at each phase checkpoint.
 
+**120 fps is the goal, and the gate is set on what the machine reaches.** The frame of 120 fps is 8.3 ms of CPU per frame, and on 2026-09-21 the development machine (Apple M1 Pro) measured 8.5–9.1 ms over nine commits of the main branch, with no trend and no commit of that range responsible: the scroll does not fit inside the frame today. The gate therefore enforces 9.5 ms, about four percent over the worst trusted reading, so that it catches a regression rather than failing on every run; 8.3 ms stays the target of this table, and closing the gap is its own work (DA-56.4). Where the number came from, and how it is re-measured, is in [11-perf.md](reference/11-perf.md).
+
 ## 7. On-disk format
 
 A review session is the directory `reviews/<name>/` with three files. `review.json` holds the metadata:

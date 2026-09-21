@@ -104,6 +104,16 @@ and `bun run release` refuses a version that has no section. See
 
 ### Changed
 
+- **The CPU-per-frame gate is set on what the machine reaches, and 120 fps stays
+  the goal** (DA-56.4). `Scrolling the diff: CPU per frame` was budgeted at
+  8.3 ms, the frame of 120 fps, and measured 8.5–9.1 ms over nine commits of the
+  main branch on a quiet machine — with no trend and no commit of that range
+  responsible, including the one that predates the whole DA-53…56 package. A
+  budget no commit meets gates nothing, so the gate now enforces 9.5 ms: about
+  four percent over the worst reading taken where the load precondition lets it
+  answer at all, which still catches a regression the size the line was written
+  for. `docs/SPEC.md` section 6 keeps 8.3 ms as the target with the measured
+  number and its date beside it, and closing the gap is DA-56.5.
 - **The Playwright UI suite runs in a gate and in CI** (DA-54.2). Its
   ninety-five tests — the sidebar, the thread rail, live update, the repository
   bar — ran only when somebody typed `bun run test:ui`, so a UI regression
