@@ -1,6 +1,6 @@
 # Roadmap
 
-Where diffalanche is going: goals and their rationale. This is a living document: a goal is direction, not a commitment; user signals determine priority and scope, not this list. Concrete tasks with statuses are in `npx github:Velklish/backslop#v0.4.0 status` and [backlog/](backlog/README.md); a task belongs to a phase by what it delivers, not by its number, and this document names no task numbers.
+Where diffalanche is going: goals and their rationale. This is a living document: a goal is direction, not a commitment; user signals determine priority and scope, not this list. Concrete tasks with statuses are in `npx github:Velklish/backslop#v0.9.0 status` and [backlog/](backlog/README.md); a task belongs to a phase by what it delivers, not by its number, and this document names no task numbers.
 
 ## Goals
 
