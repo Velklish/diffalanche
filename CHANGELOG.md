@@ -15,6 +15,14 @@ and `bun run release` refuses a version that has no section. See
 
 ### Added
 
+- **The check-run names branch protection must list are compared with the jobs that report
+  them** (DA-111). `tests/ci-names.test.ts` expands the real names out of `ci.yml` — a job
+  reports under its `name:` when it has one and under its id otherwise, and a matrix job
+  reports one check per cell — and holds them against the list in the workflow's header
+  comment, in both directions. A renamed job used to leave that list promising a name no run
+  reports, which reads as a pull request stuck at "Expected — waiting for status". The
+  `windows-latest` cells stay out of the required list until DA-45, and the test says so.
+
 - **The sessions menu is the history of tasks** (DA-56). Two groups —
   `Открытые задачи` and, under them, `Закрытые` — and every row says what its
   task is about: `2 repos · 5 files`, or `все репозитории` for a session with no
