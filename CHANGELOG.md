@@ -104,6 +104,20 @@ and `bun run release` refuses a version that has no section. See
 
 ### Changed
 
+- **Off CI the perf gate declines to answer on a busy machine instead of
+  answering wrongly** (DA-54.3, [ADR-013](docs/adr/adr-013-perf-gate-off-ci.md)).
+  `bun run perf` holds a development machine to the specification's numbers, and
+  under load those numbers are the machine's: taking the whole subject of a task
+  out of the code did not make the gate pass, and across paired runs the sign of
+  the difference flipped both ways. The gate now reads the one-minute load
+  average per core at both ends of the run and, above 2.5 per core, prints
+  `unable to measure` with the load named and exits 1 without a budget verdict —
+  before the run, without measuring at all. A red `bun run perf` is therefore one
+  of three things and the output says which: `over budget`, `not measured`, or
+  `unable to measure`. `DIFFALANCHE_PERF_IGNORE_LOAD=1` measures anyway and
+  prints **Not evidence.** with the load above the table; a bypass invisible in
+  the output would be the development allowance the ADR rejected, renamed. The
+  threshold comes from fifteen runs on one machine and is recorded with them.
 - **Either side panel comes off the screen, and a long line wraps** (DA-107).
   `[` hides the sidebar and `]` the thread rail — whole, not narrowed and not
   into a drawer — and so do the `‹` and `›` in each panel's own top row; while a

@@ -420,6 +420,54 @@ smaller one is red on the development machine first. The table names the
 widened ceiling beside the budget — `8.3 ms (20.8 on a runner)` — so a green
 runner is never read as the strict number holding.
 
+**What `bun run perf` means off a runner, and when it declines to say.** The
+ceilings on a development machine are the specification's own numbers, and that
+only means something on a machine quiet enough to measure. It often is not, so
+the gate reads the one-minute load average per core — before the run, and again
+after it, taking the busier of the two, because a machine that got busy halfway
+through decided the numbers as much as one that started busy. Above
+`LOAD_CEILING` in `perf/load.ts` it prints `unable to measure`, names the load,
+and exits 1 without a budget verdict; before the run it does that without
+measuring at all. The decision and the two options it beat are
+[ADR-013](../adr/adr-013-perf-gate-off-ci.md).
+
+So a red `bun run perf` is now one of three things, and the output says which
+without the reader having to compare numbers:
+
+| what it prints | what it means |
+|---|---|
+| `over budget: <lines>` | the median of a line is over its ceiling |
+| `not measured: <lines>` | a line's samples could not be trusted (DA-69) |
+| `unable to measure: load average …` | the machine was too busy for any number off it to be about the code |
+
+**`DIFFALANCHE_PERF_IGNORE_LOAD=1`** measures anyway. It is for a run that wants
+the numbers knowing what they are worth — comparing two trees back to back, say,
+where the machine is the same on both sides. Under it the gate prints
+`**Not evidence.**` and the load above the table and then behaves normally. It
+takes that exact value and nothing else: a bypass armed by a stray `export
+DIFFALANCHE_PERF_IGNORE_LOAD=maybe` would be the development allowance ADR-013
+rejected, wearing another name.
+
+**Where the threshold comes from.** `LOAD_CEILING` is 2.5 runnable tasks per
+core, and it is a measurement rather than a choice — but a small one, stated
+here so the next reader can disagree with the data rather than with the
+mechanism. Fifteen `bun run perf` runs on 2026-09-21, on one 8-core M1 Pro, over
+three trees (a branch, `ed81928`, `1193ab3`), with the one-minute average taken
+at both ends of each run:
+
+| busier end, per core | CPU per frame | long tasks |
+|---|---|---|
+| 0.80 – 1.40 (six runs) | 8.6 – 9.0 | 0, once 1 |
+| 1.90 – 2.44 (two runs) | 8.8 | 0, once 1 |
+| 3.25 – 8.53 (seven runs) | 8.6 – 10.2 | 0, 1 and 4 |
+
+Below 2.5 the readings sit in a band half a millisecond wide; above it they
+spread over 1.6 ms and the long-task count starts flipping between trees on the
+same commit. That is the whole of the evidence: one machine, one session,
+fifteen points, and one run below the ceiling that still produced a stray long
+task. It is enough to separate "the machine decided this" from "the code did"
+and not enough to defend the second decimal.
+
 **And what the gate guarantees about the thing it measured.** A green table used
 to mean two weaker things than it looked like, and both are closed (DA-69).
 

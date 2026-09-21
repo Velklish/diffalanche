@@ -11,6 +11,8 @@ import { evaluate, formatTable, GATE_VARIANT, RUNNER_ALLOWANCE } from "./budgets
 import { assertErasable, fixtureDrift } from "./fixture.ts";
 import type { Measurement } from "./harness.ts";
 import { parseArgs } from "./harness.ts";
+import type { Load } from "./load.ts";
+import { busier, describeLoad, IGNORE_LOAD, ignoringLoad, readLoad, tooBusy } from "./load.ts";
 
 /** What every child is given: the fixture's own environment, passed and not
  * assigned — Bun hands a child the env the process started with (11-perf.md). */
@@ -63,9 +65,35 @@ function measureOnce(fixture: string): Measurement {
   return measurement;
 }
 
+/**
+ * The three reds the gate can print, and it says which (ADR-013, DA-69). A line
+ * over its ceiling, a line with no number the gate can trust, and a machine too
+ * busy for any number off it to be about the code.
+ */
+function declineOnLoad(load: Load, when: string): never {
+  process.stderr.write(
+    `\nunable to measure: ${describeLoad(load)} ${when}. ` +
+      `Run it on a quiet machine, or set ${IGNORE_LOAD}=1 to measure anyway ` +
+      "and take the verdict as an indication rather than as evidence.\n",
+  );
+  process.exit(1);
+}
+
 async function main(): Promise<void> {
   const options = parseArgs(process.argv.slice(2), 3);
   const runs = options.runs;
+  const ignoring = ignoringLoad();
+
+  // What may be erased is asked before anything else, so a mistyped `--fixture`
+  // is never answered with "the machine is busy" (DA-63). `prepare` asks again:
+  // the check belongs to whoever erases, not to whoever remembered to call it.
+  assertErasable(options.fixture);
+
+  // Then the load, before the fixture and the browser: a minute of measurement
+  // that cannot produce a verdict is a minute spent on nothing.
+  const started = readLoad();
+  if (tooBusy(started) && !ignoring) declineOnLoad(started, "before the run");
+
   prepare(options.fixture);
 
   const measurements: Measurement[] = [];
@@ -83,6 +111,15 @@ async function main(): Promise<void> {
   if (allowance !== 1) {
     process.stderr.write(`runner allowance ${allowance} on every ms line (perf/budgets.ts)\n`);
   }
+  // The load of the busier end, because a machine that got busy halfway through
+  // decided the numbers just as much as one that started busy.
+  const load = busier(started, readLoad());
+  const busy = tooBusy(load);
+  if (busy) {
+    process.stdout.write(
+      `**Not evidence.** ${describeLoad(load)}: these numbers are about the machine.\n\n`,
+    );
+  }
   process.stdout.write(table);
 
   const summary = process.env.GITHUB_STEP_SUMMARY;
@@ -99,6 +136,7 @@ async function main(): Promise<void> {
   if (failed.length > 0) {
     process.stderr.write(`\nover budget: ${failed.map((row) => row.budget.label).join("; ")}\n`);
   }
+  if (busy && !ignoring) declineOnLoad(load, "during the run");
   if (unmeasured.length > 0 || failed.length > 0) process.exit(1);
 }
 

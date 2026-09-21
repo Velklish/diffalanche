@@ -10,6 +10,15 @@ import { BUDGETS, evaluate, formatTable, RUNNER_ALLOWANCE } from "../perf/budget
 import { assertErasable, fixtureDrift } from "../perf/fixture.ts";
 import type { Measurement } from "../perf/harness.ts";
 import { parseArgs, SCRATCH_SESSION, twoSessions } from "../perf/harness.ts";
+import {
+  busier,
+  describeLoad,
+  IGNORE_LOAD,
+  ignoringLoad,
+  LOAD_CEILING,
+  readLoad,
+  tooBusy,
+} from "../perf/load.ts";
 import { generate, PROFILES, STAMP_FILE } from "../scripts/synth.ts";
 import { loadConfig } from "../src/core/config/index.ts";
 
@@ -377,5 +386,46 @@ describe("the harness's scratch session", () => {
     const config = await loadConfig({ root: fixture });
     await expect(twoSessions(config)).rejects.toThrow(/the harness's own scratch session/);
     writeFileSync(current, was);
+  });
+});
+
+describe("the load the gate refuses to measure under", () => {
+  it("reads the one-minute average per core", () => {
+    const load = readLoad();
+    expect(load.cores).toBeGreaterThan(0);
+    expect(Number.isFinite(load.average)).toBe(true);
+    expect(load.perCore).toBeCloseTo(load.average / load.cores, 1);
+  });
+
+  it("declines above the ceiling and answers below it", () => {
+    const at = (perCore: number) => ({ average: perCore * 8, cores: 8, perCore });
+    expect(tooBusy(at(LOAD_CEILING + 0.1))).toBe(true);
+    expect(tooBusy(at(LOAD_CEILING))).toBe(false);
+    expect(tooBusy(at(LOAD_CEILING / 10))).toBe(false);
+    // The ceiling is an argument, so the rule is checked without the constant.
+    expect(tooBusy(at(2), 1)).toBe(true);
+    expect(tooBusy(at(2), 3)).toBe(false);
+    // A reading that is not a number is not a quiet machine.
+    expect(tooBusy({ average: Number.NaN, cores: 8, perCore: Number.NaN })).toBe(true);
+  });
+
+  it("takes the busier end: a machine that got busy halfway through decided the numbers", () => {
+    const quiet = { average: 2, cores: 8, perCore: 0.25 };
+    const loud = { average: 40, cores: 8, perCore: 5 };
+    expect(busier(quiet, loud)).toBe(loud);
+    expect(busier(loud, quiet)).toBe(loud);
+  });
+
+  it("takes the bypass only from the exact value, so a stray export cannot arm it", () => {
+    expect(ignoringLoad({ [IGNORE_LOAD]: "1" })).toBe(true);
+    expect(ignoringLoad({ [IGNORE_LOAD]: "0" })).toBe(false);
+    expect(ignoringLoad({ [IGNORE_LOAD]: "true" })).toBe(false);
+    expect(ignoringLoad({})).toBe(false);
+  });
+
+  it("says the load in words the table can carry", () => {
+    expect(describeLoad({ average: 40, cores: 8, perCore: 5 })).toBe(
+      `load average 40 over 8 cores is 5 per core, ceiling ${LOAD_CEILING}`,
+    );
   });
 });
