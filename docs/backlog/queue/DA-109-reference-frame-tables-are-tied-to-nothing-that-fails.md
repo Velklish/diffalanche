@@ -1,5 +1,6 @@
 # DA-109 · The reference frame tables are tied to nothing that fails
 
+- **Order:** 380
 - **Scope:** 05-watcher, 07-server, 08-ui (see [reference](../../reference/README.md))
 - **Created:** 2026-09-22
 - **Dependencies:** none
@@ -126,3 +127,21 @@ green over all four.
 - Gates: `bun run lint`, `bun run typecheck`, `bun run test`, `bun run test:bun`.
   A markdown parse in the test suite touches no measured route, so `bun run perf`
   is unaffected.
+
+## Triage, 2026-09-22 — three corrections to the shape before it is taken
+
+The subject holds: the union is closed at `src/core/watcher/bus.ts:14-34` with eight members, and
+no gate reads the tables (`grep -rn "05-watcher\|07-server\|08-ui" tests/ scripts/ package.json`
+finds only prose in comments). The pattern to copy is already here: `tests/ci-names.test.ts` and
+`tests/readme-cli.test.ts` both hold a file against code in vitest.
+
+1. "A row naming a frame the type does not have → red" is false as written. `07-server.md:516-517`
+   and `08-ui.md:988-989` carry `activity` and `reload`, which are server frames
+   (`src/server/events.ts`) and are not in `WatcherEvent` by design. The check needs an explicit
+   list of frames that are not from the union.
+2. One row names two frames at once (`comment-added`, `comment-status`, `08-ui.md:983`), so the
+   row parser has to split them.
+3. The card's own rule — "the check is green on the tree it lands in" — does not hold today:
+   `08-ui` has no `sessions-changed` row. The task therefore includes a table fix, not only a
+   check. That is an argument for queuing it: a fourth stale row has accumulated since the card
+   was filed.

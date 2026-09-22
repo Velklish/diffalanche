@@ -1,5 +1,6 @@
 # DA-110 · Two runs of the perf gate on identical code disagree by a quarter, so the gate cannot resolve the differences it is asked to judge
 
+- **Order:** 705
 - **Scope:** 11-perf (see [reference](../../reference/README.md))
 - **Created:** 2026-09-22
 - **Dependencies:** none
@@ -75,11 +76,11 @@ budget, and it is then also used for A/B comparisons it cannot resolve.
 ## Out of scope
 
 - The budgets themselves, and which lines are over them. Those are
-  [DA-56.5](../queue/DA-56.5-scroll-does-not-fit-the-120-fps-frame.md),
-  [DA-56.6](../queue/DA-56.6-update-step-lives-in-da-55.md) and
-  [DA-69.1](../queue/DA-69.1-long-task-count-follows-the-machine.md).
+  [DA-56.5](DA-56.5-scroll-does-not-fit-the-120-fps-frame.md),
+  [DA-56.6](DA-56.6-update-step-lives-in-da-55.md) and
+  [DA-69.1](DA-69.1-long-task-count-follows-the-machine.md).
 - The load precondition and what it reads, which is
-  [DA-54.5](../queue/DA-54.5-load-precondition-reads-one-minute-only.md). Both runs above
+  [DA-54.5](DA-54.5-load-precondition-reads-one-minute-only.md). Both runs above
   passed it; this task is about what happens after it passes.
 - Making the suites faster.
 
