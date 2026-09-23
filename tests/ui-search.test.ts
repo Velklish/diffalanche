@@ -1,5 +1,5 @@
 import { describe, expect, it } from "vitest";
-import { preview, search } from "../src/ui/search.ts";
+import { preview, search, textHits } from "../src/ui/search.ts";
 import type { FileEntry } from "../src/ui/store.ts";
 import { useStore, withComments } from "../src/ui/store.ts";
 import type { Comment, FileChange, RepositoryChange } from "../src/ui/types.ts";
@@ -288,5 +288,19 @@ describe("files outside the review", () => {
     expect(hits).toMatchObject([
       { kind: "plain", id: "repos/a/README.md", path: "README.md", tag: "file · unchanged" },
     ]);
+  });
+});
+
+describe("text the working trees hold", () => {
+  it("becomes rows in the server's order, each with its line and neighbours", () => {
+    const rows = textHits([
+      { repo: "repos/b", path: "z.ts", line: 4, text: "needle", before: ["a"], after: ["b"] },
+      { repo: "repos/a", path: "a.ts", line: 9, text: "Needle", before: [], after: [] },
+    ]);
+    expect(rows).toMatchObject([
+      { kind: "text", id: "repos/b/z.ts:4", label: "z.ts:4", tag: "text", line: 4 },
+      { kind: "text", id: "repos/a/a.ts:9", label: "a.ts:9", tag: "text", line: 9 },
+    ]);
+    expect(rows[0]?.around).toEqual({ before: ["a"], text: "needle", after: ["b"] });
   });
 });

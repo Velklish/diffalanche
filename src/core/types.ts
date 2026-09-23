@@ -175,3 +175,26 @@ export type FileContent = {
   text: string | null;
   omitted: FileOmission | null;
 };
+
+/** One line of a working tree that holds the searched text, with the lines around it. */
+export type TextHit = {
+  repo: string;
+  path: string;
+  line: number;
+  text: string;
+  before: string[];
+  after: string[];
+};
+
+/** One page of a text search over every repository of a review. */
+export type TextSearch = {
+  query: string;
+  hits: TextHit[];
+  page: number;
+  /** The page after this one, or `null` when this is the last. */
+  next: number | null;
+  /** How many matches were found, up to the cap. */
+  total: number;
+  /** Whether the search stopped at the cap with more left unread. */
+  capped: boolean;
+};

@@ -1,11 +1,11 @@
 import type { KeyboardEvent } from "react";
-import { useCallback, useEffect, useMemo, useState } from "react";
+import { useCallback, useEffect, useMemo, useRef, useState } from "react";
 import { splitLines } from "../context.ts";
 import { revealCard, revealThread } from "../reveal.ts";
 import type { PreviewLine, SearchHit } from "../search.ts";
-import { PREVIEW_LINES, preview, search } from "../search.ts";
+import { PREVIEW_LINES, preview, search, textHits } from "../search.ts";
 import { onTask, useStore } from "../store.ts";
-import type { FileContent } from "../types.ts";
+import type { FileContent, TextHit, TextSearch } from "../types.ts";
 import { Overlay } from "./Overlay.tsx";
 
 /** Global search of handoff section 6: the field, the results on the left, a preview of the
@@ -13,6 +13,10 @@ import { Overlay } from "./Overlay.tsx";
 export function GlobalSearch() {
   const open = useStore((store) => store.paletteOpen);
   return open ? <Palette /> : null;
+}
+
+function focusField(element: HTMLInputElement | null): void {
+  element?.focus();
 }
 
 function Palette() {
@@ -42,9 +46,10 @@ function Palette() {
     );
   }, [repositories, trees, files]);
 
+  const text = useTextSearch(query);
   const hits = useMemo(
-    () => search(query, files, comments, unchanged),
-    [query, files, comments, unchanged],
+    () => [...search(query, files, comments, unchanged), ...textHits(text.hits)],
+    [query, files, comments, unchanged, text.hits],
   );
   const selected = hits[Math.min(index, hits.length - 1)] ?? null;
 
@@ -56,8 +61,8 @@ function Palette() {
         return;
       }
       const store = useStore.getState();
-      if (hit.kind === "plain") {
-        store.openBrowse(hit.repo, hit.path);
+      if (hit.kind === "plain" || hit.kind === "text") {
+        store.openBrowse(hit.repo, hit.path, { line: hit.line });
         return;
       }
       if (store.browse) store.closeBrowse();
@@ -98,9 +103,9 @@ function Palette() {
         <input
           type="text"
           value={query}
-          // The modal opened because it was asked for, so this is where the
-          // reader already is: a callback ref rather than `autoFocus`.
-          ref={(element) => element?.focus()}
+          // Where the reader already is: a callback ref rather than `autoFocus`, and a stable
+          // one, so results landing later do not take the focus back from a hit.
+          ref={focusField}
           aria-label="search"
           placeholder="файлы, символы, комментарии — во всех репозиториях"
           onChange={(event) => setQuery(event.target.value)}
@@ -114,8 +119,10 @@ function Palette() {
           {hits.length === 0 ? (
             <li className="palette-empty">
               {query.trim() === ""
-                ? "Файлы и комментарии этого ревью."
-                : `Ничего не найдено по «${query.trim()}».`}
+                ? "Файлы, текст и комментарии этого ревью."
+                : text.status === "loading"
+                  ? `Ищем «${query.trim()}» в рабочих деревьях…`
+                  : `Ничего не найдено по «${query.trim()}».`}
             </li>
           ) : (
             hits.map((hit, at) => (
@@ -128,6 +135,17 @@ function Palette() {
               />
             ))
           )}
+          {text.next === null ? null : (
+            <li>
+              <button type="button" className="palette-more" onClick={text.more}>
+                ещё совпадения · {text.hits.length} из {text.total}
+                {text.capped ? "+" : ""}
+              </button>
+            </li>
+          )}
+          {text.next === null && text.capped ? (
+            <li className="palette-capped">совпадений больше, чем показано, — уточните запрос</li>
+          ) : null}
         </ol>
         <Preview hit={selected} />
       </div>
@@ -151,6 +169,7 @@ function Row({
       <button
         type="button"
         className={on ? "palette-hit on" : "palette-hit"}
+        data-repo={hit.repo}
         aria-current={on ? "true" : undefined}
         // The pointer selects as well as opens, as the handoff has it: what the
         // preview shows follows the pointer without a click.
@@ -175,6 +194,7 @@ function Preview({ hit }: { hit: SearchHit | null }) {
   const comment = hit.kind === "comment" ? comments.find((one) => one.id === hit.id) : undefined;
   const lines = entry === undefined ? [] : preview(entry.file.patch, hit.line);
   if (hit.kind === "plain") return <PlainPreview hit={hit} />;
+  if (hit.around !== undefined) return <TextPreview hit={hit} />;
 
   return (
     <div className="palette-preview">
@@ -195,6 +215,123 @@ function Preview({ hit }: { hit: SearchHit | null }) {
         </div>
       )}
       {comment === undefined ? null : <p className="palette-body-text">{comment.body}</p>}
+    </div>
+  );
+}
+
+/** How long the field has to be still before the working trees are searched. */
+const TEXT_DEBOUNCE_MS = 150;
+
+type TextState = {
+  query: string;
+  status: "idle" | "loading" | "ready";
+  hits: TextHit[];
+  next: number | null;
+  total: number;
+  capped: boolean;
+};
+
+const NO_TEXT: TextState = {
+  query: "",
+  status: "idle",
+  hits: [],
+  next: null,
+  total: 0,
+  capped: false,
+};
+
+/** The server's text search for the query, a page at a time; an answer for an older query is
+ * dropped ([07-server.md](../../../docs/reference/07-server.md), "Text search"). */
+function useTextSearch(query: string): TextState & { more: () => void } {
+  const [state, setState] = useState<TextState>(NO_TEXT);
+  const wanted = query.trim();
+  // The page asked for: a second press before it arrives asks for nothing, and an answer for a
+  // page the list has already moved past is dropped rather than appended twice.
+  const asked = useRef<number | null>(null);
+
+  useEffect(() => {
+    asked.current = null;
+    if (wanted.length < 2) {
+      setState(NO_TEXT);
+      return;
+    }
+    setState({ ...NO_TEXT, query: wanted, status: "loading" });
+    const controller = new AbortController();
+    const timer = setTimeout(() => {
+      void readText(wanted, 0, controller.signal).then((result) => {
+        if (result === null) return;
+        setState({ query: wanted, status: "ready", ...result });
+      });
+    }, TEXT_DEBOUNCE_MS);
+    return () => {
+      clearTimeout(timer);
+      controller.abort();
+    };
+  }, [wanted]);
+
+  const more = () => {
+    const page = state.next;
+    if (page === null || state.query !== wanted || asked.current === page) return;
+    asked.current = page;
+    void readText(wanted, page).then((result) => {
+      if (result === null) {
+        // A failed read leaves the row able to ask again.
+        if (asked.current === page) asked.current = null;
+        return;
+      }
+      setState((held) =>
+        held.query === wanted && held.next === page
+          ? { ...held, ...result, hits: [...held.hits, ...result.hits] }
+          : held,
+      );
+    });
+  };
+  return { ...(state.query === wanted ? state : NO_TEXT), more };
+}
+
+async function readText(
+  query: string,
+  page: number,
+  signal?: AbortSignal,
+): Promise<Pick<TextSearch, "hits" | "next" | "total" | "capped"> | null> {
+  try {
+    const url = `/api/search/text?q=${encodeURIComponent(query)}&page=${page}`;
+    const response = await fetch(onTask(url), signal === undefined ? {} : { signal });
+    if (!response.ok) return null;
+    const { hits, next, total, capped } = (await response.json()) as TextSearch;
+    return { hits, next, total, capped };
+  } catch {
+    // An aborted read is an older query; a failed one leaves the ranked rows to speak.
+    return null;
+  }
+}
+
+/** A line the server found, between the lines around it. */
+function TextPreview({ hit }: { hit: SearchHit }) {
+  const around = hit.around;
+  const line = hit.line ?? 1;
+  if (around === undefined) return null;
+  const first = line - around.before.length;
+  const rows = [...around.before, around.text, ...around.after].map((text, at) => ({
+    at,
+    line: first + at,
+    text,
+    kind: "context" as const,
+  }));
+  return (
+    <div className="palette-preview">
+      <div className="palette-where">
+        <span className="palette-path">{hit.path}</span>
+        <span className="palette-meta">
+          {hit.repo} · L{line}
+        </span>
+      </div>
+      <div className="palette-code">
+        {rows.map((row) => (
+          <Line key={row.at} line={row} target={line} />
+        ))}
+      </div>
+      <p className="palette-note">рабочее дерево</p>
     </div>
   );
 }

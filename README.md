@@ -91,8 +91,9 @@ The keyboard follows the design handoff:
 | `⌘⏎` | sends the comment being written |
 | `esc` | closes the topmost thing that is open |
 
-Search covers file paths — the unchanged files of each repository too — and
-comment bodies; symbols and file text are Phase 2.
+Search covers file paths — the unchanged files of each repository too —,
+comment bodies, and the text of every working tree in the review, which opens
+at the line it was found on; symbols are Phase 2.
 
 Context outside the diff is one press away. `↑ 20 lines` on a hunk header brings
 the working tree's lines above it into the diff, and the sidebar's `all files`

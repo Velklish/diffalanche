@@ -45,6 +45,7 @@ import {
 import type { ReviewService } from "./review.ts";
 import { listBranches } from "./routes/branches.ts";
 import { fileRoute, fileSource, treeRoute } from "./routes/browse.ts";
+import { textRoute } from "./routes/search.ts";
 
 export type AppOptions = {
   config: Config;
@@ -179,6 +180,9 @@ export function createApp({ activity, config, events, review, ui, verbose }: App
     }
     return c.json(change);
   });
+
+  // Text in the working tree of every repository of the review, a page at a time (DA-38).
+  app.get("/api/search/text", (c) => textRoute(c, config, review, named(c)));
 
   app.get("/api/comments/:id", async (c) =>
     c.json(

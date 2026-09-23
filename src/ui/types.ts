@@ -50,6 +50,8 @@ export type {
   ReviewBundle,
   ReviewDocument,
   ScanWarning,
+  TextHit,
+  TextSearch,
   TreeEntry,
 } from "../core/types.ts";
 export type { ActivityEvent, ActivityVerb } from "../core/watcher/activity.ts";

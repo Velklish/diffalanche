@@ -1123,6 +1123,39 @@ button:disabled {
   color: var(--tx3);
 }
 
+.palette-tag.text {
+  color: var(--tx2);
+}
+
+/* The next page of text hits: a quiet row under the list, not a hit of its own. */
+.palette-more {
+  width: 100%;
+  padding: 6px 8px;
+  border: 0;
+  border-radius: 7px;
+  background: none;
+  color: var(--tx3);
+  font: 11px / 1.5 var(--mono);
+  text-align: left;
+}
+
+.palette-more:hover {
+  background: var(--panel2);
+  color: var(--tx2);
+}
+
+/* The server stopped at its cap on the last page: said once, under the list. */
+.palette-capped {
+  padding: 6px 8px;
+  color: var(--tx3);
+  font: 11px / 1.5 var(--mono);
+}
+
+.palette-more:focus-visible {
+  outline: 1px solid var(--accBd);
+  outline-offset: -1px;
+}
+
 .palette-empty {
   padding: 8px;
   color: var(--tx3);
@@ -2601,7 +2634,9 @@ button.counter:focus-visible {
   outline: none;
 }
 
-.context {
+/* Scoped to the bar: a bare `.context` also caught the preview's context rows in global search,
+   which are `palette-line context`, and set them 10.5 px on a 10.5 px line. */
+.status-bar .context {
   color: var(--tx3);
   font: 10.5px / 1 var(--mono);
 }

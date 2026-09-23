@@ -137,6 +137,7 @@ alike** — and answers for the current session without it. See
 | `GET /api/repos/:repo/diff[?review=]` | one repository of the change set |
 | `GET /api/repos/:repo/tree[?review=]` | every file of one repository of the review, the base revision and the working tree merged, inside the task's scope |
 | `GET /api/repos/:repo/file?path=&rev=[&review=]` | one file of it whole — `rev` is `worktree` (the default) or `base` |
+| `GET /api/search/text?q=&page=[&review=]` | a fixed string in the working tree of every repository of the review, a page of hits at a time |
 | `GET /api/comments/:id[?review=]` | one thread |
 | `GET /api/warnings[?review=]` | the warnings of the change set |
 | `GET /api/activity` | the feed of what the server noticed while it has been running |
@@ -544,6 +545,50 @@ with `text: null` and `omitted` saying which. A path outside the scope, a path
 the revision does not have, and one git does not list — ignored, inside `.git`,
 or stepping outside the repository — are all `404 no-such-file` with a message
 naming which; a request without `path`, or with a `rev` that is neither, is a
+400.
+
+### Text search
+
+`GET /api/search/text?q=<text>&page=<n>` is the `text` half of global search
+([08-ui.md](08-ui.md), "Global search"): `git grep` over the working tree of
+every repository in the review's change set, through `src/core/git/grep.ts`
+([02-git.md](02-git.md), "Text search"). The query is a fixed string, matched
+without regard to case; tracked and untracked files are searched alike, ignored
+and binary ones are not, and a scope entry that names files narrows the search
+to those files.
+
+```json
+{
+  "query": "normalises",
+  "hits": [
+    { "repo": "repos/core/cargos-api", "path": "app/route/route_94.py", "line": 7,
+      "text": "    \"\"\"The request carries the raw values, the resolver normalises them.\"\"\"",
+      "before": ["…"], "after": ["…"] }
+  ],
+  "page": 0,
+  "next": 1,
+  "total": 51,
+  "capped": false
+}
+```
+
+The numbers are the route's own (`src/server/routes/search.ts`), chosen for the
+modal they feed:
+
+| Name | Value | Why |
+|---|---|---|
+| `TEXT_MIN_QUERY` | 2 | one character matches most of every file and is not a search; a shorter query answers an empty page, not a refusal |
+| `TEXT_PER_FILE` | 3 | the list says which files hold the text, and a file is read whole in browse mode; without it one file of a common word fills the first page and hides every other repository |
+| `TEXT_CAP` | 500 | the most hits one search keeps over all repositories; git is stopped at the first past it, and `capped` says so |
+| `TEXT_PAGE` | 50 | the hits one answer carries; `next` is the page after, `null` on the last |
+| `TEXT_NEIGHBOURS` | 5 | lines on each side of a hit: with it, the eleven rows of the preview column |
+
+The repositories are read together, eight at a time — the width of a scan —
+and the hits are kept in the review's order of repositories, git's order of
+paths inside each. The neighbours are read for the page being answered only, one
+read of a file however many of its lines the page holds, and straight from disk:
+the path came from git, so the listing check `…/file` makes is not asked again.
+A query with a newline or a NUL, and a `page` that is not a whole number, are a
 400.
 
 ### Refusals

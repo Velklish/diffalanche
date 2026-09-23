@@ -2,12 +2,13 @@
  * [08-ui.md](../../docs/reference/08-ui.md), "Global search". */
 import { byCodePoint } from "../core/order.ts";
 import type { FileEntry } from "./store.ts";
-import type { Comment } from "./types.ts";
+import type { Comment, TextHit } from "./types.ts";
 
 /** One row of the results column. */
 export type SearchHit = {
-  /** `plain` is a file the review does not carry: it opens in browse mode. */
-  kind: "file" | "plain" | "comment";
+  /** `plain` is a file the review does not carry, `text` a line the server found; both open in
+   * browse mode. */
+  kind: "file" | "plain" | "comment" | "text";
   /** `<repo>/<path>` for a file, the thread's id for a comment. */
   id: string;
   repo: string;
@@ -16,10 +17,12 @@ export type SearchHit = {
   line: number | null;
   /** What the row shows: the path, or the first line of the comment. */
   label: string;
-  /** The tag beside it: the handoff's `file`, `file · unchanged` and `comment`; `symbol` is
-   * DA-39's, and `comment · orphaned` waits for the status Phase 3 adds. */
-  tag: "file" | "file · unchanged" | "comment";
+  /** The tag beside it: the handoff's `file`, `file · unchanged` and `comment`, and `text`;
+   * `symbol` is DA-39's, and `comment · orphaned` waits for the status Phase 3 adds. */
+  tag: "file" | "file · unchanged" | "comment" | "text";
   score: number;
+  /** A `text` hit's line and its neighbours, which is its preview. */
+  around?: { before: string[]; text: string; after: string[] };
 };
 
 /** One row of the preview column. */
@@ -108,6 +111,22 @@ export function search(
   // rows in the same order — the reader's second `⌘K` is not a new list.
   hits.sort((a, b) => b.score - a.score || byCodePoint(a.id, b.id));
   return hits.slice(0, LIMIT);
+}
+
+/** The server's text hits as rows, in the order it found them: after the ranked ones, since git
+ * ranks nothing ([08-ui.md](../../docs/reference/08-ui.md), "Global search"). */
+export function textHits(hits: TextHit[]): SearchHit[] {
+  return hits.map((hit) => ({
+    kind: "text",
+    id: `${hit.repo}/${hit.path}:${hit.line}`,
+    repo: hit.repo,
+    path: hit.path,
+    line: hit.line,
+    label: `${hit.path}:${hit.line}`,
+    tag: "text",
+    score: 0,
+    around: { before: hit.before, text: hit.text, after: hit.after },
+  }));
 }
 
 /**

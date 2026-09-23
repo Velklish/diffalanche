@@ -1,4 +1,4 @@
-import { execFile } from "node:child_process";
+import { execFile, spawn } from "node:child_process";
 import { devNull } from "node:os";
 import { promisify } from "node:util";
 import { GitError, gitError } from "./errors.ts";
@@ -73,6 +73,45 @@ export async function gitOrNull(cwd: string, args: string[]): Promise<string | n
     if (error instanceof GitError && error.failure === "exited") return null;
     throw error;
   }
+}
+
+/** A git command read line by line until `take` says it has enough, when git is stopped rather than
+ * read to the end; exit 1 is an answer, like `check-ignore`'s ([02-git.md](../../../docs/reference/02-git.md)). */
+export function gitLines(
+  cwd: string,
+  args: string[],
+  take: (line: string) => boolean,
+  overrides: string[] = [],
+): Promise<"done" | "stopped"> {
+  return new Promise((resolve, reject) => {
+    const child = spawn("git", gitArgs(args, overrides), { cwd, env: readOnlyEnv() });
+    let stopped = false;
+    let rest = "";
+    let stderr = "";
+    child.stdout.setEncoding("utf8");
+    child.stderr.setEncoding("utf8");
+    child.stderr.on("data", (chunk: string) => {
+      stderr += chunk;
+    });
+    child.stdout.on("data", (chunk: string) => {
+      if (stopped) return;
+      const lines = (rest + chunk).split("\n");
+      rest = lines.pop() ?? "";
+      for (const line of lines) {
+        if (take(line)) continue;
+        stopped = true;
+        child.kill();
+        return;
+      }
+    });
+    child.on("error", (error) => reject(gitError(args[0] ?? "", error)));
+    child.on("close", (code, signal) => {
+      if (stopped) return resolve("stopped");
+      if (rest !== "") take(rest);
+      if (code === 0 || code === 1) return resolve("done");
+      reject(gitError(args[0] ?? "", code === null ? { signal } : { code, stderr }));
+    });
+  });
 }
 
 /** The driver keys the repository's configuration defines, each set to nothing, or `null` when the

@@ -111,6 +111,15 @@ async function readWorktree(cwd: string, path: string, maxBytes: number): Promis
     `:(literal)${path}`,
   ]);
   if (!listed.split("\0").includes(path)) return null;
+  return readListed(cwd, path, maxBytes);
+}
+
+/** A file git has already named — listed, or found by `grep` — read from disk without asking again. */
+export async function readListed(
+  cwd: string,
+  path: string,
+  maxBytes = DEFAULT_MAX_FILE_BYTES,
+): Promise<FileRead | null> {
   const full = join(cwd, path);
   try {
     // `lstat`, so a link is read as git records it — its target — and never followed.

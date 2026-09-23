@@ -43,6 +43,14 @@ and `bun run release` refuses a version that has no section. See
   development and CI, `bun run model:fetch` puts the pinned files in the cache and checks
   their SHA-256.
 
+- **Global search finds text in the working trees** (DA-38). A query of two characters or more
+  is also sent to `GET /api/search/text`, which runs `git grep` for it as a fixed string,
+  without regard to case, over tracked and untracked files of every repository in the review —
+  inside a task's scope — and answers a page of hits with the five lines on each side. The rows
+  carry a `text` tag after the ranked ones, the preview shows the line between its neighbours,
+  and `⏎` opens the file in browse mode at that line. At most three lines of a file are
+  listed, 500 hits in all; git is stopped at the cap rather than read to the end.
+
 - **A repository can be read outside its diff** (DA-37). The sidebar's `all files` tab lists
   every file of each repository of the review, the unchanged ones marked `unchanged`; one of
   those opens whole in place of the review — numbered from 1, read-only, with

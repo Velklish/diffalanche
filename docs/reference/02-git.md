@@ -78,6 +78,7 @@ files. That is how `ref` mode skips one.
 | `ls-files -z -s`, `ls-files -z --deleted` | the files on disk the index tracks, less the deleted ones, for browsing |
 | `ls-files -z --cached --others --exclude-standard -- :(literal)<path>` | whether a path is one git lists, before the working tree is read |
 | `cat-file -s <sha>:<path>`, `cat-file blob <sha>:<path>` | one file at the base revision: its size first, then its bytes |
+| `grep -n -z -I -F -i --untracked --no-color -e <text> -- [:(literal)<path>…]` | text search over the working tree ([Text search](#text-search)) |
 
 The change set comes from the **plumbing**, not from `git diff`. The porcelain
 refreshes the index on its way out, and a refresh takes `.git/index.lock` and
@@ -564,6 +565,36 @@ A file over `DEFAULT_MAX_FILE_BYTES` (512 KiB, the diff's own limit) is
 `omitted: "too-large"`, and one with a NUL byte is `omitted: "binary"` — the
 same two words, for the same reasons, as a file of the change set
 ([Files listed without content](#files-listed-without-content)).
+
+## Text search
+
+`grepWorktree(cwd, query, { limit, perFile, paths })` in `src/core/git/grep.ts`
+is one repository's half of the server's text search ([07-server.md](07-server.md)).
+`-F` reads the query as text — `a.b*c` finds `a.b*c` and nothing else — and `-i`
+folds case; `-I` leaves binary files out and `--untracked` puts untracked files
+in, ignored ones staying out. `-z` puts a NUL after the path and after the line
+number, so a path holding `:` or `-` is still read right. `grep.column` and
+`grep.fullName` are pinned off with `-c`, because a repository that sets either
+changes the shape of every line.
+
+It is the one reader that does not wait for git to finish: `gitLines` in
+`run.ts` spawns git and hands its output over line by line, and the search stops
+git at the first match past `limit`, so a common word costs what the cap costs
+rather than what the repository holds. `perFile` keeps a few lines of each file
+and skips the rest; `git grep -m` would do that inside git but needs git 2.38,
+so the skipping is the reader's. Two bounds keep the skipping from costing the
+search. A file that has had `SKIPPED_PER_FILE` (100) of its lines passed over is
+**set aside**: git is stopped and asked again with that file excluded
+(`:(exclude,literal)<path>`), the files already read are passed over, and the
+search goes on after it — without that, a file of one word repeated that sorts
+early ate the whole read and every file after it went unsearched. Up to twenty
+files are set aside; past that the search stops and says it is capped. And the
+whole read of a repository stops after `limit × 20` lines. Exit 1 is "nothing
+found", as for `check-ignore`.
+
+`git grep` over the working tree reads the index and writes nothing:
+`tests/search-text.test.ts` holds `.git/index` and `HEAD` byte for byte across a
+search.
 
 ## What it does not do yet
 
