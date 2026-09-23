@@ -288,6 +288,23 @@ and `bun run release` refuses a version that has no section. See
 
 ### Fixed
 
+- **A line comment no longer drops the warning of a linked worktree** (DA-80).
+  Patching one repository into `diff.json` was written twice — once for the
+  CLI's line comment, once for the watcher's rescan — and the CLI's copy rebuilt
+  the repository's warnings from the fresh read alone, which cannot say
+  `worktree of <main>`: after a comment on a line of a linked worktree the review
+  stopped reporting it until the next full scan. Both writers now go through one
+  patch, `replaceRepository`, which puts the repository's share of the new
+  `rootWarnings` of `diff.json` back — the warnings the walk of the root and the
+  scope produced, kept apart for this. A cache written before the field existed
+  is still read as it is — the sessions list keeps its counters — and the next
+  patch of one repository into it becomes a scan of the whole scope instead,
+  which writes the field; `SCHEMA_VERSION` stays at 2, so `review.json` and
+  `comments.json` are untouched. Every list of the cache
+  is now sorted where the cache is built, so the CLI's patch can no longer write
+  warnings in an order that reads downstream as a new set and brings back a
+  warnings bar the reader dismissed.
+
 - **A window on any task now hears about that task's comments** (DA-55.1). The
   watcher followed one session — the current one — so `comment-added`,
   `reply-added` and `comment-status` never named a thread of a task opened with

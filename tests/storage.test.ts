@@ -231,6 +231,7 @@ describe("reading", () => {
       version: SCHEMA_VERSION,
       base: { mode: "head" } as const,
       scope: null,
+      rootWarnings: [],
       root,
       repositories: [],
       totals: { repositories: 0, files: 0, lines: 0 },
@@ -250,6 +251,19 @@ describe("reading", () => {
       JSON.stringify({ version: 99, base: { mode: "head" }, scope: null, root, repositories: [] }),
     );
     expect(await readDiffCache(dataDir, "one")).toBeNull();
+  });
+
+  it("reads a diff cache written before its root warnings as it is", async () => {
+    await makeSession(dataDir, "one");
+    // Only a patch of one repository needs the field, and the two that patch scan instead.
+    const written = { version: SCHEMA_VERSION, base: { mode: "head" }, scope: null, root };
+    const rest = {
+      repositories: [],
+      totals: { repositories: 0, files: 0, lines: 0 },
+      warnings: [],
+    };
+    writeFileSync(diffCachePath(dataDir, "one"), JSON.stringify({ ...written, ...rest }));
+    expect(await readDiffCache(dataDir, "one")).toEqual({ ...written, ...rest });
   });
 });
 

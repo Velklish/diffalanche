@@ -16,6 +16,7 @@ import {
   commentsPath,
   currentPath,
   dataDirOf,
+  diffCachePath,
   ensureDataDir,
   readCurrent,
   readReview,
@@ -195,6 +196,7 @@ describe("listSessions", () => {
       version: SCHEMA_VERSION,
       base: { mode: "head" },
       scope: null,
+      rootWarnings: [],
       root,
       repositories: [
         { path: "repos/a", branch: "main", base: head, files: [], warnings: [] },
@@ -218,6 +220,18 @@ describe("listSessions", () => {
     });
     // Nothing has been scanned in the other session, so there is no count to give.
     expect(sessions[1]).toMatchObject({ name: "older", current: false, repositories: null });
+  });
+
+  it("keeps the count of a task whose cache was written before its root warnings", async () => {
+    await createSession(dataDir, "long-closed", { mode: "head" });
+    // Such a cache is read as it is: only a patch of one repository needs the field.
+    const repository = { path: "repos/a", branch: "main", base: head, files: [], warnings: [] };
+    const totals = { repositories: 1, files: 0, lines: 0 };
+    const written = { version: SCHEMA_VERSION, base: { mode: "head" }, scope: null, root };
+    const rest = { repositories: [repository], totals, warnings: [] };
+    writeFileSync(diffCachePath(dataDir, "long-closed"), JSON.stringify({ ...written, ...rest }));
+    const { sessions } = await listSessions(dataDir);
+    expect(sessions[0]).toMatchObject({ name: "long-closed", repositories: 1 });
   });
 
   it("is empty on a data directory with no sessions", async () => {

@@ -33,23 +33,65 @@ export function totalsOf(repositories: RepositoryChange[]): ReviewTotals {
   return { repositories: repositories.length, files, lines };
 }
 
-/** The cache around a set of repositories: sorted by path, with the totals counted. */
+/** The cache around a set of repositories, every list sorted here and nowhere else: an order-only
+ * change of the warnings reads downstream as a new set ([02-git.md](../../docs/reference/02-git.md)). */
 function cache(
   root: string,
   base: BaseSpec,
   scope: Scope,
   repositories: RepositoryChange[],
   warnings: ScanWarning[],
+  rootWarnings: ScanWarning[],
 ): DiffCache {
   return {
     version: SCHEMA_VERSION,
     base,
     scope,
+    rootWarnings: sortWarnings(rootWarnings),
     root,
     repositories: [...repositories].sort((a, b) => byCodePoint(a.path, b.path)),
     totals: totalsOf(repositories),
-    warnings,
+    warnings: sortWarnings(warnings),
   };
+}
+
+function sortWarnings(warnings: ScanWarning[]): ScanWarning[] {
+  return [...warnings].sort(
+    (a, b) => byCodePoint(a.path, b.path) || byCodePoint(a.message, b.message),
+  );
+}
+
+/** A cache that carries the root warnings a patch puts back. */
+export type PatchableCache = DiffCache & { rootWarnings: ScanWarning[] };
+
+/** Whether one repository may be patched into this cache: it answers this base and scope, and it
+ * was written with its root warnings ([02-git.md](../../docs/reference/02-git.md)). */
+export function patchable(
+  cached: DiffCache | null,
+  base: BaseSpec,
+  scope: Scope,
+): cached is PatchableCache {
+  return (
+    cached !== null &&
+    cached.rootWarnings !== undefined &&
+    sameBase(cached.base, base) &&
+    sameScope(cached.scope, scope)
+  );
+}
+
+/** The cache with one repository's entry and warnings replaced by a fresh read of it — the one
+ * patch both the CLI and the watcher write ([02-git.md](../../docs/reference/02-git.md)). */
+export function replaceRepository(cached: PatchableCache, change: RepositoryChange): DiffCache {
+  const repo = change.path;
+  const repositories = cached.repositories.filter((one) => one.path !== repo);
+  if (change.files.length > 0) repositories.push(change);
+  const warnings: ScanWarning[] = [
+    ...cached.warnings.filter((one) => one.path !== repo),
+    ...cached.rootWarnings.filter((one) => one.path === repo),
+    ...change.warnings.map((message) => ({ path: repo, message })),
+  ];
+  const { root, base, scope, rootWarnings } = cached;
+  return cache(root, base, scope, repositories, warnings, rootWarnings);
 }
 
 /**
@@ -191,9 +233,9 @@ export async function scanReview(
       path: entry.repo,
       message: "in the scope of this review task, but not a repository under the root",
     }));
+  const rootWarnings: ScanWarning[] = [...found.warnings, ...missing];
   const warnings: ScanWarning[] = [
-    ...found.warnings,
-    ...missing,
+    ...rootWarnings,
     ...scanned.flatMap((repo) => repo.warnings.map((message) => ({ path: repo.path, message }))),
   ];
   return {
@@ -203,6 +245,7 @@ export async function scanReview(
       scope,
       scanned.filter((repo) => repo.files.length > 0),
       warnings,
+      rootWarnings,
     ),
     found: paths,
   };
@@ -241,21 +284,9 @@ export async function refreshRepository(
     // review reading half of each. `review base` and a scope edit are what put
     // it there, and one full scan repairs it — outside the lock, because it
     // takes as long as every repository takes.
-    if (previous === null || !sameBase(previous.base, base) || !sameScope(previous.scope, scope)) {
-      return true;
-    }
-    const repositories = previous.repositories.filter((one) => one.path !== repo);
-    if (change.files.length > 0) repositories.push(change);
-    const warnings: ScanWarning[] = [
-      ...previous.warnings.filter((one) => one.path !== repo),
-      ...change.warnings.map((message) => ({ path: repo, message })),
-    ];
+    if (!patchable(previous, base, scope)) return true;
     await held.assertHeld();
-    await writeDiffCache(
-      config.dataDir,
-      session,
-      cache(previous.root, base, scope, repositories, warnings),
-    );
+    await writeDiffCache(config.dataDir, session, replaceRepository(previous, change));
     return false;
   });
   if (!full) return;

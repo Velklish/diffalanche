@@ -7,7 +7,7 @@
  * (`docs/SPEC.md` section 11).
  */
 import { relative } from "node:path";
-import { filterChange, sameBase, sameScope, scanReview, totalsOf } from "../change-set.ts";
+import { filterChange, patchable, replaceRepository, scanReview } from "../change-set.ts";
 import type { Config } from "../config/index.ts";
 import { repositoryInScope } from "../domain/scope.ts";
 import { checkIgnore, readRepositoryChange } from "../git/index.ts";
@@ -77,7 +77,7 @@ export const IGNORE_CACHE_LIMIT = 4_096;
 
 export type WatcherOptions = {
   config: Config;
-  /** The repositories to watch and what the scan that found them had to say. */
+  /** The repositories to watch, as the scan found them; its warnings are the cache's to keep. */
   scan: ScanResult;
   bus: EventBus;
   activity: ActivityLog;
@@ -252,7 +252,7 @@ export async function startWatcher(options: WatcherOptions): Promise<Watcher> {
     // person sees must not wait for a file of megabytes. A file that was
     // touched without its content changing — a build output, a save with the
     // same bytes — is not a change of the review and says nothing at all.
-    await rescanRepository(config, followed, repo, scan, (outcome) => {
+    await rescanRepository(config, followed, repo, (outcome) => {
       options.onRescan?.(followed, outcome.cache);
       // From inside the rescan, so it says the change set moved rather than
       // that a file was written: a save with the same bytes reaches no one.
@@ -504,7 +504,6 @@ export async function rescanRepository(
   config: Config,
   session: string,
   repo: string,
-  scan: ScanResult,
   ready?: Ready,
 ): Promise<Rescan> {
   const review = await readReview(config.dataDir, session);
@@ -524,41 +523,18 @@ export async function rescanRepository(
     // cache computed against another base, or for another scope, is read again
     // for the same reason it is in the server — it answers a different
     // question.
-    if (
-      cached === null ||
-      !sameBase(cached.base, review.base) ||
-      !sameScope(cached.scope, review.scope)
-    ) {
-      return null;
-    }
+    if (!patchable(cached, review.base, review.scope)) return null;
 
     const before = cached.repositories.find((one) => one.path === repo) ?? null;
     if (sameChange(before, change)) {
       return { cache: cached, changed: false, warningsChanged: false };
     }
 
-    const repositories = cached.repositories.filter((one) => one.path !== repo);
-    if (change.files.length > 0) repositories.push(change);
-    repositories.sort((a, b) => byCodePoint(a.path, b.path));
-
-    // Everything the cache says about the other repositories stands; what it
-    // said about this one is replaced by what this read and the scan say now.
-    const warnings = [
-      ...cached.warnings.filter((one) => one.path !== repo),
-      ...scan.warnings.filter((one) => one.path === repo),
-      ...change.warnings.map((message) => ({ path: repo, message })),
-    ].sort((a, b) => byCodePoint(a.path, b.path) || byCodePoint(a.message, b.message));
-
-    const cache: DiffCache = {
-      ...cached,
-      repositories,
-      totals: totalsOf(repositories),
-      warnings,
-    };
+    const cache = replaceRepository(cached, change);
     const outcome: Rescan = {
       cache,
       changed: true,
-      warningsChanged: !sameWarnings(cached.warnings, warnings),
+      warningsChanged: !sameWarnings(cached.warnings, cache.warnings),
     };
     ready?.(outcome);
     await held.assertHeld();

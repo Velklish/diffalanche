@@ -62,6 +62,7 @@ beforeAll(async () => {
     version: SCHEMA_VERSION,
     base: { mode: "head" },
     scope: null,
+    rootWarnings: [],
     root,
     repositories: [repository],
     totals: { repositories: 1, files: repository.files.length, lines: 0 },

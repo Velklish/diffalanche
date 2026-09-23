@@ -470,15 +470,54 @@ await refreshRepository(config, session, review.base, "repos/group/service-api",
 - `totalsOf(repositories)` counts a set of repositories again, for a caller that
   narrowed one.
 - `refreshRepository(config, session, base, repo, scope?)` reads one repository
-  again and writes it into the cache in place, so a comment written right after
-  an edit anchors to the line that is there now. A cache computed against
-  another base, or for another scope, is not patched — `review base` and a scope
-  edit put it there, and one full scan repairs it. It re-reads rather than
-  comparing the cache against the mtimes of `.git` and the working tree: one
-  `diff-index` on one repository costs less than walking that tree, and it is
-  right in the case a mtime comparison gets wrong — a file saved within the same
-  second as the scan. With no cache at all there is nothing to patch, so the
-  whole root is scanned once.
+  again and writes it into the cache in place with `replaceRepository` below, so
+  a comment written right after an edit anchors to the line that is there now.
+  A cache computed against another base, or for another scope, is not patched —
+  `review base` and a scope edit put it there, and one full scan repairs it. It
+  re-reads rather than comparing the cache against the mtimes of `.git` and the
+  working tree: one `diff-index` on one repository costs less than walking that
+  tree, and it is right in the case a mtime comparison gets wrong — a file saved
+  within the same second as the scan. With no cache at all there is nothing to
+  patch, so the whole root is scanned once.
+
+### Patching one repository
+
+`replaceRepository(cache, change)` is **the one patch of one repository into
+`diff.json`**, and both writers that patch go through it: `refreshRepository`
+above, before a line comment captures its anchor, and the watcher's rescan after
+an edit ([05-watcher.md](05-watcher.md)). It used to be written twice, and the
+two copies had drifted: the CLI's dropped a warning the watcher's kept (DA-80).
+
+- **The entry is replaced.** The repository's old entry goes and the fresh read
+  takes its place; a read with no files leaves the repository out, the way a
+  scan leaves it out. Every other repository's entry stands.
+- **The warnings are rebuilt around it.** What the cache says about every other
+  repository stands; what it said about this one is replaced by what the fresh
+  read says now **and by the cache's `rootWarnings` for that path**. Those are
+  the warnings the walk of the root and the scope produced — `worktree of
+  <main>` from [01-scanner.md](01-scanner.md), `in the scope of this review
+  task, but not a repository under the root` from `scanReview` — and no read of
+  one repository produces them again. Taken from the read alone, a patch drops
+  them: a linked worktree stopped being reported after any line comment on it
+  until the next full scan. `diff.json` carries them apart from the full list for
+  exactly this ([03-storage.md](03-storage.md)).
+- **Every list of the cache is sorted where the cache is built, and only
+  there**: repositories by path, `warnings` and `rootWarnings` by path and then
+  message. A full scan and a patch are built by the same function, so neither
+  can write an unsorted list. It matters because both comparisons downstream of
+  the `warnings` event — the watcher's `sameWarnings` and the UI store's guard —
+  go index by index, and an order-only change reads there as a new set and puts
+  a warnings bar the reader dismissed back on the screen.
+- **The patch is pure; the lock, the read and the write stay with each
+  caller.** Between reading `diff.json` under the session's lock and writing it
+  back is where the two writers genuinely differ — the watcher writes nothing for
+  a repository whose entry did not change, and hands the new change set over
+  before the write; the CLI writes what it patched. Both fall through to a full
+  scan when `patchable(cache, base, scope)` says no: the cache answers another
+  base or scope, or it was written before `rootWarnings` existed and a patch
+  would have nothing to put back. The shared function stops
+  at the patch because that is where the copies drifted; taking the lock inside
+  it would take a callback for each of those differences.
 
 ## What it does not do yet
 

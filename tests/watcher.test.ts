@@ -233,7 +233,7 @@ async function baseline(): Promise<number> {
   const runs: number[] = [];
   for (let run = 0; run < RUNS; run += 1) {
     const started = performance.now();
-    await rescanRepository(config, SESSION, REPO, found);
+    await rescanRepository(config, SESSION, REPO);
     runs.push(performance.now() - started);
   }
   return median(runs);

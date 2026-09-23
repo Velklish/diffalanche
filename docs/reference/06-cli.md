@@ -276,9 +276,10 @@ simply older than what it overwrites. The damage is bounded in a way the closed
 direction's was not: what is lost is one repository's patch rather than every
 repository the scan found, and the next fs event or the next `comment` on that
 repository brings it back ([05-watcher.md](05-watcher.md)). Closing it would mean
-re-reading the cache inside the lock and merging rather than replacing, which is
-the one-repository patch logic DA-80 is about; until then this is the side that
-stays open, and it is written here rather than left to be rediscovered.
+re-reading the cache inside the lock and merging rather than replacing: the
+one-repository patch of [02-git.md](02-git.md) is that merge for one repository,
+and nothing does it for a whole scan. This is the side that stays open, and it is
+written here rather than left to be rediscovered.
 
 That lock is a third way `diff` exits 1, beside the two refusals above. A lock a
 running `serve` or another `diff` still holds when `timeoutMs` runs out is a
@@ -287,8 +288,9 @@ is thrown away with `diff.json` left exactly as it was: the run prints nothing
 and writes nothing. So the header of the command — every run rescans the root and
 rewrites the cache — holds for a run that exits 0.
 
-`--repo <path>` narrows what is printed — its repository, its warnings, and
-totals counted again for it — and never narrows what is written: a cache with
+`--repo <path>` narrows what is printed — its repository, its warnings (both
+`warnings` and `rootWarnings`), and totals counted again for it — and never
+narrows what is written: a cache with
 one repository in it would tell the UI and the next `comment` that the rest of
 the review has no changes. A path the scan found no repository at is exit code
 1, `no repository "<path>" under the root`: an empty change set means the

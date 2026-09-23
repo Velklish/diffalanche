@@ -350,6 +350,17 @@ Either field missing altogether is read as "never scanned" — a cache that cann
 say what it answers is no answer. The rest of the shape inside it is the git
 reader's contract ([02-git.md](02-git.md)), not storage's.
 
+One more field is checked for being a list when it is there: `rootWarnings`,
+the part of `warnings` the walk of the root and the scope produced rather than a
+read of one repository. A patch of one repository rebuilds that repository's
+warnings from a fresh read, and a fresh read cannot say `worktree of <main>`; the
+patch puts the repository's share of `rootWarnings` back instead
+([02-git.md](02-git.md)). **A cache without the field is read as it is** — every
+reader gets the repositories, the totals and the warnings it holds, so the
+sessions list keeps counting a task nobody has opened since, a closed one
+included. It is only not *patched*: the two writers that patch one repository
+into the cache scan the whole scope instead, and that scan writes the field.
+
 ## Schema versions
 
 `SCHEMA_VERSION` is what a write puts in a file; `READABLE_VERSIONS` is what a
@@ -368,6 +379,21 @@ no.
 discarded and the caller scans again, the same answer a cache with no `base` or
 no `scope` gets. It is the one file the tool writes and can write again, and
 `docs/SPEC.md` section 7 already says hand edits to it are lost.
+
+**A change of the cache's shape is marked by the cache, not by
+`SCHEMA_VERSION`.** `rootWarnings` (DA-80) did not raise the version: the
+version is shared, and raising it would have every write of `review.json` and
+`comments.json` carry the new number, which every earlier build refuses — a
+server of one build and an `npx diffalanche` of another on one data directory
+would stop reading each other's comments over a field of the one file either can
+write again. The field's own absence is the marker instead, and it marks less
+than a missing `base` or `scope` does: a cache without it still answers the
+question it records, so it is read as it is and served, and only a patch of one
+repository refuses it and scans the scope instead. A cache nobody patches keeps
+the old shape until something scans that session — `diff`, a server start on it
+as the current session, a window on it as a named task. An earlier build
+reading a cache that has the field keeps working and leaves it as it found it,
+or drops it, which this build answers the same way.
 
 ## What it does not do yet
 

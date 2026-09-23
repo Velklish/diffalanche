@@ -50,6 +50,9 @@ function narrow(cache: DiffCache, repo: string | undefined): DiffCache {
     repositories,
     totals: totalsOf(repositories),
     warnings: cache.warnings.filter((warning) => warning.path === repo),
+    ...(cache.rootWarnings === undefined
+      ? {}
+      : { rootWarnings: cache.rootWarnings.filter((warning) => warning.path === repo) }),
   };
 }
 

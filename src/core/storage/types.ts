@@ -3,7 +3,7 @@
  * is the only module that reads and writes these files; every other module
  * takes the parsed value and never touches the JSON.
  */
-import type { BaseSpec, ReviewBundle } from "../types.ts";
+import type { BaseSpec, ReviewBundle, ScanWarning } from "../types.ts";
 
 /** The version every file of the data directory is written with. */
 export const SCHEMA_VERSION = 2;
@@ -132,7 +132,14 @@ export type CommentsFile = {
  * whose base or scope has changed since has a cache that answers a different
  * question than the one now being asked.
  */
-export type DiffCache = { version: number; base: Base; scope: Scope } & ReviewBundle;
+export type DiffCache = {
+  version: number;
+  base: Base;
+  scope: Scope;
+  /** The part of `warnings` the walk of the root and the scope said, which a patch puts back; absent
+   * in a cache written before it, which is read as it is and never patched (03-storage.md). */
+  rootWarnings?: ScanWarning[];
+} & ReviewBundle;
 
 /** What `reviews/` holds: the session names, and why a directory was left out. */
 export type SessionListing = {

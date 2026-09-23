@@ -1,9 +1,10 @@
 import { execFileSync } from "node:child_process";
 import { appendFileSync, existsSync, mkdtempSync, rmSync, writeFileSync } from "node:fs";
-import { tmpdir } from "node:os";
+import { devNull, tmpdir } from "node:os";
 import { join } from "node:path";
 import { afterAll, beforeAll, describe, expect, it } from "vitest";
 import { generate, PROFILES } from "../scripts/synth.ts";
+import { run } from "../src/cli/run.ts";
 import {
   findRepositories,
   mapWithLimit,
@@ -11,11 +12,15 @@ import {
   SCAN_CONCURRENCY,
   scanReview,
 } from "../src/core/change-set.ts";
+import type { Config } from "../src/core/config/index.ts";
 import { loadConfig } from "../src/core/config/index.ts";
 import { parseDiff, scan } from "../src/core/index.ts";
+import { byCodePoint } from "../src/core/order.ts";
 import type { DiffCache } from "../src/core/storage/index.ts";
 import { readDiffCache, writeDiffCache } from "../src/core/storage/index.ts";
-import type { BaseSpec } from "../src/core/types.ts";
+import type { BaseSpec, ScanWarning } from "../src/core/types.ts";
+import { rescanRepository } from "../src/core/watcher/index.ts";
+import { makeRoot, REPOS } from "./helpers/fixture-root.ts";
 
 /** The bound counted in calls, not processes: this is where it holds whatever the machine is
  * doing, and `tests/scope-scan.test.ts` is the ceiling beside it (`docs/reference/02-git.md`). */
@@ -196,6 +201,102 @@ describe("refreshing one repository", () => {
       rmSync(fixture, { recursive: true, force: true });
     }
   }, 120_000);
+});
+
+/** The one patch both writers use: the CLI before it captures a line anchor, the watcher after an
+ * edit. A linked worktree is the case, because its warning is the walk's and not the read's. */
+describe("patching one repository into the cache", () => {
+  const [ALPHA, BETA] = REPOS;
+  const WORKTREE = `${ALPHA}-worktree`;
+  const SESSION = "patched";
+  let fixture: string;
+
+  async function cli(...argv: string[]): Promise<number> {
+    const quiet = { out: () => {}, err: () => {}, input: async () => "" };
+    return run([...argv, "--root", fixture], { read: async () => null }, quiet);
+  }
+
+  async function cached(): Promise<DiffCache> {
+    const config = await loadConfig({ root: fixture });
+    return (await readDiffCache(config.dataDir, SESSION)) as DiffCache;
+  }
+
+  /** Sorted the way the cache promises: by path, then by message. */
+  function sorted(warnings: ScanWarning[]): ScanWarning[] {
+    return [...warnings].sort(
+      (a, b) => byCodePoint(a.path, b.path) || byCodePoint(a.message, b.message),
+    );
+  }
+
+  beforeAll(async () => {
+    fixture = makeRoot();
+    execFileSync("git", ["worktree", "add", "-q", "--detach", `../alpha-worktree`, "HEAD"], {
+      cwd: join(fixture, ALPHA),
+      stdio: "ignore",
+      env: { ...process.env, GIT_CONFIG_GLOBAL: devNull, GIT_CONFIG_SYSTEM: devNull },
+    });
+    appendFileSync(join(fixture, WORKTREE, "file.txt"), "edited in the worktree\n");
+    expect(await cli("review", "new", SESSION)).toBe(0);
+    expect(await cli("diff", "--json")).toBe(0);
+  }, 60_000);
+
+  afterAll(() => {
+    rmSync(fixture, { recursive: true, force: true });
+  });
+
+  it("keeps the worktree warning through a line comment of the CLI", async () => {
+    const warning = { path: WORKTREE, message: `worktree of ${ALPHA}` };
+    expect((await cached()).warnings).toContainEqual(warning);
+    expect((await cached()).rootWarnings).toContainEqual(warning);
+
+    // Line 9 is the one the worktree appended; the fixture's own edit is not in this checkout.
+    const argv = ["--path", "file.txt", "--line", "9", "--severity", "nit", "--body", "here"];
+    expect(await cli("comment", "--repo", WORKTREE, ...argv)).toBe(0);
+
+    expect((await cached()).warnings).toContainEqual(warning);
+  }, 60_000);
+
+  const writers: Record<string, (config: Config) => Promise<unknown>> = {
+    cli: (config) => refreshRepository(config, SESSION, { mode: "head" }, BETA),
+    watcher: (config) => rescanRepository(config, SESSION, BETA),
+  };
+  it.each(Object.keys(writers))(
+    "writes the warnings sorted when the %s patches",
+    async (writer) => {
+      const config = await loadConfig({ root: fixture });
+      const fresh = await cached();
+      // Out of order on purpose, and without BETA's entry so the watcher's
+      // short-circuit for an unchanged repository does not skip the write.
+      const shuffled = [...fresh.warnings, { path: "repos/z", message: "b" }].reverse();
+      await writeDiffCache(config.dataDir, SESSION, {
+        ...fresh,
+        repositories: fresh.repositories.filter((one) => one.path !== BETA),
+        warnings: [{ path: "repos/z", message: "a" }, ...shuffled],
+      });
+      await writers[writer]?.(config);
+      const { warnings } = await cached();
+      expect(warnings).toContainEqual({ path: "repos/z", message: "a" });
+      expect(warnings).toEqual(sorted(warnings));
+    },
+    60_000,
+  );
+
+  it.each(Object.keys(writers))(
+    "scans instead of patching a cache written before its root warnings, when the %s writes",
+    async (writer) => {
+      const config = await loadConfig({ root: fixture });
+      const { rootWarnings, ...old } = await cached();
+      const warning = { path: WORKTREE, message: `worktree of ${ALPHA}` };
+      expect(rootWarnings).toContainEqual(warning);
+      // What a build before the field left after a line comment on the worktree.
+      const warnings = old.warnings.filter((one) => one.path !== WORKTREE);
+      await writeDiffCache(config.dataDir, SESSION, { ...old, warnings });
+      await writers[writer]?.(config);
+      expect((await cached()).rootWarnings).toContainEqual(warning);
+      expect((await cached()).warnings).toContainEqual(warning);
+    },
+    60_000,
+  );
 });
 
 describe("parseDiff", () => {

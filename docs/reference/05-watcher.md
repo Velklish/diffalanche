@@ -17,7 +17,7 @@ const watcher = await startWatcher({ config, scan, bus, activity });
 | Option | What it is |
 |---|---|
 | `config` | the loaded configuration: the root, the data directory, and `exclude` |
-| `scan` | the `ScanResult` the review was built from: which repositories to watch, and what the scan warned about |
+| `scan` | the `ScanResult` the review was built from: which repositories to watch. Its warnings are not read: what the walk said about a repository travels in the cache's `rootWarnings` ([02-git.md](02-git.md)) |
 | `bus` | where events go |
 | `activity` | the feed the events are recorded in |
 | `debounceMs` | how long a repository stays quiet before it is rescanned; 100 ms |
@@ -368,11 +368,14 @@ a moment when the caller's memory is newer than the file, and that is the
 caller's to hold: what the server does with it is in
 [07-server.md](07-server.md).
 
-A rescan replaces one repository's entry in `diff.json` and leaves the rest
-alone. A repository left with no changes drops out of the cache, the way a scan
-leaves it out. The cache carries the hunks: it is the only place they live, and
-anchor capture reads them there, while the review response of the server drops
-them for speed.
+A rescan replaces one repository's entry in `diff.json`, and its warnings, with
+`replaceRepository` — the one patch of one repository, which the CLI's line
+comment uses as well. What it keeps, what it drops, and why the lists it writes
+are sorted is in [02-git.md](02-git.md). What the rescan adds around it is its
+own: a repository whose recomputed entry equals the cached one is not written at
+all, and the new change set is handed over before the write. The cache carries
+the hunks: it is the only place they live, and anchor capture reads them there,
+while the review response of the server drops them for speed.
 
 With no cache at all — or with one computed against a base that is no longer the
 session's — there is nothing to patch, and a cache holding the one repository
@@ -381,11 +384,6 @@ set is read instead, by `scanReview` of
 [`src/core/change-set.ts`](../../src/core/change-set.ts). That read happens
 outside the session lock, which is taken only for the write. A patched cache
 keeps the base it records.
-
-The warnings of the cache are rebuilt around the rescanned repository: what the
-cache says about the others stands, and what it said about this one is replaced
-by what the fresh read and the scan say about it now. The list is sorted by path
-and message, so an unchanged set of warnings does not look like a new one.
 
 ## The activity feed
 

@@ -216,6 +216,8 @@ export function parseDiffCache(file: string, text: string): DiffCache | null {
   const scope = parseScope(file, "scope", raw.scope);
   asString(file, "root", raw.root);
   asArray(file, "repositories", raw.repositories);
+  // Absent in a cache written before it: read as it is, and the patching writers scan instead.
+  if (raw.rootWarnings !== undefined) asArray(file, "rootWarnings", raw.rootWarnings);
   asObject(file, "totals", raw.totals);
   return { ...(raw as unknown as DiffCache), base, scope };
 }
