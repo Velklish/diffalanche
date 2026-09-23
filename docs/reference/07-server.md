@@ -143,6 +143,7 @@ alike** — and answers for the current session without it. See
 | `GET /api/warnings[?review=]` | the warnings of the change set |
 | `GET /api/activity` | the feed of what the server noticed while it has been running |
 | `GET /api/export?status=&format=[&review=]` | the export of a session |
+| `GET /api/suggest?body=` | past comments like `body` from every session, and the severity they vote for |
 | `POST /api/comments[?review=]` | a new comment; the updated comment comes back |
 | `POST /api/comments/:id/replies[?review=]` | a reply in a thread |
 | `POST /api/comments/:id/resolve`, `/reopen` `[?review=]` | the status of a thread |
@@ -164,6 +165,27 @@ catch-all refusal (`app.all`) register under the method `ALL` and are chains by
 design, so the check reads the other methods only — which is also why a guard
 on one route goes in through `use` on its path rather than as a second handler
 in the route's own `app.get(path, guard, handler)`.
+
+### Suggestions
+
+`GET /api/suggest?body=<text>` answers
+`{ severity: { severity, confidence } | null, suggestions: [...] }`: the five
+comments nearest the text across every review session, each with its session,
+id, severity, repository, file, line, text and similarity, and the severity they
+vote for ([09-ml.md](09-ml.md#suggestions)). It is not scoped by `?review=`: a
+suggestion is history, and the history is every session. A `body` that is
+missing or blank is a 400.
+
+The model runs on a worker thread of its own (`src/server/suggest.ts`,
+[09-ml.md](09-ml.md#in-the-server)), started by the first request and kept for
+every later one, so a server nobody asks for suggestions never loads it. The
+first request pays for the load and for indexing whatever the index is missing;
+after that a request is an update that finds nothing new, one run of the model
+and a search. Requests are answered one at a time, in the order they came: two
+keystrokes arriving together would otherwise both embed the same new comments.
+The server's `close()` ends the thread (`closeApp`), and a thread that ended on
+its own is started again by the next request. A thread that fails to load is the
+503 below, not a fault of the server ([09-ml.md](09-ml.md#in-the-server)).
 
 ### The review document
 
@@ -646,6 +668,7 @@ Every refusal is the domain's own code and message
 | `scope-has-comments` | 409, with `count` and `comments` beside the message |
 | every other `DomainError` | 400 |
 | a file of the data directory that cannot be read | 500, `error: "storage"` |
+| the embedding model is not in the user cache, or does not run on this platform | 503, `error: "model"` |
 
 The 409 is the one refusal that is neither "there is nothing here" nor "that
 request is wrong": the request is well formed and the state says no, and what it

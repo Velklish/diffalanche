@@ -78,6 +78,9 @@ export type IndexUpdate = {
 type UpdateOptions = {
   /** Embed every comment again, whatever the index holds: `index rebuild`. */
   rebuild?: boolean;
+  /** The index as the caller last read or wrote it, when the file has not changed since: it is
+   * not read again. The server keeps one between two suggestions. */
+  current?: EmbeddingIndex | undefined;
 };
 
 type Row = { entry: IndexEntry; vector: Float32Array | null };
@@ -89,7 +92,12 @@ export async function updateIndex(
   embedder: Pick<Embedder, "identity" | "model" | "embed">,
   options: UpdateOptions = {},
 ): Promise<{ index: EmbeddingIndex; update: IndexUpdate }> {
-  const read = options.rebuild === true ? null : await readIndex(dataDir);
+  const read =
+    options.rebuild === true
+      ? null
+      : options.current !== undefined
+        ? { index: options.current, problem: null }
+        : await readIndex(dataDir);
   let previous = read?.index ?? null;
   let rebuilt: string | null = null;
   if (options.rebuild === true) rebuilt = "asked for";
@@ -109,6 +117,20 @@ export async function updateIndex(
     const update = { embedded: 0, kept: 0, dropped: 0, sessions: 0, rebuilt, warnings };
     return { index: { ...index, vectors: new Float32Array(0) }, update };
   }
+  const prints = new Map<string, Fingerprint>();
+  for (const session of listing.names) prints.set(session, await fingerprint(dataDir, session));
+  // Nothing written since: the index as it is, not a copy of it.
+  if (
+    previous !== null &&
+    listing.names.length === Object.keys(previous.sessions).length &&
+    listing.names.every((session) =>
+      samePrint((previous as EmbeddingIndex).sessions[session], prints.get(session) ?? null),
+    )
+  ) {
+    const kept = previous.entries.length;
+    const update = { embedded: 0, kept, dropped: 0, sessions: listing.names.length, rebuilt };
+    return { index: previous, update: { ...update, warnings } };
+  }
   const dimensions = embedder.model.dimensions;
   const vectorAt = (row: number): Float32Array =>
     (previous as EmbeddingIndex).vectors.subarray(row * dimensions, (row + 1) * dimensions);
@@ -125,7 +147,7 @@ export async function updateIndex(
   const rows: Row[] = [];
   let changed = previous === null;
   for (const session of listing.names) {
-    const print = await fingerprint(dataDir, session);
+    const print = prints.get(session) ?? null;
     const carried = bySession.get(session) ?? [];
     if (previous !== null && samePrint(previous.sessions[session], print)) {
       sessions[session] = print;

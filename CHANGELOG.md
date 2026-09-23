@@ -15,6 +15,23 @@ and `bun run release` refuses a version that has no section. See
 
 ### Added
 
+- **`suggest` and `GET /api/suggest`** (DA-35). `diffalanche suggest --body <text>
+  [--json]` answers with the five past comments nearest the text across every
+  review session — each with its similarity, severity, session, file and line —
+  and the severity they vote for with a confidence: each neighbour weighs
+  `exp((similarity − nearest) / 0.01)`, the confidence is the winner's share of
+  the weight, and nothing is proposed when the nearest is under 0.86. The three
+  numbers were chosen on forty labelled comments in two languages
+  (`perf/suggest-vote.ts`, [09-ml.md](docs/reference/09-ml.md#suggestions)).
+  `GET /api/suggest?body=` answers the same from the server, with the model on a
+  worker thread started by the first request: 5–7 ms warm over 200 comments,
+  21–36 ms over 10 000; a model that is not there, or a thread that cannot load,
+  is a 503, and the server's `close()` ends the thread. `serve` peaked at 742–764 MiB
+  on Bun and 657–659 MiB on Node after its first suggestion on the synthetic review
+  (`perf/index-scale.ts serve`).
+  A blank `--body`, and a root nobody reviewed, are refused in one line. Each
+  severity of the synthetic review now has two texts of its own, so its comments
+  cluster: the same eight texts, count and seed.
 - **The server's embedder runs on a thread of its own** (DA-34.1). With the
   index rebuilt in a loop on the server's own thread, the update after an edit
   took 422–435 ms against 272–297 ms without it — every step of a rescan waits

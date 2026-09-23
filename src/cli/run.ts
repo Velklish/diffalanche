@@ -34,6 +34,7 @@ import {
 } from "./commands/review.ts";
 import { serve } from "./commands/serve.ts";
 import { show } from "./commands/show.ts";
+import { suggest } from "./commands/suggest.ts";
 import { reopen, resolve } from "./commands/verdict.ts";
 import { version } from "./commands/version.ts";
 import { createContext } from "./context.ts";
@@ -63,6 +64,7 @@ const COMMANDS: Command[] = [
   resolve,
   reopen,
   exportReview,
+  suggest,
   indexRebuild,
   indexStatusCommand,
   modelStatus,

@@ -104,7 +104,9 @@ the generated fixture on disk as it was generated
 
 Comments are spread over all four anchor levels (review, repository, file, line)
 and all four severities; a line comment's anchor names a line inside the block
-its file actually changed, with its real context and hunk header.
+its file actually changed, with its real context and hunk header. Each severity
+has two texts of its own, so the texts cluster by severity: `suggest` is checked
+on this review, and its vote needs clusters to vote in ([09-ml.md](09-ml.md#suggestions)).
 
 `synth.json` at the root is the generator's stamp: the seed, the session name
 `current` points at, the profile, and the thread and reply counts written into
@@ -398,9 +400,16 @@ bun perf/index-scale.ts grow --data-dir <d> --from synth --copies 49   # 50 copi
 bun perf/index-scale.ts catch-up --data-dir <d> [--worker]   # the update after 200, 1 and 0 new comments
 bun perf/index-scale.ts fake --data-dir <d> --size 20000               # an index of random vectors
 /usr/bin/time -l bun perf/index-scale.ts query --data-dir <d>          # peak memory of one query
+/usr/bin/time -l bun perf/index-scale.ts serve --root <copy of a fixture>  # the server's, first suggestion
 ```
 
-`search` needs no model; `catch-up` and `query` read it from the user cache, and
+`bun perf/suggest-vote.ts` is the same kind of script for `suggest`: forty
+labelled comments asked for their neighbours with themselves left out, and the
+severities right by `k` and temperature that chose the vote
+([09-ml.md](09-ml.md#suggestions)).
+
+`search` needs no model; `catch-up`, `query` and `serve` read it from the user
+cache; `serve` removes the fixture's `index/` first and writes a new one, and
 `catch-up` rewrites the index and adds one comment to the first session of the
 data directory it is given — a copy, never the fixture.
 

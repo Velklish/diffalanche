@@ -14,12 +14,14 @@ import { ModelError } from "../src/core/ml/embed/errors.ts";
 import { EMBEDDING_MODEL } from "../src/core/ml/embed/model.ts";
 import { startThreadedEmbedder } from "../src/core/ml/embed/threaded.ts";
 import { nearest, updateIndex } from "../src/core/ml/index/index.ts";
+import { NEIGHBOURS, suggest } from "../src/core/ml/suggest/index.ts";
 import { dataDirOf, listSessionNames, readComments } from "../src/core/storage/index.ts";
 import { createActivityLog } from "../src/core/watcher/index.ts";
 import { createApp } from "../src/server/app.ts";
 import type { UiAssets } from "../src/server/assets.ts";
 import { createEventStream } from "../src/server/events.ts";
 import { createReviewService } from "../src/server/review.ts";
+import { createSuggestService } from "../src/server/suggest.ts";
 
 const noUi: UiAssets = { read: async () => null };
 const location = modelDirectory(defaultCacheHome(), EMBEDDING_MODEL);
@@ -53,6 +55,39 @@ describe("the embedder on a thread of its own", () => {
     }
     await expect(threaded.embed(["after close"])).rejects.toThrow(/the embedding thread has ended/);
   }, 120_000);
+
+  it("answers GET /api/suggest from the thread within 100 ms once it is warm", async () => {
+    const root = mkdtempSync(join(tmpdir(), "diffalanche-suggest-api-"));
+    generate({ out: root, seed: 5, profile: PROFILES.small });
+    const config = await loadConfig({ root });
+    // The server's own: the user cache's model on a worker thread.
+    const service = createSuggestService(config.dataDir);
+    const app = createApp({
+      activity: createActivityLog(),
+      config,
+      events: createEventStream(),
+      review: createReviewService(config),
+      ui: noUi,
+      suggest: service,
+    });
+    const ask = (body: string) => app.request(`/api/suggest?body=${encodeURIComponent(body)}`);
+    try {
+      // The first request starts the thread and indexes the review: that is not "warm".
+      expect((await ask("warm-up")).status).toBe(200);
+      const times: number[] = [];
+      for (let i = 0; i < 7; i += 1) {
+        const started = performance.now();
+        const response = await ask(`The cache key leaves out the region, case ${i}.`);
+        times.push(performance.now() - started);
+        expect(response.status).toBe(200);
+      }
+      // The median of seven: one request the machine took away is not the route's time.
+      expect(times.sort((a, b) => a - b)[3]).toBeLessThan(100);
+    } finally {
+      await service.close();
+      rmSync(root, { recursive: true, force: true });
+    }
+  }, 180_000);
 
   it("refuses to start on a directory without the model", async () => {
     const empty = mkdtempSync(join(tmpdir(), "diffalanche-no-model-"));
@@ -162,6 +197,73 @@ describe("the index with the model", () => {
     expect((await cli("index", "status", "--data-dir", dataDir)).out).toContain(
       "state     current",
     );
+  }, 120_000);
+
+  it("suggests for a paraphrase a comment of its cluster first, and that cluster's severity", async () => {
+    // The synthetic review gives each severity two texts of its own (scripts/synth.ts).
+    const cases = [
+      {
+        paraphrase:
+          "The cache key does not include the region, so two tariffs overwrite each other.",
+        body: "Missing the region in the cache key: two tariffs collide here.",
+        severity: "critical",
+      },
+      {
+        paraphrase: "A new default gets allocated on each request; move it out of the loop.",
+        body: "This allocates on every request; hoist the default out of the loop.",
+        severity: "warning",
+      },
+      {
+        paraphrase: "Функция называется filter, а на деле делает map: переименуй или раздели.",
+        body: "The name says filter, the body maps. Rename or split it.",
+        severity: "nit",
+      },
+      {
+        paraphrase: "Почему пустой список здесь ошибка, а в соседней ветке значение по умолчанию?",
+        body: "Why is the empty list an error in this branch and a default in the next one?",
+        severity: "question",
+      },
+    ];
+    for (const one of cases) {
+      const { suggestions, severity } = await suggest(dataDir, model, one.paraphrase);
+      expect(suggestions, one.paraphrase).toHaveLength(NEIGHBOURS);
+      // The similarity is in the message: the floor is 0.86, and a platform moves it by 0.0013.
+      const said = `${one.paraphrase} (nearest at ${suggestions[0]?.similarity.toFixed(4)})`;
+      expect(suggestions[0]?.body, said).toBe(one.body);
+      expect(severity?.severity, said).toBe(one.severity);
+    }
+  }, 120_000);
+
+  it("prints the suggestions with their sources and the severity, and the same as JSON", async () => {
+    const body = "The cache key does not include the region, so two tariffs overwrite each other.";
+    const text = await cli("suggest", "--body", body, "--root", root, "--data-dir", dataDir);
+    expect(text.code, text.err).toBe(0);
+    expect(text.out).toMatch(/^severity {2}critical, confidence \d\.\d\d\n\n/);
+    expect(text.out).toMatch(
+      /\n0\.\d\d {2}critical {2}synth {2}\S+.* {2}Missing the region in the cache key: two tariffs collide here\./,
+    );
+    const json = await cli(
+      "suggest",
+      "--body",
+      body,
+      "--json",
+      "--root",
+      root,
+      "--data-dir",
+      dataDir,
+    );
+    const answer = JSON.parse(json.out) as {
+      severity: { severity: string };
+      suggestions: unknown[];
+    };
+    expect(answer.severity.severity).toBe("critical");
+    expect(answer.suggestions).toHaveLength(NEIGHBOURS);
+    expect(answer.suggestions[0]).toMatchObject({
+      session: "synth",
+      severity: "critical",
+      body: "Missing the region in the cache key: two tariffs collide here.",
+      similarity: expect.any(Number),
+    });
   }, 120_000);
 
   it("gives on a thread of its own the bytes it gives on the calling thread", async () => {

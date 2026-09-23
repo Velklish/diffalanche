@@ -9,7 +9,7 @@ import { scan } from "../core/index.ts";
 import { ensureDataDir } from "../core/storage/index.ts";
 import type { Watcher } from "../core/watcher/index.ts";
 import { createActivityLog, createEventBus, startWatcher } from "../core/watcher/index.ts";
-import { createApp } from "./app.ts";
+import { closeApp, createApp } from "./app.ts";
 import type { UiAssets } from "./assets.ts";
 import { createEventStream, forwardActivity, forwardEvents } from "./events.ts";
 import type { ReviewService } from "./review.ts";
@@ -163,6 +163,7 @@ export async function startReviewServer(options: ReviewServerOptions): Promise<R
       events.close();
       await running.close();
       await server.close();
+      await closeApp(app);
     },
   };
 }

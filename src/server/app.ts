@@ -46,6 +46,8 @@ import type { ReviewService } from "./review.ts";
 import { listBranches } from "./routes/branches.ts";
 import { fileRoute, fileSource, treeRoute } from "./routes/browse.ts";
 import { symbolIndexOf, symbolRoute, textRoute } from "./routes/search.ts";
+import type { SuggestService } from "./suggest.ts";
+import { createSuggestService } from "./suggest.ts";
 
 type AppOptions = {
   config: Config;
@@ -57,6 +59,8 @@ type AppOptions = {
   activity: ActivityLog;
   /** Request logging to stderr. Off unless `serve` was given `--verbose`. */
   verbose?: boolean | undefined;
+  /** Where `GET /api/suggest` embeds; one of the data directory's own without it. */
+  suggest?: SuggestService | undefined;
 };
 
 /** The methods that change nothing, and so need no guard on where they came from. */
@@ -94,13 +98,29 @@ function named(c: Context): string | undefined {
 /** What `GET /api/config` gives the UI: the two settings it has to know. */
 type ClientConfig = { user: string; port: number };
 
+/** The suggestion service of each app, for the server's `close` to end its thread. */
+const services = new WeakMap<Hono, SuggestService>();
+
+export async function closeApp(app: Hono): Promise<void> {
+  await services.get(app)?.close();
+}
+
 /**
  * The server of `docs/reference/07-server.md`: the review in one response, the
  * sessions, the settings, and the built UI. Every refusal comes from the domain
  * and keeps its message ([errors.ts](errors.ts)).
  */
-export function createApp({ activity, config, events, review, ui, verbose }: AppOptions): Hono {
+export function createApp({
+  activity,
+  config,
+  events,
+  review,
+  ui,
+  verbose,
+  suggest,
+}: AppOptions): Hono {
   const app = new Hono();
+  const suggestions = suggest ?? createSuggestService(config.dataDir);
   /** What the UI signs with: the configured name, and never an agent's role. */
   const author = { author: config.user, role: "human" as Role };
 
@@ -211,6 +231,14 @@ export function createApp({ activity, config, events, review, ui, verbose }: App
   // frames of the stream carry. They live in memory and are gone with the
   // server ([ADR-005](../../docs/adr/adr-005-live-update.md)).
   app.get("/api/activity", (c) => c.json(activity.recent()));
+
+  // Past comments like the one being written, from every session, and the severity they
+  // vote for; the first request starts the model ([07-server.md](../../docs/reference/07-server.md)).
+  app.get("/api/suggest", async (c) => {
+    const body = c.req.query("body");
+    if (body === undefined || body.trim() === "") throw new RequestError("body is required");
+    return c.json(await suggestions.suggest(body));
+  });
 
   // Every repository under the root, with whether it has anything to review.
   // This is the one route that reads git per request: it exists for the screen
@@ -396,5 +424,6 @@ export function createApp({ activity, config, events, review, ui, verbose }: App
   });
 
   app.onError(errorResponse);
+  services.set(app, suggestions);
   return app;
 }

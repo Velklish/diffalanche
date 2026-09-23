@@ -6,7 +6,7 @@ base head · 17 open comments
 
 - **question** · `review`
 
-  The list order is part of the contract, sorting it here breaks callers.
+  Null check is unreachable: the contract guarantees a non-null collection.
 
   > **claude** (agent) — Renamed to match the body.
 
@@ -14,11 +14,11 @@ base head · 17 open comments
 
 - **warning** · `repository`
 
-  Null check is unreachable: the contract guarantees a non-null collection.
+  This allocates on every request; hoist the default out of the loop.
 
 - **nit** · `app/flag/flag_91.py:151`
 
-  The list order is part of the contract, sorting it here breaks callers.
+  Duplicate of the helper two files up; call that one instead.
 
 - **critical** · `docs/invoice-162.md:46-48`
 
@@ -26,17 +26,17 @@ base head · 17 open comments
 
 - **question** · `internal/payload/payload-131.go:127`
 
-  Duplicate of the helper two files up; call that one instead.
+  Null check is unreachable: the contract guarantees a non-null collection.
 
   > **claude** (agent) — Fixed: the region is part of the cache key now.
 
 - **warning** · `src/Quotes/QuoteService49.cs:78`
 
-  Null check is unreachable: the contract guarantees a non-null collection.
+  This allocates on every request; hoist the default out of the loop.
 
 - **nit** · `src/Routes/RouteService212.cs:14`
 
-  The list order is part of the contract, sorting it here breaks callers.
+  Duplicate of the helper two files up; call that one instead.
 
   > **claude** (agent) — Fixed: removed the fallback, the contract guarantees non-null.
 
@@ -44,13 +44,13 @@ base head · 17 open comments
 
 - **critical** · `app/cargo/cargo_409.py:64-66`
 
-  Why is the empty list an error in this branch and a default in the next one?
+  The list order is part of the contract, sorting it here breaks callers.
 
   > **claude** (agent) — Fixed: the region is part of the cache key now.
 
 - **warning** · `docs/contract-317.md:141`
 
-  Null check is unreachable: the contract guarantees a non-null collection.
+  This allocates on every request; hoist the default out of the loop.
 
   > **claude** (agent) — Fixed: the region is part of the cache key now.
 
@@ -64,25 +64,25 @@ base head · 17 open comments
 
 - **question** · `src/Regions/RegionService371.cs:127`
 
-  Duplicate of the helper two files up; call that one instead.
+  Null check is unreachable: the contract guarantees a non-null collection.
 
 - **nit** · `src/flag/flag-346.ts`
 
-  Missing the region in the cache key: two tariffs collide here.
+  The name says filter, the body maps. Rename or split it.
 
 ## repos/services/quotes-worker — 4 comments
 
 - **warning** · `app/quote/quote_535.py:130`
 
-  Null check is unreachable: the contract guarantees a non-null collection.
+  This allocates on every request; hoist the default out of the loop.
 
 - **question** · `docs/contract-590.md:31`
 
-  Missing the region in the cache key: two tariffs collide here.
+  Why is the empty list an error in this branch and a default in the next one?
 
 - **nit** · `internal/payload/payload-568.go:123`
 
-  Why is the empty list an error in this branch and a default in the next one?
+  Duplicate of the helper two files up; call that one instead.
 
   > **claude** (agent) — Fixed: the default is hoisted, the loop allocates nothing now.
 

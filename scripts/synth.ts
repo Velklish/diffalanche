@@ -475,16 +475,26 @@ function spreadCount(total: number, parts: number): number[] {
 
 const SEVERITIES = ["critical", "warning", "nit", "question"] as const;
 
-const BODIES = [
-  "Null check is unreachable: the contract guarantees a non-null collection.",
-  "This allocates on every request; hoist the default out of the loop.",
-  "The name says filter, the body maps. Rename or split it.",
-  "Missing the region in the cache key: two tariffs collide here.",
-  "Why is the empty list an error in this branch and a default in the next one?",
-  "Log level is wrong: a resolved request is not a debug event.",
-  "The list order is part of the contract, sorting it here breaks callers.",
-  "Duplicate of the helper two files up; call that one instead.",
-] as const;
+/** Two findings per severity, so that a severity is a property of what a comment says: the
+ * suggestions of DA-35 are checked on this review, and their vote needs clusters to vote in. */
+const BODIES: Record<(typeof SEVERITIES)[number], readonly string[]> = {
+  critical: [
+    "Missing the region in the cache key: two tariffs collide here.",
+    "The list order is part of the contract, sorting it here breaks callers.",
+  ],
+  warning: [
+    "This allocates on every request; hoist the default out of the loop.",
+    "Log level is wrong: a resolved request is not a debug event.",
+  ],
+  nit: [
+    "The name says filter, the body maps. Rename or split it.",
+    "Duplicate of the helper two files up; call that one instead.",
+  ],
+  question: [
+    "Why is the empty list an error in this branch and a default in the next one?",
+    "Null check is unreachable: the contract guarantees a non-null collection.",
+  ],
+};
 
 const REPLIES = [
   "Fixed: removed the fallback, the contract guarantees non-null.",
@@ -545,7 +555,7 @@ function buildComments(
     const id = commentId(rnd);
     const created = stamp(i * 3);
     const severity = SEVERITIES[i % SEVERITIES.length] ?? "warning";
-    const body = pick(rnd, BODIES);
+    const body = pick(rnd, BODIES[severity]);
 
     // Every fifteenth comment anchors above a line: file, repository, review.
     const level = i % 15;

@@ -165,6 +165,32 @@ diffalanche: --repo: no repository "repos/core/nope" under the root
 A body that is only whitespace is exit code 1 as well, from `--body -` as much
 as from `--body <text>`.
 
+## suggest — how findings like this one were rated before
+
+Before choosing a severity, ask the history. `suggest` embeds the text and
+answers with the five past comments nearest it across every review session, and
+the severity they vote for:
+
+```
+$ diffalanche suggest --body "The cache key does not include the region, so two tariffs overwrite each other."
+severity  critical, confidence 1.00
+
+0.94  critical  synth  repos/core/cargos-api/docs/cargo-163.md:41                      Missing the region in the cache key: two tariffs collide here.
+0.94  critical  synth  repos/platform/loads-search/internal/invoice/invoice-281.go:62  Missing the region in the cache key: two tariffs collide here.
+0.94  critical  synth  repos/platform/loads-search/app/cargo/cargo_404.py:26           Missing the region in the cache key: two tariffs collide here.
+0.94  critical  synth  repos/services/quotes-worker/src/Cargos/CargoService497.cs:35   Missing the region in the cache key: two tariffs collide here.
+0.85  warning   synth  repos/core/cargos-api/src/Carriers/CarrierService59.cs:21       Log level is wrong: a resolved request is not a debug event.
+```
+
+`--json` prints `{"severity": {"severity", "confidence"} | null, "suggestions":
+[...]}`, each suggestion with `session`, `id`, `severity`, `repo`, `path`,
+`line`, `body` and `similarity`. `severity` is `null` when nothing written
+before is near enough — then your own judgement is all there is. It is a
+proposal, not a rule: a finding is as severe as what it breaks. The first call
+of a process loads the embedding model, seconds rather than milliseconds; a
+machine without the model answers exit code 1 and one line naming where it
+looked.
+
 ## What the comment looks like on disk
 
 ```

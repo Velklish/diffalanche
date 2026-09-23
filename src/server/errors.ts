@@ -8,6 +8,7 @@ import type { Context } from "hono";
 import { HTTPException } from "hono/http-exception";
 import type { DomainErrorCode } from "../core/domain/index.ts";
 import { DomainError, ScopeCommentsError } from "../core/domain/index.ts";
+import { ModelError } from "../core/ml/embed/errors.ts";
 import { StorageError } from "../core/storage/index.ts";
 
 /** The body of every refusal: the code to branch on, the message to show. */
@@ -107,6 +108,10 @@ export function errorResponse(error: Error, c: Context): Response {
   }
   if (error instanceof StorageError) {
     return c.json<ErrorBody>({ error: "storage", message: error.message }, 500);
+  }
+  // The model is not there, or not on this platform: the server works, this part of it does not.
+  if (error instanceof ModelError) {
+    return c.json<ErrorBody>({ error: "model", message: error.message }, 503);
   }
   return c.json<ErrorBody>({ error: "internal", message: error.message }, 500);
 }

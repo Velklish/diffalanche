@@ -121,6 +121,21 @@ describe("the index with an embedder that is a function of the text", () => {
     expect(statSync(indexPath(dataDir)).mtimeMs).toBe(before);
   });
 
+  it("hands back the index it was given when nothing changed, not a copy of it", async () => {
+    const { index } = await updateIndex(dataDir, fakeEmbedder());
+    const again = await updateIndex(dataDir, fakeEmbedder(), { current: index });
+    expect(again.index).toBe(index);
+    await addComment(dataDir, "beta", {
+      severity: "nit",
+      body: "one more",
+      author: "a",
+      role: "agent",
+    });
+    const changed = await updateIndex(dataDir, fakeEmbedder(), { current: index });
+    expect(changed.index).not.toBe(index);
+    expect(changed.update).toMatchObject({ embedded: 1, kept: 3 });
+  });
+
   it("embeds a new comment and an edited text, and nothing else", async () => {
     await updateIndex(dataDir, fakeEmbedder());
     await addComment(dataDir, "beta", {
@@ -209,6 +224,19 @@ describe("the index with an embedder that is a function of the text", () => {
     expect(statSync(indexPath(dataDir)).mtimeMs).toBe(before);
     // Nor are its entries gone: the update keeps them.
     expect(await indexStatus(dataDir, embeddingIdentity())).toMatchObject({ missing: 0, gone: 0 });
+  });
+
+  it("reads a session again when only the inode of its comments.json changed", async () => {
+    const { index } = await updateIndex(dataDir, fakeEmbedder());
+    const print = index.sessions.alpha as { mtimeMs: number; size: number; ino: number };
+    // The same time and size and another file: what one atomic write inside a tick looks like.
+    const stale = {
+      ...index,
+      sessions: { ...index.sessions, alpha: { ...print, ino: print.ino + 1 } },
+    };
+    const again = await updateIndex(dataDir, fakeEmbedder(), { current: stale });
+    expect(again.index).not.toBe(stale);
+    expect(again.index.sessions.alpha).toEqual(print);
   });
 
   it("writes nothing, and makes no index directory, where there is no session", async () => {
