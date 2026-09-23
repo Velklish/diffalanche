@@ -25,7 +25,15 @@ server, which takes a `Config` and never opens the file itself.
     comments.json               the threads
     diff.json                   the change set of the last scan
     .lock/                      present only while a write is in progress
+  index/
+    index.bin                   the embedding index, written by src/core/ml/index (09-ml.md)
 ```
+
+The index is the one file here storage does not read or write: it is a cache of
+every session's comments that `src/core/ml/index` builds, and it uses two
+things of this module — `writeFileAtomic`, which takes bytes as well as text,
+and `makeDir`, the helper that turns a refused `mkdir` into a `StorageError`
+([09-ml.md](09-ml.md#the-index)).
 
 **A session name is one path segment.** `sessionDir` and `writeCurrent` refuse
 an empty name, `.`, `..`, and anything holding a slash or a backslash: `resolve`

@@ -823,7 +823,7 @@ export function repositoryIgnore(config: Config, repository: Repository): Ignore
 
 /**
  * What the data directory's watch reports: everything except the change-set
- * cache, which the watcher writes itself. The lock is in — it is not data, but
+ * cache and `index/`, both written by the tool. The lock is in — it is not data, but
  * a runtime that coalesces the changes of one directory into a single event
  * (macOS does, and Bun reports what is left) can hand back the lock as the only
  * name for a write that changed a session's files. Every one of them is the
@@ -831,7 +831,7 @@ export function repositoryIgnore(config: Config, repository: Repository): Ignore
  * with the last read.
  */
 export const dataIgnore: Ignore = (path) =>
-  writtenFile(path.split("/").at(-1) as string) === "diff.json";
+  path.split("/")[0] === "index" || writtenFile(path.split("/").at(-1) as string) === "diff.json";
 
 /**
  * The file a change is about: `comments.json.tmp-<uuid>` is `comments.json`,

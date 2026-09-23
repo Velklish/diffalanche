@@ -5,10 +5,18 @@ import { join } from "node:path";
 import { Tokenizer } from "@huggingface/tokenizers";
 import * as ort from "onnxruntime-node";
 import { modelStatus } from "./cache.ts";
-import { EMBEDDING_MODEL, type EmbeddingModel } from "./model.ts";
+import { ModelError } from "./errors.ts";
+import {
+  EMBEDDING_MODEL,
+  type EmbeddingIdentity,
+  type EmbeddingModel,
+  embeddingIdentity,
+} from "./model.ts";
 
 export type Embedder = {
   model: EmbeddingModel;
+  /** What the vectors belong to; the index keeps it and re-embeds when it changes. */
+  identity: EmbeddingIdentity;
   /** One L2-normalised vector per text, in the order the texts were given. */
   embed: (texts: string[]) => Promise<Float32Array[]>;
 };
@@ -39,7 +47,9 @@ export async function loadEmbedder(
   const status = await modelStatus(location, model);
   if (!status.present) {
     const missing = status.files.filter((file) => !file.present).map((file) => file.name);
-    throw new Error(`the embedding model is not in ${location}: ${missing.join(", ")} missing`);
+    throw new ModelError(
+      `the embedding model is not in ${location}: ${missing.join(", ")} missing`,
+    );
   }
   const [tokenizerJson, tokenizerConfig] = await Promise.all(
     ["tokenizer.json", "tokenizer_config.json"].map(async (name) =>
@@ -72,6 +82,7 @@ export async function loadEmbedder(
 
   return {
     model,
+    identity: embeddingIdentity(model),
     embed: async (texts) => {
       // One text per run: int8 activations are scaled per tensor, so in a batch a text's
       // vector would depend on its neighbours (ADR-014 measures by how much).

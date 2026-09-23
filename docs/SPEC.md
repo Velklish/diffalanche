@@ -199,7 +199,7 @@ Anchor levels: `repo: null` — the whole review; `path: null` — a repository;
 
 **Schema versions.** Every file of the data directory carries `version`, and the current one is 2. `review.json` and `comments.json` of version 1 are read — a version 1 review is `scope: null`, `status: "open"` — and written back as version 2 by the next write, so a data directory upgrades itself as it is used. A version this build does not know is refused for those two files, because a person wrote what is in them; `diff.json` of an unknown version is discarded and scanned again, because the tool wrote it and can write it again.
 
-A write to `review.json` or `comments.json` replaces the whole file at once, and a transient `.lock` directory inside the session directory marks a write in progress; writers from the UI and from several CLI processes wait for it, so no message is lost. Next to the sessions live the `current` pointer and the embedding index over all sessions.
+A write to `review.json` or `comments.json` replaces the whole file at once, and a transient `.lock` directory inside the session directory marks a write in progress; writers from the UI and from several CLI processes wait for it, so no message is lost. Next to the sessions live the `current` pointer and the embedding index over all sessions, `index/index.bin`: a cache like `diff.json`, written only by the tool, brought up to date by whatever reads it, and rebuilt when it was built by another model, runtime, or platform. Its first line is JSON carrying `version`; the vectors after it are raw floats.
 
 `config.json`:
 
@@ -249,7 +249,7 @@ Every command accepts `--review <name>` (default: the current session) and `--da
 | `resolve <id> --role human [--note] [--author]`, `reopen <id> --role human [--author]` | status; `resolvedBy` comes from `--author`; any other role is refused with exit code 1 |
 | `export [--status open\|all] [--format md\|json]` | markdown grouped by repository |
 | `suggest --body <text> [--json]` | similar past comments and a likely severity (Phase 2) |
-| `index rebuild` | rebuild the embedding index (Phase 2) |
+| `index rebuild`, `index status [--json]` | rebuild the embedding index; what it holds and what it is missing (Phase 2) |
 | `model status [--json]` | the embedding model's version and cache location, and whether it is there (Phase 2); the generative model joins it in Phase 4 |
 | `model pull` | generative model on demand (Phase 4) |
 | `insights [--since <date>] [--json]` | report of recurring findings (Phase 4) |

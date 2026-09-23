@@ -12,7 +12,7 @@ type AtomicWriteOptions = {
 
 export async function writeFileAtomic(
   path: string,
-  content: string,
+  content: string | Uint8Array,
   options: AtomicWriteOptions = {},
 ): Promise<void> {
   // Same directory as the target: a rename across filesystems is a copy, and a
@@ -23,7 +23,9 @@ export async function writeFileAtomic(
   try {
     const handle = await open(temp, "wx");
     try {
-      await handle.writeFile(content, "utf8");
+      await (typeof content === "string"
+        ? handle.writeFile(content, "utf8")
+        : handle.writeFile(content));
       await handle.sync();
     } finally {
       await handle.close();

@@ -209,6 +209,8 @@ flags, and `tests/readme-cli.test.ts` fails if the two ever disagree.
 | `resolve <id> --role human [--note <text>] [--author <name>]` | close a thread; `--role human` is required |
 | `reopen <id> --role human [--note <text>] [--author <name>]` | open a thread again; `--role human` is required |
 | `export [--status <open\|all>] [--format <md\|json>]` | the review as markdown grouped by repository |
+| `index rebuild` | embed every comment of every review session again and write the embedding index |
+| `index status [--json]` | what the embedding index holds, and what it is missing |
 | `model status [--json]` | the embedding model: its version, where it is cached, and whether it is there |
 | `version` | print the version of diffalanche; also `--version` |
 

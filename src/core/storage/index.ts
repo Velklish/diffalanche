@@ -106,7 +106,7 @@ const CANNOT_CREATE: Readonly<Record<string, string>> = {
 
 /** The one place a refused `mkdir` becomes a `StorageError`, so both directories
  * refuse alike ([03-storage.md](../../../docs/reference/03-storage.md)). */
-async function makeDir(dir: string): Promise<string> {
+export async function makeDir(dir: string): Promise<string> {
   try {
     await mkdir(dir, { recursive: true });
   } catch (error) {

@@ -48,3 +48,36 @@ export const EMBEDDING_MODEL: EmbeddingModel = {
     },
   ],
 };
+
+/** The runtime the vectors come from; `tests/embed.test.ts` holds it to the one installed. */
+export const EMBEDDING_RUNTIME = "onnxruntime-node 1.30.0";
+
+/** The platforms `onnxruntime-node` ships native files for; darwin-x64 has none (ADR-014). */
+export const EMBEDDING_PLATFORMS: readonly string[] = [
+  "darwin-arm64",
+  "linux-x64",
+  "linux-arm64",
+  "win32-x64",
+  "win32-arm64",
+];
+
+/** What a vector belongs to: two vectors compare only when all four are the same (ADR-014). */
+export type EmbeddingIdentity = {
+  model: string;
+  revision: string;
+  runtime: string;
+  platform: string;
+};
+
+export function currentPlatform(): string {
+  return `${process.platform}-${process.arch}`;
+}
+
+export function embeddingIdentity(model: EmbeddingModel = EMBEDDING_MODEL): EmbeddingIdentity {
+  return {
+    model: model.name,
+    revision: model.revision,
+    runtime: EMBEDDING_RUNTIME,
+    platform: currentPlatform(),
+  };
+}

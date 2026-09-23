@@ -192,7 +192,18 @@ rmSync(GENERATED, { recursive: true, force: true });
 mkdirSync(GENERATED, { recursive: true });
 
 bun(["run", "build:ui"]);
-bun(["build", "src/cli/index.ts", "--target", "node", "--outfile", "dist/cli.js"]);
+// No runtime in the npm bundle until DA-41 delivers one: the embedder stays out, and a command
+// that needs it says in one line that it could not be loaded (09-ml.md).
+bun([
+  "build",
+  "src/cli/index.ts",
+  "--target",
+  "node",
+  "--outfile",
+  "dist/cli.js",
+  "--external",
+  "*embedder.ts",
+]);
 console.log(`dist/cli.js  ${size("dist/cli.js")}`);
 copyGrammars();
 

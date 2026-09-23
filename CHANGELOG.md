@@ -15,6 +15,21 @@ and `bun run release` refuses a version that has no section. See
 
 ### Added
 
+- **The embedding index, and `index rebuild` and `index status`** (DA-34).
+  `src/core/ml/index` keeps a vector for every comment of every review session,
+  with its session, id, severity, anchor and text, in `index/index.bin` of the
+  data directory: one line of JSON, then the vectors as raw floats. Whatever
+  reads it brings it up to date first, embedding only what is new or edited and
+  not reading a session whose `comments.json` did not change, so a comment an
+  agent writes with no server running is found as surely as one written in the
+  UI — and `diffalanche comment` never loads the model. A search is brute force
+  by cosine with a session filter: 1.8–3.6 ms over 10 000 comments, under 50 ms
+  to 100 000; memory is what stops it first, at about 20 000 comments on Bun
+  ([09-ml.md](docs/reference/09-ml.md#how-far-brute-force-goes)). An index built by
+  another model, runtime or platform is embedded again, and a data directory with
+  no session gets no `index/`. `index status [--json]` says what it holds and what
+  it is missing without loading the model. The npm bundle leaves the embedder out
+  until DA-41 delivers the runtime.
 - **The reference's frame tables are checked against `WatcherEvent`** (DA-109).
   The events of [05-watcher.md](docs/reference/05-watcher.md), the stream of
   [07-server.md](docs/reference/07-server.md) and the handlers of

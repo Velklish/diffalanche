@@ -215,7 +215,11 @@ In the data directory every change is one signal: the reload reads `current`,
 `comments.json`, `review.json`, and the status of every session, and compares
 each with the last read, so a name that turns out to be the lock, or a temporary
 file, or the directory itself costs a handful of small reads and says nothing.
-Only `diff.json` is left out, because the watcher writes it. Matching on the file name instead would drop the write:
+Two things are left out: `diff.json`, because the watcher writes it, and everything under
+`index/` — the embedding index, which the tool writes whenever a suggestion or `index rebuild`
+brings it up to date and which no page shows ([09-ml.md](09-ml.md#the-index)); reading the
+sessions again for it would queue a reload on the path an edit's update waits in. Matching on
+the file name instead would drop the write:
 `writeFileAtomic` renames a temporary file over the target, and a runtime may
 report the temporary name, the target, or neither.
 

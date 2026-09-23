@@ -7,6 +7,7 @@
  */
 import { DomainError } from "../core/domain/index.ts";
 import { GitError } from "../core/git/errors.ts";
+import { ModelError } from "../core/ml/embed/errors.ts";
 import { StorageError } from "../core/storage/index.ts";
 import type { UiAssets } from "../server/assets.ts";
 import { ListenError } from "../server/serve.ts";
@@ -14,6 +15,7 @@ import { flag, parse } from "./args.ts";
 import type { Command } from "./command.ts";
 import { comment } from "./commands/comment.ts";
 import { diff } from "./commands/diff.ts";
+import { indexRebuild, indexStatusCommand } from "./commands/embedding-index.ts";
 import { exportReview } from "./commands/export.ts";
 import { list } from "./commands/list.ts";
 import { modelStatus } from "./commands/model.ts";
@@ -61,6 +63,8 @@ const COMMANDS: Command[] = [
   resolve,
   reopen,
   exportReview,
+  indexRebuild,
+  indexStatusCommand,
   modelStatus,
   version,
 ];
@@ -100,7 +104,8 @@ export async function run(argv: string[], ui: UiAssets, output: Output): Promise
       error instanceof DomainError ||
       error instanceof StorageError ||
       error instanceof GitError ||
-      error instanceof ListenError
+      error instanceof ListenError ||
+      error instanceof ModelError
     ) {
       output.err(`diffalanche: ${error.message.replace(/\s*\n\s*/g, " ")}\n`);
       return 1;

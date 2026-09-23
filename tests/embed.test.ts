@@ -14,7 +14,7 @@ import {
   meanPool,
   truncate,
 } from "../src/core/ml/embed/embedder.ts";
-import { EMBEDDING_MODEL } from "../src/core/ml/embed/model.ts";
+import { EMBEDDING_MODEL, EMBEDDING_RUNTIME } from "../src/core/ml/embed/model.ts";
 
 const execFileAsync = promisify(execFile);
 const RUNTIME = process.versions.bun === undefined ? "node" : "bun";
@@ -126,6 +126,12 @@ describe(`the model on ${RUNTIME}`, () => {
 
   afterAll(() => {
     globalThis.fetch = realFetch;
+  });
+
+  it("names the runtime it runs on, which the index records with every vector", async () => {
+    const ort = await import("onnxruntime-node");
+    expect(EMBEDDING_RUNTIME).toBe(`onnxruntime-node ${ort.env.versions.node}`);
+    expect(model.identity.runtime).toBe(EMBEDDING_RUNTIME);
   });
 
   it("is loaded once per process", () => {

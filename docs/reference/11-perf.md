@@ -384,6 +384,24 @@ the losing library and the query switches, so `VARIANTS` now holds the one page
 that ships and the `--variant` option has one value. The reference of the UI
 side is [08-ui.md](08-ui.md).
 
+### The sizes of the embedding index
+
+`perf/index-scale.ts` is not a gate: it prints the numbers
+[09-ml.md](09-ml.md#how-far-brute-force-goes) records about the index, one JSON
+line per measurement, so they can be taken again on another machine.
+
+```sh
+bun perf/index-scale.ts search                     # read and search, 1 000 to 100 000 random vectors
+bun perf/index-scale.ts grow --data-dir <d> --from synth --copies 49   # 50 copies of a session
+bun perf/index-scale.ts catch-up --data-dir <d>    # the update after 200, 1 and 0 new comments
+bun perf/index-scale.ts fake --data-dir <d> --size 20000               # an index of random vectors
+/usr/bin/time -l bun perf/index-scale.ts query --data-dir <d>          # peak memory of one query
+```
+
+`search` needs no model; `catch-up` and `query` read it from the user cache, and
+`catch-up` rewrites the index and adds one comment to the first session of the
+data directory it is given — a copy, never the fixture.
+
 ## The gate
 
 `perf/budgets.ts` holds the budget table of `docs/SPEC.md` section 6 as code and
