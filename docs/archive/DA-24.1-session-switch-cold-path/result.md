@@ -16,7 +16,7 @@ The cause of the cold path's cost is recorded by the branch itself in `docs/refe
 
 **Documentation in the same pass.** `docs/reference/07-server.md` (the review document and its per-session cache), `docs/reference/11-perf.md` (what the switch line measures), and a `### Changed` entry in `CHANGELOG.md`.
 
-**Filed, not closed.** [DA-55.5](../../backlog/queue/DA-55.5-startup-trusts-a-cache-nothing-refreshed.md) — the first document of a server's lifetime is built from a cache nothing has refreshed — was filed by this track and triaged to the queue at this acceptance. Its "Out of scope" names the cold path as DA-24.1's and settled.
+**Filed, not closed.** [DA-55.5](../DA-55.5-startup-trusts-a-cache-nothing-refreshed/task.md) — the first document of a server's lifetime is built from a cache nothing has refreshed — was filed by this track and triaged to the queue at this acceptance. Its "Out of scope" names the cold path as DA-24.1's and settled.
 
 ## The integration of the sessions-cache track into `main`
 

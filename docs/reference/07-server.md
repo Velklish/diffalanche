@@ -21,9 +21,11 @@ and the socket.
 
 Starting does four things before the socket opens: it creates the data directory
 if it is not there, scans the root, starts the watcher of
-[05-watcher.md](05-watcher.md), and reads the change set of the current session
-into `diff.json`. The watcher comes before that read, because it is the watcher
-that says which session's cache may be trusted
+[05-watcher.md](05-watcher.md), and has the watcher read the change set of the
+current session from the working tree into `diff.json`, which the first document
+is built from. The watcher comes before that read, because it is the watcher
+that says which session's cache may be trusted, and the read goes through the
+watcher's queue so a rescan cannot overwrite it
 ([The review document](#the-review-document)). A root with no current session
 skips the last: the server starts anyway, and `GET /api/review` is what says
 so.
@@ -206,6 +208,40 @@ session the watcher follows and reads the working tree for every other one. The
 cost of opening a task is its scope's repositories rather than the root's, and
 the read is written back, so anchor capture reads a file that says what the
 screen says ([04-domain.md](04-domain.md)).
+
+**Nor is the followed session's cache fresh when the server starts.** The
+exemption holds while the server runs, because only then is the watcher
+rewriting that cache; while no server ran, nothing did, and the working tree
+moved freely under it — an edit, a commit, a branch switch. So the first
+document of a server's lifetime is not built from it: before the socket opens,
+`serve` has the watcher read the current session's scope once from the working
+tree (`refresh`, [05-watcher.md](05-watcher.md)) and builds the first document
+from what that hands over. It is queued like a rescan, so an edit made while it
+runs is read after it rather than overwritten by it. The cost is the scope's
+repositories, once per `serve`, including the starts where nothing changed; a
+task over two repositories of twenty-one reads two, which
+`tests/scope-scan.test.ts` counts in processes. The socket stays closed until
+that read is done, so **the price grows with the number of repositories in the
+scope**. Measured on the synthetic review, whose session has no scope — all
+twenty-one repositories — on 2026-09-23 on the 8-core machine this was written
+on, under a load average of 21–23 (busy, so an upper bound rather than a
+budget), two sets of five starts each: `startReviewServer` to a listening socket
+took a median of 552 and 489 ms, against 39 ms for the build before this one,
+which trusted the cache; the read itself was 446 and 508 ms of that.
+
+The two cheaper answers were weighed and left. Trusting the cache until the first
+rescan repairs it is wrong for as long as nobody touches the affected repository
+— on a repository the person has stopped working in, indefinitely. Comparing the
+base `sha` each repository records with what `git rev-parse` says now costs one
+process per repository instead of five, and catches a commit or a branch switch
+but not an uncommitted edit, which is the common case.
+
+**A session that becomes the followed one while the server runs is not covered
+by this.** `review use` moves `current`, the watcher follows the new session from
+then on, and that session's `diff.json` is trusted from the moment it is
+followed — though it was last refreshed when it was last followed or last read
+as a named task, and a repository of it may have moved in between. That is
+DA-55.6.
 
 **What a rescan does to a document that is not there.** The watcher hands the
 change set over *before* it writes `diff.json` — an update the person is waiting

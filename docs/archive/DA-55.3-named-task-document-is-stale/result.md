@@ -8,4 +8,4 @@
 
 **Documentation in the same pass.** `docs/reference/07-server.md` under **The review document** — which cache may be trusted and why — and a `### Fixed` entry in `CHANGELOG.md`.
 
-**Filed, not closed.** [DA-55.5](../../backlog/queue/DA-55.5-startup-trusts-a-cache-nothing-refreshed.md), `major`, parent DA-55.3: the exemption this task grants the followed session is sound while the server runs, but at the moment it starts nothing has refreshed that session's cache either. It is the boundary of this fix rather than a defect it introduced, and it was triaged from `triage/` to the queue at this acceptance.
+**Filed, not closed.** [DA-55.5](../DA-55.5-startup-trusts-a-cache-nothing-refreshed/task.md), `major`, parent DA-55.3: the exemption this task grants the followed session is sound while the server runs, but at the moment it starts nothing has refreshed that session's cache either. It is the boundary of this fix rather than a defect it introduced, and it was triaged from `triage/` to the queue at this acceptance.

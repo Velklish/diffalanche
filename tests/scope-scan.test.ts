@@ -19,7 +19,10 @@ import { generate, PROFILES } from "../scripts/synth.ts";
 import { SCAN_CONCURRENCY, scanReview } from "../src/core/change-set.ts";
 import type { Config } from "../src/core/config/index.ts";
 import { loadConfig } from "../src/core/config/index.ts";
+import { createSession } from "../src/core/domain/index.ts";
+import { readCurrent, writeCurrent } from "../src/core/storage/index.ts";
 import { createReviewService } from "../src/server/review.ts";
+import { startReviewServer } from "../src/server/serve.ts";
 
 /**
  * The twenty-one repositories of the synthetic review (`docs/SPEC.md` section
@@ -200,6 +203,22 @@ describe.skipIf(process.platform === "win32")("the cost of a scoped scan", () =>
       expect(peak).toBeLessThanOrEqual(CEILING);
     }, 300_000);
   }
+
+  it("starts a server reading the repositories of the current task's scope and no others", async () => {
+    const previous = await readCurrent(config.dataDir);
+    const scope = SCOPED.map((repo) => ({ repo, paths: null }));
+    await createSession(config.dataDir, "two-of-many", { mode: "head" }, undefined, { scope });
+    try {
+      // The start reads the working tree once, and a task over two repositories pays for two.
+      const started = await count(async () => {
+        const server = await startReviewServer({ config: { ...config, port: 0 } });
+        await server.close();
+      });
+      expect(started.touched).toEqual([...SCOPED].sort());
+    } finally {
+      if (previous !== null) await writeCurrent(config.dataDir, previous);
+    }
+  }, 300_000);
 
   it("starts git in the repositories of the scope and in no others", async () => {
     const scope = SCOPED.map((repo) => ({ repo, paths: null }));

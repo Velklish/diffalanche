@@ -110,6 +110,9 @@ export type WatcherOptions = {
 export type Watcher = {
   /** The review session the watcher writes into: the current one, as it changes. */
   session: () => string | null;
+  /** Reads that session's whole change set from the working tree, in the queue of rescans: what
+   * a server does before its first document ([07-server.md](../../../docs/reference/07-server.md)). */
+  refresh: () => Promise<void>;
   /** Stops watching and waits for the rescan in flight; nothing is written after it resolves. */
   close: () => Promise<void>;
 };
@@ -458,6 +461,18 @@ export async function startWatcher(options: WatcherOptions): Promise<Watcher> {
 
   return {
     session: () => session,
+    refresh: () => {
+      enqueue(async () => {
+        const followed = session;
+        // A session that cannot be read is the first document's to report, not this one's.
+        const review = await readSessionOrNull(config, followed);
+        if (followed === null || review === null) return;
+        await rescanSession(config, followed, review, (outcome) =>
+          options.onRescan?.(followed, outcome.cache),
+        );
+      });
+      return queue;
+    },
     close: async () => {
       closed = true;
       for (const timer of timers.values()) clearTimeout(timer);
@@ -542,7 +557,17 @@ export async function rescanRepository(
     return outcome;
   });
   if (patched !== null) return patched;
+  return rescanSession(config, session, review, ready);
+}
 
+/** The whole change set of a session read again and written, the scan outside the lock and the
+ * write inside it: what a rescan falls back to, and what `refresh` is. */
+async function rescanSession(
+  config: Config,
+  session: string,
+  review: Review,
+  ready?: Ready,
+): Promise<Rescan> {
   const { cache } = await scanReview(config, review.base, review.scope);
   const outcome: Rescan = { cache, changed: true, warningsChanged: true };
   ready?.(outcome);

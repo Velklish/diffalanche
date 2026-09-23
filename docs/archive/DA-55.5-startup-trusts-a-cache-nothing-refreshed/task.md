@@ -105,7 +105,7 @@ repositories and says nothing about a two-repository task.
 - Named tasks, which DA-55.3 closed: their change set is read from the working
   tree whenever their document is built.
 - The watcher following more than one session
-  ([DA-55.1](../../archive/DA-55.1-watcher-follows-one-session/task.md)), which is about
+  ([DA-55.1](../DA-55.1-watcher-follows-one-session/task.md)), which is about
   comments and metadata and rescans none of those sessions.
 - The cost of the cold path itself, which is DA-24.1's and is settled: it is
   bounded by the task's scope and paid once per session per server lifetime.

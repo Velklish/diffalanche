@@ -62,6 +62,17 @@ A rescan that fails is handed to `onError` and dropped: the queue stays usable,
 and an `onError` that throws is caught too, because reporting a failure must not
 become one.
 
+`watcher.refresh()` reads the followed session's whole change set from the
+working tree — every repository of its scope, the way a rescan with no cache to
+patch does — hands it to `onRescan` and writes `diff.json`. It runs in the same
+queue as the rescans, so a rescan that an edit started meanwhile waits for it and
+patches what it wrote rather than a cache it is about to replace. It announces
+nothing on the bus: it is what a server runs once, before its first document and
+before any window can be listening, because nothing refreshed that cache while
+no server ran ([07-server.md](07-server.md)). With no current session, or one
+whose `review.json` cannot be read, it does nothing — the first document is the
+one that reports that.
+
 ## What it watches, and what it ignores
 
 One watch per repository, plus one over the data directory. `fs.watch` with

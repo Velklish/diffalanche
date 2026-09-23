@@ -288,6 +288,19 @@ and `bun run release` refuses a version that has no section. See
 
 ### Fixed
 
+- **A server no longer opens on the change set its previous run left** (DA-55.5).
+  The server trusts `diff.json` of the session the watcher follows, because the
+  watcher keeps it fresh — but only while a server runs. Code edited, committed or
+  switched while `serve` was stopped left a cache whose base and scope still
+  matched, and the first document came out of it: the review showed the previous
+  run's diff until a file in that repository was touched again. `serve` now has
+  the watcher read the current session's scope once from the working tree before
+  the socket opens — queued like a rescan, so an edit made meanwhile is read after
+  it — and builds the first document from that. The cost is the scope's
+  repositories on every start; a task over two repositories of twenty-one reads
+  two. A session that becomes current while the server runs is still trusted as
+  it stands, which is DA-55.6.
+
 - **A line comment no longer drops the warning of a linked worktree** (DA-80).
   Patching one repository into `diff.json` was written twice — once for the
   CLI's line comment, once for the watcher's rescan — and the CLI's copy rebuilt

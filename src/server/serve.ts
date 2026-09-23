@@ -92,6 +92,9 @@ export async function startReviewServer(options: ReviewServerOptions): Promise<R
     },
   });
   watcher = running;
+  // Nothing refreshed `diff.json` while no server ran, so the first document is not built from it:
+  // one read of the current session's scope, queued ahead of any rescan (07-server.md).
+  await running.refresh();
   // A rescan hands the change set to `adopt`, warnings and all, so neither of
   // its two events costs the next reader a re-read.
   bus.subscribe((event) => {

@@ -250,6 +250,19 @@ describe("a root with no current review session", () => {
     });
   });
 
+  it("starts, and answers the review with the domain's refusal", async () => {
+    // Nothing to refresh before the first document: no session is current.
+    const config = { ...(await loadConfig({ root: empty })), port: 0 };
+    const server = await startReviewServer({ config, ui });
+    try {
+      const response = await fetch(`${server.url}/api/review`);
+      expect(response.status).toBe(404);
+      expect(((await response.json()) as { error: string }).error).toBe("no-current-session");
+    } finally {
+      await server.close();
+    }
+  }, 120_000);
+
   it("still lists the sessions and the repositories, which is what the first run needs", async () => {
     expect(await (await bare.request("/api/sessions")).json()).toEqual({
       sessions: [],
@@ -560,6 +573,25 @@ describe("the change set a document is built from", () => {
       await writeDiffCache(config.dataDir, SESSION, kept);
     }
   });
+
+  it("does not start from the change set the previous run left", async () => {
+    await createReviewService(config).document(SESSION);
+    const kept = (await readDiffCache(config.dataDir, SESSION)) as DiffCache;
+    // What a stopped server leaves: a cache whose base and scope still match a tree that moved on.
+    await writeDiffCache(config.dataDir, SESSION, await marked(SESSION));
+    const server = await startReviewServer({ config: { ...config, port: 0 }, ui });
+    try {
+      const document = (await (await fetch(`${server.url}/api/review`)).json()) as ReviewDocument;
+      expect(document.session.name).toBe(SESSION);
+      expect(firstFile(document).patch).not.toContain(MARK);
+      expect(
+        firstFile((await readDiffCache(config.dataDir, SESSION)) as DiffCache).patch,
+      ).not.toContain(MARK);
+    } finally {
+      await server.close();
+      await writeDiffCache(config.dataDir, SESSION, kept);
+    }
+  }, 120_000);
 
   it("drops a held document when a repository it could show has changed", async () => {
     const service = createReviewService(config, { watched: () => SESSION });
