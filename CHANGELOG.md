@@ -15,6 +15,17 @@ and `bun run release` refuses a version that has no section. See
 
 ### Added
 
+- **The server's embedder runs on a thread of its own** (DA-34.1). With the
+  index rebuilt in a loop on the server's own thread, the update after an edit
+  took 422–435 ms against 272–297 ms without it — every step of a rescan waits
+  out the run in progress — while switching sessions stayed inside 100 ms.
+  `startThreadedEmbedder` moves the model into a `node:worker_threads` worker,
+  which gives the same bytes and brought the update back to 285–344 ms. The
+  thread ends itself on `close()`, because terminating one that loaded the
+  runtime aborts Bun; it is held only while it loads or works, so an idle one keeps
+  no process alive; and a thread that throws as it loads is a `ModelError` rather
+  than an uncaught error in the server. `perf/run.ts --embedding <main|worker>` and `--lag` take
+  the measurement again ([09-ml.md](docs/reference/09-ml.md#in-the-server)).
 - **The embedding index, and `index rebuild` and `index status`** (DA-34).
   `src/core/ml/index` keeps a vector for every comment of every review session,
   with its session, id, severity, anchor and text, in `index/index.bin` of the

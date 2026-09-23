@@ -356,18 +356,32 @@ async function twoSessions(config: Config): Promise<Sessions> {
 
 export { SCRATCH_SESSION, twoSessions };
 
-type Options = { fixture: string; variants: string[]; runs: number };
+type Options = {
+  fixture: string;
+  variants: string[];
+  runs: number;
+  /** `--embedding <main|worker>` rebuilds the index in the server's process while it is
+   * measured, `--lag` only times its event loop; `perf/run.ts` alone (perf/embedding.ts). */
+  lag: { embedding: "main" | "worker" | null } | null;
+};
 
 export function parseArgs(argv: string[], defaultRuns = 1): Options {
-  const options: Options = { fixture: ".perf/fixture", variants: [], runs: defaultRuns };
+  const options: Options = { fixture: ".perf/fixture", variants: [], runs: defaultRuns, lag: null };
   for (let i = 0; i < argv.length; i += 1) {
     const flag = argv[i];
     const value = argv[i + 1];
     if (flag === "--fixture" && value) options.fixture = value;
     else if (flag === "--variant" && value) options.variants.push(value);
     else if (flag === "--runs") options.runs = parseRuns(value);
+    else if (flag === "--embedding") options.lag = { embedding: parseWhere(value) };
+    else if (flag === "--lag") options.lag = { embedding: null };
   }
   return options;
+}
+
+function parseWhere(value: string | undefined): "main" | "worker" {
+  if (value === "main" || value === "worker") return value;
+  throw new Error(`--embedding takes main or worker, got: ${value ?? "nothing"}`);
 }
 
 /** A run count that is not a whole number of at least one is a mistake, not a default. */

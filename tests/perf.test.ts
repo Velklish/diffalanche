@@ -57,6 +57,14 @@ describe("perf arguments", () => {
     }
     expect(() => parseArgs(["--runs"])).toThrow(/--runs takes a whole number/);
   });
+
+  it("names where the model runs during a measurement, and nothing by default", () => {
+    expect(parseArgs([]).lag).toBeNull();
+    expect(parseArgs(["--lag"]).lag).toEqual({ embedding: null });
+    expect(parseArgs(["--embedding", "main"]).lag).toEqual({ embedding: "main" });
+    expect(parseArgs(["--embedding", "worker"]).lag).toEqual({ embedding: "worker" });
+    expect(() => parseArgs(["--embedding", "gpu"])).toThrow(/--embedding takes main or worker/);
+  });
 });
 
 describe("perf gate", () => {

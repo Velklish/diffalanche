@@ -1,9 +1,7 @@
-/**
- * Command line around the harness: measures the chosen variants against the
- * synthetic review and prints the numbers as JSON on stdout.
- *
- *   bun perf/run.ts [--fixture <dir>] [--variant <name>]... [--runs <n>]
- */
+/** Command line around the harness: the chosen variants measured on the synthetic review, as JSON
+ * on stdout; its options are in 11-perf.md, "The measurement harness". */
+import { loadConfig } from "../src/core/config/index.ts";
+import { startEmbedding } from "./embedding.ts";
 import type { Measurement } from "./harness.ts";
 import { measure, parseArgs, VARIANTS, withServer } from "./harness.ts";
 
@@ -17,6 +15,8 @@ async function main(): Promise<void> {
 
   const results: Measurement[] = [];
   await withServer(options.fixture, async (baseUrl, sessions) => {
+    const { dataDir } = await loadConfig({ root: options.fixture });
+    const load = options.lag === null ? null : await startEmbedding(dataDir, options.lag.embedding);
     for (const variant of chosen) {
       for (let run = 0; run < options.runs; run += 1) {
         const measurement = await measure(baseUrl, variant, options.fixture, sessions);
@@ -24,6 +24,7 @@ async function main(): Promise<void> {
         process.stderr.write(`${variant.name} run ${run + 1}: ${JSON.stringify(measurement)}\n`);
       }
     }
+    if (load !== null) process.stderr.write(`event loop: ${JSON.stringify(await load.stop())}\n`);
   });
   process.stdout.write(`${JSON.stringify(results, null, 2)}\n`);
 }

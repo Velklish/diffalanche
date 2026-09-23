@@ -8,6 +8,7 @@ import { defaultCacheHome, modelDirectory } from "../src/core/ml/embed/cache.ts"
 import type { Embedder } from "../src/core/ml/embed/embedder.ts";
 import { EMBEDDING_MODEL, embeddingIdentity } from "../src/core/ml/embed/model.ts";
 import { openEmbedder } from "../src/core/ml/embed/open.ts";
+import { startThreadedEmbedder } from "../src/core/ml/embed/threaded.ts";
 import type { EmbeddingIndex, IndexEntry } from "../src/core/ml/index/index.ts";
 import { indexPath, nearest, readIndex, updateIndex } from "../src/core/ml/index/index.ts";
 import { writeIndex } from "../src/core/ml/index/store.ts";
@@ -114,13 +115,14 @@ async function grow(dataDir: string, from: string, copies: number): Promise<void
   }
 }
 
-function open(): Promise<Embedder> {
-  return openEmbedder(modelDirectory(defaultCacheHome(), EMBEDDING_MODEL));
+async function open(worker: boolean): Promise<Embedder & { close?: () => Promise<void> }> {
+  const location = modelDirectory(defaultCacheHome(), EMBEDDING_MODEL);
+  return worker ? startThreadedEmbedder(location) : openEmbedder(location);
 }
 
 /** The first update after N comments nobody indexed: N = 1 and N = every comment of the data dir. */
-async function catchUp(dataDir: string): Promise<void> {
-  const embedder = await open();
+async function catchUp(dataDir: string, worker: boolean): Promise<void> {
+  const embedder = await open(worker);
   await embedder.embed(["warm-up"]);
   const lags: number[] = [];
   let last = performance.now();
@@ -135,7 +137,7 @@ async function catchUp(dataDir: string): Promise<void> {
     const { update } = await updateIndex(dataDir, embedder, { rebuild });
     const ms = Math.round(performance.now() - started);
     process.stdout.write(
-      `${JSON.stringify({ runtime: RUNTIME, label, embedded: update.embedded, kept: update.kept, ms, lagMs: stats(lags) })}\n`,
+      `${JSON.stringify({ runtime: RUNTIME, thread: worker ? "worker" : "main", label, embedded: update.embedded, kept: update.kept, ms, lagMs: stats(lags) })}\n`,
     );
   };
   await measure("every comment", true);
@@ -150,11 +152,12 @@ async function catchUp(dataDir: string): Promise<void> {
   await measure("one new comment", false);
   await measure("nothing new", false);
   clearInterval(timer);
+  await embedder.close?.();
 }
 
 /** A process that loads the model and the index and answers one query, for its peak memory. */
 async function query(dataDir: string): Promise<void> {
-  const embedder = await open();
+  const embedder = await open(false);
   let started = performance.now();
   const { index } = await readIndex(dataDir);
   if (index === null) throw new Error(`${dataDir}: no index; run \`index rebuild\` first`);
@@ -177,7 +180,7 @@ const dataDir = option("data-dir");
 if (mode === "search") await search();
 else if (mode === "grow" && dataDir)
   await grow(dataDir, option("from") ?? "synth", Number(option("copies") ?? "49"));
-else if (mode === "catch-up" && dataDir) await catchUp(dataDir);
+else if (mode === "catch-up" && dataDir) await catchUp(dataDir, process.argv.includes("--worker"));
 else if (mode === "query" && dataDir) await query(dataDir);
 else if (mode === "fake" && dataDir) await writeIndex(dataDir, fake(Number(option("size"))));
 else {

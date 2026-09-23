@@ -1,6 +1,5 @@
-/** The model-backed half of the index's tests. They are the "model" project of
- * vitest.config.ts, run one file at a time after every other test: one copy of the model is
- * resident at once, and none loads beside the watcher's timed tests (09-ml.md, "Tests"). */
+/** The tests that need the model: the "model" project of vitest.config.ts, one file at a time
+ * after every other file, one copy of the model resident at once (09-ml.md, "Tests"). */
 import { mkdtempSync, rmSync } from "node:fs";
 import { tmpdir } from "node:os";
 import { join } from "node:path";
@@ -11,7 +10,9 @@ import { loadConfig } from "../src/core/config/index.ts";
 import { addComment } from "../src/core/domain/index.ts";
 import { defaultCacheHome, modelDirectory } from "../src/core/ml/embed/cache.ts";
 import { type Embedder, embedder } from "../src/core/ml/embed/embedder.ts";
+import { ModelError } from "../src/core/ml/embed/errors.ts";
 import { EMBEDDING_MODEL } from "../src/core/ml/embed/model.ts";
+import { startThreadedEmbedder } from "../src/core/ml/embed/threaded.ts";
 import { nearest, updateIndex } from "../src/core/ml/index/index.ts";
 import { dataDirOf, listSessionNames, readComments } from "../src/core/storage/index.ts";
 import { createActivityLog } from "../src/core/watcher/index.ts";
@@ -21,6 +22,8 @@ import { createEventStream } from "../src/server/events.ts";
 import { createReviewService } from "../src/server/review.ts";
 
 const noUi: UiAssets = { read: async () => null };
+const location = modelDirectory(defaultCacheHome(), EMBEDDING_MODEL);
+const THREAD_TEXTS = ["Unused import.", "Нет ограничения на размер загружаемого файла."];
 
 async function cli(...argv: string[]): Promise<{ code: number; out: string; err: string }> {
   let out = "";
@@ -35,6 +38,31 @@ async function cli(...argv: string[]): Promise<{ code: number; out: string; err:
   });
   return { code, out, err };
 }
+
+/** Taken on the thread before this process loads a copy of its own, and compared below. */
+let fromThread: Float32Array[] = [];
+
+describe("the embedder on a thread of its own", () => {
+  it("embeds, and refuses every call once it is closed", async () => {
+    const threaded = await startThreadedEmbedder(location);
+    try {
+      fromThread = await threaded.embed(THREAD_TEXTS);
+      expect(fromThread.map((vector) => vector.length)).toEqual([384, 384]);
+    } finally {
+      await threaded.close();
+    }
+    await expect(threaded.embed(["after close"])).rejects.toThrow(/the embedding thread has ended/);
+  }, 120_000);
+
+  it("refuses to start on a directory without the model", async () => {
+    const empty = mkdtempSync(join(tmpdir(), "diffalanche-no-model-"));
+    try {
+      await expect(startThreadedEmbedder(empty)).rejects.toThrow(ModelError);
+    } finally {
+      rmSync(empty, { recursive: true, force: true });
+    }
+  }, 60_000);
+});
 
 describe("the index with the model", () => {
   const location = modelDirectory(defaultCacheHome(), EMBEDDING_MODEL);
@@ -135,4 +163,17 @@ describe("the index with the model", () => {
       "state     current",
     );
   }, 120_000);
+
+  it("gives on a thread of its own the bytes it gives on the calling thread", async () => {
+    const here = await model.embed(THREAD_TEXTS);
+    THREAD_TEXTS.forEach((text, i) => {
+      const there = fromThread[i];
+      if (there === undefined)
+        throw new Error("run the whole file: its first test fills fromThread");
+      expect(
+        Buffer.from(there.buffer).equals(Buffer.from((here[i] as Float32Array).buffer)),
+        text,
+      ).toBe(true);
+    });
+  }, 60_000);
 });

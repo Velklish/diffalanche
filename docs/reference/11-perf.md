@@ -346,6 +346,8 @@ bun perf/run.ts --runs 3
 | `--fixture <dir>` | Root of a synthetic review made by `bun run synth`. Default `.perf/fixture` |
 | `--variant <name>` | Measure only this variant; repeatable. Default: all of them. There is one, `default` |
 | `--runs <n>` | Repetitions per variant: a whole number of at least 1, anything else is an error. Default 1 for `perf/run.ts`, 3 for the gate |
+| `--embedding <main\|worker>` | `perf/run.ts` only: rebuild the embedding index in a loop inside the server's process while the page is measured — the model on the server's own thread or on a worker — and print on stderr how long each run took and how late a 5 ms timer fired ([09-ml.md](09-ml.md#in-the-server)) |
+| `--lag` | `perf/run.ts` only: the timer of `--embedding` with no model, the baseline to hold it against |
 
 The numbers come out as JSON on stdout, one object per run, with progress on
 stderr.
@@ -393,7 +395,7 @@ line per measurement, so they can be taken again on another machine.
 ```sh
 bun perf/index-scale.ts search                     # read and search, 1 000 to 100 000 random vectors
 bun perf/index-scale.ts grow --data-dir <d> --from synth --copies 49   # 50 copies of a session
-bun perf/index-scale.ts catch-up --data-dir <d>    # the update after 200, 1 and 0 new comments
+bun perf/index-scale.ts catch-up --data-dir <d> [--worker]   # the update after 200, 1 and 0 new comments
 bun perf/index-scale.ts fake --data-dir <d> --size 20000               # an index of random vectors
 /usr/bin/time -l bun perf/index-scale.ts query --data-dir <d>          # peak memory of one query
 ```
