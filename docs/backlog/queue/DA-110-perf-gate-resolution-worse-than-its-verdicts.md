@@ -7,7 +7,7 @@
 
 This is a task in its own right and not a finding under a parent, which is why
 it carries no cost label: it asks for the gate's own resolution to be known and
-stated, which no single task owns. [DA-109](DA-109-reference-frame-tables-are-tied-to-nothing-that-fails.md) sits here on the same footing.
+stated, which no single task owns. [DA-109](../../archive/DA-109-reference-frame-tables-are-tied-to-nothing-that-fails/task.md) sits here on the same footing.
 
 ## Context
 

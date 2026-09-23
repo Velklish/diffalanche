@@ -15,6 +15,17 @@ and `bun run release` refuses a version that has no section. See
 
 ### Added
 
+- **The reference's frame tables are checked against `WatcherEvent`** (DA-109).
+  The events of [05-watcher.md](docs/reference/05-watcher.md), the stream of
+  [07-server.md](docs/reference/07-server.md) and the handlers of
+  [08-ui.md](docs/reference/08-ui.md) each sit under an anchor naming the union
+  and what the table prints, and `tests/frame-tables.test.ts` reads the union
+  out of `bus.ts` with tree-sitter and fails on a frame with no row, a row whose
+  fields are not the member's, and a row for a frame the union does not have.
+  `activity` and `reload`, the server's own frames, are owed a row in the two
+  tables that carry them, and each file is held to its anchor's shape. 08-ui had
+  no row for `sessions-changed`; it has one now. How the check reads both sides
+  is in the [reference](docs/reference/README.md#the-frame-tables-mirror-watcherevent).
 - **Every export has an importer, and every route is registered once** (DA-59).
   `noUnusedLocals` does not see an exported symbol, and Biome has no rule that
   does, so `tests/exports.test.ts` reads the imports and exports of every

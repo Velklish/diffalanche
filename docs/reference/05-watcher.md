@@ -261,6 +261,8 @@ one at a time: two of them write the same `diff.json`, and queueing costs less
 than making each wait for the session lock. The write goes through the lock all
 the same, because the CLI writes the same directory.
 
+<!-- frames of WatcherEvent, fields without type — checked by tests/frame-tables.test.ts -->
+
 | Event | Data | When |
 |---|---|---|
 | `diff-changed` | `{ repo, files }` | a repository was rescanned and its entry is not what it was; `files` are the paths that woke the watcher, not the files of the new change set, and it is **empty** when what woke it was the walk taking over a dead watch — that names no path |

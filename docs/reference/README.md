@@ -38,3 +38,19 @@ An entry point's re-exports are its published surface and are not held to an imp
 A red run lists the file, the line and the symbol of each export nobody imports. There are three ways out: drop the `export`, or the name from the barrel, and let `noUnusedLocals` say whether the symbol is used at all; import it where it was meant to be used; or add it to `KEPT` in the test with the reason it stays public. `KEPT` holds what an import in no checked-in file takes: `useGrammarSource`, `embeddedAssets` and `EmbeddedAsset`, which the entry `scripts/build.ts` generates for the compiled binary imports; and `HEARTBEAT_MS` and `ModelFile`, which another track's code imports until both tracks land. A reason that stops being true, because the symbol got an importer or is gone, fails the test beside it.
 
 The check runs inside `bun run test`, which is already in `gates` in `backslop.json` and in the CI `check` job, so it has no gate line of its own.
+
+### The frame tables mirror `WatcherEvent`
+
+`tests/frame-tables.test.ts` (DA-109). `WatcherEvent` in `src/core/watcher/bus.ts` is the wire shape of the live stream as well as the bus's own, and three tables enumerate it: the events in [05-watcher.md](05-watcher.md), the frames of the stream in [07-server.md](07-server.md), and what the page does with each in [08-ui.md](08-ui.md). Each sits under an HTML comment naming the union and what the table prints:
+
+```md
+<!-- frames of WatcherEvent, fields without type — checked by tests/frame-tables.test.ts -->
+```
+
+The test reads the members of the union out of `bus.ts` — an object literal each, named by its literal `type`; a member it cannot read that way fails the test rather than being skipped — and every anchored table in this directory out of its markdown. It fails on:
+
+- a frame of the union with no row in a table;
+- a row whose field list is not the member's — 05-watcher prints the fields without `type`, 07-server with it, and 08-ui prints none and is held to the names alone;
+- a row naming a frame the union does not have, and a frame with a second row.
+
+`activity` and `reload` are the server's own frames, not the watcher's: a line of the feed, and the answer to a client the replay ring cannot reach back to ([07-server.md](07-server.md#the-live-stream)). A table whose anchor says `and the server` carries a row for each, their fields not compared, and the test fails when either is no longer a string in `src/server/events.ts`. The three files are held to their anchor's exact shape — mode and `and the server` — so an anchor turned to `names` cannot switch the field comparison off. A frame added to the union is a row in all three tables in the same change, and another table that enumerates the union opts in with the same anchor.

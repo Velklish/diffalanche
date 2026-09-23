@@ -672,6 +672,8 @@ repositories it found.
 ([ADR-005](../adr/adr-005-live-update.md)): updates flow one way, and the
 browser fetches what an event names rather than being sent it.
 
+<!-- frames of WatcherEvent and the server, fields with type — checked by tests/frame-tables.test.ts -->
+
 | Event | Data |
 |---|---|
 | `diff-changed` | `{ type, repo, files }` — `files` are the paths that woke the watcher |
