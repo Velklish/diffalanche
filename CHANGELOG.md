@@ -15,6 +15,14 @@ and `bun run release` refuses a version that has no section. See
 
 ### Added
 
+- **The recovery paths of live update are tested** (DA-96). A `reload` frame
+  reading the review again, the footer saying `reconnecting` while the browser
+  retries and staying as it was once it has closed the stream, and the queue that
+  puts a failed read in the toast and still applies the next frame — none of the
+  three was reached by any suite, so dropping the `reload` listener left every
+  one of them green. They are unit tests against a stubbed `EventSource`, shared
+  with the other live tests; why not a browser spec is in
+  [08-ui.md](docs/reference/08-ui.md).
 - **The check-run names branch protection must list are compared with the jobs that report
   them** (DA-111). `tests/ci-names.test.ts` expands the real names out of `ci.yml` — a job
   reports under its `name:` when it has one and under its id otherwise, and a matrix job
