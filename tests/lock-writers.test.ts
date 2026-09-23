@@ -7,7 +7,7 @@ import { afterAll, beforeAll, describe, expect, it } from "vitest";
 import { run } from "../src/cli/run.ts";
 import type { Config } from "../src/core/config/index.ts";
 import { loadConfig } from "../src/core/config/index.ts";
-import { addComment, DomainError } from "../src/core/domain/index.ts";
+import { addComment, DomainError, reopen, reply, resolve } from "../src/core/domain/index.ts";
 import type { Comment, DiffCache } from "../src/core/storage/index.ts";
 import {
   readComments,
@@ -15,11 +15,13 @@ import {
   readReview,
   sessionDir,
   withLock,
+  writeComments,
   writeDiffCache,
   writeReview,
 } from "../src/core/storage/index.ts";
 import type { UiAssets } from "../src/server/assets.ts";
 import { makeRoot, REPOS } from "./helpers/fixture-root.ts";
+import { comment } from "./helpers/session.ts";
 
 const noUi: UiAssets = { read: async () => null };
 
@@ -88,6 +90,40 @@ describe("a comment written while the scope narrows", () => {
     );
     expect(await readComments(config.dataDir, SESSION)).toEqual([]);
   }, 60_000);
+});
+
+/** The other half of the scope read inside the lock: a thread the scope took in while the writer
+ * waited for the lock is found, not refused with `no-such-comment` (DA-67.1). */
+describe("a thread answered while the scope widens", () => {
+  const human = { author: "kim.p", role: "human" as const };
+  const writers: Record<string, (session: string, id: string) => Promise<Comment>> = {
+    reply: (session, id) => reply(config.dataDir, session, id, { ...human, body: "answered" }),
+    resolve: (session, id) => resolve(config.dataDir, session, id, human),
+    reopen: (session, id) => reopen(config.dataDir, session, id, human),
+  };
+
+  it.each(Object.keys(writers))(
+    "is found by %s",
+    async (writer) => {
+      const session = `widening-${writer}`;
+      expect(await cli("review", "new", session, "--repo", REPOS[0], "--no-use")).toBe(0);
+      // Outside the scope, the way a hand edit or a narrowing leaves one.
+      await writeComments(config.dataDir, session, [comment("c_widen1", { repo: REPOS[1] })]);
+
+      let pending: Promise<Comment | unknown> = Promise.resolve(null);
+      await withLock(sessionDir(config.dataDir, session), async (held) => {
+        pending =
+          writers[writer]?.(session, "c_widen1").catch((error: unknown) => error) ?? pending;
+        await sleep(REACH_LOCK_MS);
+        await held.assertHeld();
+        const review = await readReview(config.dataDir, session);
+        await writeReview(config.dataDir, session, { ...review, scope: null });
+      });
+
+      expect(await pending).toMatchObject({ id: "c_widen1" });
+    },
+    60_000,
+  );
 });
 
 describe("`diff` writing its cache while a watcher holds the lock", () => {

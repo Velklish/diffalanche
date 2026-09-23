@@ -103,6 +103,9 @@ export type WatcherOptions = {
   onError?: (error: unknown) => void;
   /** A watch died and the walk took its place; said once (05-watcher.md). */
   onFallback?: () => void;
+  /** The walk from the start, which nobody asked for: the runtime has no recursive watch, or
+   * `watch` refused a tree. Said once, and not for `recursive: false` (05-watcher.md). */
+  onWalk?: () => void;
   /** The native watch of every tree. A test that has to fail one brings its own. */
   native?: TreeWatcherOptions["native"];
 };
@@ -232,19 +235,14 @@ export async function startWatcher(options: WatcherOptions): Promise<Watcher> {
     const repo = repository.path;
     const files = [...(pending.get(repo) ?? [])].sort(byCodePoint);
     pending.delete(repo);
-    // A build writing into a directory git ignores restarts the debounce for as
-    // long as it runs, and the ceiling then forces a rescan a second that can
-    // find nothing. Asking git first costs one process instead of four.
+    // A build writing where git ignores forces a rescan a second that finds nothing; asking git
+    // first costs one process where a rescan costs five (05-watcher.md).
     if (await burstIsIgnored(repository, files)) return;
     // Taken once: the rescan is about the session it started on, and `current`
-    // may move under it while the four git processes run.
+    // may move under it while the five git processes run.
     const followed = session;
-    // A repository the task is not about is watched but not read: the scope
-    // decides what the review is, and reading it would cost four git processes
-    // to produce a change set nothing may show
-    // ([ADR-010](../../../docs/adr/adr-010-review-task-scope.md)). Watching it
-    // anyway is what makes a scope that widens while the server runs take
-    // effect without a restart.
+    // Outside the task's scope a repository is watched, so a widened scope needs no restart, and
+    // not read: five git processes for a change set nothing may show (05-watcher.md, ADR-010).
     if (followed === null || !repositoryInScope(scope, repo)) {
       // Nothing will read this repository, so nothing can say whether its
       // content changed: the burst is all there is to report (05-watcher.md).
@@ -454,10 +452,17 @@ export async function startWatcher(options: WatcherOptions): Promise<Watcher> {
     }),
   );
 
+  // Asked before any tree can have fallen back, so a tree polling now polled from the start.
+  const walking = options.recursive !== false && watchers.some((watcher) => watcher.polling());
   // Nothing is watched until every tree says it is: a change made in the
   // moment between starting and being watched would otherwise be absorbed into
   // the baseline of the walk and never reported.
   await Promise.all(watchers.map((watcher) => watcher.ready));
+  if (walking) {
+    // One line for the session: a later takeover would say the same thing again.
+    fellBack = true;
+    options.onWalk?.();
+  }
 
   return {
     session: () => session,

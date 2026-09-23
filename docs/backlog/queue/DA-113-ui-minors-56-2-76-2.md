@@ -18,7 +18,7 @@ Each entry is fixed, or closed with a stated reason why not; the outcome of each
 
 ## Out of scope
 
-- Minor entries of other scopes: 02-git, 03-storage, 04-domain, 05-watcher and 07-server go to [DA-114](DA-114-core-minors-batch.md); 11-perf waits for the perf pass.
+- Minor entries of other scopes: 02-git, 03-storage, 04-domain, 05-watcher and 07-server go to [DA-114](../../archive/DA-114-core-minors-batch/task.md); 11-perf waits for the perf pass.
 
 ## Verification
 

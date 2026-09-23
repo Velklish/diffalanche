@@ -10,7 +10,6 @@ import {
   readReview,
   sessionExists,
   timestamp,
-  updateComments,
   updateSession,
 } from "../storage/index.ts";
 import type { RepositoryChange } from "../types.ts";
@@ -240,9 +239,8 @@ export async function reply(
   message: Message,
 ): Promise<Comment> {
   await assertSession(dataDir, session);
-  const scope = await sessionScope(dataDir, session);
-  return updateComments(dataDir, session, (comments) => {
-    const comment = find(comments, id, scope);
+  return updateSession(dataDir, session, ({ review, comments }) => {
+    const comment = find(comments, id, review.scope);
     comment.replies.push({
       id: nextReplyId(comment.replies),
       author: message.author,
@@ -262,9 +260,8 @@ export async function resolve(
 ): Promise<Comment> {
   await assertSession(dataDir, session);
   assertHuman(verdict, "resolve a comment");
-  const scope = await sessionScope(dataDir, session);
-  return updateComments(dataDir, session, (comments) => {
-    const comment = find(comments, id, scope);
+  return updateSession(dataDir, session, ({ review, comments }) => {
+    const comment = find(comments, id, review.scope);
     if (verdict.note !== undefined) {
       comment.replies.push({
         id: nextReplyId(comment.replies),
@@ -289,9 +286,8 @@ export async function reopen(
 ): Promise<Comment> {
   await assertSession(dataDir, session);
   assertHuman(verdict, "reopen a comment");
-  const scope = await sessionScope(dataDir, session);
-  return updateComments(dataDir, session, (comments) => {
-    const comment = find(comments, id, scope);
+  return updateSession(dataDir, session, ({ review, comments }) => {
+    const comment = find(comments, id, review.scope);
     if (verdict.note !== undefined) {
       comment.replies.push({
         id: nextReplyId(comment.replies),

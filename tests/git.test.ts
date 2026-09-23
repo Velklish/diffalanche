@@ -379,19 +379,19 @@ describe("files listed without content", () => {
       " three",
       "",
     ].join("\n");
-    const [binary, big] = parseDiff(patch, { maxFileBytes: 60 });
+    const [binary, big] = parseDiff(patch, { maxFileBytes: 60 }).files;
     expect(binary).toMatchObject({ path: "img.png", omitted: "binary", patch: "", hunks: [] });
     expect(big).toMatchObject({ path: "big.ts", omitted: "too-large", patch: "", hunks: [] });
     // The counts survive: the file list needs them even without the patch.
     expect(big).toMatchObject({ additions: 1, deletions: 1 });
 
-    const [kept] = parseDiff(patch, { maxFileBytes: 1024 });
+    const [kept] = parseDiff(patch, { maxFileBytes: 1024 }).files;
     expect(kept?.omitted).toBe("binary");
-    expect(parseDiff(patch, { maxFileBytes: 1024 })[1]?.omitted).toBeNull();
+    expect(parseDiff(patch, { maxFileBytes: 1024 }).files[1]?.omitted).toBeNull();
   });
 
   it("keeps a file whose only change is its mode, which has no hunks either", () => {
-    const [file] = parseDiff("diff --git a/x.sh b/x.sh\nold mode 100644\nnew mode 100755\n");
+    const [file] = parseDiff("diff --git a/x.sh b/x.sh\nold mode 100644\nnew mode 100755\n").files;
     expect(file).toMatchObject({ path: "x.sh", status: "modified", omitted: null });
     expect(file?.patch).toContain("new mode 100755");
   });
@@ -581,7 +581,7 @@ describe("paths git does not write literally", () => {
       "+two",
       "",
     ].join("\n");
-    const [file] = parseDiff(patch);
+    const [file] = parseDiff(patch).files;
     expect(file?.path).toBe('quote".ts');
     expect(file?.status).toBe("modified");
   });
@@ -726,7 +726,7 @@ describe("a file that changes type", () => {
       "+six",
       "",
     ].join("\n");
-    expect(parseDiff(twice).map((file) => file.status)).toEqual(["modified", "modified"]);
+    expect(parseDiff(twice).files.map((file) => file.status)).toEqual(["modified", "modified"]);
   });
 });
 

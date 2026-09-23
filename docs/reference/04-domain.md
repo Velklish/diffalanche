@@ -161,7 +161,11 @@ agent changes, and a task's definition does not move under its reader.
 answer inside the scope: a comment outside it is not in the list, and every one
 of the other four says `no-such-comment` — one question, one answer. Nothing
 writes such a comment; a `comments.json` edited by hand is where it comes from.
-They read `review.json` for the scope, one small file per call.
+They read `review.json` for the scope, one small file per call. `list` and `get`
+read it before anything else, which is what a read is; `reply`, `resolve` and
+`reopen` take it from the same `updateSession` draft they write through, inside
+the session's lock, so a scope widened while they waited for the lock finds the
+thread instead of refusing it (DA-67.1, [03-storage.md](03-storage.md)).
 
 That "nothing writes such a comment" is held by where `addComment` checks the
 scope, and it takes two checks to hold it. **Both refuse with `out-of-scope`,

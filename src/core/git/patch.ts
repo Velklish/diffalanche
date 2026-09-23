@@ -19,9 +19,11 @@ export type PatchOptions = {
    * `diff --json` and `diff.json` ask for them.
    */
   hunks?: boolean | undefined;
-  /** Facts the parse learns that the caller reports: `readRepositoryChange` warns with them. */
-  notes?: string[] | undefined;
 };
+
+/** The files of a diff, and what the parse learned that the caller reports as warnings: returned
+ * rather than passed in, so a caller cannot drop them by leaving an argument out. */
+export type ParsedDiff = { files: FileChange[]; notes: string[] };
 
 /**
  * Splits `git diff` output into one file each and parses every patch.
@@ -33,11 +35,12 @@ export type PatchOptions = {
  * the hunks, because that is what the renderer reads
  * ([ADR-008](../../../docs/adr/adr-008-diff-rendering-verdict.md)).
  */
-export function parseDiff(raw: string, options: PatchOptions = {}): FileChange[] {
+export function parseDiff(raw: string, options: PatchOptions = {}): ParsedDiff {
   const maxFileBytes = options.maxFileBytes ?? DEFAULT_MAX_FILE_BYTES;
   const structured = options.hunks ?? true;
   const parsed = split(raw).map((patch) => parseFile(patch, maxFileBytes, structured));
-  return mergeTypeChanges(parsed, options.notes ?? []);
+  const notes: string[] = [];
+  return { files: mergeTypeChanges(parsed, notes), notes };
 }
 
 /**

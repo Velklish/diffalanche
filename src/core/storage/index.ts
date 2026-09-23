@@ -147,13 +147,29 @@ function isMissing(error: unknown): boolean {
   return (error as NodeJS.ErrnoException).code === "ENOENT";
 }
 
+/** Why a file could not be read, by errno; `EISDIR` is left out on purpose and reaches exit
+ * code 2 ([03-storage.md](../../../docs/reference/03-storage.md)). */
+const CANNOT_READ: Readonly<Record<string, string>> = {
+  EACCES: "permission denied",
+  EPERM: "permission denied",
+  ENOTDIR: "a file is in the way of one of its parents",
+};
+
+/** A refused read as the `StorageError` it can name, or the error itself when it cannot. */
+function readError(error: unknown, path: string): unknown {
+  const errno = error as NodeJS.ErrnoException;
+  const reason = errno.code === undefined ? undefined : CANNOT_READ[errno.code];
+  if (reason === undefined) return error;
+  return new StorageError(errno.path ?? path, null, `could not be read: ${reason}`);
+}
+
 async function exists(path: string): Promise<boolean> {
   try {
     await stat(path);
     return true;
   } catch (error) {
     if (isMissing(error)) return false;
-    throw error;
+    throw readError(error, path);
   }
 }
 
@@ -162,7 +178,7 @@ async function readText(path: string): Promise<string | null> {
     return await readFile(path, "utf8");
   } catch (error) {
     if (isMissing(error)) return null;
-    throw error;
+    throw readError(error, path);
   }
 }
 

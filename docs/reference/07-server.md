@@ -356,7 +356,7 @@ read. Answered from that cache, a live update patched the page with the diff of
 a minute ago: the card of an edited file never showed the edit, three times out
 of three on the synthetic review, while the same event on the current session
 showed it every time. So the route reads the one repository the event names —
-four git processes, what the watcher pays for the current session anyway, and
+five git processes, what the watcher pays for the current session anyway, and
 not the whole scope's — and filters it by the task's scope. Measured end to end
 on the synthetic review, from the edit to the frame that showed it: 295 ms for a
 window on a named task against 235 ms for one on the current session, inside the

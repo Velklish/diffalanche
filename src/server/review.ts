@@ -390,23 +390,8 @@ async function rebuild(config: Config, session: string, review: Review): Promise
   return cache;
 }
 
-/**
- * One repository of a **named** task, read from the working tree as it now
- * stands rather than from that task's `diff.json`.
- *
- * The cache would be wrong here. The watcher rescans and rewrites the cache of
- * the **current** session only ([05-watcher.md](../../docs/reference/05-watcher.md)),
- * so a task that is not current holds a change set frozen at the moment it was
- * last read — and this is the answer a live update patches the page with.
- * Measured on the synthetic review: served from the cache, the card of the
- * edited file never showed the edit, three times out of three, while the same
- * event on the current session showed it every time.
- *
- * It costs the four git processes of one repository — what the watcher pays for
- * the current session anyway — and not the whole scope's. The hunks are dropped
- * as everywhere else: the renderer reads the patch, and the structured lines
- * live in `diff.json` for anchor capture.
- */
+/** One repository of a **named** task read from the working tree, not from that task's frozen
+ * `diff.json`: five git processes, hunks dropped ([07-server.md](../../docs/reference/07-server.md)). */
 async function freshRepository(
   config: Config,
   session: string,
@@ -417,7 +402,7 @@ async function freshRepository(
   if (!underRoot(config.root, repo)) return null;
   const review = await readReview(config.dataDir, session);
   // A repository the task is not about has nothing to say to it, and reading it
-  // would be four git processes for a change set nothing may show.
+  // would be five git processes for a change set nothing may show.
   if (!repositoryInScope(review.scope, repo)) return null;
   const change = filterChange(
     review.scope,

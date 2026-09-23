@@ -90,6 +90,11 @@ export async function startReviewServer(options: ReviewServerOptions): Promise<R
         "the recursive watch failed: the trees are walked on a timer, and updates are slower\n",
       );
     },
+    onWalk: () => {
+      process.stderr.write(
+        "a recursive watch was not available: trees are walked on a timer, and updates are slower\n",
+      );
+    },
   });
   watcher = running;
   // Nothing refreshed `diff.json` while no server ran, so the first document is not built from it:

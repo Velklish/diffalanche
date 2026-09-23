@@ -245,12 +245,15 @@ call returns.
   lock, so two creates of one name cannot both pass it.
 
 `updateComments(dataDir, name, update)` is `updateSession` with only the
-comments in view, and is what `reply`, `resolve`, and `reopen` call. `addComment`
-is the one comment writer that goes to `updateSession` instead, because it checks
-the scope and the scope lives in `review.json`: read outside the lock it is the
-scope of a moment that has passed, and a narrowing landing between the read and
-the write leaves a comment nothing reads back
-([04-domain.md](04-domain.md)).
+comments in view. No comment writer of the domain calls it: `addComment`,
+`reply`, `resolve`, and `reopen` all go to `updateSession`, because each of them
+decides against the scope and the scope lives in `review.json` — read outside
+the lock it is the scope of a moment that has passed. For `addComment` a
+narrowing landing between the read and the write leaves a comment nothing reads
+back; for the other three a widening in that window refused a comment that was
+already in scope with `no-such-comment` (DA-67.1)
+([04-domain.md](04-domain.md)). Taking the scope from the draft costs no read:
+`updateSession` reads `review.json` inside the lock for every write anyway.
 
 The lock options go through as well, which is how the lease is tested: a change
 that outruns `staleMs` and has the lock taken from it is refused and writes
@@ -328,6 +331,28 @@ which is the difference between exit code 1 and exit code 2 in
 [06-cli.md](06-cli.md). The same error reaches an HTTP write through
 `updateSession`, where it is the `500` `error: "storage"` of
 [07-server.md](07-server.md) carrying that same sentence.
+
+**A refused read is one in the same way, for the reasons it can name.** A file
+that is not there is an answer, not a refusal — no session, never scanned, no
+`current`. Past that, the stat behind `sessionExists` and the reads of
+`review.json`, `comments.json`, `diff.json` and `current` word `EACCES` and
+`EPERM` — permission denied — and `ENOTDIR`, which is what a file written over
+`reviews/<name>` gives every read under it:
+
+```
+/root/.diffalanche/reviews/alpha/review.json: could not be read: a file is in the way of one of its parents
+```
+
+`EISDIR` — a directory where a file should be — is left out on purpose and
+reaches exit code 2 with its stack: it is the case the "exit code 2" verdict of
+`tests/cli.test.ts` is written against, and that verdict needs one fault no
+layer claims (DA-99.1).
+
+Two reads of the data directory are not covered and rethrow anything but "not
+there" untouched: `config.json`, which the configuration reads with its own
+`ENOENT`-only rule, and the listing of `reviews/` behind `listSessionNames`. A
+file where either directory should be still reaches the person as a raw errno;
+that is DA-99.2.
 
 The `scope` of `review.json` is checked for being a scope at all and no further:
 a list of entries with a `repo` and, when it has them, a list of `paths`; absent

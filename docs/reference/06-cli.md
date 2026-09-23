@@ -206,13 +206,15 @@ trace says nothing they can act on:
 diffalanche: port 4880 is already in use: stop the diffalanche that holds it, or run with --port <n>
 diffalanche: port 80 is not allowed for this user: run with --port <n> above 1023
 diffalanche: /srv/shared/.diffalanche: could not be created: permission denied
+diffalanche: /srv/shared/.diffalanche/reviews/alpha/review.json: could not be read: a file is in the way of one of its parents
 ```
 
 The set of worded refusals is closed on purpose, and everything outside it keeps
 the stack trace and exit code 2. A listening socket refused with an `EPERM` or
 an `EAFNOSUPPORT`, a `mkdir` that fails with something the directory helper does
-not name — those are what the tool did not expect, and the trace is the only
-useful thing to say about them.
+not name, a file of the data directory that is a directory (`EISDIR`,
+[03-storage.md](03-storage.md)) — those are what the tool did not expect, and
+the trace is the only useful thing to say about them.
 
 JSON goes to stdout and nothing else does: warnings of a scan are inside the
 JSON when `--json` is given and on stderr when it is not, so `diffalanche diff

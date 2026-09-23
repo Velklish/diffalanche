@@ -288,6 +288,22 @@ and `bun run release` refuses a version that has no section. See
 
 ### Fixed
 
+- **Five minor defects of the change set, the watcher and storage** (DA-114).
+  `parseDiff` returns `{ files, notes }`, so the warning about the half of a type
+  change it could not list can no longer be dropped by a caller that leaves an
+  argument out (DA-76.3). A session that walks its trees from the start — no
+  recursive watch on the runtime, or `watch` refused — now says so once on
+  stderr through the watcher's new `onWalk`, as a watch that dies later already
+  did; `recursive: false` stays silent, because the walk was asked for (DA-85.1).
+  The cost of one repository read is five git processes in every comment and
+  reference section that names it (DA-61.1). `reply`, `resolve` and `reopen` take
+  the scope inside the session lock, so a scope widened while they waited no
+  longer refuses a thread already in it (DA-67.1). A file written over a session
+  directory is a one-line refusal at exit code 1 —
+  `…/review.json: could not be read: a file is in the way of one of its
+  parents` — instead of a raw `ENOTDIR` stack at exit code 2; reads word
+  `EACCES`, `EPERM` and `ENOTDIR`, and `EISDIR` is left to exit code 2 (DA-99.1).
+
 - **A server no longer opens on the change set its previous run left** (DA-55.5).
   The server trusts `diff.json` of the session the watcher follows, because the
   watcher keeps it fresh — but only while a server runs. Code edited, committed or

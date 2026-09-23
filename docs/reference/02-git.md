@@ -29,7 +29,9 @@ Neither the repository it reads nor the environment it was started in
   and `--no-textconv` close two of those by flag as well. `required` is in the
   list because without it an emptied filter is fatal rather than skipped. The consequence to know about: a repository with
   a filter driver — git-lfs is the common one — is shown the content that is on
-  disk, not what the driver would make of it.
+  disk, not what the driver would make of it. That read starts beside the base
+  resolution and the branch, in one `Promise.all`, so it adds a fifth process to
+  a read and no step to its wall-clock path.
 - **A command added to this module inherits the answer.** The key-by-key table
   of [ADR-012](../adr/adr-012-git-trust-model.md) says which keys the commands
   below reach and what covers each; a new command is checked against that table.
@@ -189,9 +191,13 @@ for the whole entry would hide the link, which is the one thing the entry exists
 to show. So the counts are still summed, the patch and the hunks come from the
 half that has them, and the side that could not be shown is said out loud in the
 repository's warnings rather than left to be inferred from a card with content on
-one side only. That warning travels through `notes` in `PatchOptions`, which the
-caller supplies and `readRepositoryChange` does: a caller that wants the warning
-has to pass the array, and one that does not simply does not hear about it.
+one side only. That warning comes back from `parseDiff` beside the files — it
+returns `{ files, notes }` — and `readRepositoryChange` puts the notes into the
+repository's warnings. It is a return value rather than an array the caller
+passes in, so no caller can lose it by leaving an argument out: taking the files
+means reaching past the notes (DA-76.3). `parseDiff` is exported from
+`src/core/index.ts` but not from the package, which ships the CLI alone, so the
+change of its return has no caller outside this repository.
 
 ```
 thing.bin changed type and its old side is binary: only the other side is listed

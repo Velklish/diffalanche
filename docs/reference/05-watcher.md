@@ -28,6 +28,7 @@ const watcher = await startWatcher({ config, scan, bus, activity });
 | `recursive` | `false` walks every tree instead of watching it; the default asks the runtime |
 | `onError` | a rescan that failed; without it the failure is silent |
 | `onFallback` | a recursive watch died and the walk took its place; said once |
+| `onWalk` | the session walks from the start although nobody asked it to — no recursive watch on this runtime, or `watch` refused a tree; said once, never for `recursive: false` |
 
 The session it works on is the current one, read from the `current` pointer. It
 follows that pointer: a session created from the UI or switched to with
@@ -79,12 +80,26 @@ One watch per repository, plus one over the data directory. `fs.watch` with
 `recursive: true` is the whole implementation where the runtime honours it;
 where it does not, the same interface walks the tree on a timer and compares
 modification time and size. A watch that **dies after it started** says so once,
-through `onFallback`; a runtime that never had one starts on the walk and says
-nothing, which is DA-85.1.
+through `onFallback`. A session that **walks from the start** says so once too,
+through `onWalk`: the probe below answered that the runtime cannot recurse, or
+`watch` itself refused one tree when it was built — Node's
+`ERR_FEATURE_UNAVAILABLE_ON_PLATFORM` does that to every tree, and `ENOENT`,
+`EACCES` or `EMFILE` can do it to one — and the walk took the tree at
+construction without going through the takeover. The line `serve` prints names
+neither cause, because the one callback does not carry which it was: *a
+recursive watch was not available*. The question is asked once
+every tree is built and before any of them can have fallen back, so a tree that
+is walking then has walked from the start. Nothing is rescanned for it: the
+walk's first baseline *is* the startup baseline and nothing was missed, which is
+the difference from the takeover below. `serve` turns it into one line on stderr,
+and the takeover line is not said after it — the operator already knows the
+session walks and why updates are slower (DA-85.1).
 
 `recursive: false` skips the question and walks: a filesystem whose
 notifications cannot be trusted — a network mount — is what it is for, and so is
-a runtime whose watch goes quiet.
+a runtime whose watch goes quiet. It says nothing through `onWalk`: the walk is
+the caller's own choice, and a line about it would tell the operator what they
+asked for.
 
 Accepting `recursive: true` is not the same as honouring it, so the answer comes
 from a probe rather than from a version table: `supportsRecursiveWatch(dataDir)`
@@ -240,7 +255,7 @@ Changes are debounced per repository: a change restarts the wait, but never past
 one second after the first one, so a build that writes into the working tree for
 a minute still produces a rescan every second instead of none at all — and where
 that build writes into a directory git ignores, the one `check-ignore` of the
-window ends it instead, in place of the four git processes and the cache rewrite
+window ends it instead, in place of the five git processes and the cache rewrite
 a rescan costs. The rescan that follows reads that repository alone. Rescans run
 one at a time: two of them write the same `diff.json`, and queueing costs less
 than making each wait for the session lock. The write goes through the lock all
@@ -291,7 +306,7 @@ recognises its own writes has to keep the two apart: the UI does
 
 **A repository the current task is not about is watched and not rescanned.**
 Watching it costs no git process, and it is what makes a scope that widens while
-the server runs take effect without a restart; reading it would cost four git
+the server runs take effect without a restart; reading it would cost five git
 processes to produce a change set nothing may show. The scope is re-read
 whenever `review.json` changes, so a scope edit is in force from the next burst
 on.
@@ -317,7 +332,7 @@ quite the same thing**:
 The price of the second is one `git check-ignore` per burst for repositories the
 current task is not about, where before there was none: the ignore question now
 comes first, so a build writing into an ignored directory of an unrelated
-repository still says nothing. One process against the four a rescan costs —
+repository still says nothing. One process against the five a rescan costs —
 the same trade the rescan path already makes, measured at about 20 ms over fifty
 paths in `tests/watcher.test.ts`, one process for the whole window.
 
@@ -427,14 +442,17 @@ event — over three edits, and it asserts the median against **300 ms plus one
 rescan of the same repository timed in the same conditions**, and only where the
 tree is watched: on the walk the number is the interval and the cost of the walk
 itself. That is the watcher's own share, because the rescan costs what the
-machine charges for four git processes and a rewrite of the cache: about 190 ms
+machine charges for five git processes and a rewrite of the cache: about 190 ms
 all together on a quiet machine, of which 100 ms is the debounce, and two to
-three times that while the rest of the test suite runs in parallel. The flat
+three times that while the rest of the test suite runs in parallel. The 190 ms
+was measured when a read was four processes and is not measured again: the
+fifth, `config --list`, starts beside the base resolution in one `Promise.all`
+([02-git.md](02-git.md)), so it adds a process and no step to the path. The flat
 number belongs to the performance gate, which measures a machine that is doing
 nothing else — 220 ms there.
 
 The `check-ignore` of the burst is on that path too, and it is one process
-against the four of the rescan. Measured once rather than gated: about 20 ms
+against the five of the rescan. Measured once rather than gated: about 20 ms
 over fifty paths in `tests/watcher.test.ts`, with the update after an edit in
 the same run where it was before.
 

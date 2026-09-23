@@ -328,7 +328,7 @@ describe("parseDiff", () => {
       "rename to src/new.ts",
       "",
     ].join("\n");
-    const files = parseDiff(rename);
+    const { files } = parseDiff(rename);
     expect(files).toHaveLength(1);
     expect(files[0]).toMatchObject({
       path: "src/new.ts",
@@ -343,11 +343,35 @@ describe("parseDiff", () => {
   });
 
   it("splits the output into one patch per file and counts the changed lines", () => {
-    const files = parseDiff(raw);
+    const { files, notes } = parseDiff(raw);
+    expect(notes).toEqual([]);
     expect(files.map((file) => file.path)).toEqual(["src/a.ts", "src/b.ts"]);
     expect(files[0]).toMatchObject({ status: "modified", additions: 1, deletions: 1 });
     expect(files[1]).toMatchObject({ status: "added", additions: 2, deletions: 0 });
     expect(files[0]?.patch).toContain("diff --git a/src/a.ts b/src/a.ts");
     expect(files[0]?.patch).toContain("@@ -1,3 +1,3 @@");
+  });
+
+  it("returns the half of a type change it could not list with the files, not into a sink", () => {
+    const typeChange = [
+      "diff --git a/thing.bin b/thing.bin",
+      "deleted file mode 100644",
+      "index 1111111..0000000",
+      "Binary files a/thing.bin and /dev/null differ",
+      "diff --git a/thing.bin b/thing.bin",
+      "new file mode 120000",
+      "index 0000000..2222222",
+      "--- /dev/null",
+      "+++ b/thing.bin",
+      "@@ -0,0 +1 @@",
+      "+/etc/hosts",
+      "\\ No newline at end of file",
+      "",
+    ].join("\n");
+    const { files, notes } = parseDiff(typeChange);
+    expect(files.map((file) => file.path)).toEqual(["thing.bin"]);
+    expect(notes).toEqual([
+      "thing.bin changed type and its old side is binary: only the other side is listed",
+    ]);
   });
 });

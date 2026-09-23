@@ -137,8 +137,7 @@ async function readOne(
     diff(cwd, resolution.base.sha, drivers),
     untrackedFiles(cwd),
   ]);
-  const notes: string[] = [];
-  const files = parseDiff(raw, { ...options, notes });
+  const { files, notes } = parseDiff(raw, options);
   const warnings = [...resolution.warnings, ...notes];
   const tracked = new Set(files.map((file) => file.path));
   for (const path of untracked) {
@@ -192,7 +191,7 @@ async function readUntracked(
       const file = parseDiff(untrackedPatch(path, target, "120000"), {
         ...options,
         maxFileBytes: Number.POSITIVE_INFINITY,
-      })[0];
+      }).files[0];
       return file ? { file } : listed("binary");
     }
     // `ls-files --others` lists regular files and links only, so nothing reaches this;
@@ -207,7 +206,7 @@ async function readUntracked(
     const file = parseDiff(untrackedPatch(path, content.toString("utf8"), "100644"), {
       ...options,
       maxFileBytes: Number.POSITIVE_INFINITY,
-    })[0];
+    }).files[0];
     return file ? { file } : listed("binary");
   } catch (error) {
     const code = (error as { code?: unknown } | null)?.code;

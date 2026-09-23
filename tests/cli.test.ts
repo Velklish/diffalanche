@@ -736,4 +736,16 @@ describe("exit code 2", () => {
     expect(result.err).toContain("at ");
     expect(result.out).toBe("");
   });
+
+  it("is not what a file where a session directory should be gets: that is one line and 1", async () => {
+    await inRoot("review", "new", "alpha");
+    rmSync(dataFile("reviews", "alpha"), { recursive: true, force: true });
+    writeFileSync(dataFile("reviews", "alpha"), "not a directory\n");
+    const result = await inRoot("review", "new", "alpha");
+    expect(result.code).toBe(1);
+    expect(result.err.trim().split("\n")).toEqual([
+      `diffalanche: ${dataFile("reviews", "alpha", "review.json")}: could not be read: ` +
+        "a file is in the way of one of its parents",
+    ]);
+  });
 });

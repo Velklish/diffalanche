@@ -20,7 +20,7 @@ import { tmpdir } from "node:os";
 import { join } from "node:path";
 import { fileURLToPath } from "node:url";
 import { promisify } from "node:util";
-import { afterAll, beforeAll, describe, expect, it } from "vitest";
+import { afterAll, afterEach, beforeAll, beforeEach, describe, expect, it } from "vitest";
 import { generate, PROFILES } from "../scripts/synth.ts";
 import { scanReview } from "../src/core/change-set.ts";
 import type { Config } from "../src/core/config/index.ts";
@@ -39,7 +39,14 @@ import {
   writeReview,
 } from "../src/core/storage/index.ts";
 import type { ScanResult } from "../src/core/types.ts";
-import type { ActivityEvent, EventBus, Watcher, WatcherEvent } from "../src/core/watcher/index.ts";
+import type {
+  ActivityEvent,
+  EventBus,
+  TreeSource,
+  Watcher,
+  WatcherEvent,
+  WatcherOptions,
+} from "../src/core/watcher/index.ts";
 import {
   createActivityLog,
   createEventBus,
@@ -334,15 +341,8 @@ describe("watcher", () => {
     expect(
       new Set(since(first, "diff-changed").map((one) => (one.event as { repo: string }).repo)),
     ).toEqual(new Set([REPO]));
-    // `docs/SPEC.md` section 6 gives 300 ms from the edit to the update. Most
-    // of that is the rescan itself — four git processes and a rewrite of the
-    // cache — and what it costs is what the machine charges for them: on a
-    // machine running the rest of this suite in parallel, several times what
-    // it costs on a quiet one. So what is asserted here is the budget on top
-    // of one rescan timed in the same conditions, which is the watcher\'s own
-    // share: the debounce and the delivery of the event. The flat 300 ms is
-    // measured on a quiet machine by `bun run perf`, and
-    // `docs/reference/05-watcher.md` records both.
+    // The budget on top of one rescan — five git processes and a cache rewrite — timed in the same
+    // conditions: the watcher's own share; the flat 300 ms is `bun run perf`'s (05-watcher.md).
     process.stderr.write(`update after an edit: ${median(elapsed).toFixed(1)} ms\n`);
     // Only where the tree is watched. On the walk the number is the interval
     // and the cost of the walk itself, which is why a platform without a
@@ -600,9 +600,8 @@ describe("watcher", () => {
     const started = performance.now();
     const ignored = await checkIgnore(join(root, REPO), paths);
     const elapsed = performance.now() - started;
-    // Measured once, not a gated number: what a burst costs is one process for
-    // every path of the window, against the four a rescan spends on one
-    // repository.
+    // Measured once, not gated: one process for every path of the window, against the five a
+    // rescan spends on one repository.
     process.stderr.write(
       `check-ignore over ${paths.length} paths: ${elapsed.toFixed(1)} ms in one process\n`,
     );
@@ -1188,6 +1187,86 @@ describe("a watcher whose watches die under it", () => {
       await rm(file, { force: true });
       await rm(other, { force: true });
       await settle();
+    }
+  }, 60_000);
+});
+
+describe("a watcher that walks from the start", () => {
+  let dataDir: string;
+  let walks: number;
+  let fallbacks: number;
+  let changed: string[];
+
+  /** A watch that is alive and delivers nothing until the test fails it. */
+  const alive = (): TreeSource => ({ polling: false, ready: Promise.resolve(), close: () => {} });
+
+  // Its own data directory: nothing here needs a session, and the suite's stays untouched.
+  function start(recursive: boolean, native: WatcherOptions["native"]): Promise<Watcher> {
+    return startWatcher({
+      config: { ...config, dataDir },
+      scan: found,
+      bus: createEventBus(),
+      activity: createActivityLog(),
+      pollIntervalMs: 40,
+      recursive,
+      onWalk: () => {
+        walks += 1;
+      },
+      onFallback: () => {
+        fallbacks += 1;
+      },
+      onRepositoryChanged: (repo) => changed.push(repo),
+      ...(native === undefined ? {} : { native }),
+    });
+  }
+
+  beforeEach(() => {
+    dataDir = mkdtempSync(join(tmpdir(), "diffalanche-walk-"));
+    mkdirSync(join(dataDir, "reviews"), { recursive: true });
+    walks = 0;
+    fallbacks = 0;
+    changed = [];
+  });
+
+  afterEach(() => {
+    rmSync(dataDir, { recursive: true, force: true });
+  });
+
+  it("says so once when the runtime refuses the watch, and nothing when the walk was asked for", async () => {
+    // What Node's ERR_FEATURE_UNAVAILABLE_ON_PLATFORM leaves: `watch` refused when it is built.
+    await (await start(true, () => null)).close();
+    expect(walks).toBe(1);
+    await (await start(false, () => null)).close();
+    expect(walks).toBe(1);
+    expect(fallbacks).toBe(0);
+  }, 60_000);
+
+  it("says nothing when every watch it built is working", async () => {
+    await (await start(true, alive)).close();
+    expect(walks).toBe(0);
+  }, 60_000);
+
+  it("does not say the takeover line after it, when a watch that did start dies later", async () => {
+    const failures = new Map<string, () => void>();
+    const watcher = await start(true, (options, onFailure) => {
+      // One tree refused at construction, the way `watch` refuses on ENOENT or EMFILE.
+      if (options.dir === join(root, REPO)) return null;
+      failures.set(options.dir, onFailure);
+      return alive();
+    });
+    try {
+      expect(walks).toBe(1);
+      (failures.get(join(root, OTHER_REPO)) as () => void)();
+      // The takeover's rescan comes after its report, so by then the line was said or not.
+      const deadline = performance.now() + 20_000;
+      while (!changed.includes(OTHER_REPO) && performance.now() < deadline) {
+        await new Promise((done) => setTimeout(done, 10));
+      }
+      expect(changed).toContain(OTHER_REPO);
+      expect(walks).toBe(1);
+      expect(fallbacks).toBe(0);
+    } finally {
+      await watcher.close();
     }
   }, 60_000);
 });
