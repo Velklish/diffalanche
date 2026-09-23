@@ -1,5 +1,5 @@
 import { describe, expect, it } from "vitest";
-import { preview, search, textHits } from "../src/ui/search.ts";
+import { preview, search, symbolHits, textHits } from "../src/ui/search.ts";
 import type { FileEntry } from "../src/ui/store.ts";
 import { useStore, withComments } from "../src/ui/store.ts";
 import type { Comment, FileChange, RepositoryChange } from "../src/ui/types.ts";
@@ -302,5 +302,30 @@ describe("text the working trees hold", () => {
       { kind: "text", id: "repos/a/a.ts:9", label: "a.ts:9", tag: "text", line: 9 },
     ]);
     expect(rows[0]?.around).toEqual({ before: ["a"], text: "needle", after: ["b"] });
+  });
+});
+
+describe("definitions the index found", () => {
+  it("become rows by name, with the kind and the line that defines it", () => {
+    const [row] = symbolHits([
+      {
+        repo: "repos/a",
+        path: "src/Cargo.cs",
+        line: 12,
+        name: "CargoService",
+        kind: "class",
+        text: "public sealed class CargoService",
+        before: ["/// <summary/>"],
+        after: ["{"],
+      },
+    ]);
+    expect(row).toMatchObject({
+      kind: "symbol",
+      label: "CargoService",
+      tag: "symbol",
+      line: 12,
+      detail: "class",
+    });
+    expect(row?.around?.text).toBe("public sealed class CargoService");
   });
 });

@@ -276,6 +276,7 @@ point; `configPath(dataDir)` names the file.
 | `user` | `user`, else `git config user.name` read in the root, else the operating system user | — |
 | `port` | `--port`, else `port` | `4880` |
 | `lsp` | `lsp`, a command per language | `{}` |
+| `grammars` | `grammars`, a language per name — `wasm` resolved **against the root**, `extensions`, `query` ([09-ml.md](09-ml.md)) | `{}` |
 
 The two kinds of path are relative to different directories on purpose:
 `--root` and `--data-dir` are typed at a shell prompt, so they follow the

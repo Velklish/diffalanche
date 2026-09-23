@@ -236,3 +236,36 @@ describe("user fallback", () => {
     expect((await loadConfig({}, root)).user).toBe("kim.p");
   });
 });
+
+describe("grammars", () => {
+  it("takes a language of its own, its WASM resolved against the root", async () => {
+    writeConfig({
+      user: "kim.p",
+      grammars: {
+        kotlin: {
+          wasm: "grammars/tree-sitter-kotlin.wasm",
+          extensions: [".kt", ".kts"],
+          query: "(function_declaration (simple_identifier) @function)",
+        },
+      },
+    });
+    expect((await loadConfig({}, root)).grammars).toEqual({
+      kotlin: {
+        path: join(root, "grammars", "tree-sitter-kotlin.wasm"),
+        extensions: [".kt", ".kts"],
+        query: "(function_declaration (simple_identifier) @function)",
+      },
+    });
+  });
+
+  it("is empty without the table, and names the field of an entry that does not add up", async () => {
+    expect((await loadConfig({}, root)).grammars).toEqual({});
+    writeConfig({
+      user: "kim.p",
+      grammars: { kotlin: { wasm: "k.wasm", extensions: ["kt"], query: "" } },
+    });
+    await expect(loadConfig({}, root)).rejects.toThrow(/grammars\.kotlin\.extensions: expected/);
+    writeConfig({ user: "kim.p", grammars: { kotlin: { extensions: [".kt"], query: "" } } });
+    await expect(loadConfig({}, root)).rejects.toThrow(/grammars\.kotlin\.wasm/);
+  });
+});

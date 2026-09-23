@@ -1127,6 +1127,10 @@ button:disabled {
   color: var(--tx2);
 }
 
+.palette-tag.symbol {
+  color: var(--warn);
+}
+
 /* The next page of text hits: a quiet row under the list, not a hit of its own. */
 .palette-more {
   width: 100%;

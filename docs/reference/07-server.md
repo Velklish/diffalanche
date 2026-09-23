@@ -138,6 +138,7 @@ alike** — and answers for the current session without it. See
 | `GET /api/repos/:repo/tree[?review=]` | every file of one repository of the review, the base revision and the working tree merged, inside the task's scope |
 | `GET /api/repos/:repo/file?path=&rev=[&review=]` | one file of it whole — `rev` is `worktree` (the default) or `base` |
 | `GET /api/search/text?q=&page=[&review=]` | a fixed string in the working tree of every repository of the review, a page of hits at a time |
+| `GET /api/search/symbols?q=[&review=]` | the definitions whose names answer the query, from the symbol index |
 | `GET /api/comments/:id[?review=]` | one thread |
 | `GET /api/warnings[?review=]` | the warnings of the change set |
 | `GET /api/activity` | the feed of what the server noticed while it has been running |
@@ -590,6 +591,36 @@ read of a file however many of its lines the page holds, and straight from disk:
 the path came from git, so the listing check `…/file` makes is not asked again.
 A query with a newline or a NUL, and a `page` that is not a whole number, are a
 400.
+
+### Symbols
+
+`GET /api/search/symbols?q=<name>` is the `symbol` half of global search: the
+twenty definitions whose names answer the query best, from the symbol index of
+[09-ml.md](09-ml.md), in the repositories of the review's change set and inside
+its scope.
+
+```json
+{
+  "query": "cargoservice",
+  "hits": [
+    { "repo": "repos/core/cargos-api", "path": "src/Cargos/CargoService.cs", "line": 12,
+      "name": "CargoService", "kind": "class", "text": "public sealed class CargoService",
+      "before": ["…"], "after": ["…"] }
+  ]
+}
+```
+
+The index is read in the background once a review is open: `GET /api/review`
+hands it the repositories of the document it served, and a question over a
+repository still being read waits for that repository; the time it takes is
+recorded in 09-ml.md, and how it stays current too. `failed` names the languages
+whose grammar or query would not load — their files are not in the index, and
+the search list says so.
+`before` and `after` are the five lines on each side, read as the text search
+reads them. The scope is applied to what the index answers, since one index
+serves every task: a definition in a file the task's scope does not name is not
+among the twenty. A query under two characters answers no hits; one with a
+newline or a NUL is a 400.
 
 ### Refusals
 

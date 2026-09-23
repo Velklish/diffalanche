@@ -3,9 +3,9 @@ import { useCallback, useEffect, useMemo, useRef, useState } from "react";
 import { splitLines } from "../context.ts";
 import { revealCard, revealThread } from "../reveal.ts";
 import type { PreviewLine, SearchHit } from "../search.ts";
-import { PREVIEW_LINES, preview, search, textHits } from "../search.ts";
+import { PREVIEW_LINES, preview, search, symbolHits, textHits } from "../search.ts";
 import { onTask, useStore } from "../store.ts";
-import type { FileContent, TextHit, TextSearch } from "../types.ts";
+import type { FileContent, SymbolHit, SymbolSearch, TextHit, TextSearch } from "../types.ts";
 import { Overlay } from "./Overlay.tsx";
 
 /** Global search of handoff section 6: the field, the results on the left, a preview of the
@@ -47,9 +47,14 @@ function Palette() {
   }, [repositories, trees, files]);
 
   const text = useTextSearch(query);
+  const symbols = useSymbolSearch(query);
   const hits = useMemo(
-    () => [...search(query, files, comments, unchanged), ...textHits(text.hits)],
-    [query, files, comments, unchanged, text.hits],
+    () => [
+      ...search(query, files, comments, unchanged),
+      ...symbolHits(symbols.hits),
+      ...textHits(text.hits),
+    ],
+    [query, files, comments, unchanged, symbols.hits, text.hits],
   );
   const selected = hits[Math.min(index, hits.length - 1)] ?? null;
 
@@ -61,7 +66,7 @@ function Palette() {
         return;
       }
       const store = useStore.getState();
-      if (hit.kind === "plain" || hit.kind === "text") {
+      if (hit.kind === "plain" || hit.kind === "text" || hit.kind === "symbol") {
         store.openBrowse(hit.repo, hit.path, { line: hit.line });
         return;
       }
@@ -119,7 +124,7 @@ function Palette() {
           {hits.length === 0 ? (
             <li className="palette-empty">
               {query.trim() === ""
-                ? "Файлы, текст и комментарии этого ревью."
+                ? "Файлы, символы, текст и комментарии этого ревью."
                 : text.status === "loading"
                   ? `Ищем «${query.trim()}» в рабочих деревьях…`
                   : `Ничего не найдено по «${query.trim()}».`}
@@ -143,6 +148,7 @@ function Palette() {
               </button>
             </li>
           )}
+          {symbols.note === null ? null : <li className="palette-capped">{symbols.note}</li>}
           {text.next === null && text.capped ? (
             <li className="palette-capped">совпадений больше, чем показано, — уточните запрос</li>
           ) : null}
@@ -306,6 +312,51 @@ async function readText(
   }
 }
 
+/** The definitions whose names answer the query, from the server's index; an answer for an older
+ * query is dropped ([07-server.md](../../../docs/reference/07-server.md), "Symbols"). */
+function useSymbolSearch(query: string): SymbolState {
+  const [state, setState] = useState<SymbolState & { query: string }>({ query: "", ...NO_SYMBOLS });
+  const wanted = query.trim();
+
+  useEffect(() => {
+    if (wanted.length < 2) return;
+    const controller = new AbortController();
+    const timer = setTimeout(() => {
+      const url = `/api/search/symbols?q=${encodeURIComponent(wanted)}`;
+      void fetch(onTask(url), { signal: controller.signal })
+        .then(async (response) => {
+          if (response.ok) {
+            const { hits, failed } = (await response.json()) as SymbolSearch;
+            const note = failed.length === 0 ? null : unreadable(failed);
+            setState({ query: wanted, hits, note });
+            return;
+          }
+          const body = (await response.json().catch(() => ({}))) as { message?: unknown };
+          const said = typeof body.message === "string" ? body.message : `${response.status}`;
+          setState({ query: wanted, hits: [], note: `символы не найдены: ${said}` });
+        })
+        // An aborted read is an older query, and its rows are not this one's.
+        .catch(() => {});
+    }, TEXT_DEBOUNCE_MS);
+    return () => {
+      clearTimeout(timer);
+      controller.abort();
+    };
+  }, [wanted]);
+
+  return state.query === wanted ? state : NO_SYMBOLS;
+}
+
+/** What the index could not read, in one line under the list. */
+function unreadable(failed: SymbolSearch["failed"]): string {
+  const names = failed.map((one) => one.language).join(", ");
+  return `символы ${names} не читаются: ${failed[0]?.message ?? ""}`;
+}
+
+type SymbolState = { hits: SymbolHit[]; note: string | null };
+
+const NO_SYMBOLS: SymbolState = { hits: [], note: null };
+
 /** A line the server found, between the lines around it. */
 function TextPreview({ hit }: { hit: SearchHit }) {
   const around = hit.around;
@@ -324,6 +375,7 @@ function TextPreview({ hit }: { hit: SearchHit }) {
         <span className="palette-path">{hit.path}</span>
         <span className="palette-meta">
           {hit.repo} · L{line}
+          {hit.detail === undefined ? "" : ` · ${hit.detail}`}
         </span>
       </div>
       <div className="palette-code">
@@ -331,7 +383,9 @@ function TextPreview({ hit }: { hit: SearchHit }) {
           <Line key={row.at} line={row} target={line} />
         ))}
       </div>
-      <p className="palette-note">рабочее дерево</p>
+      <p className="palette-note">
+        {hit.kind === "symbol" ? "определение · рабочее дерево" : "рабочее дерево"}
+      </p>
     </div>
   );
 }

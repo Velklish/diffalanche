@@ -4,11 +4,14 @@ import { join } from "node:path";
 import type { Context } from "hono";
 import { mapWithLimit, SCAN_CONCURRENCY } from "../../core/change-set.ts";
 import type { Config } from "../../core/config/index.ts";
-import { scopeEntry } from "../../core/domain/index.ts";
+import { pathInScope, scopeEntry } from "../../core/domain/index.ts";
 import { readListed } from "../../core/git/browse.ts";
 import { grepWorktree } from "../../core/git/grep.ts";
-import type { TextHit, TextSearch } from "../../core/types.ts";
+import type { LanguageSpec, SymbolIndex } from "../../core/ml/symbols/index.ts";
+import { BUNDLED_LANGUAGES, createSymbolIndex } from "../../core/ml/symbols/index.ts";
+import type { SymbolHit, SymbolSearch, TextHit, TextSearch } from "../../core/types.ts";
 import { RequestError } from "../errors.ts";
+import type { EventStream } from "../events.ts";
 import type { ReviewService } from "../review.ts";
 
 /** The most matches one search reads, over every repository together. */
@@ -52,7 +55,17 @@ export async function textRoute(
   const kept = all.slice(0, TEXT_CAP);
   const slice = kept.slice(page * TEXT_PAGE, (page + 1) * TEXT_PAGE);
 
-  // The neighbours are read for this page only, one read per file however many hits it holds.
+  const hits: TextHit[] = await withNeighbours(config, slice);
+  const next = (page + 1) * TEXT_PAGE < kept.length ? page + 1 : null;
+  return c.json<TextSearch>({ query, hits, page, next, total: kept.length, capped });
+}
+
+/** The lines around each hit, one read of a file however many hits it holds; the paths came from
+ * git, so the listing check of the file route is not asked again. */
+async function withNeighbours<T extends { repo: string; path: string; line: number }>(
+  config: Config,
+  found: T[],
+): Promise<(T & { before: string[]; after: string[] })[]> {
   const files = new Map<string, Promise<string[] | null>>();
   const linesOf = (repo: string, path: string) => {
     const key = `${repo}\n${path}`;
@@ -68,17 +81,82 @@ export async function textRoute(
     }
     return held;
   };
-  const hits: TextHit[] = await Promise.all(
-    slice.map(async (match) => {
-      const lines = await linesOf(match.repo, match.path);
-      const at = match.line - 1;
+  return Promise.all(
+    found.map(async (one) => {
+      const lines = await linesOf(one.repo, one.path);
+      const at = one.line - 1;
       return {
-        ...match,
+        ...one,
         before: lines?.slice(Math.max(0, at - TEXT_NEIGHBOURS), at) ?? [],
         after: lines?.slice(at + 1, at + 1 + TEXT_NEIGHBOURS) ?? [],
       };
     }),
   );
-  const next = (page + 1) * TEXT_PAGE < kept.length ? page + 1 : null;
-  return c.json<TextSearch>({ query, hits, page, next, total: kept.length, capped });
+}
+
+/** How many definitions one answer carries. */
+export const SYMBOL_LIMIT = 20;
+
+/** What indexing 300 files may take; what it took is recorded in 09-ml.md. */
+export const SYMBOL_INDEX_BUDGET_MS = 20_000;
+
+/** `GET /api/search/symbols`: the definitions whose names answer the query, in the repositories
+ * of the review and inside its scope ([07-server.md](../../../docs/reference/07-server.md)). */
+export async function symbolRoute(
+  c: Context,
+  config: Config,
+  review: ReviewService,
+  session: string | undefined,
+  index: SymbolIndex,
+): Promise<Response> {
+  const query = (c.req.query("q") ?? "").trim();
+  if (/[\n\0]/.test(query)) throw new RequestError("q is one line of text");
+  if (query.length < TEXT_MIN_QUERY) {
+    return c.json<SymbolSearch>({ query, hits: [], failed: index.failures() });
+  }
+  const document = await review.document(session);
+  const scope = document.session.scope;
+  // The index is per repository and shared by every task; the scope is applied to what it answers.
+  const found = await index.query(document.repositories, query, SYMBOL_LIMIT, (def) =>
+    pathInScope(scope, def.repo, def.path),
+  );
+  const hits: SymbolHit[] = await withNeighbours(config, found);
+  return c.json<SymbolSearch>({ query, hits, failed: index.failures() });
+}
+
+/** The bundled languages and those of `config.json`: an entry of the same name replaces a bundled
+ * one, and an extension a configured language names is its own. */
+export function languagesOf(config: Config): LanguageSpec[] {
+  const configured = Object.entries(config.grammars).map(([name, grammar]) => ({
+    name,
+    grammar: `${name}.wasm`,
+    path: grammar.path,
+    extensions: grammar.extensions,
+    query: grammar.query,
+  }));
+  const named = new Set(configured.map((one) => one.name));
+  return [...BUNDLED_LANGUAGES.filter((one) => !named.has(one.name)), ...configured];
+}
+
+/** The symbol index of a server, made when a review is first read; from then on every
+ * `diff-changed` the stream carries is handed to it ([09-ml.md](../../../docs/reference/09-ml.md)). */
+export function symbolIndexOf(config: Config, events: EventStream): () => SymbolIndex {
+  let index: SymbolIndex | null = null;
+  return () => {
+    if (index !== null) return index;
+    const made = createSymbolIndex({ root: config.root, languages: languagesOf(config) });
+    events.subscribe({
+      session: null,
+      end: () => {},
+      send: (frame) => {
+        if (frame.event !== "diff-changed") return;
+        const data = JSON.parse(frame.data) as { repo?: unknown; files?: unknown };
+        if (typeof data.repo !== "string" || !Array.isArray(data.files)) return;
+        const files = data.files.filter((one): one is string => typeof one === "string");
+        void made.changed(data.repo, files).catch(() => {});
+      },
+    });
+    index = made;
+    return made;
+  };
 }

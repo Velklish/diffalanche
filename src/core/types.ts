@@ -198,3 +198,26 @@ export type TextSearch = {
   /** Whether the search stopped at the cap with more left unread. */
   capped: boolean;
 };
+
+/** What a definition the symbol index found is. */
+export type SymbolKind = "function" | "class" | "method" | "type";
+
+/** A definition found by name, with the lines around it for the preview. */
+export type SymbolHit = {
+  repo: string;
+  path: string;
+  line: number;
+  name: string;
+  kind: SymbolKind;
+  text: string;
+  before: string[];
+  after: string[];
+};
+
+/** The definitions that answer a query, best first, and the languages whose grammar would not
+ * load — their files are not in the index. */
+export type SymbolSearch = {
+  query: string;
+  hits: SymbolHit[];
+  failed: { language: string; message: string }[];
+};

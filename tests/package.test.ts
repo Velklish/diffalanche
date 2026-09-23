@@ -7,7 +7,7 @@ import { unexpected } from "../scripts/check-package.ts";
 const ROOT = resolve(dirname(fileURLToPath(import.meta.url)), "..");
 
 describe("what the npm tarball carries out of dist/", () => {
-  it("passes the bundle and the UI and refuses everything else", () => {
+  it("passes the bundle, the UI and the grammars, and refuses everything else", () => {
     expect(
       unexpected([
         "package.json",
@@ -15,6 +15,8 @@ describe("what the npm tarball carries out of dist/", () => {
         "dist/cli.js",
         "dist/ui/index.html",
         "dist/ui/assets/index-abc.js",
+        "dist/grammars/web-tree-sitter.wasm",
+        "dist/grammars/tree-sitter-c-sharp.wasm",
         "skills/diffalanche-review/SKILL.md",
       ]),
     ).toEqual([]);

@@ -43,6 +43,15 @@ and `bun run release` refuses a version that has no section. See
   development and CI, `bun run model:fetch` puts the pinned files in the cache and checks
   their SHA-256.
 
+- **Global search finds definitions by name** (DA-39). A symbol index built with tree-sitter —
+  `web-tree-sitter` over WASM, the grammars VS Code ships (ADR-015) — reads the functions,
+  classes, methods and types of TypeScript, TSX, JavaScript, C#, Python, Go, Rust and Java in
+  every repository of the review, in the background once the review is open, and again for
+  the files each `diff-changed` names or the change set shows moved. `GET /api/search/symbols?q=` answers the twenty best by a fuzzy match of the
+  name; the rows carry the `symbol` tag, the preview is the line that defines it, and `⏎` opens
+  the file at the definition. `config.json` takes a `grammars` table for languages of its own.
+  The npm package gains `dist/grammars/` (+0.96 MiB packed) and each binary about 10.6 MiB.
+
 - **Global search finds text in the working trees** (DA-38). A query of two characters or more
   is also sent to `GET /api/search/text`, which runs `git grep` for it as a fixed string,
   without regard to case, over tracked and untracked files of every repository in the review —

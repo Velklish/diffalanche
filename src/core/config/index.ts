@@ -30,7 +30,13 @@ export type Config = {
   port: number;
   /** `language → server command`; empty until Phase 3. */
   lsp: Record<string, string[]>;
+  /** Languages the symbol index reads besides the bundled ones, by name; `path` is absolute. */
+  grammars: Record<string, ConfigGrammar>;
 };
+
+/** One entry of `grammars`: a tree-sitter WASM file, the extensions it owns, and the query whose
+ * captures are the definitions ([09-ml.md](../../../docs/reference/09-ml.md)). */
+export type ConfigGrammar = { path: string; extensions: string[]; query: string };
 
 /** What the command line may override. Everything else comes from the file. */
 export type ConfigOverrides = {
@@ -121,6 +127,7 @@ export async function loadConfig(
     user: raw.user === undefined ? await resolveUser(root) : asString(file, "user", raw.user),
     port,
     lsp: asLsp(file, raw.lsp),
+    grammars: asGrammars(file, raw.grammars, root),
   };
 }
 
@@ -189,6 +196,30 @@ function asLsp(file: string, value: unknown): Record<string, string[]> {
     lsp[language] = parts;
   }
   return lsp;
+}
+
+function asGrammars(file: string, value: unknown, root: string): Record<string, ConfigGrammar> {
+  if (value === undefined) return {};
+  const raw = asObject(file, "grammars", value);
+  const grammars: Record<string, ConfigGrammar> = {};
+  for (const [language, entry] of Object.entries(raw)) {
+    const field = `grammars.${language}`;
+    const spec = asObject(file, field, entry);
+    const extensions = asStrings(file, `${field}.extensions`, spec.extensions);
+    if (extensions.length === 0 || extensions.some((one) => !/^\.[^./\\]+$/.test(one))) {
+      fail(
+        file,
+        `${field}.extensions`,
+        `expected extensions like ".kt", got ${JSON.stringify(extensions)}`,
+      );
+    }
+    grammars[language] = {
+      path: resolve(root, asString(file, `${field}.wasm`, spec.wasm)),
+      extensions,
+      query: asString(file, `${field}.query`, spec.query),
+    };
+  }
+  return grammars;
 }
 
 /**

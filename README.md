@@ -92,8 +92,10 @@ The keyboard follows the design handoff:
 | `esc` | closes the topmost thing that is open |
 
 Search covers file paths — the unchanged files of each repository too —,
-comment bodies, and the text of every working tree in the review, which opens
-at the line it was found on; symbols are Phase 2.
+comment bodies, the text of every working tree in the review, and definitions by
+name — functions, classes, methods and types of TypeScript, JavaScript, C#,
+Python, Go, Rust and Java, parsed with tree-sitter; a text or symbol hit opens
+at its line.
 
 Context outside the diff is one press away. `↑ 20 lines` on a hunk header brings
 the working tree's lines above it into the diff, and the sidebar's `all files`
@@ -161,7 +163,8 @@ defaults below are the configuration:
   "exclude": [],
   "user": "kim.p",
   "port": 4880,
-  "lsp": {}
+  "lsp": {},
+  "grammars": {}
 }
 ```
 
@@ -173,6 +176,7 @@ defaults below are the configuration:
 | `user` | git's `user.name` in the root, else the OS user | The name the UI signs comments with |
 | `port` | `4880` | What `serve` listens on; `--port` overrides it |
 | `lsp` | `{}` | `language → server command`; unused until Phase 3 |
+| `grammars` | `{}` | Languages the symbol index reads besides the bundled eight: `name → { wasm, extensions, query }`, the WASM path relative to the root ([09-ml.md](docs/reference/09-ml.md)) |
 
 A broken value is refused by name — `config.json: port: expected a port between
 1 and 65535` — rather than silently replaced by a default.

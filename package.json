@@ -46,6 +46,7 @@
     "@types/react": "^19.2.18",
     "@types/react-dom": "^19.2.7",
     "@vitejs/plugin-react": "^6.1.1",
+    "@vscode/tree-sitter-wasm": "^0.3.1",
     "gitdiff-parser": "^0.3.1",
     "hono": "^4.13.7",
     "onnxruntime-node": "^1.30.0",
@@ -56,6 +57,7 @@
     "typescript": "^7.0.2",
     "vite": "^8.2.2",
     "vitest": "^5.0.0",
+    "web-tree-sitter": "^0.27.0",
     "zustand": "^5.0.15"
   }
 }

@@ -787,11 +787,13 @@ The workflow does the rest, on the commit the tag names.
   can sign the attestation naming the commit and the run. The binaries stay out
   of the tarball — `files` in `package.json` lists `dist` and `skills` and
   excludes `dist/diffalanche-*`, which are release assets and about 490 MB of
-  them. What the tarball does carry is seventeen files: `package.json`, the
-  readme, the licence, the changelog, `dist/cli.js`, the built UI, and the
-  agent skills. **`bun run check:package` is what keeps it that way** — it runs
+  them. What the tarball does carry is twenty-six files: `package.json`, the
+  readme, the licence, the changelog, `dist/cli.js`, the built UI, the WASM of
+  the symbol index in `dist/grammars/`
+  ([ADR-015](../adr/adr-015-symbol-index-binding.md)), and the agent skills.
+  **`bun run check:package` is what keeps it that way** — it runs
   `npm pack --dry-run --json` and refuses anything under `dist/` that is not
-  `dist/cli.js` or under `dist/ui/`, so a by-product of a build or a release
+  `dist/cli.js` or under `dist/ui/` or `dist/grammars/`, so a by-product of a build or a release
   step cannot ride along unnoticed. `scripts/check-package.ts` holds the rule,
   `tests/package.test.ts` holds it to what the release workflow actually does,
   and the `check` job of `ci.yml` runs it over a real tarball: a stray file

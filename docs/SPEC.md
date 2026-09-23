@@ -213,11 +213,18 @@ A write to `review.json` or `comments.json` replaces the whole file at once, and
   "lsp": {
     "csharp": ["csharp-ls"],
     "typescript": ["typescript-language-server", "--stdio"]
+  },
+  "grammars": {
+    "kotlin": {
+      "wasm": "tools/tree-sitter-kotlin.wasm",
+      "extensions": [".kt", ".kts"],
+      "query": "(function_declaration (simple_identifier) @function)"
+    }
   }
 }
 ```
 
-Defaults without a config: `roots: ["."]`, `depth: 2`, port `4880`, empty `lsp`. The server listens on `127.0.0.1` only.
+Defaults without a config: `roots: ["."]`, `depth: 2`, port `4880`, empty `lsp`, no `grammars` beyond the bundled ones. A `grammars` entry adds a language to the symbol index: a tree-sitter grammar compiled to WASM, relative to the root, the extensions it owns, and a query whose captures `@function`, `@class`, `@method`, `@type` are the definitions. The server listens on `127.0.0.1` only.
 
 ## 8. CLI
 

@@ -45,7 +45,7 @@ import {
 import type { ReviewService } from "./review.ts";
 import { listBranches } from "./routes/branches.ts";
 import { fileRoute, fileSource, treeRoute } from "./routes/browse.ts";
-import { textRoute } from "./routes/search.ts";
+import { symbolIndexOf, symbolRoute, textRoute } from "./routes/search.ts";
 
 export type AppOptions = {
   config: Config;
@@ -138,14 +138,22 @@ export function createApp({ activity, config, events, review, ui, verbose }: App
     });
   }
 
+  // One symbol index a server, made when a review is first read (ADR-015).
+  const symbols = symbolIndexOf(config, events);
+
   // Serialised once per change, not once per request: the review is megabytes.
   // `?review=<name>` is the task an agent printed a link to; without it the
   // current session, as before ([ADR-010](../../docs/adr/adr-010-review-task-scope.md)).
-  app.get("/api/review", async (c) =>
-    c.body(await review.payload(named(c)), 200, {
-      "content-type": "application/json",
-    }),
-  );
+  app.get("/api/review", async (c) => {
+    const payload = await review.payload(named(c));
+    // The symbol index is read in the background once a review is open, not on the first question
+    // (ADR-015); the document is the one just served, held.
+    void review.document(named(c)).then(
+      (document) => symbols().warm(document.repositories),
+      () => {},
+    );
+    return c.body(payload, 200, { "content-type": "application/json" });
+  });
 
   app.get("/api/sessions", async (c) => c.json(await listSessions(config.dataDir)));
 
@@ -183,6 +191,8 @@ export function createApp({ activity, config, events, review, ui, verbose }: App
 
   // Text in the working tree of every repository of the review, a page at a time (DA-38).
   app.get("/api/search/text", (c) => textRoute(c, config, review, named(c)));
+  // Definitions by name, from the index a review read starts building (DA-39).
+  app.get("/api/search/symbols", (c) => symbolRoute(c, config, review, named(c), symbols()));
 
   app.get("/api/comments/:id", async (c) =>
     c.json(

@@ -2,13 +2,13 @@
  * [08-ui.md](../../docs/reference/08-ui.md), "Global search". */
 import { byCodePoint } from "../core/order.ts";
 import type { FileEntry } from "./store.ts";
-import type { Comment, TextHit } from "./types.ts";
+import type { Comment, SymbolHit, TextHit } from "./types.ts";
 
 /** One row of the results column. */
 export type SearchHit = {
-  /** `plain` is a file the review does not carry, `text` a line the server found; both open in
-   * browse mode. */
-  kind: "file" | "plain" | "comment" | "text";
+  /** `plain` is a file the review does not carry, `text` a line the server found and `symbol` a
+   * definition it indexed; all three open in browse mode. */
+  kind: "file" | "plain" | "comment" | "text" | "symbol";
   /** `<repo>/<path>` for a file, the thread's id for a comment. */
   id: string;
   repo: string;
@@ -17,12 +17,14 @@ export type SearchHit = {
   line: number | null;
   /** What the row shows: the path, or the first line of the comment. */
   label: string;
-  /** The tag beside it: the handoff's `file`, `file · unchanged` and `comment`, and `text`;
-   * `symbol` is DA-39's, and `comment · orphaned` waits for the status Phase 3 adds. */
-  tag: "file" | "file · unchanged" | "comment" | "text";
+  /** The tag beside it: the handoff's `file`, `file · unchanged`, `symbol` and `comment`, and
+   * `text`; `comment · orphaned` waits for the status Phase 3 adds. */
+  tag: "file" | "file · unchanged" | "comment" | "text" | "symbol";
   score: number;
-  /** A `text` hit's line and its neighbours, which is its preview. */
+  /** A `text` or `symbol` hit's line and its neighbours, which is its preview. */
   around?: { before: string[]; text: string; after: string[] };
+  /** What a `symbol` hit is: `function`, `class`, `method`, `type`. */
+  detail?: string;
 };
 
 /** One row of the preview column. */
@@ -126,6 +128,22 @@ export function textHits(hits: TextHit[]): SearchHit[] {
     tag: "text",
     score: 0,
     around: { before: hit.before, text: hit.text, after: hit.after },
+  }));
+}
+
+/** The server's definitions as rows, best first as it ranked them. */
+export function symbolHits(hits: SymbolHit[]): SearchHit[] {
+  return hits.map((hit) => ({
+    kind: "symbol",
+    id: `${hit.repo}/${hit.path}:${hit.line}:${hit.name}`,
+    repo: hit.repo,
+    path: hit.path,
+    line: hit.line,
+    label: hit.name,
+    tag: "symbol",
+    score: 0,
+    around: { before: hit.before, text: hit.text, after: hit.after },
+    detail: hit.kind,
   }));
 }
 
