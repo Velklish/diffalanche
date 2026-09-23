@@ -5,7 +5,13 @@ import { tmpdir } from "node:os";
 import { join } from "node:path";
 import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
 import { run } from "../src/cli/run.ts";
-import { EMBEDDING_MODEL } from "../src/core/ml/embed/model.ts";
+import { deliverFrom } from "../src/core/ml/embed/delivery.ts";
+import {
+  currentPlatform,
+  EMBEDDING_MODEL,
+  EMBEDDING_NATIVE,
+  EMBEDDING_PLATFORMS,
+} from "../src/core/ml/embed/model.ts";
 import type { UiAssets } from "../src/server/assets.ts";
 
 const noUi: UiAssets = { read: async () => null };
@@ -74,12 +80,70 @@ describe("model status", () => {
           present: true,
         })),
       },
+      runtime: {
+        name: "onnxruntime-node 1.30.0",
+        platform: currentPlatform(),
+        available: true,
+        from: "node_modules",
+      },
     });
+  });
+
+  it.skipIf(!EMBEDDING_PLATFORMS.includes(currentPlatform()))(
+    "says whether the runtime's files are beside the model on the two channels",
+    async () => {
+      const native = EMBEDDING_NATIVE[currentPlatform()] ?? [];
+      const runtime = join(location(), `onnxruntime-node-1.30.0-${currentPlatform()}`);
+      deliverFrom({ from: "release", base: "http://127.0.0.1:9" });
+      try {
+        expect((await cli("model", "status")).out).toContain(
+          `runtime    onnxruntime-node 1.30.0, ${currentPlatform()}: absent: ` +
+            `${native.map((file) => file.name).join(", ")} missing or incomplete`,
+        );
+        mkdirSync(runtime, { recursive: true });
+        for (const file of native) {
+          writeFileSync(join(runtime, file.name), "");
+          truncateSync(join(runtime, file.name), file.bytes);
+        }
+        const { out } = await cli("model", "status");
+        expect(out).toMatch(
+          new RegExp(
+            `runtime    onnxruntime-node 1\\.30\\.0, ${currentPlatform()}: present, [0-9.]+ MB`,
+          ),
+        );
+        const status = JSON.parse((await cli("model", "status", "--json")).out);
+        expect(status.runtime).toMatchObject({ location: runtime, present: true, from: "cache" });
+      } finally {
+        deliverFrom({ from: "sources" });
+      }
+    },
+  );
+
+  it("says the runtime is not available on an Intel Mac", async () => {
+    const platform = Object.getOwnPropertyDescriptor(process, "platform");
+    const arch = Object.getOwnPropertyDescriptor(process, "arch");
+    Object.defineProperty(process, "platform", { ...platform, value: "darwin" });
+    Object.defineProperty(process, "arch", { ...arch, value: "x64" });
+    try {
+      const { code, out } = await cli("model", "status");
+      expect(code).toBe(0);
+      expect(out).toContain(
+        "runtime    onnxruntime-node 1.30.0, darwin-x64: not available on this platform",
+      );
+      expect(JSON.parse((await cli("model", "status", "--json")).out).runtime).toEqual({
+        name: "onnxruntime-node 1.30.0",
+        platform: "darwin-x64",
+        available: false,
+      });
+    } finally {
+      Object.defineProperty(process, "platform", platform as PropertyDescriptor);
+      Object.defineProperty(process, "arch", arch as PropertyDescriptor);
+    }
   });
 
   it("is a subcommand of a group that names it", async () => {
     const { code, err } = await cli("model");
     expect(code).toBe(1);
-    expect(err).toBe("diffalanche: model needs a subcommand: status\n");
+    expect(err).toBe("diffalanche: model needs a subcommand: status, pull\n");
   });
 });

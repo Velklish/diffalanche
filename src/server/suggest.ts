@@ -28,7 +28,9 @@ async function stamp(path: string): Promise<string | null> {
 export function createSuggestService(
   dataDir: string,
   open: () => Promise<Opened> = () =>
-    openThreadedEmbedder(modelDirectory(defaultCacheHome(), EMBEDDING_MODEL)),
+    openThreadedEmbedder(modelDirectory(defaultCacheHome(), EMBEDDING_MODEL), (text) =>
+      process.stderr.write(text),
+    ),
 ): SuggestService {
   let started: Promise<Opened> | null = null;
   let queue: Promise<unknown> = Promise.resolve();

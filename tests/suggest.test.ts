@@ -203,7 +203,7 @@ describe("suggest", () => {
       const absent = await cli("suggest", "--body", "x", "--data-dir", dataDir);
       expect(absent.code).toBe(1);
       expect(absent.err).toMatch(
-        /^diffalanche: the embedding model is not in .*missing or incomplete\n$/,
+        /^diffalanche: the embedding model is not in .*missing or incomplete; `bun run model:fetch` puts it there\n$/,
       );
     } finally {
       vi.unstubAllEnvs();
@@ -235,7 +235,7 @@ describe("a thread whose module cannot load", () => {
   const broken = new URL("./helpers/throwing-worker.ts", import.meta.url);
 
   it("is refused as a model that is not there, and the process lives on", async () => {
-    const start = startThreadedEmbedder(tmpdir(), broken);
+    const start = startThreadedEmbedder(tmpdir(), { script: broken });
     await expect(start).rejects.toThrow(ModelError);
     await expect(start).rejects.toThrow(
       /^the embedding runtime could not be loaded: .*the runtime is not here/,
@@ -244,7 +244,9 @@ describe("a thread whose module cannot load", () => {
 
   it("answers GET /api/suggest with 503 and the reason", async () => {
     const dataDir = mkdtempSync(join(tmpdir(), "diffalanche-suggest-thread-"));
-    const service = createSuggestService(dataDir, () => startThreadedEmbedder(dataDir, broken));
+    const service = createSuggestService(dataDir, () =>
+      startThreadedEmbedder(dataDir, { script: broken }),
+    );
     try {
       await makeSession(dataDir, "alpha", [comment("c_a1")]);
       const config = await loadConfig({ root: dataDir, dataDir });

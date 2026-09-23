@@ -15,6 +15,29 @@ and `bun run release` refuses a version that has no section. See
 
 ### Added
 
+- **The embedding model reaches both channels** (DA-41). The npm package
+  downloads the model and this platform's ONNX Runtime files once, on the first
+  `suggest` or `index rebuild` or the first suggestion `serve` is asked for, from
+  its version's GitHub release — 180 MB on an Apple Silicon Mac — with progress on
+  standard error, every file checked against the SHA-256 the build pins and read
+  back once it has its name, and one clear line when it is offline, when a file
+  does not match, or when the disk refused the write; `serve` itself downloads
+  nothing, and answers a suggestion 503 while the files arrive. Two processes that
+  prepare at once each write files of their own. The runtime's files sit in a
+  directory of their version and platform under the model's, so two versions of
+  the tool never overwrite each other's; `model status` says whether they are
+  there, and on an Intel Mac that the runtime is not available.
+  `diffalanche model pull --embedding` fetches it ahead of time, and
+  `DIFFALANCHE_ASSETS_URL` names a mirror. The binaries carry both (233–290 MiB by
+  platform) and write them into the same cache on first use, from a child of
+  themselves so the process that loads the model stays under 768 MiB.
+  A Bun plugin shared by the npm bundle and the binaries loads the runtime's
+  binding from the cache, and the embedding thread ships as
+  `dist/embed-worker.js`. The release stages nineteen assets beside the binaries
+  and sums them all into `SHA256SUMS.txt`. The README has a section on the model's
+  files, sizes and cache, and the agent's CLI reference makes `model pull
+  --embedding` a step of its own before `suggest`, since a download is not resumed
+  ([09-ml.md](docs/reference/09-ml.md#delivery)).
 - **`suggest` and `GET /api/suggest`** (DA-35). `diffalanche suggest --body <text>
   [--json]` answers with the five past comments nearest the text across every
   review session — each with its similarity, severity, session, file and line —

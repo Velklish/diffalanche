@@ -29,7 +29,7 @@
     "synth": "bun run scripts/synth.ts",
     "model:fetch": "bun run scripts/fetch-model.ts",
     "build:ui": "vite build",
-    "build:cli": "bun build src/cli/index.ts --target node --outfile dist/cli.js --external '*embedder.ts'",
+    "build:cli": "bun run scripts/bundle.ts",
     "release": "bun run scripts/release.ts",
     "perf": "bun perf/gate.ts",
     "check:package": "bun run scripts/check-package.ts",

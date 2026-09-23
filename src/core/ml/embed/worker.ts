@@ -1,7 +1,6 @@
 /** The embedder on a thread of its own: the server's event loop hands it texts and waits for
  * vectors instead of running the model itself (09-ml.md, "In the server"). */
 import { parentPort, workerData } from "node:worker_threads";
-import { embedder } from "./embedder.ts";
 
 export type Request = { id: number; texts: string[] } | { close: true };
 export type Reply =
@@ -11,7 +10,11 @@ export type Reply =
 
 const port = parentPort;
 if (port !== null) {
-  const loaded = embedder((workerData as { location: string }).location);
+  const data = workerData as { location: string; binding: string | undefined };
+  // A thread has globals of its own: the patched build's binding path is set here too, and the
+  // runtime is imported only after it is (09-ml.md, "Delivery").
+  globalThis.__diffalancheOrtBinding = data.binding;
+  const loaded = import("./embedder.ts").then(({ embedder }) => embedder(data.location));
   loaded.then(
     () => port.postMessage({ ready: true } satisfies Reply),
     (error: unknown) => port.postMessage({ id: null, error: String(error) } satisfies Reply),

@@ -5,8 +5,8 @@ import { resolve } from "node:path";
 import { argv, exit, stderr, stdout } from "node:process";
 import { fileURLToPath } from "node:url";
 
-/** The npm channel is the bundle, the UI and the symbol index's WASM ([11-perf.md](../docs/reference/11-perf.md)). */
-const ALLOWED = ["dist/cli.js"];
+/** The npm channel is the bundle, its embedder worker, the UI and the symbol index's WASM ([11-perf.md](../docs/reference/11-perf.md)). */
+const ALLOWED = ["dist/cli.js", "dist/embed-worker.js"];
 const ALLOWED_TREES = ["dist/ui/", "dist/grammars/"];
 
 /** Entries of `dist/` the tarball must not carry: the binaries, and whatever
@@ -53,7 +53,7 @@ if (isMain()) {
     stderr.write(
       `check:package: the tarball carries ${strays.length} unexpected entr${strays.length === 1 ? "y" : "ies"} out of dist/:\n` +
         `${strays.map((file) => `  ${file}\n`).join("")}` +
-        "Only dist/cli.js, dist/ui/ and dist/grammars/ belong to the npm channel; everything else in dist/ is a release asset or a by-product.\n",
+        "Only dist/cli.js, dist/embed-worker.js, dist/ui/ and dist/grammars/ belong to the npm channel; everything else in dist/ is a release asset or a by-product.\n",
     );
     exit(1);
   }

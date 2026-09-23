@@ -47,9 +47,14 @@ describe("the release workflow keeps dist/ what the npm channel ships", () => {
 
   it("keeps the two checks the checksums step exists for", () => {
     expect(release).toContain('lines=$(wc -l < "$manifest" | tr -d " ")');
-    expect(release).toContain('if [ "$lines" -ne 6 ]; then');
-    // `-c` resolves the manifest's paths against the current directory, so the
-    // re-read still has to happen from inside dist/.
-    expect(release).toMatch(/cd dist\n(.*\n)*?\s*sha256sum -c "\$manifest"/);
+    // Six binaries and the assets the staging step counted (09-ml.md, "Delivery").
+    expect(release).toContain("expected=$((6 + ASSETS))");
+    expect(release).toContain('if [ "$lines" -ne "$expected" ]; then');
+    // `-c` resolves the manifest's paths against the current directory, so each
+    // file is re-read from the directory it was summed in.
+    expect(release).toContain(`(cd dist && grep ' diffalanche-' "$manifest" | sha256sum -c -)`);
+    expect(release).toContain(
+      `(cd "$RUNNER_TEMP/assets" && grep -v ' diffalanche-' "$manifest" | sha256sum -c -)`,
+    );
   });
 });

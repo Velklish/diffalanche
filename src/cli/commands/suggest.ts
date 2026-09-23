@@ -35,7 +35,10 @@ export const suggest: Command = {
     if (body.trim() === "") throw new UsageError("--body is blank");
     const { dataDir } = await context.config();
     await assertHistory(dataDir, "there is no history to suggest from");
-    const embedder = await openEmbedder(modelDirectory(defaultCacheHome(), EMBEDDING_MODEL));
+    const embedder = await openEmbedder(
+      modelDirectory(defaultCacheHome(), EMBEDDING_MODEL),
+      (text) => context.io.err(text),
+    );
     const { suggestions, severity, update } = await suggestFor(dataDir, embedder, body);
     for (const warning of update.warnings) context.io.err(`diffalanche: ${warning}\n`);
     if (flag(args, "json")) {

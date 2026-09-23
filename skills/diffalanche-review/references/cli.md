@@ -186,10 +186,26 @@ severity  critical, confidence 1.00
 [...]}`, each suggestion with `session`, `id`, `severity`, `repo`, `path`,
 `line`, `body` and `similarity`. `severity` is `null` when nothing written
 before is near enough — then your own judgement is all there is. It is a
-proposal, not a rule: a finding is as severe as what it breaks. The first call
-of a process loads the embedding model, seconds rather than milliseconds; a
-machine without the model answers exit code 1 and one line naming where it
-looked.
+proposal, not a rule: a finding is as severe as what it breaks.
+
+**The first `suggest` on a machine prepares the model.** The embedding model and
+its runtime come to the user cache once: from the npm package that is a download
+of 160–208 MB from the release (180 MB on an Apple Silicon Mac), with its
+progress on standard error; a binary writes out the copy it carries. After that
+the first call of a process loads the model, seconds rather than milliseconds.
+Prepare it as a step of its own before you rely on `suggest`:
+
+```
+$ diffalanche model pull --embedding
+```
+
+A download is not resumed: a command your harness kills on a timeout starts over
+on the next call, so give this step a long timeout or run it in the background,
+and ask `diffalanche model status` whether the model and its runtime are there.
+Offline and without the files, a command answers exit code 1 and one line naming
+the file and where it could not be fetched from; `DIFFALANCHE_ASSETS_URL` points
+the download at a mirror of the release. An Intel Mac has no model: `suggest`
+answers exit code 1 and says so.
 
 ## What the comment looks like on disk
 

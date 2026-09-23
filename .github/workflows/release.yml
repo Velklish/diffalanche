@@ -84,23 +84,42 @@ jobs:
       # collected back from six uploads instead of computed over one directory.
       # The binaries are not executed here: running each channel on its own
       # platform is the `smoke` matrix of ci.yml, on the commit this tag names.
+      # The binaries carry the model, and the release carries it for the npm channel: both are
+      # the pinned files, checked against the manifest's SHA-256 as they are fetched.
+      - name: the embedding model
+        run: bun run model:fetch
+
       - name: build both channels
         run: bun run build
 
+      # The model's files and every platform's native runtime files under their release names,
+      # which the npm channel downloads by (09-ml.md, "Delivery"). Outside dist/, which npm packs.
+      - name: the model and the runtime as release assets
+        id: assets
+        run: |
+          set -eu
+          count=$(bun run scripts/assets.ts "$RUNNER_TEMP/assets")
+          echo "count=$count" >> "$GITHUB_OUTPUT"
+          ls -l "$RUNNER_TEMP/assets"
+
       - name: checksums
-        # Six lines, one per target; `-c` re-reads them from inside `dist/`.
+        # One line per binary and one per asset; `-c` re-reads each from its own directory.
         # The manifest stays out of `dist/`, which npm packs (11-perf.md).
+        env:
+          ASSETS: ${{ steps.assets.outputs.count }}
         run: |
           set -eu
           manifest="$RUNNER_TEMP/SHA256SUMS.txt"
-          cd dist
-          sha256sum diffalanche-* > "$manifest"
+          (cd dist && sha256sum diffalanche-*) > "$manifest"
+          (cd "$RUNNER_TEMP/assets" && sha256sum -- *) >> "$manifest"
           lines=$(wc -l < "$manifest" | tr -d " ")
-          if [ "$lines" -ne 6 ]; then
-            echo "::error::SHA256SUMS.txt has $lines lines, one per binary built; six targets were expected"
+          expected=$((6 + ASSETS))
+          if [ "$lines" -ne "$expected" ]; then
+            echo "::error::SHA256SUMS.txt has $lines lines; six binaries and $ASSETS assets were expected"
             exit 1
           fi
-          sha256sum -c "$manifest"
+          (cd dist && grep ' diffalanche-' "$manifest" | sha256sum -c -)
+          (cd "$RUNNER_TEMP/assets" && grep -v ' diffalanche-' "$manifest" | sha256sum -c -)
           cat "$manifest"
 
       # The GitHub release first, npm second: a published npm version cannot be
@@ -110,7 +129,7 @@ jobs:
       # to re-run the job, which comes back through here. So an existing release
       # is reused rather than a second one refused, and the assets are replaced.
       #
-      # It is a draft until the binaries are on it. Half a gigabyte takes time to
+      # It is a draft until the binaries are on it. A gigabyte and a half takes time to
       # upload, and an upload can fail: published-then-filled would show a
       # release page with notes and no downloads, for seconds on the happy path
       # and until someone noticed on the unhappy one.
@@ -126,7 +145,7 @@ jobs:
             --notes-file "$RUNNER_TEMP/notes.md" \
             $PRERELEASE
           gh release upload "$GITHUB_REF_NAME" \
-            dist/diffalanche-* "$RUNNER_TEMP/SHA256SUMS.txt" \
+            dist/diffalanche-* "$RUNNER_TEMP"/assets/* "$RUNNER_TEMP/SHA256SUMS.txt" \
             --clobber
           gh release edit "$GITHUB_REF_NAME" --draft=false
 

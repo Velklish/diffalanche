@@ -39,7 +39,10 @@ export const indexRebuild: Command = {
     const { dataDir } = await context.config();
     await assertHistory(dataDir, "there is nothing to index");
     const started = performance.now();
-    const embedder = await openEmbedder(modelDirectory(defaultCacheHome(), EMBEDDING_MODEL));
+    const embedder = await openEmbedder(
+      modelDirectory(defaultCacheHome(), EMBEDDING_MODEL),
+      (text) => context.io.err(text),
+    );
     const { update } = await updateIndex(dataDir, embedder, { rebuild: true });
     for (const warning of update.warnings) context.io.err(`diffalanche: ${warning}\n`);
     const seconds = ((performance.now() - started) / 1000).toFixed(1);

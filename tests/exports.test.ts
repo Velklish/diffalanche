@@ -12,16 +12,11 @@ const ROOT = join(import.meta.dirname, "..");
 /** Exports nothing imports that stay exported on purpose, by file, each with the reason. */
 const KEPT: Record<string, Record<string, string>> = {
   "src/core/ml/symbols/grammars.ts": {
-    useGrammarSource: "the binary's entry imports it, and scripts/build.ts:125 writes that entry",
-  },
-  "src/core/ml/embed/model.ts": {
-    ModelFile:
-      "imported by src/core/ml/embed/delivery.ts of the ml2 track (DA-41); drop when the " +
-      "second of gates and ml2 lands",
+    useGrammarSource: "the binary's entry imports it, and scripts/build.ts:124 writes that entry",
   },
   "src/server/assets.ts": {
-    embeddedAssets: "the binary's entry imports it, and scripts/build.ts:167 writes that entry",
-    EmbeddedAsset: "the binary's generated asset table imports it (scripts/build.ts:156)",
+    embeddedAssets: "the binary's entry imports it, and scripts/build.ts:178 writes that entry",
+    EmbeddedAsset: "the binary's generated asset table imports it (scripts/build.ts:153)",
   },
 };
 

@@ -18,7 +18,7 @@ import { diff } from "./commands/diff.ts";
 import { indexRebuild, indexStatusCommand } from "./commands/embedding-index.ts";
 import { exportReview } from "./commands/export.ts";
 import { list } from "./commands/list.ts";
-import { modelStatus } from "./commands/model.ts";
+import { modelPull, modelStatus } from "./commands/model.ts";
 import { reply } from "./commands/reply.ts";
 import {
   reviewBase,
@@ -68,6 +68,7 @@ const COMMANDS: Command[] = [
   indexRebuild,
   indexStatusCommand,
   modelStatus,
+  modelPull,
   version,
 ];
 

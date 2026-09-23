@@ -273,7 +273,8 @@ ubuntu, macOS, and Windows, `bun` on ubuntu and macOS, and `binary` on ubuntu
 and macOS, each building its own channel in the job that runs it. The binary job
 builds the one binary it runs — `bun run build -- --target current` — rather
 than all six and throwing five away; the name comes from `process.platform` and
-`process.arch`.
+`process.arch`. It runs `bun run model:fetch` first, as `e2e` does: the binary
+embeds the pinned model from the user cache (09-ml.md).
 
 Bun is pinned to the version of the other jobs where it is the toolchain that
 builds the bundle and generates the fixture, and taken as `latest` in the `bun`
@@ -860,10 +861,18 @@ The workflow does the rest, on the commit the tag names.
   back from six uploads instead of computed over one directory. The binaries are
   not executed in this workflow: running each channel on its own platform is
   what the smoke matrix does, on the same commit.
-- **`SHA256SUMS.txt`** is written over `dist/diffalanche-*` and attached to the
-  release beside the six binaries. The step counts its own lines first — six
-  targets, six lines — and then re-reads the files with `sha256sum -c`. What
-  that rules out is a build that emitted fewer binaries than the six targets,
+- **The model and the runtime are release assets too.** `bun run model:fetch`
+  puts the pinned model in the runner's cache before the build — the binaries
+  embed it — and `scripts/assets.ts "$RUNNER_TEMP/assets"` stages the nineteen
+  files the npm channel downloads, the model's three and every platform's native
+  runtime files under names like
+  `onnxruntime-node-1.30.0-linux-x64-libonnxruntime.so.1`, each checked against
+  its pin, and prints how many it staged ([09-ml.md](09-ml.md#delivery)).
+- **`SHA256SUMS.txt`** is written over `dist/diffalanche-*` and the staged assets
+  and attached to the release beside them. The step counts its own lines first —
+  six binaries plus the assets the staging counted — and then re-reads every file
+  with `sha256sum -c` from the directory it was summed in. What that rules out is
+  a build that emitted fewer binaries, or a staging that left an asset out,
   which would otherwise produce a release quietly short of a platform; what it
   does not do is authenticate the download, which is the provenance
   attestation's job on the npm side and the release page's on this one.
@@ -874,20 +883,20 @@ The workflow does the rest, on the commit the tag names.
   left in it shipped in the tarball, listing binaries the tarball does not
   contain (DA-106). Writing it elsewhere makes that structural rather than a
   second exclusion in `files` to keep in sync. `sha256sum -c` resolves the
-  manifest's paths against the current directory, so the re-read still happens
-  from inside `dist/`.
+  manifest's paths against the current directory, so the binaries' lines are
+  re-read from inside `dist/` and the assets' from their staging directory.
 - **npm is published with provenance:** `npm publish --provenance --access
   public` from the repository secret `NPM_TOKEN`, with `id-token: write` so npm
   can sign the attestation naming the commit and the run. The binaries stay out
   of the tarball — `files` in `package.json` lists `dist` and `skills` and
-  excludes `dist/diffalanche-*`, which are release assets and about 490 MB of
-  them. What the tarball does carry is twenty-six files: `package.json`, the
-  readme, the licence, the changelog, `dist/cli.js`, the built UI, the WASM of
-  the symbol index in `dist/grammars/`
-  ([ADR-015](../adr/adr-015-symbol-index-binding.md)), and the agent skills.
-  **`bun run check:package` is what keeps it that way** — it runs
+  excludes `dist/diffalanche-*`, which are release assets, 233–290 MiB each
+  with the model inside. What the tarball does carry is twenty-seven files:
+  `package.json`, the readme, the licence, the changelog, `dist/cli.js`,
+  `dist/embed-worker.js`, the built UI, the WASM of the symbol index in
+  `dist/grammars/` ([ADR-015](../adr/adr-015-symbol-index-binding.md)), and the
+  agent skills. **`bun run check:package` is what keeps it that way** — it runs
   `npm pack --dry-run --json` and refuses anything under `dist/` that is not
-  `dist/cli.js` or under `dist/ui/` or `dist/grammars/`, so a by-product of a build or a release
+  `dist/cli.js`, `dist/embed-worker.js` or under `dist/ui/` or `dist/grammars/`, so a by-product of a build or a release
   step cannot ride along unnoticed. `scripts/check-package.ts` holds the rule,
   `tests/package.test.ts` holds it to what the release workflow actually does,
   and the `check` job of `ci.yml` runs it over a real tarball: a stray file
@@ -898,7 +907,7 @@ The workflow does the rest, on the commit the tag names.
 
 The release is a draft until its binaries are on it — `gh release create
 --draft`, then the upload, then `gh release edit --draft=false` — so the page
-appears complete or not at all. Half a gigabyte takes time to upload and an
+appears complete or not at all. A gigabyte and a half takes time to upload and an
 upload can fail; published first would mean a page carrying notes and no
 downloads, for seconds when it works and until someone noticed when it did not.
 

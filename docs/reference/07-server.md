@@ -185,7 +185,11 @@ and a search. Requests are answered one at a time, in the order they came: two
 keystrokes arriving together would otherwise both embed the same new comments.
 The server's `close()` ends the thread (`closeApp`), and a thread that ended on
 its own is started again by the next request. A thread that fails to load is the
-503 below, not a fault of the server ([09-ml.md](09-ml.md#in-the-server)).
+503 below, not a fault of the server ([09-ml.md](09-ml.md#in-the-server)). On the
+npm package and the binary the first request also starts putting the model's files
+in the user cache, in the background, and no request waits for that: until they
+are there each is the 503, saying the model is being put in place, and the one
+after a preparation that failed says why ([09-ml.md](09-ml.md#delivery)).
 
 ### The review document
 
@@ -718,7 +722,7 @@ Every refusal is the domain's own code and message
 | `scope-has-comments` | 409, with `count` and `comments` beside the message |
 | every other `DomainError` | 400 |
 | a file of the data directory that cannot be read | 500, `error: "storage"` |
-| the embedding model is not in the user cache, or does not run on this platform | 503, `error: "model"` |
+| the embedding model is not in the user cache, is being put in place, or does not run on this platform | 503, `error: "model"` |
 
 The 409 is the one refusal that is neither "there is nothing here" nor "that
 request is wrong": the request is well formed and the state says no, and what it

@@ -15,12 +15,14 @@ export type ThreadedEmbedder = Embedder & {
 
 type Pending = { resolve: (vectors: Float32Array[]) => void; reject: (error: Error) => void };
 
-/** `script` is the thread's module; a test hands one that fails to load. */
+/** `binding` is the runtime's binding in the cache on the two channels, `undefined` from sources;
+ * `script` is the thread's module, which a test replaces with one that fails to load. */
 export function startThreadedEmbedder(
   location: string,
-  script: URL = new URL("./worker.ts", import.meta.url),
+  options: { binding?: string | undefined; script?: URL } = {},
 ): Promise<ThreadedEmbedder> {
-  const worker = new Worker(script, { workerData: { location } });
+  const script = options.script ?? new URL("./worker.ts", import.meta.url);
+  const worker = new Worker(script, { workerData: { location, binding: options.binding } });
   const pending = new Map<number, Pending>();
   let next = 1;
   let gone: Error | null = null;

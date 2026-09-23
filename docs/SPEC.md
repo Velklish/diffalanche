@@ -250,8 +250,8 @@ Every command accepts `--review <name>` (default: the current session) and `--da
 | `export [--status open\|all] [--format md\|json]` | markdown grouped by repository |
 | `suggest --body <text> [--json]` | similar past comments and a likely severity (Phase 2) |
 | `index rebuild`, `index status [--json]` | rebuild the embedding index; what it holds and what it is missing (Phase 2) |
-| `model status [--json]` | the embedding model's version and cache location, and whether it is there (Phase 2); the generative model joins it in Phase 4 |
-| `model pull` | generative model on demand (Phase 4) |
+| `model status [--json]` | the embedding model's version and cache location, and whether it and its runtime are there (Phase 2); the generative model joins it in Phase 4 |
+| `model pull [--embedding]` | `--embedding`: the embedding model and its runtime into the user cache now rather than on first use (Phase 2); without it, the generative model on demand (Phase 4) |
 | `insights [--since <date>] [--json]` | report of recurring findings (Phase 4) |
 
 CLI defaults: `--author agent`, `--role agent`. The UI writes `author` from `config.user` and `role: human`.

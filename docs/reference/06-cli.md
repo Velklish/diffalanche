@@ -3,8 +3,8 @@
 `src/cli` is the whole agent contract: its flags, its output, and its exit codes
 are what a skill is written against ([ADR-004](../adr/adr-004-agent-contract.md)).
 The commands of `docs/SPEC.md` section 8 that exist today are below; the Phase 2
-and Phase 4 rows — `model pull`, `insights`, and `review delete` — are not
-written yet. Of the `model` group only `model status` exists.
+and Phase 4 rows — `model pull` without `--embedding`, `insights`, and `review delete` — are not
+written yet. Of the `model` group, `model status` and `model pull --embedding` exist.
 
 ## Commands
 
@@ -32,7 +32,8 @@ written yet. Of the `model` group only `model status` exists.
 | `diffalanche suggest [--json] --body <text>` | the five past comments nearest the text across every review session, with their sources, and the severity they vote for; see [09-ml.md](09-ml.md#suggestions) |
 | `diffalanche index rebuild` | embeds every comment of every review session again and writes the index; see [09-ml.md](09-ml.md#index-rebuild-and-index-status) |
 | `diffalanche index status [--json]` | what the index holds, what it is missing, and what built it, read without the model |
-| `diffalanche model status [--json]` | the embedding model's version, where it is cached, and whether it is there; see [09-ml.md](09-ml.md#model-status) |
+| `diffalanche model pull [--embedding]` | puts the embedding model and its runtime into the user cache now rather than on first use, with the download's progress on standard error; see [09-ml.md](09-ml.md#delivery) |
+| `diffalanche model status [--json]` | the embedding model's version, where it is cached, and whether it and this platform's runtime are there; see [09-ml.md](09-ml.md#model-status) |
 | `diffalanche version` | the version of the package; also `--version` |
 | `diffalanche --help` | the command list; also `-h`, `help`, and no arguments at all |
 

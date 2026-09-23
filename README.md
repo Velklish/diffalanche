@@ -29,7 +29,8 @@ npx diffalanche serve --open
 
 It runs on Node 22 or newer. A binary, one per platform, is the other channel:
 `darwin-x64`, `darwin-arm64`, `linux-x64`, `linux-arm64`, `windows-x64`, and
-`windows-arm64`, each with the UI inside it and no runtime to install. Windows
+`windows-arm64`, each with the UI and the embedding model inside it and no
+runtime to install ([The embedding model](#the-embedding-model)). Windows
 binaries build but have never been run on Windows.
 
 Until the first release, run it from a clone. Bun is the toolchain:
@@ -151,6 +152,43 @@ variable or `dataDir` is taken from the root, so one value serves every root.
 Only `dataDir` is read from that file — the settings below stay in
 `config.json` inside the data directory.
 
+## The embedding model
+
+Suggestions — `suggest`, and the composer from DA-36 — come from a multilingual
+embedding model that runs on your machine and needs nothing online once it is
+there: `multilingual-e5-small` in int8, pinned to one revision, with the ONNX
+Runtime that runs it. Both live in the user cache, shared by every root:
+
+```
+$XDG_CACHE_HOME/diffalanche/models/multilingual-e5-small-761b726dd34f/   # ~/.cache without the variable
+  model_quantized.onnx     118.3 MB
+  tokenizer.json            17.1 MB
+  tokenizer_config.json      443 B
+  onnxruntime-node-1.30.0-<platform>/   # the runtime: its binding and library, 25–73 MB
+```
+
+- **The npm package** carries neither. The first `suggest` or `index rebuild`, or
+  the first suggestion `serve` is asked for, downloads them from this version's
+  GitHub release — 160–208 MB by platform, 180 MB on an Apple Silicon Mac — with
+  the progress on standard error, and checks every file against the SHA-256 the
+  build pins before it keeps it. `serve` alone downloads nothing, and while the
+  download runs it answers a suggestion with 503 rather than waiting.
+  `diffalanche model pull --embedding` does it ahead of time. A download is not
+  resumed: an interrupted one starts over. Offline and without the files, the
+  command says which file it could not fetch and from where, and writes nothing.
+- **A binary** carries both: 233–290 MiB by platform, 233 MiB on an Apple Silicon
+  Mac. On first use it writes them into the same cache, and never reaches the
+  network for them.
+- **An Intel Mac** (darwin-x64) gets neither: the runtime has no build for it, and
+  suggestions are not available there.
+
+`diffalanche model status` says where the model is expected and whether it and
+the runtime are there. Deleting the directory is safe: the next use fetches or
+writes it again. A new version with another model or runtime gets a directory of
+its own and leaves the old one where it was — 160–208 MB each, removed
+only by hand. `DIFFALANCHE_ASSETS_URL` points the npm package at a mirror of the
+release.
+
 ## Configuration
 
 `.diffalanche/config.json`, all of it optional — with no file at all, the
@@ -212,7 +250,8 @@ flags, and `tests/readme-cli.test.ts` fails if the two ever disagree.
 | `suggest [--json] --body <text>` | past comments like this one from every review session, and the severity they vote for |
 | `index rebuild` | embed every comment of every review session again and write the embedding index |
 | `index status [--json]` | what the embedding index holds, and what it is missing |
-| `model status [--json]` | the embedding model: its version, where it is cached, and whether it is there |
+| `model status [--json]` | the embedding model: its version, where it is cached, and whether it and its runtime are there |
+| `model pull [--embedding]` | put the embedding model and its runtime into the user cache now rather than on first use; `--embedding` is required until the generative model (Phase 4) |
 | `version` | print the version of diffalanche; also `--version` |
 
 Every command also takes these, **after** the command name — `diffalanche diff
@@ -529,19 +568,22 @@ point at the commit before it.
 - `bun run build` builds the UI, `dist/cli.js`, and all six binaries in one job —
   `bun build --compile` cross-compiles, so a matrix of six would only rebuild the
   same UI six times;
-- the binaries and a `SHA256SUMS.txt` are attached to a GitHub release. The
-  checksum step counts its own lines against the six targets and re-reads the
-  files with `sha256sum -c`, so a build that emitted fewer binaries stops the
-  release instead of shipping one short a platform;
+- the binaries, the embedding model's files and each platform's runtime files —
+  nineteen assets the npm channel downloads, staged by `scripts/assets.ts` after
+  `bun run model:fetch` — and a `SHA256SUMS.txt` are attached to a GitHub
+  release. The checksum step counts its own lines against the six binaries plus
+  the assets and re-reads every file with `sha256sum -c`, so a build that emitted
+  fewer stops the release instead of shipping one short;
 - `npm publish --provenance` publishes the npm channel from the repository
   secret `NPM_TOKEN`, with the workflow's OIDC token as the provenance
   attestation. The six binaries stay out of the tarball: they are release
-  assets, and `files` in `package.json` excludes them. Without the secret the
+  assets, and `files` in `package.json` excludes them; the package is the bundle,
+  its embedding thread `dist/embed-worker.js`, and the UI. Without the secret the
   step is skipped with a notice, and the GitHub release is the whole release.
 
 The release page appears only once its binaries are on it: the release is
 created as a draft, the assets are uploaded, and the draft is published last.
-Half a gigabyte takes time to upload and an upload can fail, and a release page
+A gigabyte and a half takes time to upload and an upload can fail, and a release page
 with notes and no downloads is worse than one that is not there yet.
 
 The job can be run again. The GitHub release is reused if it already exists and

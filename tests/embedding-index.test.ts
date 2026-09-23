@@ -351,7 +351,8 @@ describe("the index with an embedder that is a function of the text", () => {
       expect(out).toBe("");
       expect(err).toBe(
         `diffalanche: the embedding model is not in ${modelDirectory(cacheHome, EMBEDDING_MODEL)}: ` +
-          "model_quantized.onnx, tokenizer.json, tokenizer_config.json missing or incomplete\n",
+          "model_quantized.onnx, tokenizer.json, tokenizer_config.json missing or incomplete; " +
+          "`bun run model:fetch` puts it there\n",
       );
     } finally {
       vi.unstubAllEnvs();
