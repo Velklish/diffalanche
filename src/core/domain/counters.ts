@@ -7,7 +7,7 @@ import { byCodePoint } from "../order.ts";
 import { type Comment, SEVERITIES, type Severity } from "../storage/types.ts";
 
 /** The last message of a thread: the comment itself when nothing was replied. */
-export function lastMessageRole(comment: Comment): Comment["role"] {
+function lastMessageRole(comment: Comment): Comment["role"] {
   return comment.replies.at(-1)?.role ?? comment.role;
 }
 
@@ -31,11 +31,11 @@ export type Counters = {
   severity: Severity | null;
 };
 
-export type FileCounters = { path: string; counters: Counters };
-export type RepositoryCounters = { repo: string; counters: Counters; files: FileCounters[] };
+type FileCounters = { path: string; counters: Counters };
+type RepositoryCounters = { repo: string; counters: Counters; files: FileCounters[] };
 export type ReviewCounters = { counters: Counters; repositories: RepositoryCounters[] };
 
-export function countComments(comments: Comment[]): Counters {
+function countComments(comments: Comment[]): Counters {
   const open = comments.filter((comment) => comment.status === "open");
   return {
     total: comments.length,

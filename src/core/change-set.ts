@@ -62,7 +62,7 @@ function sortWarnings(warnings: ScanWarning[]): ScanWarning[] {
 }
 
 /** A cache that carries the root warnings a patch puts back. */
-export type PatchableCache = DiffCache & { rootWarnings: ScanWarning[] };
+type PatchableCache = DiffCache & { rootWarnings: ScanWarning[] };
 
 /** Whether one repository may be patched into this cache: it answers this base and scope, and it
  * was written with its root warnings ([02-git.md](../../docs/reference/02-git.md)). */
@@ -157,7 +157,7 @@ export function filterChange(scope: Scope, change: RepositoryChange): Repository
 }
 
 /** What one scan of the root came to: the cache, and every repository it saw. */
-export type ReviewScan = {
+type ReviewScan = {
   cache: DiffCache;
   /**
    * The path of every repository the scan found, with changes or without. A

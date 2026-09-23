@@ -12,17 +12,17 @@ import { streamSSE } from "hono/streaming";
 import type { ActivityEvent, EventBus, WatcherEvent } from "../core/watcher/index.ts";
 
 /** One frame on the wire: the id the client sends back, the name, and its JSON. */
-export type EventFrame = { id: number; event: string; data: string };
+type EventFrame = { id: number; event: string; data: string };
 
 /** How many frames a client can miss and still be caught up rather than reloaded. */
-export const REPLAY_CAPACITY = 200;
+const REPLAY_CAPACITY = 200;
 
 /**
  * The frame a client gets instead of a replay it can no longer have: it says
  * "read the review again", which is the only honest answer when the events that
  * would have brought it up to date are gone.
  */
-export const RELOAD_EVENT = "reload";
+const RELOAD_EVENT = "reload";
 
 /**
  * How often a stream that has nothing to say says so. Anything between the
@@ -40,10 +40,10 @@ export const HEARTBEAT_MS = 15_000;
  * the request is handled, so nothing is missed in that window; it is the
  * silence that is invisible.
  */
-export const HELLO = ": connected\n\n";
+const HELLO = ": connected\n\n";
 
 /** One open stream. `end` is the server stopping, not the client leaving. */
-export type Client = {
+type Client = {
   send: (frame: EventFrame) => void;
   end: () => void;
   /** The task this window is on, `null` for the current session. A **registry**
@@ -56,7 +56,7 @@ export type Client = {
  * that tells it to read the review again because the ring cannot reach that far
  * back. Never both.
  */
-export type Replay = { frames: EventFrame[]; reload: EventFrame | null };
+type Replay = { frames: EventFrame[]; reload: EventFrame | null };
 
 export type EventStream = {
   /** Puts an event on the stream and keeps it for a client that reconnects. */

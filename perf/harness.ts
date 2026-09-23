@@ -38,7 +38,7 @@ export type VariantSpec = { name: string; query: string };
 export const VARIANTS: VariantSpec[] = [{ name: "default", query: "" }];
 
 /** The two sessions a run switches between; the second one the harness makes. */
-export type Sessions = { current: string; other: string };
+type Sessions = { current: string; other: string };
 
 export type Measurement = {
   variant: string;
@@ -356,7 +356,7 @@ async function twoSessions(config: Config): Promise<Sessions> {
 
 export { SCRATCH_SESSION, twoSessions };
 
-export type Options = { fixture: string; variants: string[]; runs: number };
+type Options = { fixture: string; variants: string[]; runs: number };
 
 export function parseArgs(argv: string[], defaultRuns = 1): Options {
   const options: Options = { fixture: ".perf/fixture", variants: [], runs: defaultRuns };

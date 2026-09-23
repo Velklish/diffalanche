@@ -13,21 +13,16 @@
 
 export type {
   Counters,
-  FileCounters,
-  RepositoryCounters,
   ReviewCounters,
 } from "../core/domain/counters.ts";
 export type {
-  Anchor,
   Base,
   Comment,
   CommentStatus,
   Reply,
   Review,
   ReviewStatus,
-  Role,
   Scope,
-  ScopeEntry,
   Severity,
   Side,
 } from "../core/storage/types.ts";
@@ -41,23 +36,17 @@ export type {
   BaseMode,
   FileChange,
   FileContent,
-  FileOmission,
   FileRevision,
-  FileStatus,
   RepositoryChange,
   RepositoryTree,
-  ResolvedBase,
-  ReviewBundle,
   ReviewDocument,
   ScanWarning,
   SymbolHit,
-  SymbolKind,
   SymbolSearch,
   TextHit,
   TextSearch,
-  TreeEntry,
 } from "../core/types.ts";
-export type { ActivityEvent, ActivityVerb } from "../core/watcher/activity.ts";
+export type { ActivityEvent } from "../core/watcher/activity.ts";
 
 /**
  * What `GET /api/repos/branches` answers with (DA-24): every branch of the

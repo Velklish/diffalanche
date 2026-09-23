@@ -121,7 +121,7 @@ function addFeatureRepository(out: string): void {
   git(clone, "worktree", "add", "-q", "-b", "nested-worktree", "nested/inner", "HEAD");
 }
 
-export function buildFixture(out: string): void {
+function buildFixture(out: string): void {
   generate({ out, profile: PROFILES.small });
   addFeatureRepository(resolve(out));
 }

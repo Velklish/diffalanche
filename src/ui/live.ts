@@ -18,9 +18,6 @@ import { PROBE_Y } from "./reveal.ts";
 import { onTask, refusal, useStore } from "./store.ts";
 import type { Comment } from "./types.ts";
 
-/** What the sidebar footer says about the stream. */
-export type Connection = "connecting" | "watching" | "reconnecting";
-
 /** A shift smaller than this is not worth a scroll: a sub-pixel jitter is not a jump. */
 const ANCHOR_EPSILON = 1;
 

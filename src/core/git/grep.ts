@@ -3,9 +3,9 @@
 import { gitLines } from "./run.ts";
 
 /** One line that holds the query: the path relative to the repository, its number, its text. */
-export type GrepMatch = { path: string; line: number; text: string };
+type GrepMatch = { path: string; line: number; text: string };
 
-export type GrepOptions = {
+type GrepOptions = {
   /** The most matches kept; git is stopped at the first one past it. */
   limit: number;
   /** The most matches kept from one file; the rest of it is reached by opening it. */
@@ -21,7 +21,7 @@ const PINNED = ["grep.column=false", "grep.fullName=false"];
 const READ_PER_KEPT = 20;
 
 /** Lines of one file passed over before it is set aside and git asked again without it. */
-export const SKIPPED_PER_FILE = 100;
+const SKIPPED_PER_FILE = 100;
 
 /** How many files may be set aside that way before the search calls itself capped. */
 const SET_ASIDE = 20;

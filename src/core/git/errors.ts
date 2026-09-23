@@ -1,6 +1,6 @@
 /** Why a git call failed, told apart by what Node reports rather than by which helper ran it.
  * The four shapes and how they are recognised are in `docs/reference/02-git.md`. */
-export type GitFailure = "not-started" | "exited" | "killed" | "too-large";
+type GitFailure = "not-started" | "exited" | "killed" | "too-large";
 
 /** Everything the git layer refuses, carrying which of the four it was and what git said.
  * `repositoryFault` is true when one repository is at fault and its neighbours still read. */

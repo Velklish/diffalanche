@@ -7,7 +7,7 @@ import { median } from "./harness.ts";
  * named in `pendingUntil` turns it on.
  */
 /** The fields of a measurement a budget line can read: the numeric ones. */
-export type MetricField = {
+type MetricField = {
   [K in keyof Measurement]: Measurement[K] extends number ? K : never;
 }[keyof Measurement];
 
@@ -55,7 +55,7 @@ export const GATE_VARIANT: VariantSpec = { name: "default", query: "" };
 
 /** The gate is set on what this machine reaches; 8.3 ms, the frame of 120 fps,
  * stays the goal of `docs/SPEC.md` section 6 (`docs/reference/11-perf.md`). */
-export const CPU_PER_FRAME_NOTE =
+const CPU_PER_FRAME_NOTE =
   "9.5 ms is what the gate enforces; 8.3 ms, the frame of 120 fps, is the goal of docs/SPEC.md section 6";
 
 /** The allowance of a GitHub-hosted runner: derived from what a runner
@@ -74,7 +74,7 @@ export type GateRow = {
   unmeasured: boolean;
 };
 
-export type EvaluateOptions = {
+type EvaluateOptions = {
   /** The table to evaluate; the one above unless a test brings its own. */
   budgets?: Budget[];
   /** 1 on a development machine; `RUNNER_ALLOWANCE` on a GitHub-hosted runner. */

@@ -197,6 +197,16 @@ describe("the other routes", () => {
     expect(worktree?.branch).not.toBe("");
   });
 
+  it("registers each method and path once", () => {
+    // Hono answers with the first match, so an edit to a second copy does nothing. `use` and
+    // `all` register as ALL and are chains by design: only a method's own handler is held.
+    const handlers = app.routes
+      .filter((route) => route.method !== "ALL")
+      .map((route) => `${route.method} ${route.path}`);
+    expect(handlers).toContain("GET /api/repos/branches");
+    expect(handlers.filter((pair, at) => handlers.indexOf(pair) !== at)).toEqual([]);
+  });
+
   it("serves the page for anything that is not the API, and refuses an unknown API route", async () => {
     expect(await (await app.request("/")).text()).toBe(PAGE);
     // The UI routes in the browser, so a deep link is the page as well.

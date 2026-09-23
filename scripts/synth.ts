@@ -39,7 +39,7 @@ export const PROFILES = {
   small: { repos: 3, files: 20, lines: 2_000, comments: 20 },
 } as const satisfies Record<string, Profile>;
 
-export interface SynthOptions {
+interface SynthOptions {
   /** Root of the generated review. Created if missing, emptied if it exists. */
   out: string;
   seed?: number;

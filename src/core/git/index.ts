@@ -15,12 +15,11 @@ import {
   untrackedFiles,
 } from "./run.ts";
 
-export type { PatchOptions } from "./patch.ts";
-export { DEFAULT_MAX_FILE_BYTES, parseDiff } from "./patch.ts";
+export { parseDiff } from "./patch.ts";
 export { checkIgnore } from "./run.ts";
 
 /** What a base resolution came to in one repository. */
-export type BaseResolution = {
+type BaseResolution = {
   /** `null` when the base did not resolve and the repository is out of the review. */
   base: ResolvedBase | null;
   warnings: string[];
@@ -31,7 +30,7 @@ export type BaseResolution = {
  * decision 4). Every fallback is a warning, so the reason a repository is
  * measured against something other than what was asked for is never silent.
  */
-export async function resolveBase(cwd: string, spec: BaseSpec): Promise<BaseResolution> {
+async function resolveBase(cwd: string, spec: BaseSpec): Promise<BaseResolution> {
   if (spec.mode === "ref") {
     const sha = await revParse(cwd, spec.ref);
     if (!sha) return { base: null, warnings: [`ref ${spec.ref} does not resolve`] };

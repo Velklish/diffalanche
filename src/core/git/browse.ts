@@ -60,7 +60,7 @@ export async function listTree(cwd: string, sha: string | null): Promise<TreeEnt
 }
 
 /** A file read whole: its text, or why it is listed without it. */
-export type FileRead = { text: string; omitted: null } | { text: null; omitted: FileOmission };
+type FileRead = { text: string; omitted: null } | { text: null; omitted: FileOmission };
 
 /** What the domain anchors a line outside the change set from: a file's text on disk or at a
  * revision, `null` when there is none — the UI's server and the CLI read it the same way. */

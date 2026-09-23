@@ -3,7 +3,7 @@
 import type { Store } from "./store.ts";
 
 /** Every overlay of the workspace, topmost first. */
-export type OverlayName =
+type OverlayName =
   | "palette"
   | "scopeConfirm"
   | "scope"

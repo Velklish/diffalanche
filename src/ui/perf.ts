@@ -4,9 +4,9 @@
  * frame it caused has actually been painted.
  */
 
-export type LongTask = { start: number; duration: number };
+type LongTask = { start: number; duration: number };
 
-export type ScrollResult = {
+type ScrollResult = {
   frames: number;
   startTime: number;
   endTime: number;
@@ -14,7 +14,7 @@ export type ScrollResult = {
   longTasks: LongTask[];
 };
 
-export type PerfApi = {
+type PerfApi = {
   ready: boolean;
   files: number;
   /** `performance.now()` when the review response was parsed. */
@@ -40,7 +40,7 @@ export type PerfApi = {
 
 /** One correction of the reading position; `grewAfter` is the growth that
  * arrived after the measurement ([08-ui.md](../../docs/reference/08-ui.md)). */
-export type Settled = {
+type Settled = {
   /** `null` when the probe found nothing to anchor to. */
   delta: number | null;
   heightBefore: number;

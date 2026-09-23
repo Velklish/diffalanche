@@ -47,7 +47,7 @@ import { listBranches } from "./routes/branches.ts";
 import { fileRoute, fileSource, treeRoute } from "./routes/browse.ts";
 import { symbolIndexOf, symbolRoute, textRoute } from "./routes/search.ts";
 
-export type AppOptions = {
+type AppOptions = {
   config: Config;
   review: ReviewService;
   ui: UiAssets;
@@ -92,7 +92,7 @@ function named(c: Context): string | undefined {
 }
 
 /** What `GET /api/config` gives the UI: the two settings it has to know. */
-export type ClientConfig = { user: string; port: number };
+type ClientConfig = { user: string; port: number };
 
 /**
  * The server of `docs/reference/07-server.md`: the review in one response, the
@@ -211,11 +211,6 @@ export function createApp({ activity, config, events, review, ui, verbose }: App
   // frames of the stream carry. They live in memory and are gone with the
   // server ([ADR-005](../../docs/adr/adr-005-live-update.md)).
   app.get("/api/activity", (c) => c.json(activity.recent()));
-
-  // Every branch the base picker may choose from, over the whole root. Like
-  // the scan, it reads git per request: there is no cache of refs, and the
-  // picker is opened by hand rather than on every reload.
-  app.get("/api/repos/branches", async (c) => c.json(await listBranches(config)));
 
   // Every repository under the root, with whether it has anything to review.
   // This is the one route that reads git per request: it exists for the screen

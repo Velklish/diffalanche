@@ -17,8 +17,6 @@ export const SCHEMA_VERSION = 2;
  */
 export const READABLE_VERSIONS: readonly number[] = [1, SCHEMA_VERSION];
 
-export type { BaseMode } from "../types.ts";
-
 /**
  * The base of a review session, as `review.json` stores it under `base`: the
  * change-set reader's own `BaseSpec` (`docs/SPEC.md` section 3, decision 4).

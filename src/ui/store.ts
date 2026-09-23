@@ -58,7 +58,7 @@ import type {
   Side,
 } from "./types.ts";
 
-export type Theme = "dark" | "light";
+type Theme = "dark" | "light";
 /**
  * What a frame of this page's own write is about, and so which frame may claim
  * the mark it left. `review` is the session itself — `session-changed`, which
@@ -69,13 +69,13 @@ export type Theme = "dark" | "light";
  * `sessions-changed` ([05-watcher.md](../../docs/reference/05-watcher.md)). A
  * mark is claimed once, so the two kinds are two marks and not one.
  */
-export type SelfWrite = "review" | "history";
+type SelfWrite = "review" | "history";
 /** The sidebar's tabs: `changes` (handoff 1.3), `all files` for browsing (DA-37), and `select`,
  * the picking surface a new review task is built on (DA-55). */
 export type SidebarTab = "changes" | "all" | "select";
 export type DiffView = "split" | "unified";
 /** The file browse mode shows, as the server answered for it; `key` drops a stale answer. */
-export type PlainFile = {
+type PlainFile = {
   key: string;
   status: LoadStatus;
   content: FileContent | null;
@@ -83,7 +83,7 @@ export type PlainFile = {
 };
 export type TreeState = { status: LoadStatus; tree: RepositoryTree | null };
 /** The lines are the working tree's, fetched for this patch; a new patch makes them stale. */
-export type HunkContext = { patch: string; lines: string[]; above: Record<number, number> };
+type HunkContext = { patch: string; lines: string[]; above: Record<number, number> };
 export type RailScope = "file" | "all";
 export type ExportView = "rendered" | "raw";
 /**
@@ -91,7 +91,7 @@ export type ExportView = "rendered" | "raw";
  * refuses with `no-current-session` and the first-run screen is what that means
  * on the screen ([07-server.md](../../docs/reference/07-server.md)).
  */
-export type LoadStatus = "loading" | "ready" | "no-session" | "failed";
+type LoadStatus = "loading" | "ready" | "no-session" | "failed";
 
 /** One file of the change set with the repository it belongs to. */
 export type FileEntry = {
@@ -121,7 +121,7 @@ export type ComposerTarget = {
  * carried with it, because one review holds three hundred diffs and a range
  * without its file cannot be drawn on one of them.
  */
-export type Selection = { repo: string; path: string; side: Side; a: number; b: number };
+type Selection = { repo: string; path: string; side: Side; a: number; b: number };
 
 /** Where a thread is drawn: under the line it is anchored to, and in the rail. */
 export type ReplyPlace = "widget" | "rail";
@@ -137,7 +137,7 @@ const ACTIVITY_KEPT = 200;
 
 /** A message and the press that raised it: two identical strings are two
  * toasts, and the second gets its own 2.2 seconds ([08-ui.md]). */
-export type Raised = { text: string; seq: number };
+type Raised = { text: string; seq: number };
 
 let raised = 0;
 

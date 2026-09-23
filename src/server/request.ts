@@ -8,7 +8,7 @@ import type { Scope, Severity, Side } from "../core/storage/index.ts";
 import { SEVERITIES, SIDES } from "../core/storage/index.ts";
 import { RequestError } from "./errors.ts";
 
-export type Body = Record<string, unknown>;
+type Body = Record<string, unknown>;
 
 /**
  * The body as an object. A body has to arrive as `application/json`: a form or

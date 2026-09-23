@@ -4,7 +4,7 @@
  * accepts and the flags it documents cannot drift apart (DA-13).
  */
 
-export type OptionSpec = {
+type OptionSpec = {
   type: "string" | "boolean";
   /** The value's name in the usage line; a boolean option carries none. */
   value?: string;

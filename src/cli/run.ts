@@ -40,8 +40,6 @@ import type { Output } from "./output.ts";
 import { group, overview, usage } from "./spec.ts";
 import { VERSION } from "./version.ts";
 
-export type { Output } from "./output.ts";
-
 /** In the order `--help` lists them: the review first, then what it is read with. */
 const COMMANDS: Command[] = [
   serve,

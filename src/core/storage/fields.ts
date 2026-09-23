@@ -11,7 +11,7 @@ export function fail(file: string, field: string | null, message: string): never
 }
 
 /** Names the type of a value the way a message about a wrong field should. */
-export function describe(value: unknown): string {
+function describe(value: unknown): string {
   if (value === null) return "null";
   if (Array.isArray(value)) return "an array";
   return `a ${typeof value}`;

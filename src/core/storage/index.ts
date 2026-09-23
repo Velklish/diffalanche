@@ -15,16 +15,14 @@ import type { Comment, DiffCache, Review, SessionListing } from "./types.ts";
 import { SCHEMA_VERSION } from "./types.ts";
 
 export { StorageError } from "./errors.ts";
-export type { Lock, LockOptions } from "./lock.ts";
+
 export { withLock } from "./lock.ts";
-export { parseBase, toJson } from "./schema.ts";
+
 export type {
   Anchor,
   Base,
-  BaseMode,
   Comment,
   CommentStatus,
-  CommentsFile,
   DiffCache,
   Reply,
   Review,
@@ -32,14 +30,10 @@ export type {
   Role,
   Scope,
   ScopeEntry,
-  SessionListing,
   Severity,
   Side,
 } from "./types.ts";
 export {
-  COMMENT_STATUSES,
-  READABLE_VERSIONS,
-  REVIEW_STATUSES,
   ROLES,
   SCHEMA_VERSION,
   SEVERITIES,
@@ -47,14 +41,14 @@ export {
 } from "./types.ts";
 
 /** The name of the data directory inside the root; `--data-dir` replaces the whole path. */
-export const DATA_DIR_NAME = ".diffalanche";
+const DATA_DIR_NAME = ".diffalanche";
 
 /** The data directory of a root, the default before `--data-dir` is applied. */
 export function dataDirOf(root: string): string {
   return resolve(root, DATA_DIR_NAME);
 }
 
-export function reviewsDir(dataDir: string): string {
+function reviewsDir(dataDir: string): string {
   return resolve(dataDir, "reviews");
 }
 
@@ -139,7 +133,7 @@ export async function sessionExists(dataDir: string, name: string): Promise<bool
   return exists(reviewPath(dataDir, name));
 }
 
-export async function ensureSessionDir(dataDir: string, name: string): Promise<string> {
+async function ensureSessionDir(dataDir: string, name: string): Promise<string> {
   return makeDir(sessionDir(dataDir, name));
 }
 
@@ -265,7 +259,7 @@ export async function writeCurrent(dataDir: string, name: string): Promise<void>
 // ---------------------------------------------------------------------------
 
 /** The session's two files as a writer sees them inside the lock. */
-export type SessionDraft = {
+type SessionDraft = {
   /** Changed in place, or replaced outright; written back either way. */
   review: Review;
   /**
@@ -276,7 +270,7 @@ export type SessionDraft = {
   comments: Comment[];
 };
 
-export type UpdateSessionOptions = LockOptions & {
+type UpdateSessionOptions = LockOptions & {
   /** The metadata to start from when the session is being created. */
   create?: Review;
 };

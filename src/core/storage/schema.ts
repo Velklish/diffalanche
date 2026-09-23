@@ -59,7 +59,7 @@ function asVersion(file: string, value: unknown): number {
   return SCHEMA_VERSION;
 }
 
-export function parseBase(file: string, field: string, value: unknown): Base {
+function parseBase(file: string, field: string, value: unknown): Base {
   const raw = asObject(file, field, value);
   const mode = asOneOf(file, `${field}.mode`, raw.mode, ["head", "branch", "ref"] as const);
   if (mode === "head") return { mode };

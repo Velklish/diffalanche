@@ -23,7 +23,7 @@ export type PatchOptions = {
 
 /** The files of a diff, and what the parse learned that the caller reports as warnings: returned
  * rather than passed in, so a caller cannot drop them by leaving an argument out. */
-export type ParsedDiff = { files: FileChange[]; notes: string[] };
+type ParsedDiff = { files: FileChange[]; notes: string[] };
 
 /**
  * Splits `git diff` output into one file each and parses every patch.

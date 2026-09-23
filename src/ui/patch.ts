@@ -23,7 +23,7 @@ export function mergedPatch(patch: string, status: FileStatus): FileData | null 
 }
 
 /** One hunk of a patch: the `@@` line it is headed by, and everything under it. */
-export type PatchHunk = { header: string; body: string };
+type PatchHunk = { header: string; body: string };
 
 /** The hunks of a file that changed, by their `@@` header, and when they did. */
 export type ChangedHunks = { hunks: Set<string>; at: number };

@@ -10,14 +10,12 @@ import type { LanguageSpec, SymbolKind } from "./languages.ts";
 import { SYMBOL_KINDS } from "./languages.ts";
 import { matchScore } from "./match.ts";
 
-export type { GrammarSource } from "./grammars.ts";
-export { useGrammarSource } from "./grammars.ts";
-export type { LanguageSpec, SymbolKind } from "./languages.ts";
-export { BUNDLED_LANGUAGES, SYMBOL_KINDS } from "./languages.ts";
+export type { LanguageSpec } from "./languages.ts";
+export { BUNDLED_LANGUAGES } from "./languages.ts";
 export { matchScore } from "./match.ts";
 
 /** One definition: where it is, what it is called, and the line that declares it. */
-export type SymbolDef = {
+type SymbolDef = {
   repo: string;
   path: string;
   line: number;
@@ -28,12 +26,12 @@ export type SymbolDef = {
 
 /** A repository as the review shows it: its path, and the files of its change set with their
  * patches — what tells the index which files to read again. */
-export type RepositoryView = { path: string; files: readonly { path: string; patch: string }[] };
+type RepositoryView = { path: string; files: readonly { path: string; patch: string }[] };
 
 /** A language whose grammar or query would not load: only its files go unindexed. */
-export type LanguageFailure = { language: string; message: string };
+type LanguageFailure = { language: string; message: string };
 
-export type SymbolIndexOptions = {
+type SymbolIndexOptions = {
   root: string;
   languages: readonly LanguageSpec[];
   source?: GrammarSource;

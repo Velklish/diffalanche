@@ -82,7 +82,7 @@ export function formatBase(base: Base): string {
   return base.branch === undefined ? "branch" : `branch:${base.branch}`;
 }
 
-export type CreateSessionOptions = {
+type CreateSessionOptions = {
   /** What the task is about; `null`, the default, is the whole root. */
   scope?: Scope;
   /**

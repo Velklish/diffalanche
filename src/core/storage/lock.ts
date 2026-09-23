@@ -30,7 +30,7 @@ export type LockOptions = {
  * `assertHeld` immediately before the write and gets a refusal instead of a
  * silent overwrite of somebody else's work.
  */
-export type Lock = {
+type Lock = {
   assertHeld: () => Promise<void>;
 };
 

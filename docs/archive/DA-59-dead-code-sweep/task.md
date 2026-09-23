@@ -92,7 +92,7 @@ typecheck that would otherwise have caught it.
 ## Out of scope
 
 - The long comments on both copies of the route. The duplicate goes with its
-  copy; the surviving one is [DA-58](DA-58-comment-sweep-to-two-lines.md)'s.
+  copy; the surviving one is [DA-58](../../backlog/queue/DA-58-comment-sweep-to-two-lines.md)'s.
 - Anything the table above found clean. Re-running those probes is verification,
   not work.
 - Types kept deliberately as a subsystem's published surface. If one of the

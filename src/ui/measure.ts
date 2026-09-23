@@ -134,13 +134,13 @@ export function measureLines(
  * line of body at 12.5px. The count is close enough that a card carrying
  * threads holds its place in the scrollbar before it has ever been mounted.
  */
-export const THREAD_LINE_HEIGHT = 19;
-export const THREAD_CHARS = 82;
-export const THREAD_CHROME = 82;
-export const REPLY_CHROME = 55;
+const THREAD_LINE_HEIGHT = 19;
+const THREAD_CHARS = 82;
+const THREAD_CHROME = 82;
+const REPLY_CHROME = 55;
 /** The block the widgets of one line sit in, and the gap between two of them. */
-export const WIDGETS_PADDING = 20;
-export const WIDGET_GAP = 9;
+const WIDGETS_PADDING = 20;
+const WIDGET_GAP = 9;
 
 /** How tall the widgets of one anchored line will be. */
 export function measureThreads(threads: Comment[]): number {

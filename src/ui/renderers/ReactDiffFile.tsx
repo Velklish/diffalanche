@@ -112,7 +112,7 @@ export type LineMarkers = {
  * for a file whose hunks cannot grow — an added, deleted or type-changed one. */
 export type HunkLines = { lines: string[] | null; above: Record<number, number> };
 
-export type ReactDiffFileProps = {
+type ReactDiffFileProps = {
   file: FileChange;
   view: DiffView;
   /** Hunks whose outer context lines are hidden, by index in the file. */

@@ -14,7 +14,7 @@ import {
 } from "../storage/index.ts";
 import type { RepositoryChange } from "../types.ts";
 import { captureAnchor, captureFromFile } from "./anchors.ts";
-import { isAwaiting, isUnanswered } from "./counters.ts";
+import { isUnanswered } from "./counters.ts";
 import { DomainError } from "./errors.ts";
 import type { Actor } from "./roles.ts";
 import { assertHuman } from "./roles.ts";
@@ -31,7 +31,7 @@ const ID_ALPHABET = "0123456789abcdefghijklmnopqrstuvwxyz";
 const ID_LENGTH = 6;
 
 /** Where the comment goes and what it says. The anchor is filled from the change set. */
-export type NewComment = {
+type NewComment = {
   /** `null` — the whole review. */
   repo?: string | null;
   /** `null` — the whole repository. */
@@ -48,7 +48,7 @@ export type NewComment = {
   role: Role;
 };
 
-export type Message = {
+type Message = {
   body: string;
   author: string;
   role: Role;
@@ -111,7 +111,7 @@ function nextReplyId(replies: Reply[]): string {
 }
 
 /** The anchor of a comment, without what is written on it. */
-export type AnchorLevels = Pick<NewComment, "repo" | "path" | "line" | "endLine">;
+type AnchorLevels = Pick<NewComment, "repo" | "path" | "line" | "endLine">;
 
 /**
  * Checks that the anchor levels add up. `docs/SPEC.md` section 7 reads the
@@ -166,7 +166,7 @@ export type FileSource = (
 
 /** `source` lets a line the change set does not carry be anchored from the file; the server and the
  * CLI both give one (ADR-004, amendment of 2026-09-23), and without one such a line is refused. */
-export type AddOptions = { source?: FileSource };
+type AddOptions = { source?: FileSource };
 
 /** Writes a comment. A line anchor is filled from the change set of the session. */
 export async function addComment(
@@ -371,5 +371,3 @@ export async function list(
     return true;
   });
 }
-
-export { isAwaiting, isUnanswered };

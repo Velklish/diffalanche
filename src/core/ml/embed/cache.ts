@@ -16,9 +16,9 @@ export function modelDirectory(cacheHome: string, model: EmbeddingModel): string
   return join(cacheHome, "diffalanche", "models", `${model.name}-${model.revision.slice(0, 12)}`);
 }
 
-export type FileStatus = { name: string; bytes: number; expected: number; present: boolean };
+type FileStatus = { name: string; bytes: number; expected: number; present: boolean };
 
-export type ModelStatus = {
+type ModelStatus = {
   name: string;
   source: string;
   revision: string;

@@ -136,9 +136,9 @@ type Held = {
 
 /** How many sessions keep a built document at once; each one is megabytes
  * ([07-server.md](../../docs/reference/07-server.md)). */
-export const DOCUMENT_CACHE_LIMIT = 4;
+const DOCUMENT_CACHE_LIMIT = 4;
 
-export type ReviewServiceOptions = {
+type ReviewServiceOptions = {
   /** The session the watcher keeps fresh. Any other one's `diff.json` is read
    * from git instead ([07-server.md](../../docs/reference/07-server.md)). */
   watched?: () => string | null;

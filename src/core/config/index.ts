@@ -36,10 +36,10 @@ export type Config = {
 
 /** One entry of `grammars`: a tree-sitter WASM file, the extensions it owns, and the query whose
  * captures are the definitions ([09-ml.md](../../../docs/reference/09-ml.md)). */
-export type ConfigGrammar = { path: string; extensions: string[]; query: string };
+type ConfigGrammar = { path: string; extensions: string[]; query: string };
 
 /** What the command line may override. Everything else comes from the file. */
-export type ConfigOverrides = {
+type ConfigOverrides = {
   /** `--root`, resolved against the current directory. */
   root?: string;
   /** `--data-dir`, resolved against the current directory. */
@@ -53,7 +53,7 @@ export type ConfigOverrides = {
  * root. Both are parameters so that a test never reads the developer's own
  * environment or `~/.config`.
  */
-export type ConfigSources = {
+type ConfigSources = {
   /** The process environment; `DIFFALANCHE_DATA_DIR` is read from it. */
   env?: NodeJS.ProcessEnv;
   /** The user's configuration directory: `$XDG_CONFIG_HOME`, or `~/.config` without it. */
@@ -61,7 +61,7 @@ export type ConfigSources = {
 };
 
 /** The variable that names the data directory, relative to the root. */
-export const DATA_DIR_ENV = "DIFFALANCHE_DATA_DIR";
+const DATA_DIR_ENV = "DIFFALANCHE_DATA_DIR";
 
 /** `<configHome>/diffalanche/config.json`: the user's own settings, outside every root. */
 export function userConfigPath(configHome: string): string {
@@ -69,7 +69,7 @@ export function userConfigPath(configHome: string): string {
 }
 
 /** `$XDG_CONFIG_HOME`, or `~/.config` when the variable is unset or empty. */
-export function defaultConfigHome(env: NodeJS.ProcessEnv = process.env): string {
+function defaultConfigHome(env: NodeJS.ProcessEnv = process.env): string {
   const xdg = env.XDG_CONFIG_HOME;
   return xdg ? xdg : resolve(homedir(), ".config");
 }
@@ -84,7 +84,7 @@ export function fixtureEnv(): Record<string, string> {
 }
 
 /** Defaults without a config file: `docs/SPEC.md` section 7. */
-export const DEFAULT_ROOTS: readonly string[] = ["."];
+const DEFAULT_ROOTS: readonly string[] = ["."];
 export const DEFAULT_DEPTH = 2;
 export const DEFAULT_PORT = 4880;
 

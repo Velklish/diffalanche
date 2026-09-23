@@ -6,7 +6,7 @@
  */
 
 /** The verb of a feed line; the UI writes the sentence around it. */
-export type ActivityVerb =
+type ActivityVerb =
   /** The change set of a repository changed and nobody is known to be editing it. */
   | "changed"
   /** An agent that wrote in this repository recently is still changing it. */
@@ -30,10 +30,10 @@ export type ActivityEvent = {
 };
 
 /** How many events the feed keeps. */
-export const ACTIVITY_CAPACITY = 200;
+const ACTIVITY_CAPACITY = 200;
 
 /** How long a write keeps naming the author of the changes in that repository. */
-export const EDITING_WINDOW_MS = 120_000;
+const EDITING_WINDOW_MS = 120_000;
 
 export type ActivityLog = {
   /**
@@ -52,7 +52,7 @@ export type ActivityLog = {
   recent: (afterId?: number) => ActivityEvent[];
 };
 
-export type ActivityOptions = {
+type ActivityOptions = {
   capacity?: number;
   editingWindowMs?: number;
   /** The clock, so a test does not have to wait two minutes. */

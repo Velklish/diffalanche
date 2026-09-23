@@ -5,7 +5,7 @@ import { open, rename, unlink } from "node:fs/promises";
 import { dirname } from "node:path";
 import { StorageError } from "./errors.ts";
 
-export type AtomicWriteOptions = {
+type AtomicWriteOptions = {
   /** Flush the directory entry too. `false` for a file the tool can write again. */
   durable?: boolean;
 };

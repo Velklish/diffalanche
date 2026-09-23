@@ -20,7 +20,7 @@ export type ErrorBody = { error: string; message: string };
  * showing a message written for the CLI
  * ([04-domain.md](../../docs/reference/04-domain.md)).
  */
-export type ScopeConflictBody = ErrorBody & { count: number; comments: string[] };
+type ScopeConflictBody = ErrorBody & { count: number; comments: string[] };
 
 /**
  * A request the domain never gets to see: a body that is not an object, a
@@ -66,7 +66,7 @@ const NOT_FOUND: ReadonlySet<DomainErrorCode> = new Set<DomainErrorCode>([
   "no-such-comment",
 ]);
 
-export function statusOf(error: DomainError): 400 | 404 {
+function statusOf(error: DomainError): 400 | 404 {
   return NOT_FOUND.has(error.code) ? 404 : 400;
 }
 

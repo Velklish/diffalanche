@@ -109,7 +109,7 @@ export type DiffLine = {
   newLine: number | null;
 };
 
-export type DiffLineType = "context" | "insert" | "delete";
+type DiffLineType = "context" | "insert" | "delete";
 
 /** What a scan is told to look at, from `config.json` (`docs/SPEC.md` section 7). */
 export type ScanConfig = {

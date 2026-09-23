@@ -23,7 +23,7 @@ export const TEXT_PER_FILE = 3;
 /** The lines shown on each side of a hit: with it, the preview column's eleven rows. */
 export const TEXT_NEIGHBOURS = 5;
 /** A shorter query matches most of every file, and is not a search. */
-export const TEXT_MIN_QUERY = 2;
+const TEXT_MIN_QUERY = 2;
 
 export async function textRoute(
   c: Context,
@@ -95,7 +95,7 @@ async function withNeighbours<T extends { repo: string; path: string; line: numb
 }
 
 /** How many definitions one answer carries. */
-export const SYMBOL_LIMIT = 20;
+const SYMBOL_LIMIT = 20;
 
 /** What indexing 300 files may take; what it took is recorded in 09-ml.md. */
 export const SYMBOL_INDEX_BUDGET_MS = 20_000;
@@ -126,7 +126,7 @@ export async function symbolRoute(
 
 /** The bundled languages and those of `config.json`: an entry of the same name replaces a bundled
  * one, and an extension a configured language names is its own. */
-export function languagesOf(config: Config): LanguageSpec[] {
+function languagesOf(config: Config): LanguageSpec[] {
   const configured = Object.entries(config.grammars).map(([name, grammar]) => ({
     name,
     grammar: `${name}.wasm`,

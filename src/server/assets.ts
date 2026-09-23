@@ -1,7 +1,7 @@
 import { readFile } from "node:fs/promises";
 import { extname, join, normalize } from "node:path";
 
-export type Asset = { body: Uint8Array<ArrayBuffer>; type: string };
+type Asset = { body: Uint8Array<ArrayBuffer>; type: string };
 
 /** Where the server takes the built UI from: a directory on disk, or the binary itself. */
 export type UiAssets = {

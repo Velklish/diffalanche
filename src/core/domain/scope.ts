@@ -271,13 +271,13 @@ export function narrowScope(scope: Scope, change: ScopeChange): Scope {
 }
 
 /** What a scope write came to: the session as it now stands, and what it deleted. */
-export type ScopeUpdate = {
+type ScopeUpdate = {
   review: Review;
   /** The comments the narrowing deleted, in the order they were written. */
   dropped: Comment[];
 };
 
-export type SetScopeOptions = {
+type SetScopeOptions = {
   /**
    * Consent to deleting the comments anchored under what is being removed.
    * Without it a narrowing that would delete any is refused and writes nothing.

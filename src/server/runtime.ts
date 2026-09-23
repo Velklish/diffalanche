@@ -2,7 +2,7 @@ import type { Hono } from "hono";
 
 /** `hostname` is the address the socket is bound to, read back from the runtime
  * rather than repeated: it is what says the server is on loopback and nowhere else. */
-export type RunningServer = { port: number; hostname: string; close: () => Promise<void> };
+type RunningServer = { port: number; hostname: string; close: () => Promise<void> };
 
 type BunGlobal = {
   serve: (options: {

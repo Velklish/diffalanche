@@ -156,6 +156,15 @@ alike** — and answers for the current session without it. See
 An unknown path under `/api` is a 404 saying so rather than the page: the UI
 routes in the browser, so every other path is `index.html`.
 
+Each method and path is registered once, and `tests/server.test.ts` holds it
+against Hono's own route table (`app.routes`). Hono answers with the first match,
+so a second registration of the same pair never runs: an edit made to it does
+nothing and reads as an edit that did nothing. The middleware (`app.use`) and the
+catch-all refusal (`app.all`) register under the method `ALL` and are chains by
+design, so the check reads the other methods only — which is also why a guard
+on one route goes in through `use` on its path rather than as a second handler
+in the route's own `app.get(path, guard, handler)`.
+
 ### The review document
 
 `ReviewDocument` is defined once, in

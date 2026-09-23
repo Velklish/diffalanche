@@ -37,35 +37,26 @@ import type { EventBus } from "./bus.ts";
 import type { Ignore, PathKind, TreeWatcher, TreeWatcherOptions } from "./tree.ts";
 import { supportsRecursiveWatch, watchTree } from "./tree.ts";
 
-export type { ActivityEvent, ActivityLog, ActivityVerb } from "./activity.ts";
-export { ACTIVITY_CAPACITY, createActivityLog, EDITING_WINDOW_MS } from "./activity.ts";
-export type { EventBus, Listener, WatcherEvent, WatcherEventType } from "./bus.ts";
+export type { ActivityEvent, ActivityLog } from "./activity.ts";
+export { createActivityLog } from "./activity.ts";
+export type { EventBus, WatcherEvent } from "./bus.ts";
 export { createEventBus } from "./bus.ts";
-export type {
-  Ignore,
-  PathKind,
-  ProbeWrite,
-  TreeSource,
-  TreeWatcher,
-  TreeWatcherOptions,
-} from "./tree.ts";
+export type { TreeSource } from "./tree.ts";
 export {
-  DEFAULT_POLL_INTERVAL_MS,
-  PROBE_TIMEOUT_MS,
   probeRecursiveWatch,
   supportsRecursiveWatch,
   watchTree,
 } from "./tree.ts";
 
 /** How long a repository stays quiet before it is rescanned. */
-export const DEFAULT_DEBOUNCE_MS = 100;
+const DEFAULT_DEBOUNCE_MS = 100;
 
 /**
  * How long a repository whose files never stop changing waits at most. Without
  * it a build writing into the working tree would restart the debounce for as
  * long as it runs and the review would never update.
  */
-export const MAX_DEBOUNCE_MS = 1_000;
+const MAX_DEBOUNCE_MS = 1_000;
 
 /**
  * How many of git's ignore verdicts one repository keeps. A build writing
@@ -490,7 +481,7 @@ export async function startWatcher(options: WatcherOptions): Promise<Watcher> {
   };
 }
 
-export type Rescan = {
+type Rescan = {
   /** The change set as it now stands on disk. */
   cache: DiffCache;
   /** Whether this repository's entry is not what it was. */
@@ -506,7 +497,7 @@ export type Rescan = {
  * for that too (`docs/SPEC.md` section 6). The file follows a moment later, and
  * a write that fails is repaired by the next rescan.
  */
-export type Ready = (rescan: Rescan) => void;
+type Ready = (rescan: Rescan) => void;
 
 /**
  * Recomputes one repository and puts it in place of its entry in `diff.json`,
@@ -687,7 +678,7 @@ async function readSessionOrNull(config: Config, session: string | null): Promis
  */
 /** Every session's `review.json` in one pass, or `null` when `reviews/` itself could
  * not be listed — a failed read, which an empty data directory is not. */
-export async function readSessions(config: Config): Promise<Map<string, Review | null> | null> {
+async function readSessions(config: Config): Promise<Map<string, Review | null> | null> {
   let names: string[];
   try {
     ({ names } = await listSessionNames(config.dataDir));
@@ -712,7 +703,7 @@ async function readFollowed(
 
 /** The status of every session read this burst. A session whose file could not be
  * read keeps the status it had: a file caught mid-write is not a task that changed. */
-export function statusesOf(
+function statusesOf(
   reviews: Map<string, Review | null>,
   previous: Map<string, ReviewStatus> | null,
 ): Map<string, ReviewStatus> {

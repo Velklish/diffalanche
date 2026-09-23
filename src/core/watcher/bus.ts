@@ -33,9 +33,7 @@ export type WatcherEvent =
   | { type: "sessions-changed"; name: string; status: ReviewStatus }
   | { type: "warnings"; list: ScanWarning[] };
 
-export type WatcherEventType = WatcherEvent["type"];
-
-export type Listener = (event: WatcherEvent) => void;
+type Listener = (event: WatcherEvent) => void;
 
 export type EventBus = {
   emit: (event: WatcherEvent) => void;

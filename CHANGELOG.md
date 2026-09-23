@@ -15,6 +15,25 @@ and `bun run release` refuses a version that has no section. See
 
 ### Added
 
+- **Every export has an importer, and every route is registered once** (DA-59).
+  `noUnusedLocals` does not see an exported symbol, and Biome has no rule that
+  does, so `tests/exports.test.ts` reads the imports and exports of every
+  TypeScript file with tree-sitter and fails on an export no other file
+  imports, naming the file, the line and the symbol. A name a barrel re-exports
+  is held to that too, except in an entry point, and what the binary's
+  generated entry or another track's code imports is kept by name with its
+  reason. The sweep made 73 exports module-private — the 27 of the audit that
+  were still unimported and 46 it did not name — then took 111 names nothing
+  imported out of the barrels and 35 more exports their removal left without a
+  user. `src/ui/index.ts`, a
+  barrel nothing imported, is gone, and so are two types nothing used once
+  private: `Connection` in `src/ui/live.ts`, a copy of the store's, and
+  `WatcherEventType` in `src/core/watcher/bus.ts`. `GET /api/repos/branches` was
+  registered twice, and Hono only ever ran the first; the second copy is gone,
+  and `tests/server.test.ts` fails on a method and path registered twice. Both
+  checks are described in the
+  [reference](docs/reference/README.md#checks-that-read-the-code) and in
+  [07-server.md](docs/reference/07-server.md).
 - **The marks that carry a state without being text have a contrast check**
   (DA-56.2). The history mark, the select-mode tick and its unpicked `·`, and the
   focus ring are measured at WCAG 1.4.11's 3:1 in both themes, in a group of their

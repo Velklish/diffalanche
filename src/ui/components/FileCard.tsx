@@ -51,7 +51,7 @@ const CHIPS: Record<FileStatus, string | null> = {
   modified: null,
 };
 
-export type FileCardProps = {
+type FileCardProps = {
   id: string;
   repo: string;
   file: FileChange;

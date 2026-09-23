@@ -16,7 +16,7 @@ import type { ReviewService } from "./review.ts";
 import { createReviewService } from "./review.ts";
 import { startServer } from "./runtime.ts";
 
-export type ReviewServerOptions = {
+type ReviewServerOptions = {
   config: Config;
   /** Request logging to stderr. */
   verbose?: boolean | undefined;

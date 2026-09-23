@@ -45,10 +45,10 @@ export type TreeWatcher = {
   close: () => void;
 };
 
-export const DEFAULT_POLL_INTERVAL_MS = 250;
+const DEFAULT_POLL_INTERVAL_MS = 250;
 
 /** How long the runtime probe waits for the event that proves the watch recurses. */
-export const PROBE_TIMEOUT_MS = 500;
+const PROBE_TIMEOUT_MS = 500;
 
 /** How often the probe writes while it waits. */
 const PROBE_WRITE_MS = 50;
@@ -217,7 +217,7 @@ export async function supportsRecursiveWatch(dir: string): Promise<boolean> {
 let probed: Promise<boolean> | null = null;
 
 /** How the probe writes. A test that has to make the write fail brings its own. */
-export type ProbeWrite = (path: string, data: string) => Promise<void>;
+type ProbeWrite = (path: string, data: string) => Promise<void>;
 
 /** The probe itself, past the memo of `supportsRecursiveWatch`: answers, never throws. */
 export async function probeRecursiveWatch(

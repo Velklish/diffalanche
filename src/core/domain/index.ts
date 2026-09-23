@@ -1,39 +1,26 @@
-export { captureAnchor, captureFromFile } from "./anchors.ts";
+export { captureAnchor } from "./anchors.ts";
 export type {
-  AddOptions,
-  AnchorLevels,
   CommentFilter,
   FileSource,
-  Message,
-  NewComment,
   Verdict,
 } from "./comments.ts";
 export { addComment, assertAnchorLevels, get, list, reopen, reply, resolve } from "./comments.ts";
-export type {
-  Counters,
-  FileCounters,
-  RepositoryCounters,
-  ReviewCounters,
-} from "./counters.ts";
+
 export {
-  countComments,
   countReview,
   isAwaiting,
   isUnanswered,
-  lastMessageRole,
   worstSeverity,
 } from "./counters.ts";
 export type { DomainErrorCode } from "./errors.ts";
 export { DomainError, ScopeCommentsError } from "./errors.ts";
 export { anchorLabel, exportMarkdown } from "./export.ts";
-export type { Actor } from "./roles.ts";
-export { assertHuman } from "./roles.ts";
-export type { ScopeChange, ScopeUpdate, SetScopeOptions } from "./scope.ts";
+
+export type { ScopeChange } from "./scope.ts";
 export {
   assertAnchorInScope,
   assertScope,
   closeSession,
-  commentInScope,
   formatScope,
   isEmptyChange,
   narrowScope,
@@ -44,9 +31,8 @@ export {
   setScope,
   widenScope,
 } from "./scope.ts";
-export type { CreateSessionOptions } from "./sessions.ts";
+
 export {
-  assertSessionName,
   createSession,
   formatBase,
   listSessions,
@@ -56,4 +42,3 @@ export {
   setBase,
   useSession,
 } from "./sessions.ts";
-export type { SessionList, SessionSummary } from "./types.ts";
