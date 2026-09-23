@@ -321,8 +321,9 @@ test("review use switches the UI and the CLI at once", async ({ page }) => {
 
   cli("review", "use", SESSION);
 
-  // The UI, without a reload …
-  await expect(page.locator(".pill-name").first()).toHaveText(SESSION);
+  // The UI, without a reload — once the server has read the task it moved to, which is the whole
+  // scope before the frame goes out, so the deadline is the one for a frame (11-perf.md) …
+  await expect(page.locator(".pill-name").first()).toHaveText(SESSION, { timeout: 20_000 });
   // … and the CLI, without `--review`: the comments it answers with are this
   // session's, and the other one has none.
   expect(comments().length).toBeGreaterThan(0);

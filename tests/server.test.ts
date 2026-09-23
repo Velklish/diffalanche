@@ -11,7 +11,7 @@ import { generate, PROFILES } from "../scripts/synth.ts";
 import { findRepositories } from "../src/core/change-set.ts";
 import type { Config } from "../src/core/config/index.ts";
 import { loadConfig } from "../src/core/config/index.ts";
-import { addComment, createSession } from "../src/core/domain/index.ts";
+import { addComment, createSession, useSession } from "../src/core/domain/index.ts";
 import type { DiffCache } from "../src/core/storage/index.ts";
 import { readDiffCache, writeDiffCache } from "../src/core/storage/index.ts";
 import type { ReviewDocument } from "../src/core/types.ts";
@@ -41,6 +41,37 @@ const ui: UiAssets = {
       : null,
 };
 const noUi: UiAssets = { read: async () => null };
+
+/** Bun's own test runner leaves `fs.watch` quiet after its first events, so the walk is what a test
+ * that waits for the watcher runs on there (05-watcher.md). */
+const NATIVE_WATCH = process.env.DIFFALANCHE_TEST_RUNTIME !== "bun";
+
+/** An SSE response read as text as it arrives: enough to ask whether a frame has come. */
+function listen(response: Response): {
+  heard: (event: string) => boolean;
+  close: () => Promise<void>;
+} {
+  const reader = (response.body as ReadableStream<Uint8Array>).getReader();
+  const decoder = new TextDecoder();
+  let text = "";
+  void (async () => {
+    try {
+      for (;;) {
+        const { done, value } = await reader.read();
+        if (done) break;
+        text += decoder.decode(value, { stream: true });
+      }
+    } catch {
+      // The stream was cancelled or the server stopped: both end the reading.
+    }
+  })();
+  return {
+    heard: (event) => text.includes(`event: ${event}\n`),
+    close: async () => {
+      await reader.cancel().catch(() => undefined);
+    },
+  };
+}
 
 let root: string;
 let config: Config;
@@ -600,6 +631,45 @@ describe("the change set a document is built from", () => {
     } finally {
       await server.close();
       await writeDiffCache(config.dataDir, SESSION, kept);
+    }
+  }, 120_000);
+
+  it("reads a task that becomes current while it runs before it serves the task's cache", async () => {
+    await createReviewService(config).document(NAMED);
+    const kept = (await readDiffCache(config.dataDir, NAMED)) as DiffCache;
+    // What a task that was not followed keeps: the cache of its last read, under a tree that moved on.
+    await writeDiffCache(config.dataDir, NAMED, await marked(NAMED));
+    const server = await startReviewServer({
+      config: { ...config, port: 0 },
+      ui,
+      ...(NATIVE_WATCH ? {} : { recursive: false }),
+    });
+    const stream = listen(await fetch(`${server.url}/api/events`));
+    try {
+      // `review use` from a terminal, repeated: a write made while the recursive watch arms is lost
+      // rather than late, and no longer wait brings it back (05-watcher.md).
+      const deadline = performance.now() + 30_000;
+      while (!stream.heard("current-changed")) {
+        if (performance.now() > deadline) throw new Error("the watcher never followed the task");
+        // biome-ignore lint/correctness/useHookAtTopLevel: the domain's `review use`, not a React hook
+        await useSession(config.dataDir, NAMED);
+        const until = performance.now() + 2_000;
+        while (!stream.heard("current-changed") && performance.now() < until) {
+          await new Promise((done) => setTimeout(done, 5));
+        }
+      }
+      // What a window with no `?review=` does on that frame.
+      const document = (await (await fetch(`${server.url}/api/review`)).json()) as ReviewDocument;
+      expect(document.session.name).toBe(NAMED);
+      expect(firstFile(document).patch).not.toContain(MARK);
+      expect(
+        firstFile((await readDiffCache(config.dataDir, NAMED)) as DiffCache).patch,
+      ).not.toContain(MARK);
+    } finally {
+      await stream.close();
+      await server.close();
+      await useSession(config.dataDir, SESSION);
+      await writeDiffCache(config.dataDir, NAMED, kept);
     }
   }, 120_000);
 

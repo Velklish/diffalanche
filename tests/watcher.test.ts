@@ -28,6 +28,7 @@ import { loadConfig } from "../src/core/config/index.ts";
 import { closeSession, createSession } from "../src/core/domain/index.ts";
 import { checkIgnore } from "../src/core/git/index.ts";
 import { scan } from "../src/core/index.ts";
+import type { DiffCache } from "../src/core/storage/index.ts";
 import {
   commentsPath,
   diffCachePath,
@@ -1492,6 +1493,148 @@ describe("the sessions a watcher follows", () => {
       rmSync(dataDir, { recursive: true, force: true });
     }
   }, 60_000);
+});
+
+describe("a move of current", () => {
+  /** A data directory of its own with `current` on `SESSION` and the named tasks beside it, copied
+   * from the fixture's: `diff.json` too, unless the task is to have none. */
+  function dataDirWith(tasks: { name: string; cache: boolean }[]): string {
+    const dataDir = mkdtempSync(join(tmpdir(), "diffalanche-move-"));
+    for (const { name, cache } of [{ name: SESSION, cache: true }, ...tasks]) {
+      mkdirSync(join(dataDir, "reviews", name), { recursive: true });
+      for (const file of ["review.json", "comments.json", ...(cache ? ["diff.json"] : [])]) {
+        const from = join(config.dataDir, "reviews", SESSION, file);
+        if (existsSync(from)) copyFileSync(from, join(dataDir, "reviews", name, file));
+      }
+    }
+    writeFileSync(join(dataDir, "current"), `${SESSION}\n`);
+    return dataDir;
+  }
+
+  /** `review use`, repeated until the watcher says it followed: a write made while the recursive
+   * watch arms is lost rather than late. */
+  async function moveTo(dataDir: string, name: string, heard: WatcherEvent[]): Promise<void> {
+    const followed = (): boolean =>
+      heard.some((event) => event.type === "current-changed" && event.name === name);
+    const deadline = performance.now() + 30_000;
+    while (!followed()) {
+      if (performance.now() > deadline) throw new Error(`the watcher never followed ${name}`);
+      writeFileSync(join(dataDir, "current"), `${name}\n`);
+      const patience = performance.now() + 2_000;
+      while (!followed() && performance.now() < patience) {
+        await new Promise((done) => setTimeout(done, 5));
+      }
+    }
+  }
+
+  it("announces what the task's review.json became while it was being read", async () => {
+    const dataDir = dataDirWith([{ name: "moved", cache: true }]);
+    const heard: WatcherEvent[] = [];
+    const own = createEventBus();
+    own.subscribe((event) => heard.push(event));
+    let renamed = false;
+    const watching = await startWatcher({
+      config: { ...config, dataDir },
+      scan: found,
+      ...(NATIVE_WATCH ? {} : { recursive: false, pollIntervalMs: 40 }),
+      bus: own,
+      activity: createActivityLog(),
+      // Inside the read the watcher makes before it follows the task: a write to its review.json a
+      // moment after `review use`, landing where the baseline used to be taken.
+      onRescan: (name) => {
+        if (name !== "moved" || renamed) return;
+        renamed = true;
+        const path = join(dataDir, "reviews", "moved", "review.json");
+        const review = JSON.parse(readFileSync(path, "utf8")) as Record<string, unknown>;
+        writeFileSync(path, JSON.stringify({ ...review, title: "renamed while it was read" }));
+      },
+      onError: () => undefined,
+    });
+    try {
+      await moveTo(dataDir, "moved", heard);
+      expect(renamed).toBe(true);
+      const deadline = performance.now() + 20_000;
+      const announced = (): boolean =>
+        heard.some((event) => event.type === "session-changed" && event.name === "moved");
+      while (!announced() && performance.now() < deadline) {
+        await new Promise((done) => setTimeout(done, 5));
+      }
+      expect(announced()).toBe(true);
+    } finally {
+      await watching.close();
+      rmSync(dataDir, { recursive: true, force: true });
+    }
+  });
+
+  it("says which repositories moved while nobody followed the task, after it follows it", async () => {
+    const dataDir = dataDirWith([{ name: "moved", cache: true }]);
+    // What a task that was not followed keeps: the cache of its last read, one repository of it stale.
+    const cache = JSON.parse(
+      readFileSync(join(dataDir, "reviews", "moved", "diff.json"), "utf8"),
+    ) as DiffCache;
+    await writeDiffCache(dataDir, "moved", {
+      ...cache,
+      repositories: cache.repositories.map((one) =>
+        one.path !== REPO
+          ? one
+          : {
+              ...one,
+              files: one.files.map((file) => ({ ...file, patch: `${file.patch}\n// stale\n` })),
+            },
+      ),
+    });
+    const heard: WatcherEvent[] = [];
+    const log = createActivityLog();
+    const own = createEventBus();
+    own.subscribe((event) => heard.push(event));
+    const watching = await startWatcher({
+      config: { ...config, dataDir },
+      scan: found,
+      ...(NATIVE_WATCH ? {} : { recursive: false, pollIntervalMs: 40 }),
+      bus: own,
+      activity: log,
+      onError: () => undefined,
+    });
+    try {
+      await moveTo(dataDir, "moved", heard);
+      // In the same burst as the frame, and after it: a window on the task by name hears it, one on
+      // the pointer has already read the whole review.
+      const at = heard.findIndex((event) => event.type === "current-changed");
+      const moved = heard.slice(at + 1).filter((event) => event.type === "diff-changed");
+      expect(moved.map((event) => (event as { repo: string }).repo)).toEqual([REPO]);
+      // The state the task is in, not something that just happened: the feed says nothing of it.
+      expect(log.recent()).toEqual([]);
+    } finally {
+      await watching.close();
+      rmSync(dataDir, { recursive: true, force: true });
+    }
+  });
+
+  it("does not read a task that has no diff.json before it follows it", async () => {
+    const dataDir = dataDirWith([{ name: "fresh", cache: false }]);
+    const heard: WatcherEvent[] = [];
+    const own = createEventBus();
+    own.subscribe((event) => heard.push(event));
+    const read: string[] = [];
+    const watching = await startWatcher({
+      config: { ...config, dataDir },
+      scan: found,
+      ...(NATIVE_WATCH ? {} : { recursive: false, pollIntervalMs: 40 }),
+      bus: own,
+      activity: createActivityLog(),
+      onRescan: (name) => read.push(name),
+      onError: () => undefined,
+    });
+    try {
+      await moveTo(dataDir, "fresh", heard);
+      // Nothing to trust means nothing to refresh: the first document reads the tree itself, and
+      // the window that made the task is not kept waiting for a second read of it.
+      expect(read).not.toContain("fresh");
+    } finally {
+      await watching.close();
+      rmSync(dataDir, { recursive: true, force: true });
+    }
+  });
 });
 
 describe("closing a watcher", () => {

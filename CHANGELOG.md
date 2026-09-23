@@ -445,6 +445,26 @@ and `bun run release` refuses a version that has no section. See
 
 ### Fixed
 
+- **A task made current while the server runs is read before it is served from
+  its cache** (DA-55.6). `review use` moved `current`, and the watcher followed
+  the new task at once — so its `diff.json`, last written when it was last
+  followed or last opened by name, was trusted as it stood, and a repository that
+  had moved in between showed its old diff until a file in it was touched again.
+  The watcher now reads the task it moves to from the working tree, the read
+  DA-55.5 does at startup, and follows it and says `current-changed` only after
+  that: the window that re-reads on the frame gets what the read handed over, and
+  a window on the task by name is told which repositories moved since its cache.
+  What the task is — base, scope, title, status — is taken before the read, so a
+  change to it made meanwhile is still announced; a task with no `diff.json` is
+  not read, which keeps the first task a window creates from paying for a second
+  read. The cost is the scope's repositories on every move of `current` to a task
+  with a cache, before the frame: on the synthetic review with no scope, 570–602 ms
+  from the write to the frame against 115–117 ms before; and since the read holds
+  the watcher's queue, an edit made just after `review use` reached its frame in
+  433–520 ms against 204–209 ms, over the 300 ms of section 6 for as long as the
+  read lasts — both measured on a busy machine
+  ([07-server.md](docs/reference/07-server.md)).
+
 - **An overlay whose opener cannot take the focus back gives it to the header's
   control for the same overlay** (DA-100.1). The restore checked `isConnected`,
   which a disabled control passes, and did nothing at all when the check failed:
@@ -492,8 +512,7 @@ and `bun run release` refuses a version that has no section. See
   the socket opens — queued like a rescan, so an edit made meanwhile is read after
   it — and builds the first document from that. The cost is the scope's
   repositories on every start; a task over two repositories of twenty-one reads
-  two. A session that becomes current while the server runs is still trusted as
-  it stands, which is DA-55.6.
+  two.
 
 - **A line comment no longer drops the warning of a linked worktree** (DA-80).
   Patching one repository into `diff.json` was written twice — once for the

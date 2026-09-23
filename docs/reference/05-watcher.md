@@ -33,7 +33,24 @@ const watcher = await startWatcher({ config, scan, bus, activity });
 The session it works on is the current one, read from the `current` pointer. It
 follows that pointer: a session created from the UI or switched to with
 `review use` needs no restart, and until there is a current session the watcher
-watches without writing anything.
+watches without writing anything. **A move is followed only after the session
+moved to has been read whole** — the read `refresh` does, below, in the same
+queue — and `current-changed` goes out after that read: the session's
+`diff.json` was last written when it was last followed, and the server trusts
+the followed session's ([07-server.md](07-server.md)). A read that fails goes to
+`onError`, and the session is followed all the same. The session's metadata
+baseline is taken before that read, so a `review.json` written during it is a
+`session-changed`; the repositories the read found different from the
+`diff.json` it replaced are each a `diff-changed` with no files, after the
+frame, and none of them is a line in the activity feed: a difference that may be
+an hour old is the state the task is in, not something that just happened, and a
+feed line would date it now and hand it to whichever agent wrote there last. A
+window with no `?review=` reads the whole review on the frame and then fetches
+each of those repositories again on its `diff-changed` — a second request for
+what it already has, paid once per move. A session with no `diff.json` is not
+read, since there is nothing to trust. The read is a task of the queue, so a rescan an edit starts meanwhile
+waits for it: an edit right after `review use` is announced after the read, not
+inside the 300 ms of `docs/SPEC.md` section 6 ([07-server.md](07-server.md)).
 
 `startWatcher` resolves once every tree is being watched for real. **The
 guarantee is the walk's**: it takes its baseline before it reports anything, and
@@ -70,9 +87,11 @@ queue as the rescans, so a rescan that an edit started meanwhile waits for it an
 patches what it wrote rather than a cache it is about to replace. It announces
 nothing on the bus: it is what a server runs once, before its first document and
 before any window can be listening, because nothing refreshed that cache while
-no server ran ([07-server.md](07-server.md)). With no current session, or one
-whose `review.json` cannot be read, it does nothing — the first document is the
-one that reports that.
+no server ran ([07-server.md](07-server.md)), and what the watcher runs itself
+on a move of `current`, before it follows the session moved to. Without a
+`diff.json` it reads nothing: the first document reads the working tree anyway.
+With no current session, or one whose `review.json` cannot be read, it does
+nothing — the first document is the one that reports that.
 
 ## What it watches, and what it ignores
 
@@ -269,7 +288,7 @@ the same, because the CLI writes the same directory.
 
 | Event | Data | When |
 |---|---|---|
-| `diff-changed` | `{ repo, files }` | a repository was rescanned and its entry is not what it was; `files` are the paths that woke the watcher, not the files of the new change set, and it is **empty** when what woke it was the walk taking over a dead watch — that names no path |
+| `diff-changed` | `{ repo, files }` | a repository was rescanned and its entry is not what it was; `files` are the paths that woke the watcher, not the files of the new change set, and it is **empty** when what woke it was the walk taking over a dead watch, or the read of a session `current` moved to — neither names a path |
 | `comment-added` | `{ session, id }` | a comment appeared in the `comments.json` of a followed session |
 | `reply-added` | `{ session, id, commentId }` | a reply appeared in a thread; `id` is the reply |
 | `comment-status` | `{ session, id }` | a comment was resolved or reopened |

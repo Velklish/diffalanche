@@ -280,9 +280,51 @@ export async function startWatcher(options: WatcherOptions): Promise<Watcher> {
     if (listed !== null) reloadSessions(listed);
   }
 
+  /** A session's whole change set read from the working tree and handed over, where a `diff.json` last
+   * written when it was last followed is there to replace; the answer is what moved since that file. */
+  async function readWhole(name: string | null, review: Review | null): Promise<Moved> {
+    const moved: Moved = { repositories: [], warnings: null };
+    // A session that cannot be read is the first document's to report, not this one's.
+    if (name === null || review === null) return moved;
+    // Without a cache the first document reads the working tree itself, and a read here would be a second.
+    const before = await readDiffCache(config.dataDir, name);
+    if (before === null) return moved;
+    await rescanSession(config, name, review, ({ cache }) => {
+      options.onRescan?.(name, cache);
+      const paths = new Set([...before.repositories, ...cache.repositories].map((one) => one.path));
+      for (const repo of [...paths].sort(byCodePoint)) {
+        const was = before.repositories.find((one) => one.path === repo) ?? null;
+        const now = cache.repositories.find((one) => one.path === repo) ?? null;
+        // A repository that left the change set moved as surely as one that changed in it.
+        if (now === null || !sameChange(was, now)) moved.repositories.push(repo);
+      }
+      if (!sameWarnings(before.warnings, cache.warnings)) moved.warnings = cache.warnings;
+    });
+    return moved;
+  }
+
+  /** What a read on the way to a session found moved, said once the watcher follows it (07-server.md). */
+  function announce(moved: Moved): void {
+    // No activity line: this is the state the task is in, not something that just happened in it.
+    for (const repo of moved.repositories) {
+      options.onRepositoryChanged?.(repo);
+      bus.emit({ type: "diff-changed", repo, files: [] });
+    }
+    if (moved.warnings !== null) bus.emit({ type: "warnings", list: moved.warnings });
+  }
+
   async function reloadCurrent(): Promise<void> {
     const next = await readCurrent(config.dataDir);
     if (next === session) return;
+    // What the session is, taken before its change set: a change made during that read is then news,
+    // where a baseline taken after it swallowed it.
+    const review = await readSessionOrNull(config, next);
+    // Read before it is followed: until then its document comes from the working tree, not from a
+    // cache nothing refreshed. A read that fails is reported, and the session followed all the same.
+    const moved = await readWhole(next, review).catch((error: unknown): Moved => {
+      report(error);
+      return { repositories: [], warnings: null };
+    });
     session = next;
     if (session === null) return;
     // The comments of the session switched to are not news: they are the new
@@ -291,11 +333,15 @@ export async function startWatcher(options: WatcherOptions): Promise<Watcher> {
     if (!comments.has(session)) {
       comments.set(session, await snapshotComments(config, session, report));
     }
-    metadata.set(session, await readMetadata(config, session));
-    scope = (await readSessionOrNull(config, session))?.scope ?? null;
+    // A session a window was already on keeps its baseline, as it keeps its comments.
+    if (!metadata.has(session)) metadata.set(session, review === null ? null : metadataOf(review));
+    scope = review?.scope ?? null;
     // The pointer moved; what the session *is* has not changed, and the two are
     // different news for different windows ([08-ui.md](../../../docs/reference/08-ui.md)).
     bus.emit({ type: "current-changed", name: session });
+    // After the frame: a window on the pointer reads the whole review on it, and a window on the task
+    // by name needs to hear which repositories moved while nothing followed it.
+    announce(moved);
   }
 
   /**
@@ -458,14 +504,9 @@ export async function startWatcher(options: WatcherOptions): Promise<Watcher> {
   return {
     session: () => session,
     refresh: () => {
+      // Nothing is announced: no window can be listening before the first document.
       enqueue(async () => {
-        const followed = session;
-        // A session that cannot be read is the first document's to report, not this one's.
-        const review = await readSessionOrNull(config, followed);
-        if (followed === null || review === null) return;
-        await rescanSession(config, followed, review, (outcome) =>
-          options.onRescan?.(followed, outcome.cache),
-        );
+        await readWhole(session, await readSessionOrNull(config, session));
       });
       return queue;
     },
@@ -480,6 +521,9 @@ export async function startWatcher(options: WatcherOptions): Promise<Watcher> {
     },
   };
 }
+
+/** What a read on the way to a session found different from the `diff.json` it replaced. */
+type Moved = { repositories: string[]; warnings: ScanWarning[] | null };
 
 type Rescan = {
   /** The change set as it now stands on disk. */

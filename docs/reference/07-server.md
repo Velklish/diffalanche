@@ -271,12 +271,61 @@ base `sha` each repository records with what `git rev-parse` says now costs one
 process per repository instead of five, and catches a commit or a branch switch
 but not an uncommitted edit, which is the common case.
 
-**A session that becomes the followed one while the server runs is not covered
-by this.** `review use` moves `current`, the watcher follows the new session from
-then on, and that session's `diff.json` is trusted from the moment it is
-followed — though it was last refreshed when it was last followed or last read
-as a named task, and a repository of it may have moved in between. That is
-DA-55.6.
+**Nor is the cache of a session that becomes the followed one while the server
+runs.** `review use` moves `current`, and the session it names was last refreshed
+when it was last followed or last read as a named task; a repository of it may
+have moved in between. So the watcher reads it the way `serve` has the current
+one read at startup — every repository of its scope, handed over and written to
+`diff.json` — and **follows it only once that read is done**, saying
+`current-changed` after it and not before ([05-watcher.md](05-watcher.md)).
+Until then the session is not the followed one, and a request for it is answered
+from the working tree like any named task's; from then on, the window with no
+`?review=` that re-reads on the frame is served the change set the read handed
+over, without a build. The startup's shape — the read queued behind the move —
+was the natural answer and was left: it opens a gap between the move and the
+read in which the file nothing refreshed is trusted, and the window following
+`current` asks inside that gap, because the frame is what makes it ask. A read
+that fails is reported and the session followed all the same, as at startup.
+
+Three things keep that read honest about what it replaced. **What the task is**
+— its base, scope, title and status — is taken as the watcher's baseline before
+the read and not after it, so a `review.json` written while the read runs is a
+`session-changed` like any other rather than a new baseline that swallowed it.
+**What moved** since the file it replaced is said after the frame: every
+repository whose entry the read found different is a `diff-changed` with no
+files, which a window on the task by name needs — the frame is not its news — and
+which also carries an edit made during the read, whose own rescan then finds
+nothing new. The window with no `?review=` hears those frames too, after it has
+already read the whole review on `current-changed`, so it fetches each of those
+repositories a second time; that is one request per moved repository per move,
+and it was left because telling the two windows apart is the client's and the
+frame names no window. It writes no line in the activity feed
+([05-watcher.md](05-watcher.md)). And **a task with no `diff.json` is not read at all**: there is
+nothing to trust, the first document reads the working tree anyway, and a second
+read of the same scope would only delay the frame. That is the one move the UI
+makes itself — creating the first task of a root — and the window that made it
+reads its review without waiting for the frame.
+
+The price is the scope's repositories **on every move of `current`** to a task
+that has a cache, paid before the frame goes out, plus one parse of the file it
+replaces — including a move to a task whose held document was still true: the
+watcher does not ask the server what it holds. Measured on the synthetic review,
+moving `current` between two sessions with no scope — all twenty-one
+repositories — on 2026-09-24 on the 8-core machine this was written on, under a
+load average of 12–14 (busy, so an upper bound rather than a budget), in two sets
+of ten moves alternating with the build before this one: from the write of
+`current` to the frame took a median of 570 and 602 ms, against 115 and 117 ms
+before; the `GET /api/review` that followed the frame took 6 ms against 3, both
+documents being held and the patched one serialised again.
+
+**The read holds the watcher's queue**, because it is one of the queue's tasks:
+an edit or a reply made while it runs is announced after it. An edit made
+150 ms after `review use`, on the same review and machine and at a load average
+of 11–15, reached its frame after a median of 433 and 520 ms, against 209 and
+204 ms before — over the 300 ms of "Update after an edit" in `docs/SPEC.md`
+section 6, for as long as the read lasts. Neither number is the gate's: the
+harness moves no pointer, and its session switch is a window's own by
+`?review=`, which pays none of this.
 
 **What a rescan does to a document that is not there.** The watcher hands the
 change set over *before* it writes `diff.json` — an update the person is waiting
@@ -293,8 +342,9 @@ set alone: a write to the data directory is not a change of the working tree.
 
 That recorded change set is **the followed session's and no other's**. The
 watcher rescans one session, so a cache it handed over is about the session it
-was following at the time; once `current` moves on, what it holds is as frozen
-as the file, and it is dropped rather than served. Both doors are the same rule:
+was following at the time, or about the one it read on its way to following it;
+once `current` moves on, what it holds is as frozen as the file, and it is
+dropped rather than served. Both doors are the same rule:
 a build consults it only when it is building the followed session, and so does
 the reconciliation on the way out.
 
