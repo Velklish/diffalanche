@@ -6,7 +6,7 @@
 
 ## Context
 
-`docs/SPEC.md` section 12, question 2: no Windows machine for verification; MVP binaries ship untested there. Section 10 Phase 3 lists Windows verification. Risk areas: path separators in repository ids, the `mkdir` lock and rename semantics, `fs.watch` recursion, and the git binary on PATH.
+`docs/SPEC.md` section 12, question 1: no Windows machine for verification; MVP binaries ship untested there. Section 10 Phase 3 lists Windows verification. Risk areas: path separators in repository ids, the `mkdir` lock and rename semantics, `fs.watch` recursion, and the git binary on PATH.
 
 ## First evidence from a Windows runner
 

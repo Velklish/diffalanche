@@ -1,6 +1,6 @@
 # diffalanche — product specification
 
-Status: approved requirements, amended alongside the code that implements them. Phase 1 shipped as v0.1.0 on 2026-09-05; its findings are closed from the backlog; Phase 2 has not started. Owner: Velklish. License: MIT.
+Status: approved requirements, amended alongside the code that implements them. Phase 1 shipped as v0.1.0 on 2026-09-05; its findings are closed from the backlog; Phase 2 has started (DA-33). Owner: Velklish. License: MIT.
 
 ## 1. Purpose
 
@@ -30,7 +30,7 @@ None of them combines many repositories in one review with on-disk comments and 
 7. **Severity.** `critical | warning | nit | question`.
 8. **Status and roles.** `open | resolved`; Phase 3 adds `orphaned`. A human opens comments; from the MVP on, agents can open them too through the CLI. An agent answers inside the thread in at most three sentences: one when it fixed the issue, three when it declines. Only a human sets `resolved`: the CLI refuses `resolve` and `reopen` unless the caller passes `--role human`. Every message carries `author` and `role: human | agent`.
 9. **Agent interface.** The CLI is the only contract for agent skills. The HTTP API exists for the UI and is not a contract. The JSON files remain a second way to read the data.
-10. **Suggestions from history.** A multilingual embedding model ships with the tool (118M parameters, about 120 MB in int8) and works offline with nothing to install. It runs in the server process, so suggestions are available from the CLI as well. The binary embeds the model; the npm package downloads it into a cache on first run. A generative 0.5B model (about 400 MB quantized) is downloaded on demand with `model pull`. There is no fine-tuning: "in your style" comes from retrieving similar past comments and using them as examples.
+10. **Suggestions from history.** A multilingual embedding model ships with the tool (118M parameters, about 120 MB in int8) and works offline with nothing to install. It runs in the server process, so suggestions are available from the CLI as well. The binary embeds the model and the runtime's native files; the npm package downloads both into the user cache on first use. Intel Macs (darwin-x64) get no model, so suggestions are not available there. The model, its runtime and the delivery are decided in [ADR-014](adr/adr-014-embedding-model-and-npm-delivery.md). A generative 0.5B model (about 400 MB quantized) is downloaded on demand with `model pull`. There is no fine-tuning: "in your style" comes from retrieving similar past comments and using them as examples.
 11. **Code navigation for any language.** Three tiers. Tier 1: text search and symbol-by-name search — any language, across repositories, no dependencies. Tier 2: a symbol index built with tree-sitter; grammars for popular languages ship with the tool, others are added through config. Tier 3: LSP through a config table `language → server command`; the tool finds servers on PATH and prints the install command for missing ones. No language is hard-coded.
 12. **Performance.** Numeric budgets with a CI gate, see section 6.
 13. **MVP boundary.** In: three base modes, review sessions with history, threads, `comment` for agents, live update on code and comment changes, the activity feed, the keyboard map, global search over files and comments, sidebar and thread filters, markdown export, performance budgets, scanner and storage tests, performance test, GitHub Actions. Out: suggestions and automatic severity, file browsing, symbol and text search, re-anchoring, generative model.
@@ -243,7 +243,8 @@ Every command accepts `--review <name>` (default: the current session) and `--da
 | `export [--status open\|all] [--format md\|json]` | markdown grouped by repository |
 | `suggest --body <text> [--json]` | similar past comments and a likely severity (Phase 2) |
 | `index rebuild` | rebuild the embedding index (Phase 2) |
-| `model pull`, `model status` | generative model on demand (Phase 4) |
+| `model status [--json]` | the embedding model's version and cache location, and whether it is there (Phase 2); the generative model joins it in Phase 4 |
+| `model pull` | generative model on demand (Phase 4) |
 | `insights [--since <date>] [--json]` | report of recurring findings (Phase 4) |
 
 CLI defaults: `--author agent`, `--role agent`. The UI writes `author` from `config.user` and `role: human`.
@@ -283,11 +284,11 @@ An agent that has just written code proposes the review of it: `review new <name
 - The performance test on the synthetic review stays within the budget table.
 - CI is green on Node and Bun; binaries build for all six targets.
 
-**Phase 2 — suggestions and context.** Requirements of the Phase 2 section, the `suggest` and `index rebuild` commands, `review delete`.
+**Phase 2 — suggestions and context.** Requirements of the Phase 2 section, the `suggest`, `index rebuild` and `model status` commands, `review delete`.
 
 **Phase 3 — precision.** Requirements of the Phase 3 section, Windows verification.
 
-**Phase 4 — generative model.** Requirements of the Phase 4 section, the `model` and `insights` commands.
+**Phase 4 — generative model.** Requirements of the Phase 4 section, the `model pull` and `insights` commands.
 
 ## 11. Non-goals
 
@@ -299,5 +300,4 @@ An agent that has just written code proposes the review of it: `review new <name
 
 ## 12. Open questions
 
-1. Model delivery in the npm channel: download on first run, or a separate `@diffalanche/model` package? Owner: Velklish, decide before Phase 2.
-2. Windows: no machine is available for verification; MVP binaries ship untested there. Owner: Velklish.
+1. Windows: no machine is available for verification; MVP binaries ship untested there. Owner: Velklish.

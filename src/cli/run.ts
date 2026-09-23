@@ -16,6 +16,7 @@ import { comment } from "./commands/comment.ts";
 import { diff } from "./commands/diff.ts";
 import { exportReview } from "./commands/export.ts";
 import { list } from "./commands/list.ts";
+import { modelStatus } from "./commands/model.ts";
 import { reply } from "./commands/reply.ts";
 import {
   reviewBase,
@@ -62,6 +63,7 @@ const COMMANDS: Command[] = [
   resolve,
   reopen,
   exportReview,
+  modelStatus,
   version,
 ];
 

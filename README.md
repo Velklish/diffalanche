@@ -194,6 +194,7 @@ flags, and `tests/readme-cli.test.ts` fails if the two ever disagree.
 | `resolve <id> --role human [--note <text>] [--author <name>]` | close a thread; `--role human` is required |
 | `reopen <id> --role human [--note <text>] [--author <name>]` | open a thread again; `--role human` is required |
 | `export [--status <open\|all>] [--format <md\|json>]` | the review as markdown grouped by repository |
+| `model status [--json]` | the embedding model: its version, where it is cached, and whether it is there |
 | `version` | print the version of diffalanche; also `--version` |
 
 Every command also takes these, **after** the command name — `diffalanche diff
@@ -301,6 +302,7 @@ flag only since then; below that one test skips and says so.
 
 ```sh
 bun install        # dependencies and the lockfile
+bun run model:fetch # the pinned embedding model into ~/.cache, for the tests (135 MB once)
 bun run lint       # Biome: lint and format check
 bun run typecheck  # tsc over the three TypeScript projects
 bun run test       # Vitest on Node

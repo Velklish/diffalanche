@@ -3,8 +3,8 @@
 `src/cli` is the whole agent contract: its flags, its output, and its exit codes
 are what a skill is written against ([ADR-004](../adr/adr-004-agent-contract.md)).
 The commands of `docs/SPEC.md` section 8 that exist today are below; the Phase 2
-and Phase 4 rows — `suggest`, `index`, `model`, `insights`, and `review delete` —
-are not written yet.
+and Phase 4 rows — `suggest`, `index`, `model pull`, `insights`, and `review
+delete` — are not written yet. Of the `model` group only `model status` exists.
 
 ## Commands
 
@@ -29,6 +29,7 @@ are not written yet.
 | `diffalanche resolve <id> --role human [--note <text>] [--author]` | close a thread |
 | `diffalanche reopen <id> --role human [--note <text>] [--author]` | open it again |
 | `diffalanche export [--status <open\|all>] [--format <md\|json>]` | the review as markdown grouped by repository |
+| `diffalanche model status [--json]` | the embedding model's version, where it is cached, and whether it is there; see [09-ml.md](09-ml.md#model-status) |
 | `diffalanche version` | the version of the package; also `--version` |
 | `diffalanche --help` | the command list; also `-h`, `help`, and no arguments at all |
 

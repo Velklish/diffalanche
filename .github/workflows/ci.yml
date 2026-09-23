@@ -61,6 +61,13 @@ jobs:
       # it: Vitest runs the tests on Node here, and `test-bun` is the other half.
       - name: the runtime of this job
         run: node --version && node -e 'console.log(process.versions)'
+      # The embedding tests read the pinned model from the user cache (09-ml.md). The key follows
+      # the manifest; a cache GitHub has evicted means a fresh 135 MB from Hugging Face.
+      - uses: actions/cache@v4
+        with:
+          path: ~/.cache/diffalanche/models
+          key: embedding-model-${{ hashFiles('src/core/ml/embed/model.ts') }}
+      - run: bun run model:fetch
       - run: bun run test
       # Over the real tarball, and on a merge rather than on a tag
       # (11-perf.md). The two cheap halves of `build` are enough.
@@ -81,6 +88,13 @@ jobs:
       - run: bun install --frozen-lockfile
       - name: the runtime of this job
         run: bun --version && bun -e 'console.log(process.versions)'
+      # The embedding tests read the pinned model from the user cache (09-ml.md). The key follows
+      # the manifest; a cache GitHub has evicted means a fresh 135 MB from Hugging Face.
+      - uses: actions/cache@v4
+        with:
+          path: ~/.cache/diffalanche/models
+          key: embedding-model-${{ hashFiles('src/core/ml/embed/model.ts') }}
+      - run: bun run model:fetch
       # The same Vitest suite as `check`, on Bun's own runtime instead of Node's.
       # `tests/runtime.test.ts` refuses the job if it is Node after all.
       - run: bun run test:bun

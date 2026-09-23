@@ -322,6 +322,12 @@ which is the Node half of the same suite. Both jobs print their runtime —
 before running the suite, so the log says which runtime executed it and does not
 leave the answer to an assertion the reader has to find.
 
+Both jobs also run `bun run model:fetch` before the suite, behind an
+`actions/cache` of `~/.cache/diffalanche/models` keyed by the hash of
+`src/core/ml/embed/model.ts`: the embedding tests read the pinned model from the
+user cache and fail rather than skip without it
+([09-ml.md](09-ml.md#tests)).
+
 ## The measurement harness
 
 `perf/harness.ts` holds the measurement, `perf/run.ts` the command around it.
@@ -731,7 +737,7 @@ suite rather than a published version:
 | branch | `HEAD` is not `main`, or is detached |
 | tag | `v<version>` already exists |
 | changelog | `CHANGELOG.md` has no `## [<version>]` section, or the section is empty, or there is no Unreleased one |
-| suite | `bun run test` fails |
+| suite | `bun run test` fails — and it needs the embedding model in the user cache, so run `bun run model:fetch` once before ([09-ml.md](09-ml.md#tests)) |
 
 The changelog check reads the section the way the workflow reads it — from under
 the heading to the next `## [` — rather than looking for the heading alone. A

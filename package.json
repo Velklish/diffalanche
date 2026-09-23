@@ -27,6 +27,7 @@
     "lint": "biome check .",
     "typecheck": "tsc -p tsconfig.json && tsc -p src/ui/tsconfig.json && tsc -p tsconfig.tools.json",
     "synth": "bun run scripts/synth.ts",
+    "model:fetch": "bun run scripts/fetch-model.ts",
     "build:ui": "vite build",
     "build:cli": "bun build src/cli/index.ts --target node --outfile dist/cli.js",
     "release": "bun run scripts/release.ts",
@@ -39,6 +40,7 @@
   "devDependencies": {
     "@biomejs/biome": "^2.5.12",
     "@hono/node-server": "^2.1.1",
+    "@huggingface/tokenizers": "^0.2.0",
     "@playwright/test": "^1.63.0",
     "@types/node": "^22.20.1",
     "@types/react": "^19.2.18",
@@ -46,6 +48,7 @@
     "@vitejs/plugin-react": "^6.1.1",
     "gitdiff-parser": "^0.3.1",
     "hono": "^4.13.7",
+    "onnxruntime-node": "^1.30.0",
     "react": "^19.2.8",
     "react-diff-view": "^3.3.3",
     "react-dom": "^19.2.8",

@@ -30,6 +30,19 @@ and `bun run release` refuses a version that has no section. See
   one of them green. They are unit tests against a stubbed `EventSource`, shared
   with the other live tests; why not a browser spec is in
   [08-ui.md](docs/reference/08-ui.md).
+- **The embedding model loads, and `model status` says where it is** (DA-33).
+  `src/core/ml/embed` pins `multilingual-e5-small` in int8 ONNX, reads it from
+  `$XDG_CACHE_HOME/diffalanche/models` (`~/.cache` without the variable), loads it once per
+  process with `onnxruntime-node` and `@huggingface/tokenizers`, and embeds one text per run
+  so that a text's vector never depends on what it was embedded with. The same vector comes
+  out on Node and on Bun, and nothing in the load touches the network. `diffalanche model
+  status [--json]` names the model, its revision and its cache directory, and says whether
+  the files are there. Nothing embeds yet: the index, `suggest` and the delivery of the model
+  to a user follow from [ADR-014](docs/adr/adr-014-embedding-model-and-npm-delivery.md), which
+  the owner **accepted** as proposed. For
+  development and CI, `bun run model:fetch` puts the pinned files in the cache and checks
+  their SHA-256.
+
 - **The check-run names branch protection must list are compared with the jobs that report
   them** (DA-111). `tests/ci-names.test.ts` expands the real names out of `ci.yml` — a job
   reports under its `name:` when it has one and under its id otherwise, and a matrix job
