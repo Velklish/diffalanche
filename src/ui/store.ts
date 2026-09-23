@@ -1735,7 +1735,7 @@ function indexCounters(
  */
 type Refusal = { code: string | null; message: string; comments: string[] };
 
-async function refusal(response: Response): Promise<Refusal> {
+export async function refusal(response: Response): Promise<Refusal> {
   try {
     const body = (await response.json()) as {
       error?: unknown;

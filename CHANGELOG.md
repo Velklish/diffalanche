@@ -852,6 +852,16 @@ and `bun run release` refuses a version that has no section. See
   repository is read. `docs/reference/02-git.md` no longer claims more isolation
   than the code provides.
 
+- **A thread or a diff the live update could not read says why** (DA-102). The two
+  reads `live.ts` makes for a frame reported only the status code, so a
+  `comments.json` the server named by file and field reached the toast as
+  `the thread c_7 could not be read: the server answered 500`. They now read the
+  refusal the way every throwing fetch of the store does, through the store's own
+  `refusal()`, and keep the thread or repository in front of the server's
+  sentence. The rule — a failure the reader is told about carries the server's
+  message, a background read stays silent — is in
+  [08-ui.md](docs/reference/08-ui.md).
+
 ## [0.1.0] - 2026-09-05
 
 ### Changed

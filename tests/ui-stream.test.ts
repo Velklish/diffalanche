@@ -1,6 +1,7 @@
 import { afterEach, describe, expect, it, vi } from "vitest";
 import { startLive } from "../src/ui/live.ts";
 import { useStore } from "../src/ui/store.ts";
+import { FakeSource } from "./helpers/event-source.ts";
 
 /**
  * What the live stream does with a frame that is not this window's (DA-68). The
@@ -8,28 +9,6 @@ import { useStore } from "../src/ui/store.ts";
  * dropping is the client's, by the session the frame carries
  * ([07-server.md](../docs/reference/07-server.md)).
  */
-
-/** The `EventSource` the page opens, with a handle on what it subscribed to. */
-class FakeSource {
-  static last: FakeSource | null = null;
-  readonly listeners = new Map<string, (event: MessageEvent<string>) => void>();
-  closed = false;
-  onopen: (() => void) | null = null;
-  onerror: (() => void) | null = null;
-  constructor(readonly url: string) {
-    FakeSource.last = this;
-  }
-  addEventListener(name: string, handle: (event: MessageEvent<string>) => void): void {
-    this.listeners.set(name, handle);
-  }
-  close(): void {
-    this.closed = true;
-  }
-  /** One frame, as the server would write it. */
-  deliver(name: string, data: unknown): void {
-    this.listeners.get(name)?.({ data: JSON.stringify(data) } as MessageEvent<string>);
-  }
-}
 
 function live(): { source: FakeSource; fetched: string[]; stop: () => void } {
   const fetched: string[] = [];

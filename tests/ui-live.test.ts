@@ -1,7 +1,9 @@
 import { afterEach, describe, expect, it, vi } from "vitest";
+import { startLive } from "../src/ui/live.ts";
 import { changedHunks, hasNewLine, mergeRepository, splitHunks } from "../src/ui/patch.ts";
 import { readDismissed, useStore, withComments } from "../src/ui/store.ts";
 import type { ActivityEvent, Comment, FileChange, RepositoryChange } from "../src/ui/types.ts";
+import { FakeSource } from "./helpers/event-source.ts";
 
 /**
  * Live update (DA-25): what an event does to the review the page already holds.
@@ -638,5 +640,69 @@ describe("the warnings bar", () => {
     await useStore.getState().loadReview();
 
     expect(useStore.getState().warningsDismissedFor).toBe("ls-1");
+  });
+});
+
+/** A refused live read says what the server said (DA-102); with no review on screen the
+ * 404 returns before the anchor, which reads `document`. */
+describe("a live read the server refuses", () => {
+  const STORAGE = JSON.stringify({
+    error: "storage",
+    message: "comments.json: comments[3].severity is not one of critical, warning, nit, question",
+  });
+
+  /** Delivers one frame with every fetch answered alike, and hands back the fetches. */
+  function deliver(frame: string, data: unknown, status: number, body: string): string[] {
+    useStore.setState({ session: null, reviewName: null, toast: null });
+    const fetched: string[] = [];
+    vi.stubGlobal("EventSource", FakeSource as unknown as typeof EventSource);
+    vi.stubGlobal("fetch", (url: string) => {
+      fetched.push(String(url));
+      return Promise.resolve(new Response(body, { status }));
+    });
+    const stop = startLive();
+    (FakeSource.last as FakeSource).deliver(frame, data);
+    stop();
+    return fetched;
+  }
+
+  it("puts the server's sentence in the toast for a thread, after the thread's id", async () => {
+    deliver("comment-added", { type: "comment-added", session: "ls-1", id: "c_7" }, 500, STORAGE);
+
+    await vi.waitFor(() => expect(useStore.getState().toast).not.toBeNull());
+    expect(useStore.getState().toast?.text).toBe(
+      "the thread c_7 could not be read: comments.json: comments[3].severity is not one of critical, warning, nit, question",
+    );
+  });
+
+  it("puts the server's sentence in the toast for a diff, after the repository", async () => {
+    deliver("diff-changed", { type: "diff-changed", repo: "repos/a" }, 500, STORAGE);
+
+    await vi.waitFor(() => expect(useStore.getState().toast).not.toBeNull());
+    expect(useStore.getState().toast?.text).toBe(
+      "the diff of repos/a could not be read: comments.json: comments[3].severity is not one of critical, warning, nit, question",
+    );
+  });
+
+  it("falls back to the status when the body is not a refusal", async () => {
+    deliver("comment-added", { type: "comment-added", session: "ls-1", id: "c_7" }, 502, "<html>");
+
+    await vi.waitFor(() => expect(useStore.getState().toast).not.toBeNull());
+    expect(useStore.getState().toast?.text).toBe(
+      "the thread c_7 could not be read: the server answered 502",
+    );
+  });
+
+  it("takes a 404 on a diff as the repository leaving, not as a failure", async () => {
+    const fetched = deliver(
+      "diff-changed",
+      { type: "diff-changed", repo: "repos/a" },
+      404,
+      JSON.stringify({ error: "no-such-repository", message: 'no repository "repos/a"' }),
+    );
+
+    await vi.waitFor(() => expect(fetched).toHaveLength(1));
+    await new Promise((done) => setTimeout(done, 0));
+    expect(useStore.getState().toast).toBeNull();
   });
 });

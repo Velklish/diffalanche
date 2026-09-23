@@ -15,7 +15,7 @@ import type { ActivityEvent } from "../core/watcher/activity.ts";
 import type { WatcherEvent } from "../core/watcher/bus.ts";
 import { afterPaint, perf } from "./perf.ts";
 import { PROBE_Y } from "./reveal.ts";
-import { onTask, useStore } from "./store.ts";
+import { onTask, refusal, useStore } from "./store.ts";
 import type { Comment } from "./types.ts";
 
 /** What the sidebar footer says about the stream. */
@@ -188,9 +188,7 @@ async function diffChanged(repo: string): Promise<void> {
   const asked = useStore.getState().session?.name ?? null;
   const response = await fetch(onTask(`/api/repos/${repo}/diff`));
   if (!response.ok && response.status !== 404) {
-    throw new Error(
-      `the diff of ${repo} could not be read: the server answered ${response.status}`,
-    );
+    throw new Error(`the diff of ${repo} could not be read: ${(await refusal(response)).message}`);
   }
   const next = response.ok ? ((await response.json()) as RepositoryChange) : null;
   if (asked === null) return;
@@ -211,7 +209,7 @@ async function diffChanged(repo: string): Promise<void> {
 async function thread(id: string, replyId?: string): Promise<void> {
   const response = await fetch(onTask(`/api/comments/${id}`));
   if (!response.ok) {
-    throw new Error(`the thread ${id} could not be read: the server answered ${response.status}`);
+    throw new Error(`the thread ${id} could not be read: ${(await refusal(response)).message}`);
   }
   const comment = (await response.json()) as Comment;
   const anchor = capture();
