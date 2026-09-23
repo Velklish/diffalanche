@@ -69,7 +69,7 @@ button:disabled {
 }
 
 .panel-toggle:focus-visible {
-  outline: 1px solid var(--accBd);
+  outline: 1px solid var(--acc);
 }
 
 /* The stub appears when its panel goes, so it arrives the way everything that
@@ -133,7 +133,7 @@ button:disabled {
  * until `SCOPE` joined them (DA-55).
  */
 .pill:focus-visible {
-  border-color: var(--accBd);
+  border-color: var(--acc);
   outline: none;
 }
 
@@ -258,8 +258,10 @@ button:disabled {
   color: var(--tx);
 }
 
-.ghost:focus-visible {
-  border-color: var(--accBd);
+/* `.ghost.accent` rests on an `accBd` border; the ring has to outrank it to be seen. */
+.ghost:focus-visible,
+.ghost.accent:focus-visible {
+  border-color: var(--acc);
   outline: none;
 }
 
@@ -295,7 +297,7 @@ button:disabled {
 /* A segment has no border of its own to change, so the ring is an outline
    (DESIGN.md, Inputs and fields). The theme's toggle is the same class. */
 .segment:focus-visible {
-  outline: 1px solid var(--accBd);
+  outline: 1px solid var(--acc);
   outline-offset: -1px;
 }
 
@@ -371,7 +373,7 @@ button:disabled {
 }
 
 .sidebar-tabs .tab:focus-visible {
-  outline: 1px solid var(--accBd);
+  outline: 1px solid var(--acc);
 }
 
 .sidebar-filter {
@@ -391,7 +393,7 @@ button:disabled {
 }
 
 .sidebar-filter input:focus-visible {
-  border-color: var(--accBd);
+  border-color: var(--acc);
   outline: none;
 }
 
@@ -452,7 +454,7 @@ button:disabled {
 
 .repo-row:focus-visible,
 .file-row:focus-visible {
-  outline: 1px solid var(--accBd);
+  outline: 1px solid var(--acc);
 }
 
 .repo-row {
@@ -621,7 +623,7 @@ button:disabled {
 }
 
 .feed-head:focus-visible {
-  outline: 1px solid var(--accBd);
+  outline: 1px solid var(--acc);
   outline-offset: -1px;
 }
 
@@ -946,7 +948,7 @@ button:disabled {
 .first-run-name:focus-visible,
 .base-draft-field:focus-visible {
   outline: none;
-  border-color: var(--accBd);
+  border-color: var(--acc);
 }
 
 .base-draft {
@@ -1075,7 +1077,7 @@ button:disabled {
 }
 
 .palette-hit:focus-visible {
-  outline: 1px solid var(--accBd);
+  outline: 1px solid var(--acc);
   outline-offset: -1px;
 }
 
@@ -1509,15 +1511,16 @@ button:disabled {
   letter-spacing: 0.04em;
 }
 
-.sev-chip:focus-visible {
-  border-color: var(--accBd);
-  outline: none;
-}
-
 .sev-chip.on {
   border-color: transparent;
   color: var(--onAcc);
   font-weight: 700;
+}
+
+/* After `.on`, which clears the border at the same specificity: the chosen chip keeps a ring. */
+.sev-chip:focus-visible {
+  border-color: var(--acc);
+  outline: none;
 }
 
 .sev-chip.on.critical {
@@ -1650,7 +1653,7 @@ button:disabled {
 }
 
 .menu-row:focus-visible {
-  outline: 1px solid var(--accBd);
+  outline: 1px solid var(--acc);
 }
 
 /* thread cards */
@@ -1669,7 +1672,7 @@ button:disabled {
 
 .rail-tabs .tab:focus-visible,
 .chip:focus-visible {
-  outline: 1px solid var(--accBd);
+  outline: 1px solid var(--acc);
 }
 
 .chip.on {
@@ -1751,7 +1754,7 @@ button.chip {
 
 .thread-focus:focus-visible,
 .thread-repo:focus-visible {
-  outline: 1px solid var(--accBd);
+  outline: 1px solid var(--acc);
 }
 
 .thread-repo {
@@ -2055,7 +2058,7 @@ button.chip {
 }
 
 .session-open:focus-visible {
-  outline: 1px solid var(--accBd);
+  outline: 1px solid var(--acc);
   outline-offset: 2px;
 }
 
@@ -2143,7 +2146,7 @@ button.chip {
 }
 
 .menu-create input:focus-visible {
-  border-color: var(--accBd);
+  border-color: var(--acc);
   outline: none;
 }
 
@@ -2189,7 +2192,7 @@ button.chip {
 }
 
 .picker-head:focus-visible {
-  outline: 1px solid var(--accBd);
+  outline: 1px solid var(--acc);
 }
 
 .picker-check {
@@ -2231,7 +2234,7 @@ button.chip {
 }
 
 .picker-branch:focus-visible {
-  outline: 1px solid var(--accBd);
+  outline: 1px solid var(--acc);
 }
 
 .picker-branch.on {
@@ -2347,7 +2350,7 @@ button.chip {
 }
 
 .scope-row:focus-visible {
-  outline: 1px solid var(--accBd);
+  outline: 1px solid var(--acc);
 }
 
 .scope-file {
@@ -2568,7 +2571,7 @@ button.counter:hover {
 }
 
 button.counter:focus-visible {
-  border-color: var(--accBd);
+  border-color: var(--acc);
   outline: none;
 }
 

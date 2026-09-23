@@ -50,6 +50,35 @@ test("⌘K opens global search and esc closes it", async ({ page }) => {
   await expect(palette(page)).toBeHidden();
 });
 
+/** The highlighted hit rests on an `accBd` frame; the ring is `acc`, so focus shows (DA-56.7). */
+test("the highlighted search hit changes colour when the keyboard is on it", async ({ page }) => {
+  await open(page);
+  await page.keyboard.press("ControlOrMeta+k");
+  await page.getByRole("textbox", { name: "search" }).fill("ts");
+  const hit = palette(page).locator(".palette-hit.on");
+  await expect(hit).toHaveCount(1);
+  for (
+    let step = 0;
+    step < 6 && !(await hit.evaluate((el) => el === document.activeElement));
+    step++
+  ) {
+    await page.keyboard.press("Tab");
+  }
+  await expect(hit).toBeFocused();
+
+  const [ring, frame, acc] = await hit.evaluate((el) => {
+    const probe = document.createElement("span");
+    probe.style.color = "var(--acc)";
+    document.body.append(probe);
+    const colour = getComputedStyle(probe).color;
+    probe.remove();
+    return [getComputedStyle(el).outlineColor, getComputedStyle(el).borderTopColor, colour];
+  });
+  expect(ring).toBe(acc);
+  expect(ring).not.toBe(frame);
+  await page.keyboard.press("Escape");
+});
+
 test("two presses of shift open the same modal, and close it", async ({ page }) => {
   await open(page);
   await page.keyboard.press("Shift");

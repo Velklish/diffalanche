@@ -64,16 +64,13 @@ const MARKS: { mark: string; colour: string; grounds: string[] }[] = [
   { mark: "history mark", colour: "acc", grounds: ["panel3"] },
   { mark: "tick", colour: "acc", grounds: ["panel", "panel2"] },
   { mark: "unpicked tick", colour: "tx3", grounds: ["panel", "panel2"] },
-  { mark: "focus ring", colour: "accBd", grounds: ["bg", "panel", "panel2", "panel3"] },
-];
-
-/** Under 3:1 and kept, because the ring is a rule of `DESIGN.md` and DA-56.7 owns it; a new
- * pair under the bound fails, and so does one of these clearing it. */
-const BELOW_NON_TEXT = [
-  "focus ring on bg",
-  "focus ring on panel",
-  "focus ring on panel2",
-  "focus ring on panel3",
+  {
+    mark: "focus ring",
+    colour: "acc",
+    grounds: ["bg", "panel", "panel2", "panel3", "bd", "sel", "accBg"],
+  },
+  // A hit, a mode, a thread in play: the `accBg` wash is 1.1–1.2:1 from `panel`; the frame shows it.
+  { mark: "state frame", colour: "accBd", grounds: ["panel", "accBg"] },
 ];
 
 function tokens(selector: string): Map<string, string> {
@@ -168,15 +165,15 @@ describe("the contrast of the tokens the interface sets text in", () => {
 });
 
 describe("the contrast of the marks that carry a state without being text", () => {
-  it("clears WCAG 1.4.11 in the dark theme, but for the recorded exceptions", () => {
+  it("clears WCAG 1.4.11 in the dark theme", () => {
     const under = marks(tokens(":root")).filter((one) => one.ratio < NON_TEXT);
-    expect(under.map((one) => one.pair)).toEqual(BELOW_NON_TEXT);
+    expect(under.map((one) => `${one.pair} ${one.ratio.toFixed(2)}`)).toEqual([]);
   });
 
-  it("clears WCAG 1.4.11 in the light theme, but for the recorded exceptions", () => {
+  it("clears WCAG 1.4.11 in the light theme", () => {
     const under = marks(tokens(':root\\[data-theme="light"\\]')).filter(
       (one) => one.ratio < NON_TEXT,
     );
-    expect(under.map((one) => one.pair)).toEqual(BELOW_NON_TEXT);
+    expect(under.map((one) => `${one.pair} ${one.ratio.toFixed(2)}`)).toEqual([]);
   });
 });

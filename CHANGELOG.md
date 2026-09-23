@@ -18,10 +18,10 @@ and `bun run release` refuses a version that has no section. See
 - **The marks that carry a state without being text have a contrast check**
   (DA-56.2). The history mark, the select-mode tick and its unpicked `·`, and the
   focus ring are measured at WCAG 1.4.11's 3:1 in both themes, in a group of their
-  own beside the text pairs. The coloured marks clear it at 4.7:1 or more; the
-  focus ring (`accBd`) is 1.6–2.0:1 and is recorded as an exception until DA-56.7
-  decides its colour. `DESIGN.md` now says which dots are decoration — those
-  beside a word that says the same — and that the dividers are.
+  own beside the text pairs. The coloured marks clear it at 4.7:1 or more, and
+  the focus ring does since DA-56.7. `DESIGN.md` now says which dots are
+  decoration — those beside a word that says the same — and that the dividers
+  are.
 - **The recovery paths of live update are tested** (DA-96). A `reload` frame
   reading the review again, the footer saying `reconnecting` while the browser
   retries and staying as it was once it has closed the stream, and the queue that
@@ -126,6 +126,20 @@ and `bun run release` refuses a version that has no section. See
   that file (DA-52).
 
 ### Changed
+
+- **The focus ring can be seen** (DA-56.7). Every ring was `--accBd`, 1.6–2.0:1
+  against the grounds it is drawn on — under the 3:1 WCAG 1.4.11 asks of the
+  only signal of focus — and it showed nothing on a control whose resting border
+  is already `accBd`. The ring is now `acc`, 3.94:1 at the tightest of the seven
+  colours it sits next to, including a chosen segment and a chosen file.
+  `--accBd` keeps the edges and takes a lighter value, `#6c79b7` dark and
+  `#6977ba` light (the handoff's hue and saturation), so the frame of a thread in
+  play, an agent's reply, an active chip, the highlighted search hit and a hunk
+  that just changed clears 3:1 against its wash as well. `tokens.css`,
+  `DESIGN.md` and `.impeccable/design.json` change together, and
+  `tests/design-contrast.test.ts` holds both. The chosen severity chip of the
+  composer had no ring at all: `.sev-chip.on` cleared the border the focus rule
+  had just set, at the same specificity and later in the file.
 
 - **The server holds one built review document per session** (DA-24.1), instead
   of one at a time. The first build of a session is paid once and a switch back

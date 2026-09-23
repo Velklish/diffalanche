@@ -13,7 +13,7 @@ colors:
   tx3: "#8f97a2"
   acc: "#8b9ae0"
   accBg: "#26293a"
-  accBd: "#3f4a80"
+  accBd: "#6c79b7"
   accTx: "#a8b3e6"
   add: "rgba(110, 190, 145, 0.15)"
   addTx: "#a9dcc0"
@@ -41,7 +41,7 @@ colors:
   tx3-light: "#656158"
   acc-light: "#4d5793"
   accBg-light: "#e6e9f5"
-  accBd-light: "#aab2d8"
+  accBd-light: "#6977ba"
   accTx-light: "#3a4478"
   add-light: "rgba(58, 122, 84, 0.17)"
   addTx-light: "#26603c"
@@ -306,13 +306,15 @@ change there first.
 
 - **Muted Periwinkle** / **Ink Indigo** (`acc`): the one accent. Active states,
   the primary action, the focused thread, the selected search result, the
-  `question` severity, and the caret in every menu trigger. It is a blue that
+  `question` severity, the caret in every menu trigger, and every focus ring. It is a blue that
   has had most of its saturation taken out, so it reads as attention rather than
   as a link.
 - **Accent Ground** (`accBg`) and **Accent Edge** (`accBd`): the wash and border
   of anything currently in play — the selected line range, an agent's reply, the
-  model's re-anchoring proposal, a focused field. `accTx` is the text that sits
-  on that wash.
+  model's re-anchoring proposal, the highlighted search hit, the chosen mode of
+  the base picker. `accTx` is the text that sits on that wash. The wash is
+  1.1–1.2:1 from `panel`, so the edge is what shows the state, and it is held to
+  3:1 against both.
 
 ### Secondary — the severity voices
 
@@ -511,9 +513,10 @@ happened. A mark that is the only visible signal of its state is information,
 and WCAG 1.4.11 asks 3:1 of it against its ground: the history mark on the
 session pill (`acc` on `panel3`), the select-mode and scope-editor tick `✓` and
 `◆` (`acc` on `panel`, and `panel2` under the pointer) with its unpicked `·`
-(`tx3`), and the focus ring. `tests/design-contrast.test.ts` holds that list in
-its own group, at 3:1 and in both themes. The coloured marks clear it at 4.7:1
-or more; the ring does not — see Inputs and fields. A new mark copies the kind it
+(`tx3`), the focus ring, and the `accBd` edge of a thing in play (Primary).
+`tests/design-contrast.test.ts` holds that list in its own group, at 3:1 and in
+both themes. The coloured marks clear it at 4.7:1 or more, the ring at 3.94:1
+(Inputs and fields) and the edge at 3.46:1. A new mark copies the kind it
 is, not the nearest dot: a dot that becomes the only signal of something moves
 into that list.
 
@@ -597,13 +600,19 @@ adjustment.
 
 - **Style:** 1 px `bd` border, 8 px radius, `panel2` ground, 28 px tall for a
   single line; the composer's textarea is 72 px with a 9 px radius on `panel`.
-- **Focus:** the border becomes `accBd`. Interactive rows that have no border of
-  their own take `outline: 1px solid var(--accBd)` on `:focus-visible` instead.
-  Focus is always visible and always `accBd`; it is never removed and never a
-  glow. `accBd` is 1.6–2.0:1 against the grounds a focusable control sits on in
-  both themes, under the 3:1 WCAG 1.4.11 asks of the one signal of focus; the
-  contrast test carries those pairs as recorded exceptions, and the decision is
-  DA-56.7's.
+- **Focus:** the border becomes `acc`. Interactive rows that have no border of
+  their own take `outline: 1px solid var(--acc)` on `:focus-visible` instead.
+  Focus is always visible and always `acc`; it is never removed and never a
+  glow. Two controls keep a ring of their own because they are filled: the
+  primary button (`accTx` on its `acc` fill) and `Resolve` (`tx`). The ring is
+  the only signal of focus, so it clears the 3:1 WCAG 1.4.11 asks against every
+  colour it is drawn next to — `bg`, the three panels, `bd` inside a chosen
+  segment, `sel` beside a chosen file, `accBg` inside a thing in play — at 3.94:1
+  at the tightest (dark, `sel`). It was `accBd`, the handoff's choice, which sat
+  at 1.6–2.0:1 on the panels; `accBd` then took a lighter value, which still left
+  2.8:1 on `bd` and 2.6:1 on `sel` and could not show focus on a control whose
+  resting border is already `accBd`, so the ring became the accent itself and
+  `accBd` stayed with the edges (DA-56.7).
 
 ### Navigation
 
@@ -651,8 +660,8 @@ same mark as an inline SVG data URI. There is no raster file.
 - **Do** keep both themes in step. A token added for one theme is added for the
   other in the same edit, and light is designed as warm paper, not as inverted
   dark.
-- **Do** show focus with `accBd` — a border change on a bordered control, a 1 px
-  outline on a row that has none.
+- **Do** show focus with `acc` — a border change on a bordered control, a 1 px
+  outline on a row that has none — and let it outrank a resting `accBd` border.
 - **Do** use `dcin` for anything that appears and `dcpulse` for anything alive.
 - **Do** keep panel widths fixed and let the window scroll below the floor; a
   panel that is in the way comes off the screen whole (The Panels-Do-Not-Shrink

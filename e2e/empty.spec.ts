@@ -134,6 +134,35 @@ test("a session with an empty change set shows the no-changes screen", async ({ 
   await expect(page.getByRole("region", { name: "review sessions" })).toBeVisible();
 });
 
+/** `Change base` rests on an `accBd` border; the ring is `acc` and has to outrank it (DA-56.7). */
+test("the accent button of the no-changes screen changes colour under the keyboard", async ({
+  page,
+}) => {
+  await page.route("**/api/review", (route) => route.fulfill({ json: NO_CHANGES }));
+  await ready(page);
+  const button = page.getByRole("button", { name: "Change base" });
+  const rest = await button.evaluate((el) => getComputedStyle(el).borderTopColor);
+  for (
+    let step = 0;
+    step < 30 && !(await button.evaluate((el) => el === document.activeElement));
+    step++
+  ) {
+    await page.keyboard.press("Tab");
+  }
+  await expect(button).toBeFocused();
+
+  const [ring, acc] = await button.evaluate((el) => {
+    const probe = document.createElement("span");
+    probe.style.color = "var(--acc)";
+    document.body.append(probe);
+    const colour = getComputedStyle(probe).color;
+    probe.remove();
+    return [getComputedStyle(el).borderTopColor, colour];
+  });
+  expect(ring).toBe(acc);
+  expect(ring).not.toBe(rest);
+});
+
 /** The live path of DA-100.2: the base that brings changes takes this screen, and `Change base`
  * with it, away; the restore waited for that and hands the ring to the `BASE` pill. */
 test("a base that brings changes leaves the ring on the BASE pill", async ({ page, request }) => {

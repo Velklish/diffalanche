@@ -10,7 +10,7 @@
         "canonical": "#8b9ae0",
         "tonalRamp": [
           "#26293a",
-          "#3f4a80",
+          "#6c79b7",
           "#8b9ae0",
           "#a8b3e6"
         ]
@@ -23,7 +23,7 @@
       "accBd": {
         "role": "primary",
         "displayName": "Accent Edge",
-        "canonical": "#3f4a80"
+        "canonical": "#6c79b7"
       },
       "accTx": {
         "role": "primary",
@@ -167,7 +167,7 @@
         "tonalRamp": [
           "#3a4478",
           "#4d5793",
-          "#aab2d8",
+          "#6977ba",
           "#e6e9f5"
         ]
       },
@@ -179,7 +179,7 @@
       "accBd-light": {
         "role": "primary",
         "displayName": "Accent Edge",
-        "canonical": "#aab2d8"
+        "canonical": "#6977ba"
       },
       "accTx-light": {
         "role": "primary",
@@ -384,13 +384,13 @@
     "focusRings": [
       {
         "name": "field-focus",
-        "value": "border-color: var(--accBd); outline: none",
-        "purpose": "A bordered control (input, textarea, select) turns its 1px border to the accent edge on :focus-visible."
+        "value": "border-color: var(--acc); outline: none",
+        "purpose": "A bordered control (input, textarea, select) turns its 1px border to the accent on :focus-visible, outranking a resting accBd border."
       },
       {
         "name": "row-focus",
-        "value": "outline: 1px solid var(--accBd)",
-        "purpose": "A row that has no border of its own (tree rows, list items) takes a 1px accent-edge outline on :focus-visible. Focus is never removed and never a glow."
+        "value": "outline: 1px solid var(--acc)",
+        "purpose": "A row that has no border of its own (tree rows, list items) takes a 1px accent outline on :focus-visible. Focus is never removed and never a glow."
       }
     ],
     "breakpoints": [

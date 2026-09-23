@@ -92,6 +92,35 @@ test("dragging over three lines opens the composer on the range", async ({ page 
   await expect(card.locator("td.diff-gutter-selected")).toHaveCount(3);
 });
 
+/** `.on` clears the chip's border, and the ring is that border: it has to win (DA-56.7). */
+test("the chosen severity chip shows the ring when the keyboard is on it", async ({ page }) => {
+  await open(page);
+  const card = page.locator(".file-card").first();
+  await gutter(card, await firstAddedLine(card)).click();
+  await expect(card.locator(".composer-field")).toBeFocused();
+
+  const chosen = card.locator(".sev-chip.on");
+  for (
+    let step = 0;
+    step < 4 && !(await chosen.evaluate((el) => el === document.activeElement));
+    step++
+  ) {
+    await page.keyboard.press("Shift+Tab");
+  }
+  await expect(chosen).toBeFocused();
+
+  const [border, ring] = await chosen.evaluate((el) => {
+    const probe = document.createElement("span");
+    probe.style.color = "var(--acc)";
+    document.body.append(probe);
+    const colour = getComputedStyle(probe).color;
+    probe.remove();
+    return [getComputedStyle(el).borderTopColor, colour];
+  });
+  expect(border).toBe(ring);
+  await page.keyboard.press("Escape");
+});
+
 test("esc closes the composer and writes nothing", async ({ page }) => {
   await open(page);
   const before = listComments().length;

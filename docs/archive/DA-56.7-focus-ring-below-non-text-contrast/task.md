@@ -14,14 +14,12 @@ coloured mark that carries a state clears the bound with room to spare — the
 history mark, the tick and its unpicked `·` are 4.7:1 or more in both themes —
 and one does not: the focus ring.
 
-`DESIGN.md` makes the ring `accBd` everywhere, and says so as a rule:
+`DESIGN.md` made the ring `accBd` everywhere, and said so as a rule (at `5a5f8e8`):
 
-<!-- quote:../../../DESIGN.md -->
 ```md
 - **Focus:** the border becomes `accBd`. Interactive rows that have no border of
   their own take `outline: 1px solid var(--accBd)` on `:focus-visible` instead.
 ```
-<!-- /quote -->
 
 Measured with the formula of `tests/design-contrast.test.ts`, the token against
 each ground a focusable control sits on:
@@ -85,6 +83,9 @@ for information. Hue, saturation and lightness are HSL.
 keeps its saturation as well and moves only lightness, 19.5 points in the dark
 theme and 18.5 in the light one, against 33.7 and 31.8 for A.
 
+**Decision (owner, 2026-09-23): C** — `accBd` itself takes `#6c79b7` dark and `#6977ba` light.
+**Decision (owner, 2026-09-23, after review): the ring is `acc`** — C left `bd` and `sel` under 3:1; `accBd` keeps C for edges.
+
 ## Work to do
 
 - Choose one of A, B or C above. Any of them is a change to `DESIGN.md`'s focus
@@ -95,8 +96,10 @@ theme and 18.5 in the light one, against 33.7 and 31.8 for A.
 
 ## Out of scope
 
-- `accBd` as the border of a focused *thread* and of an agent's reply, where it
-  frames a wash rather than marking the ring.
+- A value of its own for the frames `accBd` draws — the border of a focused
+  *thread*, of an agent's reply, of a thing in play. They are not left as they
+  were: they take C with the token (`#6c79b7` dark, `#6977ba` light), held at 3:1
+  against `panel` and `accBg`, while the ring itself is drawn in `acc`.
 - Text contrast, which the same test already holds at 4.5:1.
 
 ## Verification
