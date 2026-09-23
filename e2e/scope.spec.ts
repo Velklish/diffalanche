@@ -276,6 +276,58 @@ test("after the confirmation round-trip the ring goes back to the SCOPE pill", a
   await expect(pill).toBeFocused();
 });
 
+/** Opens `New task…` from select mode with one file picked, and hands back the opener. */
+async function openNewTask(page: Page) {
+  await page.getByRole("button", { name: "select" }).click();
+  await page.locator(".file-row").first().click();
+  const opener = page.getByRole("button", { name: "New task…" });
+  await opener.click();
+  await expect(page.getByRole("dialog", { name: "новая задача" })).toBeVisible();
+  return opener;
+}
+
+/** The two ways an opener cannot take the ring back (DA-100.1), set by hand: the live
+ * paths change the DOM only after the restore has run (DA-100.2, 08-ui.md). */
+for (const [condition, spoil] of [
+  ["has gone", (button: HTMLElement) => button.remove()],
+  ["was disabled", (button: HTMLElement) => button.setAttribute("disabled", "")],
+] as const) {
+  test(`an opener that ${condition} hands the ring to the SCOPE pill`, async ({
+    page,
+    request,
+  }) => {
+    const task = await scopedTask(request);
+    await open(page, `/?review=${task.name}`);
+    const opener = await openNewTask(page);
+
+    await opener.evaluate(spoil);
+    await page.keyboard.press("Escape");
+    await expect(page.getByRole("dialog", { name: "новая задача" })).toHaveCount(0);
+
+    await expect(page.locator(".pill.scope")).toBeFocused();
+  });
+}
+
+test("a restore with nowhere to go says so instead of doing nothing", async ({ page }) => {
+  const warnings: string[] = [];
+  page.on("console", (message) => {
+    if (message.type() === "warning") warnings.push(message.text());
+  });
+  // The whole root: no SCOPE pill, so nothing in the header opens this ladder.
+  await open(page);
+  await expect(page.locator(".pill.scope")).toHaveCount(0);
+  const opener = await openNewTask(page);
+
+  await opener.evaluate((button) => button.setAttribute("disabled", ""));
+  await page.keyboard.press("Escape");
+
+  await expect
+    .poll(() => warnings)
+    .toContain("the scope overlay closed and no control could take the focus back");
+  // Leave the tree as the next test expects it.
+  await page.getByRole("button", { name: "changes" }).click();
+});
+
 test("select mode builds a task out of the tree and leaves it as it was", async ({
   page,
   request,

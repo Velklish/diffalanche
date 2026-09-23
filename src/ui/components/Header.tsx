@@ -3,6 +3,7 @@ import { baseLabel } from "../base.ts";
 import { countScope, scopeLabel } from "../scope.ts";
 import { useStore } from "../store.ts";
 import { Logo } from "./Logo.tsx";
+import { ladderHome } from "./Overlay.tsx";
 import { SessionMenu } from "./SessionMenu.tsx";
 
 /** The 52 px bar of handoff section 1.1: the pill and its menu, the base and
@@ -63,6 +64,7 @@ export function Header() {
         type="button"
         className="pill base"
         aria-haspopup="dialog"
+        {...ladderHome("base")}
         onClick={() => openBase(true)}
       >
         <span className="tag">BASE</span>
@@ -87,6 +89,7 @@ export function Header() {
         type="button"
         className="ghost"
         aria-label="search"
+        {...ladderHome("palette")}
         onClick={() => useStore.getState().setPalette(true)}
       >
         ⌕<span className="key">⌘K</span>
@@ -134,7 +137,12 @@ export function Header() {
         </button>
       </span>
 
-      <button type="button" className="ghost" onClick={() => openExport(true)}>
+      <button
+        type="button"
+        className="ghost"
+        {...ladderHome("export")}
+        onClick={() => openExport(true)}
+      >
         Export .md
       </button>
 
@@ -208,6 +216,7 @@ function ScopePill() {
       type="button"
       className="pill scope"
       aria-haspopup="dialog"
+      {...ladderHome("scope")}
       onClick={() => openScope(true)}
     >
       <span className="tag">SCOPE</span>

@@ -84,8 +84,23 @@ function leaveLadder(ladder: Ladder): void {
     if ((MOUNTED.get(ladder) ?? 0) > 0) return;
     const back = OPENERS.get(ladder) ?? null;
     OPENERS.delete(ladder);
-    if (back instanceof HTMLElement && back.isConnected) back.focus({ preventScroll: true });
+    // An opener that is gone or disabled cannot hold it; the header's control for the ladder can.
+    if (takes(back) || takes(document.querySelector(`[data-ladder="${ladder}"]`))) return;
+    console.warn(`the ${ladder} overlay closed and no control could take the focus back`);
   }, 0);
+}
+
+/** Asked of the document rather than guessed: `isConnected` passes a disabled
+ * control, and `focus()` on one does nothing. */
+function takes(element: Element | null): boolean {
+  if (!(element instanceof HTMLElement)) return false;
+  element.focus({ preventScroll: true });
+  return document.activeElement === element;
+}
+
+/** The header control that opens a ladder: where the ring goes when its opener cannot take it. */
+export function ladderHome(ladder: Ladder): { "data-ladder": Ladder } {
+  return { "data-ladder": ladder };
 }
 
 /** Everything inside the panel a `Tab` can land on, in the order it would. */

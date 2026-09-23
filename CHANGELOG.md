@@ -288,6 +288,16 @@ and `bun run release` refuses a version that has no section. See
 
 ### Fixed
 
+- **An overlay whose opener cannot take the focus back gives it to the header's
+  control for the same overlay** (DA-100.1). The restore checked `isConnected`,
+  which a disabled control passes, and did nothing at all when the check failed:
+  the ring ended on `<body>` and nothing said so. It now asks the document whether
+  the opener took the ring, falls back to the `BASE` pill, the `SCOPE` pill,
+  search or `Export`, and writes a `console.warn` when none of them can take it
+  either. Two live paths still lose the ring *after* a restore that worked —
+  creating a task from select mode, and `Change base` on the no-changes screen —
+  and are DA-100.2. See [08-ui.md](docs/reference/08-ui.md).
+
 - **Five minor defects of the change set, the watcher and storage** (DA-114).
   `parseDiff` returns `{ files, notes }`, so the warning about the half of a type
   change it could not list can no longer be dropped by a caller that leaves an

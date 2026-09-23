@@ -8,7 +8,7 @@
 
 ## Context
 
-Found while closing [DA-100](../../archive/DA-100-overlay-captures-the-opener-during-render/task.md), whose
+Found while closing [DA-100](../DA-100-overlay-captures-the-opener-during-render/task.md), whose
 "Work to do" asks for exactly this and which this entry carries the rest of: *"make the silent no-op
 at Overlay.tsx:143 impossible to reach unnoticed: a detached opener today is indistinguishable from a
 successful restore."* DA-100 moved the opener from an `Overlay` instance to a **ladder**, which
