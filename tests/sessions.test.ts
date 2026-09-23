@@ -167,6 +167,7 @@ describe("useSession", () => {
 describe("setBase", () => {
   it("writes the new base and bumps updatedAt", async () => {
     const created = await createSession(dataDir, "one", { mode: "head" });
+    // A floor under a millisecond stamp, so the next one is later: load only lengthens it.
     await sleep(2);
 
     const updated = await setBase(dataDir, "one", { mode: "branch", branch: "origin/develop" });
@@ -184,6 +185,7 @@ describe("setBase", () => {
 describe("listSessions", () => {
   it("counts comments and repositories, most recently updated first", async () => {
     await createSession(dataDir, "older", { mode: "head" });
+    // A floor under a millisecond stamp, so the next one is later: load only lengthens it.
     await sleep(2);
     await createSession(dataDir, "newer", { mode: "ref", ref: "v1.0.0" }, "a title");
 

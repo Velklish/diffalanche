@@ -7,7 +7,7 @@
 
 ## Context
 
-[DA-31.1](../../archive/DA-31.1-unit-suite-flaky-under-load/task.md) closed by
+[DA-31.1](../DA-31.1-unit-suite-flaky-under-load/task.md) closed by
 fixing `tests/events.test.ts`. It named a second suspect and did not reach it,
 and that one is still there. An audit sweep over `tests/`, `e2e/`, `perf/` and
 `scripts/` found it plus six more, all structural — none of them needs a
@@ -74,7 +74,7 @@ supported Node between 22.0 and 22.18 those four fail and the guarded one skips.
 `e2e/playwright.config.ts` sets neither `snapshotPathTemplate` nor
 `ignoreSnapshots`, so Playwright's default suffix is `process.platform` and a
 Linux run looks for a file that does not exist. This is the suite
-[DA-54.2](../../archive/DA-54.2-ui-suite-in-gates/task.md) wants to put in a gate; it cannot go into
+[DA-54.2](../DA-54.2-ui-suite-in-gates/task.md) wants to put in a gate; it cannot go into
 a Linux gate as it stands.
 
 **5. The first fixture edit races the recursive watcher's arming.**
@@ -228,10 +228,10 @@ checked or never reached the check.
 
 ## Out of scope
 
-- [DA-55.2](../../archive/DA-55.2-update-budget-step-up/task.md) — why the update budget stepped
+- [DA-55.2](../DA-55.2-update-budget-step-up/task.md) — why the update budget stepped
   from 260 ms to 341 ms. That is a performance question; this task is about
   assertions that fail without a regression.
-- [DA-54.2](../../archive/DA-54.2-ui-suite-in-gates/task.md), putting the Playwright UI suite in a
+- [DA-54.2](../DA-54.2-ui-suite-in-gates/task.md), putting the Playwright UI suite in a
   gate. Item 4 is a precondition for it, not the same work.
 - Speeding up the suites.
 

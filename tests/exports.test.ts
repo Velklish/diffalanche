@@ -23,11 +23,6 @@ const KEPT: Record<string, Record<string, string>> = {
     embeddedAssets: "the binary's entry imports it, and scripts/build.ts:167 writes that entry",
     EmbeddedAsset: "the binary's generated asset table imports it (scripts/build.ts:156)",
   },
-  "src/server/events.ts": {
-    HEARTBEAT_MS:
-      "tests/events.test.ts of the watch track (DA-60) imports it; drop this entry when the " +
-      "second of the two tracks lands",
-  },
 };
 
 /** `every`: a namespace import, a star, or a dynamic import whose names cannot be read. */

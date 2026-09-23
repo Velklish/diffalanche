@@ -135,6 +135,43 @@ function group(page: Page, label: string) {
   return page.locator(".menu-group").filter({ has: page.locator("h2", { hasText: label }) });
 }
 
+/** A second stream on the page, counting the frames about each task: the mark's absence is a claim
+ * only once the frames that could raise it have arrived (11-perf.md, "Waits in the suites"). */
+async function listen(page: Page): Promise<void> {
+  await page.evaluate(
+    () =>
+      new Promise<void>((opened) => {
+        const heard: Record<string, number> = {};
+        (window as unknown as { __heard: Record<string, number> }).__heard = heard;
+        const source = new EventSource("/api/events");
+        for (const type of ["session-changed", "sessions-changed"]) {
+          source.addEventListener(type, (event) => {
+            const { name } = JSON.parse((event as MessageEvent<string>).data) as { name: string };
+            heard[`${type} ${name}`] = (heard[`${type} ${name}`] ?? 0) + 1;
+          });
+        }
+        source.onopen = () => opened();
+      }),
+  );
+}
+
+/** How many of one frame about one task the second stream has heard. */
+function heard(page: Page, frame: string): Promise<number> {
+  return page.evaluate(
+    (key) => (window as unknown as { __heard: Record<string, number> }).__heard[key] ?? 0,
+    frame,
+  );
+}
+
+/** One more of that frame than `before`, and the frame after it painted: the page's own stream
+ * was sent the same broadcast. */
+async function arrived(page: Page, frame: string, before: number): Promise<void> {
+  await expect.poll(() => heard(page, frame), { timeout: 20_000 }).toBeGreaterThan(before);
+  await page.evaluate(
+    () => new Promise((done) => requestAnimationFrame(() => setTimeout(done, 0))),
+  );
+}
+
 test("the menu is two groups, the open tasks above, each row saying what it is about", async ({
   page,
   request,
@@ -198,6 +235,7 @@ test("closing the task from its row writes the status, moves the row, and comes 
   // Nothing is patched before the stream is up: the frames this press causes
   // have to be able to arrive for their absence below to mean anything.
   await expect(page.locator(".sidebar-foot")).toContainText("watching");
+  await listen(page);
   await page.locator(".pill").first().click();
   const row = (label: string) =>
     group(page, label)
@@ -230,14 +268,18 @@ test("closing the task from its row writes the status, moves the row, and comes 
     // then `sessions-changed` ([05-watcher.md](../docs/reference/05-watcher.md)).
     // Each is claimed under its own key, so neither raises a mark about the
     // reader's own press — with one key the second frame would.
-    await page.waitForTimeout(MARK_CEILING_MS);
+    await arrived(page, `session-changed ${SESSION}`, 0);
+    await arrived(page, `sessions-changed ${SESSION}`, 0);
     await expect(page.locator(".pill-mark")).toHaveCount(0);
 
     // The same gesture the other way round.
+    const one = await heard(page, `session-changed ${SESSION}`);
+    const all = await heard(page, `sessions-changed ${SESSION}`);
     await row("Закрытые").getByRole("button", { name: "Reopen" }).click();
     await expect(row("Открытые задачи")).toHaveCount(1);
     expect(reviewJson(SESSION).status).toBe("open");
-    await page.waitForTimeout(MARK_CEILING_MS);
+    await arrived(page, `session-changed ${SESSION}`, one);
+    await arrived(page, `sessions-changed ${SESSION}`, all);
     await expect(page.locator(".pill-mark")).toHaveCount(0);
   } finally {
     // A failure half way through may not hand the next spec a closed fixture.
@@ -308,6 +350,7 @@ test("a task this window closes raises no mark of its own", async ({ page, reque
 
   await open(page);
   await expect(page.locator(".sidebar-foot")).toContainText("watching");
+  await listen(page);
   await page.locator(".pill").first().click();
   const row = page
     .locator(".session-row")
@@ -315,9 +358,8 @@ test("a task this window closes raises no mark of its own", async ({ page, reque
   await row.getByRole("button", { name: "Close" }).click();
   await expect(page.locator(".toast")).toContainText(`review close ${made.name}`);
 
-  // Long enough for the frames the press caused to have arrived: the watcher
-  // debounces for 100 ms and walks what it cannot watch every 250.
-  await page.waitForTimeout(MARK_CEILING_MS);
+  // The frame the press caused has arrived, so the absence below is the claim at work.
+  await arrived(page, `sessions-changed ${made.name}`, 0);
   await expect(page.locator(".pill-mark")).toHaveCount(0);
 
   // And the absence above is the claim working rather than the stream being

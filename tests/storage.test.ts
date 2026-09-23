@@ -305,6 +305,7 @@ describe("updateComments", () => {
         "one",
         async (draft) => {
           draft.comments.push(comment("c_bbbbbb"));
+          // Past the 10 ms lease, which is what lets the takeover below be legitimate.
           await sleep(20);
           // Another writer took the lock over while the change was running.
           staleLock(sessionDir(dataDir, "one"), "someone else");
@@ -322,6 +323,7 @@ describe("updateComments", () => {
   it("writes comments.json only when the change asked for the comments", async () => {
     await makeSession(dataDir, "one", [comment("c_aaaaaa")]);
     const before = statSync(commentsPath(dataDir, "one")).mtimeMs;
+    // A floor, so a rewrite would carry another mtime: load only lengthens it.
     await sleep(5);
 
     await updateSession(dataDir, "one", (draft) => {
@@ -398,6 +400,7 @@ describe("withLock", () => {
     const order: string[] = [];
     const body = (label: string) => async (): Promise<string> => {
       order.push(`${label} in`);
+      // A body that takes time, not a wait for anything: the other writer has a window to break in.
       await sleep(30);
       order.push(`${label} out`);
       return label;

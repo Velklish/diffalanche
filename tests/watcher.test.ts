@@ -63,6 +63,7 @@ import {
   trimVerdicts,
   watchTree,
 } from "../src/core/watcher/index.ts";
+import { needsTypeScript } from "./helpers/typescript.ts";
 
 const run = promisify(execFile);
 const appendReply = fileURLToPath(new URL("./helpers/append-reply.ts", import.meta.url));
@@ -168,7 +169,8 @@ async function settle(): Promise<void> {
   settled += 1;
   const mark = performance.now();
   await writeFile(join(root, OTHER_REPO, `settle-${settled}.ts`), `export const s = ${settled};\n`);
-  const deadline = performance.now() + 10_000;
+  // The deadline of `waitFor`: a queue behind a loaded machine is late, not stuck.
+  const deadline = performance.now() + 20_000;
   for (;;) {
     if (changesOf(mark, OTHER_REPO).length > 0) return;
     if (performance.now() > deadline) throw new Error("the watcher never caught up");
@@ -237,14 +239,26 @@ async function waitFor(
 }
 
 /** What one rescan of the watched repository costs on this machine right now. */
-async function baseline(): Promise<number> {
-  const runs: number[] = [];
-  for (let run = 0; run < RUNS; run += 1) {
-    const started = performance.now();
-    await rescanRepository(config, SESSION, REPO);
-    runs.push(performance.now() - started);
+async function timedRescan(): Promise<number> {
+  const started = performance.now();
+  await rescanRepository(config, SESSION, REPO);
+  return performance.now() - started;
+}
+
+/** The lines of a file's first hunk once `diff.json` has them: the file follows the event. */
+async function cachedLines(path: string, wanted: string): Promise<string[] | undefined> {
+  const deadline = performance.now() + 20_000;
+  let lines: string[] | undefined;
+  while (performance.now() < deadline) {
+    const cache = await readDiffCache(config.dataDir, SESSION);
+    const repository = cache?.repositories.find((one) => one.path === REPO);
+    lines = repository?.files
+      .find((one) => one.path === path)
+      ?.hunks[0]?.lines.map((line) => line.content);
+    if (lines?.[0] === wanted) break;
+    await new Promise((done) => setTimeout(done, 10));
   }
-  return median(runs);
+  return lines;
 }
 
 /** The change set of every repository, as the server writes it before it starts watching. */
@@ -307,6 +321,7 @@ afterAll(async () => {
 describe("watcher", () => {
   it("rescans the edited repository alone and has the new hunk in diff.json in time", async () => {
     const elapsed: number[] = [];
+    const rescans: number[] = [];
     let first = 0;
     // Three edits and the median of them, the way the performance gate reads
     // its own numbers: one slow run on a busy machine is not a regression. Each
@@ -321,35 +336,30 @@ describe("watcher", () => {
       elapsed.push(hit.at - mark);
       const event = hit.event as Extract<WatcherEvent, { type: "diff-changed" }>;
       expect(event.repo).toBe(REPO);
+      // The event comes before the file: `diff.json` is written a moment after
+      // the update the person sees, so the cache is read until it has caught up.
+      const wanted = `export const watched = ${run};`;
+      expect(await cachedLines(`watched-${run}.ts`, wanted)).toEqual([wanted]);
+      // The rescan this edit is compared with, timed beside it once the watcher's own write has
+      // landed: the pair shares the machine's moment, where one baseline after all three did not.
+      rescans.push(await timedRescan());
     }
 
-    // The event comes before the file: `diff.json` is written a moment after
-    // the update the person sees, so the cache is read until it has caught up.
-    const last = `watched-${RUNS - 1}.ts`;
-    const wanted = `export const watched = ${RUNS - 1};`;
-    const deadline = performance.now() + 20_000;
-    let lines: string[] | undefined;
-    while (performance.now() < deadline) {
-      const cache = await readDiffCache(config.dataDir, SESSION);
-      const repository = cache?.repositories.find((one) => one.path === REPO);
-      const added = repository?.files.find((one) => one.path === last);
-      lines = added?.hunks[0]?.lines.map((line) => line.content);
-      if (lines?.[0] === wanted) break;
-      await new Promise((done) => setTimeout(done, 10));
-    }
-    expect(lines).toEqual([wanted]);
     // No other repository was rescanned by these edits.
     expect(
       new Set(since(first, "diff-changed").map((one) => (one.event as { repo: string }).repo)),
     ).toEqual(new Set([REPO]));
     // The budget on top of one rescan — five git processes and a cache rewrite — timed in the same
     // conditions: the watcher's own share; the flat 300 ms is `bun run perf`'s (05-watcher.md).
-    process.stderr.write(`update after an edit: ${median(elapsed).toFixed(1)} ms\n`);
+    const own = elapsed.map((ms, at) => ms - (rescans[at] as number));
+    process.stderr.write(
+      `update after an edit: ${median(elapsed).toFixed(1)} ms, one rescan beside it ${median(rescans).toFixed(1)} ms\n`,
+    );
     // Only where the tree is watched. On the walk the number is the interval
     // and the cost of the walk itself, which is why a platform without a
     // recursive watch cannot meet this budget at all.
-    if (NATIVE_WATCH) expect(median(elapsed)).toBeLessThan(BUDGET_MS + (await baseline()));
-  }, 30_000);
+    if (NATIVE_WATCH) expect(median(own)).toBeLessThan(BUDGET_MS);
+  }, 60_000);
 
   // The two below read what the test above produced — its activity line and the
   // file it wrote — so one failure there is three here. That is a dependency
@@ -618,7 +628,8 @@ describe("watcher", () => {
     await settle();
   }, 30_000);
 
-  it("turns a reply written by another process into an event with its author", async () => {
+  it("turns a reply written by another process into an event with its author", async (context) => {
+    needsTypeScript(context);
     const comments = await readComments(config.dataDir, SESSION);
     const target =
       comments.find((one) => one.repo === REPO) ?? (comments[0] as (typeof comments)[0]);
@@ -634,7 +645,9 @@ describe("watcher", () => {
     expect(replied?.repo).toBe(target.repo);
   }, 30_000);
 
-  it("names the agent that wrote recently as the one editing the repository", async () => {
+  it("names the agent that wrote recently as the one editing the repository", async (context) => {
+    // It reads the reply the process above wrote, so it skips where that one does.
+    needsTypeScript(context);
     // The reply above was written by `claude` in this repository, so the diff
     // changes that follow are attributed to that agent for two minutes.
     const mark = performance.now();
@@ -663,17 +676,20 @@ describe("watcher", () => {
   it("follows the current session when the pointer changes", async () => {
     const mark = performance.now();
     await writeFile(join(config.dataDir, "current"), `${SESSION}-other\n`);
-    // The pointer moved, which is not a change to what any session *is*: a
-    // window on a task of its own must not re-read on somebody else's switch.
-    await new Promise((done) => setTimeout(done, 4 * BUDGET_MS));
+    await waitFor("current-changed", mark);
     expect(watcher.session()).toBe(`${SESSION}-other`);
+    // The move back is read in a burst queued behind the one above, so its event is the proof that
+    // burst has said everything it was going to: an absence checked after a sleep proves nothing.
+    const back = performance.now();
+    await writeFile(join(config.dataDir, "current"), `${SESSION}\n`);
+    await waitFor("current-changed", back);
     expect(
       since(mark, "current-changed").map((one) => (one.event as { name: string }).name),
-    ).toEqual([`${SESSION}-other`]);
+    ).toEqual([`${SESSION}-other`, SESSION]);
+    // The pointer moved, which is not a change to what any session *is*: a
+    // window on a task of its own must not re-read on somebody else's switch.
     expect(since(mark, "session-changed")).toEqual([]);
-    await writeFile(join(config.dataDir, "current"), `${SESSION}\n`);
-    await waitFor("current-changed", performance.now() - 1);
-  }, 30_000);
+  });
 
   it("announces a task that appeared and a task whose status changed", async () => {
     // A task an agent opens does not become the current session (DA-53), so
@@ -1040,9 +1056,10 @@ describe("watching a tree", () => {
     });
     try {
       expect(walking.polling()).toBe(true);
-      await new Promise((done) => setTimeout(done, 60));
+      // The walk's first pass is its baseline, and a file written before it is part of it.
+      await walking.ready;
       writeFileSync(join(dir, "sub", "a.txt"), "one");
-      const deadline = performance.now() + 2_000;
+      const deadline = performance.now() + 20_000;
       while (!seen.includes("sub/a.txt") && performance.now() < deadline) {
         await new Promise((done) => setTimeout(done, 10));
       }
@@ -1051,7 +1068,7 @@ describe("watching a tree", () => {
       walking.close();
       rmSync(dir, { recursive: true, force: true });
     }
-  }, 30_000);
+  });
 });
 
 describe("a comments.json that cannot be read", () => {
@@ -1426,13 +1443,18 @@ describe("the sessions a watcher follows", () => {
     writeFileSync(join(dataDir, "current"), `${SESSION}\n`);
 
     let watched: string[] = [];
+    // Every burst asks for the followed set once, before it reads their comments.
+    let asked = 0;
     const watching = await startWatcher({
       config: { ...config, dataDir },
       scan: found,
       ...(NATIVE_WATCH ? {} : { recursive: false, pollIntervalMs: 40 }),
       bus: own,
       activity: createActivityLog(),
-      sessions: () => watched,
+      sessions: () => {
+        asked += 1;
+        return watched;
+      },
       onError: () => undefined,
     });
     const commentsOf = (session: string): WatcherEvent[] =>
@@ -1470,11 +1492,19 @@ describe("the sessions a watcher follows", () => {
       // The task joins the watched set carrying history. Nothing is announced
       // for it: the burst that notices it reads the file as the baseline.
       watched = ["followed"];
+      const before = asked;
       writeFileSync(
         join(dataDir, "reviews", "followed", "review.json"),
         readFileSync(join(dataDir, "reviews", "followed", "review.json"), "utf8"),
       );
-      await new Promise((done) => setTimeout(done, 400));
+      // A burst that asked after this point reads the baseline, and a task created after the ask is
+      // announced by that burst or a later one: its frame proves the read done, where a sleep hoped.
+      await until(() => asked > before);
+      await createSession(dataDir, "barrier", { mode: "head" }, undefined, { use: false });
+      const barrier = (): boolean =>
+        seenHere.some((event) => event.type === "sessions-changed" && event.name === "barrier");
+      await until(barrier);
+      expect(barrier()).toBe(true);
       expect(commentsOf("followed")).toEqual([]);
 
       // Now a real write into it, which is the thing DA-55.1 exists for.

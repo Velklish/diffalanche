@@ -167,6 +167,9 @@ test("an edit patches its own card, holds the reading position, and leaves the c
     await expect(page.locator(`[data-file="${edited}"] .hunk-updated`).first()).toContainText(
       "updated",
     );
+    // The patch is painted a few frames before the page corrects the reading position for it, and
+    // both assertions below are about the corrected page: its record is what says it is done.
+    await page.waitForFunction((before) => window.__perf.settles.length > before, recorded);
 
     const after = await page.evaluate((id: string) => {
       const held = window as unknown as { __mutations: Record<string, number> };
@@ -182,10 +185,6 @@ test("an edit patches its own card, holds the reading position, and leaves the c
     expect(after.mutations.untouched).toBe(0);
     // The reading position held: what was under the reader is still there.
     expect(Math.abs(after.top - marks.top)).toBeLessThan(ROW_HEIGHT);
-    // The record lands a painted frame after the loop stops, so it is waited for, not read.
-    await expect
-      .poll(() => page.evaluate(() => window.__perf.settles.length))
-      .toBeGreaterThan(recorded);
     // And the record says the correction was made against the patch and not
     // past it: `grewAfter` counts from the frame the loop stopped on (08-ui.md).
     const settled = await page.evaluate(() => window.__perf.settles.at(-1) ?? null);

@@ -263,25 +263,47 @@ test("a letter under an open overlay belongs to the overlay", async ({ page }) =
 /** The same sentence said twice is two toasts: the second press starts its own
  * 2.2 seconds rather than living out what is left of the first (DA-105). */
 test("saying the same thing again gives it the whole lifetime", async ({ page }) => {
+  // The page's clock is the test's: on the wall clock a loaded machine could put the second press
+  // past the first toast's end, and the verdict would then be about nothing (11-perf.md, "Waits").
+  await page.clock.install();
   await open(page);
+  // A minute ahead, past the test's own 30 s timeout: a pause at "now + 1 ms" lands in the past
+  // whenever the page's clock runs on before the command reaches it.
+  await page.clock.pauseAt(await page.evaluate(() => Date.now() + 60_000));
   const toast = page.locator(".toast");
+  // A press is answered when the clipboard answers, after the click has returned: the clock moves
+  // only once the toast has set its 2.2 s timer for that press, and these are counted.
+  await page.evaluate(() => {
+    const held = window as unknown as { __lifetimes: number };
+    const set = window.setTimeout;
+    held.__lifetimes = 0;
+    window.setTimeout = ((handler: TimerHandler, ms?: number, ...rest: unknown[]) => {
+      if (ms === 2_200) held.__lifetimes += 1;
+      return set(handler, ms, ...rest);
+    }) as typeof window.setTimeout;
+  });
+  const lifetimes = () =>
+    page.evaluate(() => (window as unknown as { __lifetimes: number }).__lifetimes);
   // `Copy .md` says the same sentence on every press, copied or refused alike.
   await page.getByRole("button", { name: "Export .md" }).click();
   const copy = page.getByRole("button", { name: "Copy .md" });
 
   await copy.click();
   await expect(toast).toBeVisible();
+  await expect.poll(lifetimes).toBe(1);
   // Late in the first toast's life, and early enough to be sure of it: the
   // lifetime is 2.2 s, so a second press at 1.6 s carries the bar past 2.2 s.
-  await page.waitForTimeout(1_600);
+  await page.clock.runFor(1_600);
   await copy.click();
+  await expect.poll(lifetimes).toBe(2);
 
   // Where the first deadline was. Keyed on the text, the toast is gone by now.
-  await page.waitForTimeout(900);
+  await page.clock.runFor(900);
   await expect(toast).toBeVisible();
 
-  // And it still goes away on its own.
-  await expect(toast).toBeHidden({ timeout: 3_000 });
+  // And it still goes away on its own, 2.2 s after the second press.
+  await page.clock.runFor(1_400);
+  await expect(toast).toBeHidden();
 });
 
 test("C opens the composer and R resolves the focused thread", async ({ page }) => {

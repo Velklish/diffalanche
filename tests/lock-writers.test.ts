@@ -25,12 +25,12 @@ import { comment } from "./helpers/session.ts";
 
 const noUi: UiAssets = { read: async () => null };
 
-/** Long enough for the racing writer to reach the lock; short enough not to
- * redden the wall-clock budget of `tests/watcher.test.ts` beside it. */
+/** The floor of the wait for the racing writer to reach the lock; the machine raises it when
+ * the same writer, timed uncontended beside it, is slower. */
 const REACH_LOCK_MS = 150;
 /** The floor of the wait; the machine raises it when its own scan is slower. */
 const AFTER_SCAN_MS = 400;
-/** How much longer than the scan it timed the wait has to be to guard anything. */
+/** How much longer than the thing it timed a wait has to be to guard anything. */
 const SCAN_MARGIN = 2;
 
 let root: string;
@@ -58,20 +58,27 @@ describe("a comment written while the scope narrows", () => {
 
   it("is refused rather than written where nothing can read it", async () => {
     expect(await cli("review", "new", SESSION, "--repo", REPOS[0], "--repo", REPOS[1])).toBe(0);
+    const finding = {
+      repo: REPOS[0],
+      path: "file.txt",
+      severity: "warning" as const,
+      body: "a finding",
+      author: "kim.p",
+      role: "human" as const,
+    };
+    // The same write, uncontended, on a task of its own: the wait below is derived from it.
+    const timed = `${SESSION}-timed`;
+    expect(await cli("review", "new", timed, "--repo", REPOS[0], "--no-use")).toBe(0);
+    const timedAt = performance.now();
+    await addComment(config.dataDir, timed, finding);
+    const reachMs = Math.max(REACH_LOCK_MS, Math.ceil((performance.now() - timedAt) * SCAN_MARGIN));
 
     let pending: Promise<Comment | unknown> = Promise.resolve(null);
     await withLock(sessionDir(config.dataDir, SESSION), async (held) => {
-      pending = addComment(config.dataDir, SESSION, {
-        repo: REPOS[0],
-        path: "file.txt",
-        severity: "warning",
-        body: "a finding",
-        author: "kim.p",
-        role: "human",
-      }).catch((error: unknown) => error);
+      pending = addComment(config.dataDir, SESSION, finding).catch((error: unknown) => error);
       // If the writer has not reached the lock yet it refuses at its own check,
       // and the message asserted below is what says which of the two fired.
-      await sleep(REACH_LOCK_MS);
+      await sleep(reachMs);
       await held.assertHeld();
       const review = await readReview(config.dataDir, SESSION);
       await writeReview(config.dataDir, SESSION, {
@@ -109,12 +116,23 @@ describe("a thread answered while the scope widens", () => {
       expect(await cli("review", "new", session, "--repo", REPOS[0], "--no-use")).toBe(0);
       // Outside the scope, the way a hand edit or a narrowing leaves one.
       await writeComments(config.dataDir, session, [comment("c_widen1", { repo: REPOS[1] })]);
+      // The same writer, uncontended and in scope, on a task of its own: it reaches the lock inside
+      // that time, so the wait below is one this machine meets now and not a number that it did once.
+      const timed = `${session}-timed`;
+      expect(await cli("review", "new", timed, "--repo", REPOS[0], "--no-use")).toBe(0);
+      await writeComments(config.dataDir, timed, [comment("c_widen1", { repo: REPOS[0] })]);
+      const timedAt = performance.now();
+      await writers[writer]?.(timed, "c_widen1");
+      const reachMs = Math.max(
+        REACH_LOCK_MS,
+        Math.ceil((performance.now() - timedAt) * SCAN_MARGIN),
+      );
 
       let pending: Promise<Comment | unknown> = Promise.resolve(null);
       await withLock(sessionDir(config.dataDir, session), async (held) => {
         pending =
           writers[writer]?.(session, "c_widen1").catch((error: unknown) => error) ?? pending;
-        await sleep(REACH_LOCK_MS);
+        await sleep(reachMs);
         await held.assertHeld();
         const review = await readReview(config.dataDir, session);
         await writeReview(config.dataDir, session, { ...review, scope: null });

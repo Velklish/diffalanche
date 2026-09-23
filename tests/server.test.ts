@@ -73,6 +73,28 @@ function listen(response: Response): {
   };
 }
 
+/** The config with a flag raised when a build first reads the root, which it does as its scan
+ * starts: the sign a build is under way, where a length of time could only guess it. */
+function building(of: Config): { config: Config; started: () => Promise<void> } {
+  let read = false;
+  const config = new Proxy(of, {
+    get: (target, key, receiver) => {
+      if (key === "root") read = true;
+      return Reflect.get(target, key, receiver);
+    },
+  });
+  return {
+    config,
+    started: async () => {
+      const deadline = performance.now() + 20_000;
+      while (!read) {
+        if (performance.now() > deadline) throw new Error("no build began its scan");
+        await new Promise((done) => setTimeout(done, 1));
+      }
+    },
+  };
+}
+
 let root: string;
 let config: Config;
 let app: Hono;
@@ -572,15 +594,16 @@ describe("the change set a document is built from", () => {
     // is what makes the window wide enough to land a rescan inside. `rebuild`
     // writes the file back, so the fixture repairs itself.
     rmSync(join(config.dataDir, "reviews", SESSION, "diff.json"));
-    const service = createReviewService(config, { watched: () => SESSION });
+    const scan = building(config);
+    const service = createReviewService(scan.config, { watched: () => SESSION });
     let settled = false;
     const reading = service.document(SESSION).then((document) => {
       settled = true;
       return document;
     });
-    // The assertion is what says the rescan really landed inside the build
-    // rather than after it: a probe that wins by timing is not a probe.
-    await new Promise((resolve) => setTimeout(resolve, 50));
+    // The build has begun its scan and not finished it: the rescan lands inside
+    // it rather than before or after it, and a probe that wins by timing is not a probe.
+    await scan.started();
     expect(settled).toBe(false);
     expect(service.adopt(SESSION, rescan)).toBe(false);
     expect(firstFile(await reading).patch).toContain(MARK);
@@ -697,7 +720,8 @@ describe("the change set a document is built from", () => {
   });
 
   it("keeps a build whose signal was about a repository the task is not on", async () => {
-    const service = createReviewService(config, { watched: () => SESSION });
+    const scan = building(config);
+    const service = createReviewService(scan.config, { watched: () => SESSION });
     let settled = false;
     const reading = service.document(SCOPED).then((document) => {
       settled = true;
@@ -707,7 +731,7 @@ describe("the change set a document is built from", () => {
     // then reads the working tree after the change and is already right. Only a
     // signal inside the build is the case this is about, and the assertion is
     // what says it landed there.
-    await new Promise((resolve) => setTimeout(resolve, 10));
+    await scan.started();
     expect(settled).toBe(false);
     service.repositoryChanged(outOfScope);
     const built = await reading;
@@ -717,14 +741,15 @@ describe("the change set a document is built from", () => {
   });
 
   it("drops a build whose signal was about a repository the task is on", async () => {
-    const service = createReviewService(config, { watched: () => SESSION });
+    const scan = building(config);
+    const service = createReviewService(scan.config, { watched: () => SESSION });
     let settled = false;
     // The whole root, so the build is long enough to land a signal inside it.
     const reading = service.document(NAMED).then((document) => {
       settled = true;
       return document;
     });
-    await new Promise((resolve) => setTimeout(resolve, 50));
+    await scan.started();
     expect(settled).toBe(false);
     service.repositoryChanged(inScope);
     const built = await reading;

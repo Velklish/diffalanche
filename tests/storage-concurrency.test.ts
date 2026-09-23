@@ -12,6 +12,7 @@ import { promisify } from "node:util";
 import { afterAll, beforeAll, describe, expect, it } from "vitest";
 import { type Comment, dataDirOf, ensureDataDir, readComments } from "../src/core/storage/index.ts";
 import { comment, makeSession } from "./helpers/session.ts";
+import { needsTypeScript, runsTypeScript } from "./helpers/typescript.ts";
 
 const run = promisify(execFile);
 const WRITERS = 20;
@@ -24,6 +25,8 @@ let dataDir: string;
 let replies: Comment["replies"];
 
 beforeAll(async () => {
+  // The writers are `.ts` files run as processes of their own (`helpers/typescript.ts`).
+  if (!runsTypeScript) return;
   root = mkdtempSync(join(tmpdir(), "diffalanche-concurrency-"));
   dataDir = dataDirOf(root);
   await ensureDataDir(dataDir);
@@ -40,16 +43,18 @@ beforeAll(async () => {
 }, 120_000);
 
 afterAll(() => {
-  rmSync(root, { recursive: true, force: true });
+  if (root !== undefined) rmSync(root, { recursive: true, force: true });
 });
 
 describe("concurrent writers", () => {
-  it("keeps every reply", () => {
+  it("keeps every reply", (context) => {
+    needsTypeScript(context);
     expect(replies).toHaveLength(WRITERS);
     expect(new Set(replies.map((reply) => reply.author)).size).toBe(WRITERS);
   });
 
-  it("numbers them in the order they arrived", () => {
+  it("numbers them in the order they arrived", (context) => {
+    needsTypeScript(context);
     expect(replies.map((reply) => reply.id)).toEqual(
       Array.from({ length: WRITERS }, (_, index) => `r_${index + 1}`),
     );

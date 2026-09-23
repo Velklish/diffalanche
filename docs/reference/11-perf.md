@@ -240,8 +240,13 @@ is seen in the list before the agent replies to it.
 A failure prints the command as it would be typed again, its exit code, and its
 stderr; an expectation that did not hold prints the command, what was expected,
 and the output it read. `serve` prints the same three things itself, and only
-one of its deaths is retried: a port already in use, which Node and Bun word
-differently and which the script matches both ways. Every other death is the
+one of its deaths is retried: a port already in use. `serve` words that one
+itself — `port <n> is already in use: …` ([07-server.md](07-server.md)) — and
+the script matches that sentence, plus the raw errno of Node and of Bun for a
+build that lets one through; matching only the raw wordings, as it once did,
+left the retry unable to fire at all. `tests/cli.test.ts` reads the pattern out
+of the script and holds it against what `serve` prints for a taken port, so the
+two cannot drift apart again. Every other death is the
 channel failing to serve — a `Bun.file` in the server on Node is exactly that —
 and it stops the run with `serve`'s own exit code and stderr rather than being
 counted as a busy port. The server counts as up only once it has printed the
@@ -654,7 +659,10 @@ session per server lifetime.
 **Update after an edit** covers the whole path — the watcher, the debounce, the
 rescan, the stream, the fetch, the patch, and the paint — and fails the build
 like any other line; on the machine this was written on it lands around 221 ms
-of the 300, of which 100 ms is the watcher's own debounce.
+of the 300, of which 100 ms is the watcher's own debounce. Taking the probe line
+back out is an update down the same path, so a repetition ends once the card has
+painted the restore, not after a fixed pause: a pause shorter than the restore
+left the next repetition measuring an edit behind a rescan still in flight.
 
 Both of those windows are the whole wait on purpose. Only the first-render row
 of `docs/SPEC.md` section 6 is qualified with "after the server responds"; a row
@@ -708,6 +716,64 @@ the UI itself, so the job does not; the table lands in the run summary through
 `GITHUB_STEP_SUMMARY`. One local run takes about 33 seconds on
 an M1 Pro, plus 4 seconds when the fixture has to be generated first.
 
+## Waits in the suites
+
+A test that waits for something asserts about what it finds when the wait ends,
+and a wait that ended too early reads the same as one that did not: the verdict
+behind it simply never ran, and it prints green. So every wait in `tests/`,
+`e2e/` and `perf/` is one of four kinds, and says which.
+
+- **A condition with a generous deadline.** Poll for the thing itself — the
+  frame, the event, the file in the change set, the paint — and give up after a
+  deadline that only a hang reaches: 20 s for a watcher event or an SSE frame
+  (`DEADLINE_MS` of `tests/events.test.ts`, `waitFor` and `settle` of
+  `tests/watcher.test.ts`), 60 s for a test and 120 s for a hook
+  (`vitest.config.ts`). A deadline is not a budget. A frame that arrives late on
+  a loaded machine has arrived, and a deadline tight enough to fail it tests the
+  machine. An expected *absence* is a condition too: wait for something queued
+  after the thing that must not happen — the next event of the same queue, a
+  frame on a second stream, a task created behind it — and then look.
+- **An order, not a length.** Where nothing can be polled, a wait may lean on an
+  order the platform guarantees: a macrotask queued behind another, the next
+  painted frame, or a timer of the same delay set after the one it waits out —
+  HTML runs timers of equal delay in the order they were set, which is how
+  `e2e/repo-bar.spec.ts` waits out one 120 ms settle of the centre panel. An
+  order covers only what it orders: a scroll the page makes afterwards, as cards
+  mount, re-arms that timer, so the one test that reads what the panel chose
+  polls for it instead. A clock the test
+  drives is the same thing: `e2e/keyboard.spec.ts` times the toast on
+  Playwright's `page.clock`, where wall time would let a loaded machine put the
+  second press after the first toast was already gone.
+- **A duration the test creates.** A body that holds a lock for a while, a floor
+  under a millisecond timestamp, a pool item kept in flight across a macrotask:
+  it waits for nothing, load only lengthens it, and a comment says it is a
+  floor.
+- **A wait for a party the test cannot see**, such as a writer on its way to a
+  lock. It is derived from the same thing timed in the same run — the writer
+  uncontended, the scan the locked writer must outrun — times a margin, over a
+  floor (`tests/lock-writers.test.ts`). The residual is honest: the multiple is
+  a heuristic, not a bound.
+
+**A test's timeout is a deadline on a hang.** Vitest's defaults of 5 s per test
+and 10 s per hook failed work that claims no time at all — the byte comparison
+of two synthetic trees, the generation of a fixture in a hook — once the machine
+was busy enough, so `vitest.config.ts` raises them for every file.
+
+**Which assertion owns which number.** A budget held in two places to two rules
+is a red that no longer means anything, so each number has one owner:
+
+| Number | Owner | How it is held |
+|---|---|---|
+| The five budgets of `docs/SPEC.md` section 6 | `bun run perf` | the median of three repetitions, times `RUNNER_ALLOWANCE` on a runner, declined on a busy machine |
+| 300 ms on top of one rescan: the watcher's own share of an update | `tests/watcher.test.ts`, "rescans the edited repository alone and has the new hunk in diff.json in time" | the median of three edits, each less one rescan of that repository timed beside it once the watcher's write has landed; only where the tree is watched |
+| One frame for a jump from the tree | `e2e/sidebar.spec.ts`, "choosing a file brings its card into view on the frame the click produced" | the card is in view on the frame the click produced; the 50 ms is the gate's |
+| 750 ms from a task made elsewhere to the header mark | `e2e/history.spec.ts`, `MARK_CEILING_MS` | one sample, 2.5 times the 300 ms of a live update; no gate line measures the mark, and the spec says why |
+| `HEARTBEAT_MS`, 15 s, for the head of the live stream | `tests/events.test.ts`, "answers as soon as it is subscribed, without waiting for a heartbeat" | the head arrives before a heartbeat is due and its first bytes are not one |
+
+A number printed and not held — `edit to diff-changed`, `reply written to
+reply-added`, `check-ignore over 50 paths`, `file jump, one frame` — is there to
+be read, and a latency with no owner in that table is printed rather than held.
+
 ## The CI jobs
 
 `.github/workflows/ci.yml` holds six jobs, and each of them is described in
@@ -736,11 +802,10 @@ whichever one the author happened to have. Run it before a change to the server,
 the CLI, or the scanner; the gates stay the fast ones.
 
 `bun run test:ui` **is** a gate and the `ui` job both, since DA-54.2. Its
-screenshot baselines are per platform and the ones in the repository were taken
-on macOS, so the job runs `bun run test:ui:ci` — the same suite with
-`--ignore-snapshots`, which leaves the two comparisons of `shell.spec.ts` to the
-gate on a machine whose pixels they describe and runs everything else
-([08-ui.md](08-ui.md#ui-tests)). It is the sixth of the seven, placed between
+screenshot baselines were taken on macOS and are the only ones there are, so the
+two comparisons of `shell.spec.ts` declare the platform and skip anywhere else,
+saying so; the job runs the suite as the gate does, and everything else in it
+runs on Linux too ([08-ui.md](08-ui.md#ui-tests)). It is the sixth of the seven, placed between
 `bun run test:bun` and `bun run perf` so that the two browser gates are
 adjacent and a machine that has to serialise them serialises one window.
 

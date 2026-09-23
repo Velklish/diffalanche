@@ -91,9 +91,13 @@ test("the filter narrows the tree and its count", async ({ page }) => {
   await expect(page.locator(".matches")).toHaveText("0");
 });
 
-test("choosing a file brings its card into view inside the budget", async ({ page }) => {
+test("choosing a file brings its card into view on the frame the click produced", async ({
+  page,
+}) => {
   await open(page);
 
+  // What this spec owns is a frame: the first scroll of a jump is synchronous (`src/ui/reveal.ts`).
+  // The 50 ms of `docs/SPEC.md` section 6 is the gate's (11-perf.md, "Waits in the suites").
   const jump = await page.evaluate(async () => {
     const rows = document.querySelectorAll<HTMLElement>(".file-row");
     const row = rows[rows.length - 1];
@@ -101,10 +105,13 @@ test("choosing a file brings its card into view inside the budget", async ({ pag
     const start = performance.now();
     row.click();
     await new Promise((resolve) => requestAnimationFrame(() => setTimeout(resolve, 0)));
-    return performance.now() - start;
+    const path = document.querySelector(".file-row.on .file-name")?.textContent ?? "";
+    const card = document.querySelector(`.file-card[data-path="${CSS.escape(path)}"]`);
+    return { ms: performance.now() - start, top: card?.getBoundingClientRect().top ?? Number.NaN };
   });
-
-  expect(jump).toBeLessThan(50);
+  process.stderr.write(`file jump, one frame: ${jump.ms.toFixed(1)} ms\n`);
+  expect(jump.top).toBeGreaterThanOrEqual(0);
+  expect(jump.top).toBeLessThan(200);
 
   const selected = page.locator(".file-row.on");
   await expect(selected).toHaveCount(1);
@@ -137,9 +144,7 @@ test("the current file follows the reading position", async ({ page }) => {
   const first = await page.locator(".file-row.on .file-name").textContent();
 
   await page.evaluate(() => window.__perf.jumpToFile(6));
-  await expect(page.locator(".file-row.on .file-name")).not.toHaveText(first ?? "", {
-    timeout: 2000,
-  });
+  await expect(page.locator(".file-row.on .file-name")).not.toHaveText(first ?? "");
 
   const now = await page.locator(".file-row.on .file-name").textContent();
   const card = await page

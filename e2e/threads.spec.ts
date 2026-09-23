@@ -188,8 +188,21 @@ test("a reply being written in a widget keeps its card mounted", async ({ page }
   // The far end of the review, well past the card's 1000 px mount margin.
   const card = page.locator(`.file-card[data-path="${thread.path}"]`).first();
   await expect(card.locator(".file-body.mounted")).toHaveCount(1);
+  // A mounted neighbour with no field in it: its unmount is the proof the scroll has been through
+  // the observer, where a sleep of 400 ms only hoped it had (11-perf.md, "Waits").
+  const neighbour = await page.evaluate((path) => {
+    const cards = [...document.querySelectorAll<HTMLElement>(".file-card")];
+    const at = cards.findIndex((one) => one.dataset.path === path);
+    const beside = [cards[at - 1], cards[at + 1]].find(
+      (one) => one?.querySelector(".file-body.mounted") != null,
+    );
+    return beside === undefined ? -1 : cards.indexOf(beside);
+  }, thread.path);
+  if (neighbour < 0) throw new Error("no mounted card beside the one holding the field");
   await page.evaluate(() => window.scrollTo(0, document.documentElement.scrollHeight));
-  await page.evaluate(() => new Promise((done) => setTimeout(done, 400)));
+  await expect(page.locator(".file-card").nth(neighbour).locator(".file-body.mounted")).toHaveCount(
+    0,
+  );
 
   await expect(page.locator(".reply-field")).toHaveCount(1);
   await expect(page.locator(".reply-field")).toHaveValue("still here");

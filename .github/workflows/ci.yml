@@ -121,9 +121,9 @@ jobs:
           bun-version: 1.3.14
       - run: bun install --frozen-lockfile
       - run: bunx playwright install --with-deps chromium
-      # Its own runner, because this suite and `e2e` share `dist/`; and
-      # `test:ui:ci` skips the macOS-only screenshots (08-ui.md).
-      - run: bun run test:ui:ci
+      # Its own runner, because this suite and `e2e` share `dist/`; the two
+      # macOS-only screenshots skip themselves here and say so (08-ui.md).
+      - run: bun run test:ui
 
   smoke:
     name: smoke ${{ matrix.channel }} on ${{ matrix.os }}

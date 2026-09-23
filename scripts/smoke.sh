@@ -263,16 +263,8 @@ serve_failed() { # <port> <what happened> <exit code|->
     exit 1
 }
 
-# `serve` in the background on a port nothing else holds. Returns 0 when it is
-# listening and 1 when the port was taken; anything else ends the run here.
-#
-# The port is the only death worth another try, and it has to be read out of
-# what `serve` said, because every other death looks the same from outside: a
-# Bun-only API that crashes the server on Node — the failure this matrix exists
-# to catch — would otherwise be reported as ten busy ports and a port number
-# nothing was ever wrong with. Node and Bun word it differently, so both
-# wordings are matched. A server that starts and then never answers is not a
-# port problem either.
+# `serve` in the background: 0 when it listens, 1 when the port was taken, and any other death ends
+# the run here — why only that one is retried is in docs/reference/11-perf.md, "The smoke matrix".
 start_server() { # <port>
     # shellcheck disable=SC2086
     $CLI serve --root "$ROOT" --port "$1" >"$SERVE_OUT" 2>"$SERVE_ERR" &
@@ -283,9 +275,9 @@ start_server() { # <port>
             wait "$SERVER_PID"
             code=$?
             SERVER_PID=
-            # Node: `listen EADDRINUSE: address already in use 127.0.0.1:4880`.
-            # Bun: `Failed to start server. Is port 4880 in use?`.
-            if grep -Eq 'EADDRINUSE|address already in use|Is port [0-9]+ in use' "$SERVE_ERR"; then
+            # serve's own sentence (`port 4880 is already in use: …`), then Node's
+            # raw errno and Bun's (`Is port 4880 in use?`) for a build that lets one through.
+            if grep -Eq 'port [0-9]+ is already in use|EADDRINUSE|address already in use|Is port [0-9]+ in use' "$SERVE_ERR"; then
                 return 1
             fi
             serve_failed "$1" "serve exited instead of serving the review" "$code"

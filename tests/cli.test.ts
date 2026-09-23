@@ -15,6 +15,7 @@ import { run } from "../src/cli/run.ts";
 import { VERSION } from "../src/cli/version.ts";
 import type { UiAssets } from "../src/server/assets.ts";
 import { makeRoot, REPOS } from "./helpers/fixture-root.ts";
+import { needsTypeScript } from "./helpers/typescript.ts";
 
 const noUi: UiAssets = { read: async () => null };
 
@@ -407,7 +408,8 @@ describe("the directory flags", () => {
 describe("serve on a review that cannot be read", () => {
   useFixtureRoot();
 
-  it("starts the server anyway and says so under the address", async () => {
+  it("starts the server anyway and says so under the address", async (context) => {
+    needsTypeScript(context);
     await inRoot("review", "new", "alpha");
     // A hand-edited file is an ordinary event (`docs/SPEC.md` section 3), and
     // the server is documented to start on one and answer with what is wrong.
@@ -437,7 +439,8 @@ describe("serve on a review that cannot be read", () => {
     }
   }, 60_000);
 
-  it("still prints the first-run line on a root with no session at all", async () => {
+  it("still prints the first-run line on a root with no session at all", async (context) => {
+    needsTypeScript(context);
     // The other half of the same branch: a root with no current session keeps
     // the line that says how to make one, and does not borrow the other's.
     const served = await serve();
@@ -530,7 +533,8 @@ describe("serve on a named review task", () => {
     expect(result.err).toContain('no review session "nope"');
   }, 60_000);
 
-  it("opens on that task: the address carries it and the counters are its own", async () => {
+  it("opens on that task: the address carries it and the counters are its own", async (context) => {
+    needsTypeScript(context);
     await twoSessions();
     const served = await serve("--review", "narrow");
     try {
@@ -545,7 +549,8 @@ describe("serve on a named review task", () => {
     }
   }, 60_000);
 
-  it("leaves the address and the counters alone without the flag", async () => {
+  it("leaves the address and the counters alone without the flag", async (context) => {
+    needsTypeScript(context);
     await twoSessions();
     const served = await serve();
     try {
@@ -578,6 +583,30 @@ describe("a listening socket the environment refuses", () => {
         `diffalanche: port ${port} is already in use: ` +
           "stop the diffalanche that holds it, or run with --port <n>\n",
       );
+    } finally {
+      await new Promise<void>((closed) => held.close(() => closed()));
+    }
+  }, 60_000);
+
+  it("says it in the words the smoke script retries on", async () => {
+    // The script decides "taken, try the next port" by this pattern alone, and it once matched only
+    // the raw errno that `serve` had already reworded: its retry could never fire (DA-60).
+    const script = readFileSync(
+      fileURLToPath(new URL("../scripts/smoke.sh", import.meta.url)),
+      "utf8",
+    );
+    const pattern = /grep -Eq '([^']+)' "\$SERVE_ERR"/.exec(script)?.[1];
+    expect(
+      pattern,
+      "scripts/smoke.sh no longer greps serve's stderr for a taken port",
+    ).toBeDefined();
+    const held = createServer();
+    await new Promise<void>((listening) => held.listen(0, "127.0.0.1", listening));
+    const { port } = held.address() as { port: number };
+    try {
+      const taken = await inRoot("serve", "--port", String(port));
+      expect(taken.code).toBe(1);
+      expect(taken.err).toMatch(new RegExp(pattern as string));
     } finally {
       await new Promise<void>((closed) => held.close(() => closed()));
     }
@@ -670,7 +699,8 @@ describe("output piped into a reader that stops early", () => {
   /** Past the pipe buffer in one write, which is the shape `diff` has anyway. */
   const BIG = `${Array.from({ length: 12_000 }, (_, index) => `const line${index} = ${index};`).join("\n")}\n`;
 
-  it("ends at 0 with an empty stderr instead of an unhandled error event", async () => {
+  it("ends at 0 with an empty stderr instead of an unhandled error event", async (context) => {
+    needsTypeScript(context);
     writeFileSync(join(root, REPOS[0], "big.ts"), BIG);
     await inRoot("review", "new", "t1");
 

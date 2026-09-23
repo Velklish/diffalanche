@@ -25,6 +25,7 @@ import type { UiAssets } from "../src/server/assets.ts";
 import { createEventStream } from "../src/server/events.ts";
 import { createReviewService } from "../src/server/review.ts";
 import { startReviewServer } from "../src/server/serve.ts";
+import { needsTypeScript } from "./helpers/typescript.ts";
 import { untouched } from "./helpers/untouched.ts";
 
 const run = promisify(execFile);
@@ -540,7 +541,8 @@ describe("the export", () => {
 });
 
 describe("a write from another process", () => {
-  it("shows up in the review the server serves", async () => {
+  it("shows up in the review the server serves", async (context) => {
+    needsTypeScript(context);
     const server = await startReviewServer({ config: { ...config, port: 0 } });
     try {
       const before = (await (await fetch(`${server.url}/api/review`)).json()) as ReviewDocument;

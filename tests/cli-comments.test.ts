@@ -20,22 +20,11 @@ import {
   REPOS,
   resetWorkingTrees,
 } from "./helpers/fixture-root.ts";
+import { needsTypeScript } from "./helpers/typescript.ts";
 import { untouched } from "./helpers/untouched.ts";
 
 const execFileAsync = promisify(execFile);
 const noUi: UiAssets = { read: async () => null };
-
-/**
- * Whether the runtime running the tests can start the CLI from its TypeScript
- * source: Bun always can, and Node has stripped types without a flag since
- * 22.18. The published bundle needs neither, so `engines.node` stays at 22 and
- * only this one test asks for more.
- */
-const runsTypeScript = ((): boolean => {
-  if (typeof (globalThis as { Bun?: unknown }).Bun !== "undefined") return true;
-  const [major = 0, minor = 0] = process.versions.node.split(".").map(Number);
-  return major > 22 || (major === 22 && minor >= 18);
-})();
 
 const ALPHA = REPOS[0];
 
@@ -492,11 +481,7 @@ describe("export", () => {
 
 describe("two processes", () => {
   it("both replies land in comments.json when they are written at the same moment", async (context) => {
-    if (!runsTypeScript) {
-      context.skip(
-        `Node ${process.versions.node} cannot start the CLI from its source; this test needs 22.18 or newer, or Bun`,
-      );
-    }
+    needsTypeScript(context);
     const first = await openFinding();
     const second = await openFinding("--body", "and another");
 

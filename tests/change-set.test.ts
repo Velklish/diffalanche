@@ -33,6 +33,7 @@ describe("mapWithLimit", () => {
     const order = await mapWithLimit(items, limit, async (item) => {
       live += 1;
       peak = Math.max(peak, live);
+      // Held across a macrotask so the pool has the others in flight too: work, not a wait.
       await new Promise((done) => setTimeout(done, 1));
       live -= 1;
       return item;

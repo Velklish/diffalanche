@@ -488,7 +488,7 @@ describe("an untracked symbolic link", () => {
     const change = await withLink("zero.ts", "/dev/zero");
     expect(link(change, "zero.ts").patch).toContain("+/dev/zero");
     expect(change.warnings).toEqual([]);
-  }, 10_000);
+  });
 });
 
 describe("an untracked entry that is gone by the time the reader looks", () => {
@@ -530,7 +530,7 @@ describe("an untracked entry that is not a regular file", () => {
     } finally {
       rmSync(join(solo, "pipe.fifo"));
     }
-  }, 10_000);
+  });
 });
 
 describe("paths git does not write literally", () => {

@@ -5,7 +5,7 @@
  */
 import { execFile } from "node:child_process";
 import { mkdtempSync, rmSync } from "node:fs";
-import { writeFile } from "node:fs/promises";
+import { rm, writeFile } from "node:fs/promises";
 import { tmpdir } from "node:os";
 import { join } from "node:path";
 import { fileURLToPath } from "node:url";
@@ -17,16 +17,18 @@ import type { Config } from "../src/core/config/index.ts";
 import { loadConfig } from "../src/core/config/index.ts";
 import { list } from "../src/core/domain/index.ts";
 import type { RepositoryChange, ScanWarning } from "../src/core/types.ts";
-import { createEventStream, streamEvents } from "../src/server/events.ts";
+import { createEventStream, HEARTBEAT_MS, streamEvents } from "../src/server/events.ts";
 import type { ReviewServer } from "../src/server/serve.ts";
 import { startReviewServer } from "../src/server/serve.ts";
+import { needsTypeScript } from "./helpers/typescript.ts";
 
 const run = promisify(execFile);
 const cli = fileURLToPath(new URL("../src/cli/index.ts", import.meta.url));
 const SESSION = "synth";
 const REPO = "repos/core/cargos-api";
-/** `docs/SPEC.md` section 6: update after an edit in one repository. */
-const BUDGET_MS = 300;
+/** How long a frame is waited for: a deadline on a frame that never comes, not a budget — one that
+ * arrives late on a loaded machine has still arrived (11-perf.md, "Waits"). */
+const DEADLINE_MS = 20_000;
 
 /**
  * Bun's own test runner leaves `fs.watch` quiet after its first events, while a
@@ -93,7 +95,7 @@ function read(response: Response): Reader {
   return {
     frames,
     comments,
-    next: async (event, timeoutMs = 5_000) => {
+    next: async (event, timeoutMs = DEADLINE_MS) => {
       const from = frames.length;
       const deadline = Date.now() + timeoutMs;
       for (;;) {
@@ -103,7 +105,7 @@ function read(response: Response): Reader {
         await new Promise((done) => setTimeout(done, 5));
       }
     },
-    waitFor: async (event, timeoutMs = 5_000) => {
+    waitFor: async (event, timeoutMs = DEADLINE_MS) => {
       const deadline = Date.now() + timeoutMs;
       for (;;) {
         const hit = frames.find((frame) => frame.event === event);
@@ -126,7 +128,37 @@ beforeAll(async () => {
     config: { ...config, port: 0 },
     ...(NATIVE_WATCH ? {} : { recursive: false }),
   });
+  await arm();
 }, 120_000);
+
+/** Proves the watch of `REPO` delivers before a test writes into it: on the native path a write
+ * made before the OS delivers is lost, not late, so it is repeated (`tests/watcher.test.ts`). */
+async function arm(): Promise<void> {
+  const stream = read(await fetch(`${server.url}/api/events`));
+  const file = join(root, REPO, "armed.ts");
+  try {
+    for (let attempt = 0; ; attempt += 1) {
+      await writeFile(file, `export const armed = ${attempt};\n`);
+      const heard = await stream.next("diff-changed", 2_000).catch(() => null);
+      if (heard !== null) break;
+      if (attempt >= 15) throw new Error(`the watch of ${REPO} never armed`);
+    }
+    // Its removal is a change of its own, and the document leaves the file in the callback that
+    // sends the frame: waited for there, since an attempt's late frame could pass for it.
+    await rm(file, { force: true });
+    const deadline = Date.now() + DEADLINE_MS;
+    for (;;) {
+      const diff = (await (
+        await fetch(`${server.url}/api/repos/${REPO}/diff`)
+      ).json()) as RepositoryChange;
+      if (!diff.files.some((one) => one.path === "armed.ts")) break;
+      if (Date.now() > deadline) throw new Error("the arming file never left the review");
+      await new Promise((done) => setTimeout(done, 10));
+    }
+  } finally {
+    await stream.close();
+  }
+}
 
 afterAll(async () => {
   await server?.close();
@@ -148,12 +180,15 @@ describe("the live stream", () => {
     const reader = (response.body as ReadableStream<Uint8Array>).getReader();
     try {
       const first = new TextDecoder().decode((await reader.read()).value);
-      expect(head).toBeLessThan(1_000);
+      // The defect is a head held until the first heartbeat: its first bytes would be a keep-alive,
+      // at `HEARTBEAT_MS`. Both are its own marks, and neither moves with the machine's load.
       expect(first).toContain("connected");
+      expect(first).not.toContain("keep-alive");
+      expect(head).toBeLessThan(HEARTBEAT_MS);
     } finally {
       await reader.cancel();
     }
-  }, 30_000);
+  });
 
   it("names the repository an edit changed, inside the budget", async () => {
     const stream = read(await fetch(`${server.url}/api/events`));
@@ -183,7 +218,8 @@ describe("the live stream", () => {
     }
   }, 120_000);
 
-  it("carries a reply written by the CLI, and the activity line with its author", async () => {
+  it("carries a reply written by the CLI, and the activity line with its author", async (context) => {
+    needsTypeScript(context);
     const comments = await list(config.dataDir, SESSION);
     const target =
       comments.find((one) => one.repo === REPO) ?? (comments[0] as (typeof comments)[0]);
@@ -206,13 +242,15 @@ describe("the live stream", () => {
       // that is not the watcher's latency. The wait itself is generous for the
       // same reason (DA-31.1).
       const written = Date.now();
-      const frame = await stream.next("reply-added", 20_000);
+      const frame = await stream.next("reply-added");
       const data = JSON.parse(frame.data) as { id: string; commentId: string };
       expect(data.commentId).toBe(target.id);
-      expect(Date.now() - written).toBeLessThan(5_000);
+      // Printed, not held: no budget of `docs/SPEC.md` section 6 is about a comment frame, and the
+      // deadline above is what says it came at all.
+      process.stderr.write(`reply written to reply-added: ${Date.now() - written} ms\n`);
 
       // The activity line is emitted with the event, so it may already be here.
-      const activity = await stream.waitFor("activity", 1_000);
+      const activity = await stream.waitFor("activity");
       expect(JSON.parse(activity.data)).toMatchObject({
         verb: "replied",
         author: "claude",
@@ -236,9 +274,19 @@ describe("the live stream", () => {
     const seen = await first.next("diff-changed");
     await first.close();
 
-    // Written while nothing is listening.
+    // Written while nothing is listening. The document is patched in the same callback that puts
+    // the frame in the ring, so the file showing in the diff is the proof the frame is there.
     await writeFile(join(root, REPO, "after.ts"), "export const after = 1;\n");
-    await new Promise((done) => setTimeout(done, 4 * BUDGET_MS));
+    const deadline = Date.now() + DEADLINE_MS;
+    for (;;) {
+      const diff = (await (
+        await fetch(`${server.url}/api/repos/${REPO}/diff`)
+      ).json()) as RepositoryChange;
+      if (diff.files.some((file) => file.path === "after.ts")) break;
+      if (Date.now() > deadline)
+        throw new Error("the edit made while nobody listened never landed");
+      await new Promise((done) => setTimeout(done, 10));
+    }
 
     const second = read(
       await fetch(`${server.url}/api/events`, { headers: { "Last-Event-ID": seen.id } }),
@@ -252,7 +300,9 @@ describe("the live stream", () => {
     }
   }, 120_000);
 
-  it("hands a client that has just connected the feed it missed", async () => {
+  it("hands a client that has just connected the feed it missed", async (context) => {
+    // It reads the reply the CLI wrote above, so it skips where that one does.
+    needsTypeScript(context);
     // The feed lines of everything above: the panel shows them on connect
     // rather than starting empty, and they are the same shape as the frames.
     const feed = (await (await fetch(`${server.url}/api/activity`)).json()) as {

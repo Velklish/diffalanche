@@ -303,8 +303,8 @@ and `bun run release` refuses a version that has no section. See
 - **The shell's two screenshots mask the sidebar footer** (DA-54.2). The footer
   prints `127.0.0.1:<port>`, so the free port above moved four digits of
   monospace text and both baselines failed on 33 pixels of 1.4 million — a
-  regression of the suite introduced by the fix beside it, invisible on CI
-  because the `ui` job runs with `--ignore-snapshots`. Masked for the reason
+  regression of the suite introduced by the fix beside it, which no run on
+  Linux could see. Masked for the reason
   `/api/activity` is stubbed in the same file: a baseline may only carry what
   does not vary. The footer's text stays covered by direct assertions in six
   specs, `shell.spec.ts` among them.
@@ -322,9 +322,7 @@ and `bun run release` refuses a version that has no section. See
   reached the main branch through six green gates and a green CI. It is now the
   sixth entry of `gates` in `backslop.json`, between `bun run test:bun` and
   `bun run perf` so the two browser gates are adjacent, and the `ui` job of CI
-  runs `bun run test:ui:ci` — the same suite with `--ignore-snapshots`, because
-  the screenshot baselines were taken on macOS and a Linux runner draws other
-  pixels. The collision the two Playwright configurations document is handled
+  runs it too. The collision the two Playwright configurations document is handled
   structurally: each worker has its own worktree and therefore its own `dist/`,
   `backslop gates` runs its commands one after another, `test:e2e` is not among
   them, and in CI the two are separate jobs on separate runners. The command
@@ -444,6 +442,29 @@ and `bun run release` refuses a version that has no section. See
   [06-cli.md](docs/reference/06-cli.md).
 
 ### Fixed
+
+- **The suites stopped holding numbers the machine decides** (DA-60). A wait is
+  now a condition with a generous deadline, an order the platform guarantees, a
+  duration the test makes itself, or — for a party it cannot see — a wait derived
+  from the same thing timed in the same run; the rule, and which assertion owns
+  which budget number, are in [11-perf.md](docs/reference/11-perf.md#waits-in-the-suites).
+  Among what that changed: the watcher's budget is held on each edit less a rescan
+  timed beside it, not against one baseline taken twenty seconds later; the live
+  stream's head is held under the heartbeat it guards against rather than under
+  1 s; the file jump in `sidebar.spec.ts` asserts one frame and leaves the 50 ms
+  to the gate, under a name that says so; a reply written by the CLI is held to
+  arriving at all, and its latency, which no budget of section 6 owns, is
+  printed instead of held under 5 s; the perf harness waits for the restore of
+  its probe line to be painted instead of 500 ms; `events.test.ts` arms its
+  repository watch before
+  the first edit; the history, thread, repository-bar, live and toast specs wait
+  on frames, unmounts, timer order and Playwright's clock instead of fixed
+  pauses. The smoke script's busy-port retry matches the sentence `serve` prints
+  for a taken port — it could never fire before — and a test holds the two
+  together. The tests that start a `.ts` file as a process skip on a Node older
+  than 22.18 instead of failing. The two shell screenshots declare macOS and skip
+  elsewhere, so `test:ui:ci` and its `--ignore-snapshots` are gone and the `ui` job
+  runs `bun run test:ui`. Vitest's timeouts are 60 s per test and 120 s per hook.
 
 - **A task made current while the server runs is read before it is served from
   its cache** (DA-55.6). `review use` moved `current`, and the watcher followed

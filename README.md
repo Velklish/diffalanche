@@ -351,8 +351,9 @@ specification is over budget. It takes about half a minute.
 (`synth -- --out .perf/e2e --small`) and serves it: the diff and navigation
 tests run against that fixture, and only the shell tests stub an empty review to
 measure the shell on its own. It needs Chromium, the same one the performance
-harness uses. The baselines are per platform and the ones in the repository were
-taken on macOS, which is why it is not run in CI.
+harness uses. The screenshot baselines were taken on macOS, so the two specs that
+compare against them skip on any other platform and say so; the rest of the
+suite runs in CI too.
 
 `bun run test:e2e` is the other Playwright suite: the acceptance criteria of the
 specification, one named test each, run against the binary rather than the

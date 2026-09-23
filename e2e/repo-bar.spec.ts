@@ -48,13 +48,16 @@ function repositories(page: Page): Promise<string[]> {
   return page.locator(".repo-row .repo-name").allTextContents();
 }
 
-/**
- * Puts the page where the caller asked and waits out the 120 ms the centre
- * panel gives the scroll to settle before it follows it.
- */
+/** Scrolls, then waits out one 120 ms `SETTLE_MS` of the centre panel by an equal timer set after the
+ * scroll event; a scroll the page makes later re-arms it, so what `pick` chose is polled for. */
 async function scrollTo(page: Page, y: number): Promise<void> {
-  await page.evaluate((top) => window.scrollTo({ top, behavior: "instant" }), y);
-  await page.waitForTimeout(200);
+  await page.evaluate(async (top) => {
+    window.scrollTo({ top, behavior: "instant" });
+    // Scroll events are dispatched before the frame's animation callbacks.
+    await new Promise((done) => requestAnimationFrame(done));
+    await new Promise((done) => setTimeout(done, 120));
+    await new Promise((done) => requestAnimationFrame(() => setTimeout(done, 0)));
+  }, y);
 }
 
 test("the bar of the repository being read is the one under the header", async ({ page }) => {
@@ -167,12 +170,15 @@ test("the tree still follows the reading position under the bar", async ({ page 
 
   // The probe asks which card is under the header and the bar; if it asked
   // inside the bar it would hit the bar and the selection would never move.
-  const selected = await page.evaluate(
-    () =>
-      document.querySelector(".file-row.on")?.closest(".branch")?.querySelector(".repo-name")
-        ?.textContent ?? null,
-  );
-  expect(selected).toBe(third);
+  await expect
+    .poll(() =>
+      page.evaluate(
+        () =>
+          document.querySelector(".file-row.on")?.closest(".branch")?.querySelector(".repo-name")
+            ?.textContent ?? null,
+      ),
+    )
+    .toBe(third);
 });
 
 test("the name in the tree jumps and the caret only collapses", async ({ page }) => {

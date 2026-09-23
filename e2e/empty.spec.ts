@@ -215,7 +215,8 @@ test("a ring moved while the base is being applied stays where it was put", asyn
   await search.focus();
   release();
   await expect(page.locator(".toast")).toContainText("База сессии");
-  // Two macrotasks: the restore is queued one after the switch clears, and this after it.
+  // Two macrotasks, an order and not a length of time: the restore is queued one after the switch
+  // clears, and this after it.
   await page.evaluate(() => new Promise((done) => setTimeout(() => setTimeout(done, 0), 0)));
 
   await expect(search).toBeFocused();

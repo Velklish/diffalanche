@@ -463,10 +463,14 @@ instead of a verdict, because the render of the patched diff belongs in the same
 number and is DA-25's ([11-perf.md](11-perf.md)). What `tests/watcher.test.ts`
 measures is the
 part that belongs here — the file write, the debounce, the rescan, and the
-event — over three edits, and it asserts the median against **300 ms plus one
-rescan of the same repository timed in the same conditions**, and only where the
-tree is watched: on the walk the number is the interval and the cost of the walk
-itself. That is the watcher's own share, because the rescan costs what the
+event — over three edits, and it asserts **300 ms on the median of each edit
+less one rescan of the same repository timed beside it**, once the watcher's own
+write of that edit has landed, and only where the tree is watched: on the walk
+the number is the interval and the cost of the walk itself. The rescan is timed
+per edit rather than once after all three because a baseline taken twenty
+seconds later is not "the same conditions": a load spike over the edits and not
+over the baseline failed an unchanged tree, and the reverse widened the ceiling
+without a word ([11-perf.md](11-perf.md#waits-in-the-suites)). That is the watcher's own share, because the rescan costs what the
 machine charges for five git processes and a rewrite of the cache: about 190 ms
 all together on a quiet machine, of which 100 ms is the debounce, and two to
 three times that while the rest of the test suite runs in parallel. The 190 ms

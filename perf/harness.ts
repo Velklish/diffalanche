@@ -206,6 +206,7 @@ async function measureUpdate(page: Page, baseUrl: string, fixture: string): Prom
   const target = join(fixture, repo, file);
   const original = await readFile(target, "utf8");
   const started = Date.now();
+  let restored = false;
   try {
     await appendFile(target, PROBE_LINE);
     await page.waitForFunction(
@@ -221,13 +222,27 @@ async function measureUpdate(page: Page, baseUrl: string, fixture: string): Prom
       { id: card, mark: PROBE_MARK },
     )) as boolean;
     if (!shown) throw new Error(`${card}: the edit was measured but the card does not show it`);
+
+    // The restore is an update of its own, down the path this function measures: the next run
+    // starts once the card has painted it, not after a sleep that load could outlast.
+    await page.evaluate(() => {
+      window.__perf.liveUpdate = null;
+    });
+    await writeFile(target, original);
+    restored = true;
+    await page.waitForFunction(
+      ({ id, watched, mark }: { id: string; watched: string; mark: string }) =>
+        window.__perf.liveUpdate?.repo === watched &&
+        document.querySelector(`[data-file="${CSS.escape(id)}"]`)?.textContent?.includes(mark) ===
+          false,
+      { id: card, watched: repo, mark: PROBE_MARK },
+      { timeout: 60_000 },
+    );
     return painted - started;
   } finally {
     // Whatever happened, the fixture is what it was: a run that ended in the
     // middle would otherwise leave the line behind for every run after it.
-    await writeFile(target, original);
-    // The rescan of the restored file lands before the next run starts.
-    await new Promise((done) => setTimeout(done, 500));
+    if (!restored) await writeFile(target, original);
   }
 }
 

@@ -42,7 +42,12 @@ async function open(page: Page) {
  * fixed one (DA-54.2): masked for the reason `/api/activity` is stubbed. */
 const varies = (page: Page) => [page.locator(".sidebar-foot")];
 
+/** The baselines are the pixels macOS draws, and no other platform has any: elsewhere the two
+ * comparisons are skipped and say so, rather than passing with nothing compared (08-ui.md). */
+const BASELINES = "the shell baselines were taken on macOS, and this platform draws other pixels";
+
 test("the empty shell in the dark theme", async ({ page }) => {
+  test.skip(process.platform !== "darwin", BASELINES);
   await open(page);
   await expect(page).toHaveScreenshot("shell-dark.png", {
     fullPage: true,
@@ -51,6 +56,7 @@ test("the empty shell in the dark theme", async ({ page }) => {
 });
 
 test("the empty shell in the light theme", async ({ page }) => {
+  test.skip(process.platform !== "darwin", BASELINES);
   await open(page);
   await page.getByRole("button", { name: "light theme" }).click();
   await expect(page.locator(":root")).toHaveAttribute("data-theme", "light");
