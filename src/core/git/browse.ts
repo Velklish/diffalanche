@@ -62,6 +62,14 @@ export async function listTree(cwd: string, sha: string | null): Promise<TreeEnt
 /** A file read whole: its text, or why it is listed without it. */
 export type FileRead = { text: string; omitted: null } | { text: null; omitted: FileOmission };
 
+/** What the domain anchors a line outside the change set from: a file's text on disk or at a
+ * revision, `null` when there is none — the UI's server and the CLI read it the same way. */
+export function fileSourceAt(
+  root: string,
+): (repo: string, path: string, rev: "worktree" | { sha: string }) => Promise<string | null> {
+  return async (repo, path, rev) => (await readFileAt(join(root, repo), path, rev))?.text ?? null;
+}
+
 /** A path as the tree lists one: relative, forward slashes, no step up or aside. */
 export function isRepositoryPath(path: string): boolean {
   if (path === "" || path.startsWith("/") || path.includes("\0") || path.includes("\\")) {

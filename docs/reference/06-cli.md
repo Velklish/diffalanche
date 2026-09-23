@@ -343,6 +343,17 @@ point at the line that is there now. The cache is patched in place, never
 replaced by the one repository. See
 [02-git.md](02-git.md) for `refreshRepository`, which does it.
 
+**A line the change set does not carry is anchored from the file itself**, as a
+human's is from browse mode: `comment` hands the domain the same file source the
+server does (`fileSourceAt` of `src/core/git/browse.ts`), which reads the working
+tree for `--side new` and the resolved base for `--side old`. The anchor has the
+shape of any other — the line, three lines each way, and as `hunk` the header git
+would print for that window ([04-domain.md](04-domain.md)). A line the file does
+not have is still exit code 1 with `line-not-in-diff`: `line 9 of
+repos/group/alpha/file.txt is past its end on the new side: the file has 8
+lines`. This is the amendment of 2026-09-23 to
+[ADR-004](../adr/adr-004-agent-contract.md), decided by the owner.
+
 `resolve` and `reopen` need `--role human`; with the default role, or any other
 value, they exit 1 and change nothing. The refusal is the domain's rather than
 the shipped skills', because a skill is advice and an agent that never read one

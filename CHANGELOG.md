@@ -47,9 +47,10 @@ and `bun run release` refuses a version that has no section. See
   `web-tree-sitter` over WASM, the grammars VS Code ships (ADR-015) — reads the functions,
   classes, methods and types of TypeScript, TSX, JavaScript, C#, Python, Go, Rust and Java in
   every repository of the review, in the background once the review is open, and again for
-  the files each `diff-changed` names or the change set shows moved. `GET /api/search/symbols?q=` answers the twenty best by a fuzzy match of the
-  name; the rows carry the `symbol` tag, the preview is the line that defines it, and `⏎` opens
-  the file at the definition. `config.json` takes a `grammars` table for languages of its own.
+  the files each `diff-changed` names or the change set shows moved.
+  `GET /api/search/symbols?q=` answers the twenty best by a fuzzy match of the name; the rows
+  carry the `symbol` tag, the preview is the line that defines it, and `⏎` opens the file at the
+  definition. `config.json` takes a `grammars` table for languages of its own.
   The npm package gains `dist/grammars/` (+0.96 MiB packed) and each binary about 10.6 MiB.
 
 - **Global search finds text in the working trees** (DA-38). A query of two characters or more
@@ -60,6 +61,12 @@ and `bun run release` refuses a version that has no section. See
   and `⏎` opens the file in browse mode at that line. At most three lines of a file are
   listed, 500 hits in all; git is stopped at the cap rather than read to the end.
 
+- **An agent's `comment --line` anchors a line outside the change set** (DA-37.3), the way a
+  human's comment from browse mode does: the anchor is read from the file itself — the working
+  tree for `--side new`, the base for `--side old` — in the usual shape. A line the file does not
+  have is still refused with `line-not-in-diff`, now naming how many lines it has. The owner's
+  decision, recorded as an amendment to ADR-004.
+
 - **A repository can be read outside its diff** (DA-37). The sidebar's `all files` tab lists
   every file of each repository of the review, the unchanged ones marked `unchanged`; one of
   those opens whole in place of the review — numbered from 1, read-only, with
@@ -69,7 +76,6 @@ and `bun run release` refuses a version that has no section. See
   folded away while browsing, not unmounted. A comment can be left on a line there and lands
   in the same session with its path; its anchor is captured from the file itself in the same
   `{ lineContent, hunk, before, after }` shape, `hunk` being the header of the context window.
-  The CLI keeps refusing a line outside the change set, as the agent contract has it.
 - **`↑ N lines` brings in real context.** A hunk header's new control puts the working tree's
   lines above the hunk into the diff, twenty at a time, up to the hunk above; `collapse context`
   hides them with the bundled context.

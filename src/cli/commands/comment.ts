@@ -1,7 +1,5 @@
-/**
- * `comment`: a new comment, with its anchor taken from the change set
- * (`docs/SPEC.md` sections 8 and 9). This is how an agent opens a finding.
- */
+/** `comment`: a new comment, anchored from the change set or, for a line it does not carry, from
+ * the file itself (`docs/SPEC.md` sections 8 and 9; ADR-004, amendment of 2026-09-23). */
 
 import {
   addComment,
@@ -9,6 +7,7 @@ import {
   assertAnchorLevels,
   readSession,
 } from "../../core/domain/index.ts";
+import { fileSourceAt } from "../../core/git/browse.ts";
 import { refreshRepository } from "../../core/index.ts";
 import { choice, count, noExtra, requiredChoice, text } from "../args.ts";
 import type { Command } from "../command.ts";
@@ -76,17 +75,23 @@ export const comment: Command = {
       await refreshRepository(config, session, review.base, repo, review.scope);
     }
 
-    const written = await addComment(config.dataDir, session, {
-      repo,
-      path,
-      line,
-      endLine,
-      side: choice(args, "side", SIDES) ?? "new",
-      severity,
-      body,
-      author: text(args, "author") ?? DEFAULT_AUTHOR,
-      role: choice(args, "role", ROLES) ?? DEFAULT_ROLE,
-    });
+    // A line outside the change set is anchored from the file itself, as the UI's are (ADR-004).
+    const written = await addComment(
+      config.dataDir,
+      session,
+      {
+        repo,
+        path,
+        line,
+        endLine,
+        side: choice(args, "side", SIDES) ?? "new",
+        severity,
+        body,
+        author: text(args, "author") ?? DEFAULT_AUTHOR,
+        role: choice(args, "role", ROLES) ?? DEFAULT_ROLE,
+      },
+      { source: fileSourceAt(config.root) },
+    );
     context.io.out(`${written.id} opened on ${where(written)}\n`);
     return 0;
   },

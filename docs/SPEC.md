@@ -245,7 +245,7 @@ Every command accepts `--review <name>` (default: the current session) and `--da
 | `list [--status open\|resolved\|all] [--repo] [--severity] [--unanswered] [--json]` | comments; `--unanswered` — the last message of the thread is from a human |
 | `show <id> [--json]` | one comment with its thread and anchor |
 | `reply <id> --body <text\|-> [--author] [--role]` | reply in a thread; `-` reads stdin |
-| `comment --repo R [--path P] [--line N] [--end-line M] [--side new\|old] --severity S --body <text\|-> [--author] [--role]` | new comment; the tool fills the anchor from the current diff |
+| `comment --repo R [--path P] [--line N] [--end-line M] [--side new\|old] --severity S --body <text\|-> [--author] [--role]` | new comment; the tool fills the anchor from the current diff, or from the file for a line the diff does not carry |
 | `resolve <id> --role human [--note] [--author]`, `reopen <id> --role human [--author]` | status; `resolvedBy` comes from `--author`; any other role is refused with exit code 1 |
 | `export [--status open\|all] [--format md\|json]` | markdown grouped by repository |
 | `suggest --body <text> [--json]` | similar past comments and a likely severity (Phase 2) |
@@ -263,7 +263,7 @@ CLI defaults: `--author agent`, `--role agent`. The UI writes `author` from `con
 The repository ships two skills, following the pattern of difit and diffity.
 
 - `skills/diffalanche-apply`: run `list --unanswered --json`, group by repository, present the plan, get the human's confirmation, apply the edits in `<root>/<repo>/<path>`, then `reply` to every comment. The agent never calls `resolve`.
-- `skills/diffalanche-review`: the agent reads `diff --json` and opens findings with `comment` — self-review, or review of another agent's work.
+- `skills/diffalanche-review`: the agent reads `diff --json` and opens findings with `comment` — self-review, or review of another agent's work. A finding may sit on any line of a file of the repository, in the diff or outside it, the way a human's can from browse mode; only a line the file does not have is refused ([ADR-004](adr/adr-004-agent-contract.md), amendment of 2026-09-23).
 
 Reply rules: a reply is at most three sentences — one when the issue is fixed (a second only when the fix touched something the comment did not name), three when the agent declines (what stands, why, what would change the answer); no restating of the comment, no greeting, no lists. Several agents work on several sessions at the same time; each names its own with `--review` and signs with its own `--author`.
 

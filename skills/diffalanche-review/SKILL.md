@@ -122,7 +122,9 @@ The anchor is built from the flags, narrowest first:
 anchors to a line that the change removed. The tool fills the rest of the anchor
 — the line's text, its hunk header, and three lines of context each way — by
 reading the repository again, so the anchor points at the line that is there
-now. `comment` prints the new comment's id as the first word of its line.
+now. The line need not be in the diff: a line of any file of the repository —
+the caller the change forgot, the helper it should have used — is anchored from
+the file itself. Only a line the file does not have is refused. `comment` prints the new comment's id as the first word of its line.
 
 `--severity` is one of four and it is not decoration:
 

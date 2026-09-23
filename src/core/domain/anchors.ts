@@ -164,7 +164,7 @@ export function captureFromFile(
   const found = lines[index];
   if (found === undefined) {
     throw new DomainError(
-      "invalid-anchor",
+      "line-not-in-diff",
       `line ${line} of ${name} is past its end on the ${side} side: the file has ${lines.length} lines`,
     );
   }

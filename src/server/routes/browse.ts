@@ -5,7 +5,7 @@ import type { Context } from "hono";
 import type { Config } from "../../core/config/index.ts";
 import type { FileSource } from "../../core/domain/index.ts";
 import { pathInScope } from "../../core/domain/index.ts";
-import { listTree, readFileAt } from "../../core/git/browse.ts";
+import { fileSourceAt, listTree, readFileAt } from "../../core/git/browse.ts";
 import type { FileContent, RepositoryChange, RepositoryTree } from "../../core/types.ts";
 import type { ErrorBody } from "../errors.ts";
 import { RequestError } from "../errors.ts";
@@ -81,6 +81,5 @@ export async function fileRoute(
 
 /** What the domain reads a line from when the change set does not carry it (04-domain.md). */
 export function fileSource(config: Config): FileSource {
-  return async (repo, path, rev) =>
-    (await readFileAt(join(config.root, repo), path, rev))?.text ?? null;
+  return fileSourceAt(config.root);
 }

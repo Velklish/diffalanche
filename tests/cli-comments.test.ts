@@ -291,6 +291,55 @@ describe("comment", () => {
   });
 });
 
+describe("comment on a line the change set does not carry", () => {
+  it("anchors it from the file, in the shape a line of the diff has (ADR-004)", async () => {
+    // The fixture changes line 5 of eight, so its one hunk starts at line 2: line 1 is outside.
+    const result = await invoke([
+      "comment",
+      "--repo",
+      ALPHA,
+      "--path",
+      "file.txt",
+      "--line",
+      "1",
+      "--severity",
+      "nit",
+      "--body",
+      "the first line",
+    ]);
+    expect(result.code).toBe(0);
+    const [written] = comments();
+    expect(written).toMatchObject({ path: "file.txt", line: 1, side: "new" });
+    expect(written?.anchor).toEqual({
+      lineContent: "one",
+      hunk: "@@ -1,4 +1,4 @@",
+      before: [],
+      after: ["two", "three", "four"],
+    });
+  });
+
+  it("still refuses a line the file does not have", async () => {
+    const result = await invoke([
+      "comment",
+      "--repo",
+      ALPHA,
+      "--path",
+      "file.txt",
+      "--line",
+      "9",
+      "--severity",
+      "nit",
+      "--body",
+      "x",
+    ]);
+    expect(result.code).toBe(1);
+    expect(result.err).toContain(
+      `line 9 of ${ALPHA}/file.txt is past its end on the new side: the file has 8 lines`,
+    );
+    expect(comments()).toHaveLength(0);
+  });
+});
+
 describe("list and show", () => {
   it("moves a human's comment out of --unanswered when an agent replies", async () => {
     const id = await openFinding("--role", "human", "--author", "kim.p");

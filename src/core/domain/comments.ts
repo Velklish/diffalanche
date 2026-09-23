@@ -164,8 +164,8 @@ export type FileSource = (
   rev: "worktree" | { sha: string },
 ) => Promise<string | null>;
 
-/** `source` lets a line the change set does not carry be anchored from the file itself; without
- * one such a line is refused, which is what the CLI keeps ([04-domain.md](../../../docs/reference/04-domain.md)). */
+/** `source` lets a line the change set does not carry be anchored from the file; the server and the
+ * CLI both give one (ADR-004, amendment of 2026-09-23), and without one such a line is refused. */
 export type AddOptions = { source?: FileSource };
 
 /** Writes a comment. A line anchor is filled from the change set of the session. */

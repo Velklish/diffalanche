@@ -16,9 +16,9 @@ a caller reads; the message is what a person reads.
 | `no-such-session` | a named session that is not in the data directory |
 | `no-current-session` | no `--review` and no `current` pointer |
 | `no-such-comment` | a comment id that is not in the session |
-| `invalid-anchor` | anchor levels that do not add up: a line without a file, a range that runs backwards; a line past the end of the file it is read from |
+| `invalid-anchor` | anchor levels that do not add up: a line without a file, a range that runs backwards |
 | `role-not-human` | `resolve` or `reopen` from anything but a human |
-| `line-not-in-diff` | a line anchor on a line the change set does not have, when no file source could read it either |
+| `line-not-in-diff` | a line anchor on a line neither the change set nor, when a source is given, the file itself has — past its end, or on a side that cannot be read |
 | `invalid-scope` | a scope that does not add up: a repository the root has not, a repository named twice, a path that is not one inside its repository, an edit a scope cannot express |
 | `out-of-scope` | a comment on something the review task is not about |
 | `scope-has-comments` | narrowing the scope would delete comments and nothing consented to that; the error carries their ids |
@@ -319,10 +319,12 @@ which is different from being infinitely far from the line.
 when the caller gives `addComment` a source to read it with
 (`options.source`, a `FileSource`). The server does — it is how a comment on an
 unchanged file opened in browse mode, or on a line `↑ N lines` brought in, is
-written ([07-server.md](07-server.md)) — and the CLI does not, so an agent's
-`comment` on a line outside the diff is refused as before: the agent contract
-of [ADR-004](../adr/adr-004-agent-contract.md) anchors on the change set, and
-widening it is a decision of its own. The fallback runs only on a
+written ([07-server.md](07-server.md)) — and so does the CLI's `comment`
+([06-cli.md](06-cli.md)): an agent anchors a line outside the diff the way a
+human does, by the amendment of 2026-09-23 to
+[ADR-004](../adr/adr-004-agent-contract.md). A caller that passes no source
+keeps the change set's refusal, which is what the domain alone does. The
+fallback runs only on a
 `line-not-in-diff` refusal, and the refusal stands whenever the file has
 nothing to give: a file of the change set listed without content, a side whose
 revision cannot be read — the `old` side of a repository the change set does
@@ -339,8 +341,9 @@ by what the hunks above the window added or took away, so line 20 on disk of a
 file with two lines inserted at the top is `@@ -15,7 +17,7 @@`. A window that
 starts inside a hunk — the line is just below one — starts in its trailing
 context, after every change the hunk holds, so that hunk counts whole: new line 8
-under `@@ -1,5 +1,7 @@` is `@@ -3,7 +5,7 @@`. A line past the end of the file is `invalid-anchor`,
-naming how many lines it has.
+under `@@ -1,5 +1,7 @@` is `@@ -3,7 +5,7 @@`. A line past the end of the file is still `line-not-in-diff`,
+naming how many lines the file has: the refusal stays for a line the file does
+not have.
 
 "Has no hunks in the change set" is kept for the file that really has none —
 `hunks: []` with `omitted: null`, which a change set read without hunks and a

@@ -280,7 +280,7 @@ describe("a comment outside the change set", () => {
     const response = await comment({ path: "keep.txt", line: 11 });
     expect(response.status).toBe(400);
     expect(await response.json()).toEqual({
-      error: "invalid-anchor",
+      error: "line-not-in-diff",
       message: `line 11 of ${REPO}/keep.txt is past its end on the new side: the file has 10 lines`,
     });
   });
@@ -292,7 +292,7 @@ describe("a comment outside the change set", () => {
     expect(((await ignored.json()) as { error: string }).error).toBe("line-not-in-diff");
   });
 
-  it("is refused by the domain without a source, which is what the CLI keeps", async () => {
+  it("is refused by the domain when the caller gives it no source", async () => {
     const error = await addComment(config.dataDir, "browse", {
       repo: REPO,
       path: "keep.txt",

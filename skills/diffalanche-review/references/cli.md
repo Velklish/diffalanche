@@ -117,13 +117,15 @@ nothing in it to review.
 ```
 
 `newLine` is what `--line` takes with the default `--side new`; `oldLine` is
-what it takes with `--side old`. A line that is `null` on the side you asked for
-is not on that side, and `comment` refuses it:
+what it takes with `--side old`. A line outside every hunk is fine too: the
+anchor is then read from the file itself — the working tree for `new`, the base
+for `old` — and its `hunk` is the header git would print for the three lines
+around it. A line the file does not have is refused:
 
 ```
 $ diffalanche comment --repo repos/services/quotes-worker \
     --path src/Cargos/CargoService497.cs --line 9000 --severity nit --body "…"
-diffalanche: line 9000 of repos/services/quotes-worker/src/Cargos/CargoService497.cs is not in the change set on the new side; the nearest hunk is @@ -10,41 +10,72 @@ public sealed class InvoiceSet471Resolver
+diffalanche: line 9000 of repos/services/quotes-worker/src/Cargos/CargoService497.cs is past its end on the new side: the file has 201 lines
 ```
 
 Exit code 1, nothing written.
