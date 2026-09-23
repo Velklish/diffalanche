@@ -135,6 +135,8 @@ alike** — and answers for the current session without it. See
 | `GET /api/repos/branches` | every branch of the root, for the base picker |
 | `GET /api/events` | the live stream: what the watcher noticed, as it happens |
 | `GET /api/repos/:repo/diff[?review=]` | one repository of the change set |
+| `GET /api/repos/:repo/tree[?review=]` | every file of one repository of the review, the base revision and the working tree merged, inside the task's scope |
+| `GET /api/repos/:repo/file?path=&rev=[&review=]` | one file of it whole — `rev` is `worktree` (the default) or `base` |
 | `GET /api/comments/:id[?review=]` | one thread |
 | `GET /api/warnings[?review=]` | the warnings of the change set |
 | `GET /api/activity` | the feed of what the server noticed while it has been running |
@@ -498,6 +500,52 @@ branch and is not listed — from a branch, while naming the branch it points at
 A repository whose refs cannot be read is a warning and not a failure; the
 review has other repositories.
 
+### Browsing a repository
+
+`GET /api/repos/:repo/tree` and `GET /api/repos/:repo/file` are what browse mode
+reads ([08-ui.md](08-ui.md), "Browse mode"), and what `↑ N lines` reads the
+context above a hunk from. Both are registered ahead of the `…/diff` pattern,
+as `GET /api/repos/branches` is, and both read git per request through
+`src/core/git/browse.ts` ([02-git.md](02-git.md), "Browsing a repository");
+nothing about a whole file is held in memory, because nothing asks for one until
+a reader does.
+
+The repository has to be one the review shows — in the change set of the
+document for that task — or the answer is the `/diff` route's 404,
+`no-such-repository`. That is also what gives the tree its base: the resolved
+sha of that repository in the document, the one the diff was read against.
+
+```json
+{
+  "repo": "repos/core/cargos-api",
+  "sha": "5a99a1f…",
+  "files": [
+    { "path": "README.md", "base": true, "worktree": true },
+    { "path": "app/new.py", "base": false, "worktree": true },
+    { "path": "app/gone.py", "base": true, "worktree": false }
+  ]
+}
+```
+
+`base` and `worktree` say where a file exists; which files are *changed* is the
+change set's to say, and the UI reads it from there. The list is cut to what
+the task's scope covers: a scope entry that names files browses those files, and
+a repository in the scope without paths browses all of them
+([ADR-010](../adr/adr-010-review-task-scope.md)).
+
+```json
+{ "repo": "repos/core/cargos-api", "path": "README.md", "rev": "worktree", "sha": null,
+  "text": "# cargos-api\n…", "omitted": null }
+```
+
+`sha` is the base revision when `rev` is `base` and `null` for the working tree.
+A binary file, and one over the size limit of the diff (512 KiB), come back
+with `text: null` and `omitted` saying which. A path outside the scope, a path
+the revision does not have, and one git does not list — ignored, inside `.git`,
+or stepping outside the repository — are all `404 no-such-file` with a message
+naming which; a request without `path`, or with a `rev` that is neither, is a
+400.
+
 ### Refusals
 
 Every refusal is the domain's own code and message
@@ -623,7 +671,14 @@ task's scope is not about — that one is the domain's own refusal, `out-of-scop
 because a comment stored outside the scope is one nothing reads back, whichever
 interface wrote it ([04-domain.md](04-domain.md)); the repository is not
 read again before the anchor is captured, because the comment is on the diff the
-person was shown and not on what the file says a moment later. `base` is the
+person was shown and not on what the file says a moment later. A line the
+change set does not carry — a line of a file browse mode opened, or one that
+`↑ N lines` brought in — is anchored from the file itself: the route hands the
+domain a source that reads it through the same `readFileAt` the file route
+uses. It is read at the moment the comment is written, not when the view was
+drawn: browse mode does not follow a live edit of the file it shows
+([DA-37.1](../backlog/minor/DA-37.1-browse-follow-ups.md)), so an edit made in
+between anchors the comment to the line as it now is on disk. `base` is the
 string the CLI takes — `head`, `branch`, `branch:<name>`, or a ref — read by the
 domain's own parser, so the two interfaces have one grammar for it. A `note` on
 `resolve` or `reopen` is written into the thread as a reply before the status

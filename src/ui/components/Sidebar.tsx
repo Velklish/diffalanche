@@ -1,39 +1,47 @@
-import { type KeyboardEvent, useMemo } from "react";
+import { type KeyboardEvent, useEffect, useMemo } from "react";
+import { byCodePoint } from "../../core/order.ts";
 import type { FileChange, RepositoryChange } from "../../core/types.ts";
 import { revealCard } from "../reveal.ts";
 import { countDraft, pathPicked, repoMark, scopeLabel } from "../scope.ts";
-import type { Connection, SidebarTab } from "../store.ts";
+import type { Connection, SidebarTab, TreeState } from "../store.ts";
 import { useStore } from "../store.ts";
 import type { Counters } from "../types.ts";
 import { PanelAway } from "./PanelAway.tsx";
 import { Tick } from "./ScopeEditor.tsx";
 import { SidebarSkeleton } from "./Skeleton.tsx";
 
-/**
- * The 308 px navigation of handoff section 1.3: the tree of repositories with
- * changes, the filter over their names, and the footer that says what the live
- * stream is doing. The `all files` tab is Phase 2 (DA-37) and stays hidden.
- *
- * The `select` tab turns the same tree into a picking surface and puts a bar at
- * its foot (DA-55). Reading is the main scene, so the ticks live in a mode
- * rather than beside every row for ever: outside it the tree is exactly what it
- * was.
- */
+/** The 308 px navigation of handoff section 1.3 and its three tabs; what each shows is in
+ * [08-ui.md](../../../docs/reference/08-ui.md), "Navigation" and "Browse mode". */
 export function Sidebar() {
   const status = useStore((store) => store.status);
   const query = useStore((store) => store.query);
   const setQuery = useStore((store) => store.setQuery);
   const repositories = useStore((store) => store.repositories);
   const tab = useStore((store) => store.sidebarTab);
+  const trees = useStore((store) => store.trees);
+  const all = tab === "all";
 
-  const tree = useMemo(() => filterTree(repositories, query), [repositories, query]);
-  const matches = tree.reduce((sum, entry) => sum + entry.files.length, 0);
+  const tree = useMemo(
+    () => (all ? allFiles(repositories, trees, query) : filterTree(repositories, query)),
+    [all, repositories, trees, query],
+  );
+  const matches = tree.reduce((sum, entry) => sum + (entry.rows ?? entry.files).length, 0);
   const select = tab === "select";
+
+  // The trees are read when the tab asks for them, and again after every read of the review.
+  useEffect(() => {
+    if (!all || status !== "ready") return;
+    const store = useStore.getState();
+    for (const repo of repositories) {
+      if (store.trees[repo.path] === undefined) void store.loadTree(repo.path);
+    }
+  }, [all, status, repositories]);
 
   return (
     <nav className="sidebar" aria-label="navigation">
       <div className="sidebar-tabs">
         <Tab tab="changes" />
+        <Tab tab="all" />
         <Tab tab="select" />
         <span className="spacer" />
         <PanelAway side="sidebar" />
@@ -63,6 +71,7 @@ export function Sidebar() {
                 key={entry.repo.path}
                 repo={entry.repo}
                 files={entry.files}
+                rows={entry.rows}
                 select={select}
               />
             ))
@@ -76,12 +85,13 @@ export function Sidebar() {
 }
 
 /** What each tab is called, in the order the handoff draws them. */
-const TABS: Record<Exclude<SidebarTab, "all">, string> = {
+const TABS: Record<SidebarTab, string> = {
   changes: "changes",
+  all: "all files",
   select: "select",
 };
 
-function Tab({ tab }: { tab: Exclude<SidebarTab, "all"> }) {
+function Tab({ tab }: { tab: SidebarTab }) {
   const on = useStore((store) => store.sidebarTab === tab);
   const setSidebarTab = useStore((store) => store.setSidebarTab);
   return (
@@ -185,10 +195,12 @@ function RowKeys() {
 function RepoBranch({
   repo,
   files,
+  rows,
   select,
 }: {
   repo: RepositoryChange;
   files: FileChange[];
+  rows: TreeRow[] | null;
   select: boolean;
 }) {
   const collapsed = useStore((store) => store.collapsedRepos[repo.path] === true);
@@ -243,13 +255,27 @@ function RepoBranch({
         {select ? <Tick mark={mark} /> : null}
         <span className="repo-name">{repo.path}</span>
         <Counter count={count} />
-        <span className="repo-files">· {repo.files.length} files</span>
+        <span className="repo-files">· {(rows ?? repo.files).length} files</span>
       </button>
       {collapsed
         ? null
-        : files.map((file) => (
-            <FileRow key={file.path} repo={repo.path} file={file} select={select} paths={paths} />
-          ))}
+        : rows !== null
+          ? rows.map((row) =>
+              row.file === null ? (
+                <UnchangedRow key={row.path} repo={repo.path} path={row.path} />
+              ) : (
+                <FileRow
+                  key={row.path}
+                  repo={repo.path}
+                  file={row.file}
+                  select={false}
+                  paths={paths}
+                />
+              ),
+            )
+          : files.map((file) => (
+              <FileRow key={file.path} repo={repo.path} file={file} select={select} paths={paths} />
+            ))}
     </div>
   );
 }
@@ -266,7 +292,9 @@ function FileRow({
   paths: string[];
 }) {
   const id = `${repo}/${file.path}`;
-  const selected = useStore((store) => store.repo === repo && store.path === file.path);
+  const selected = useStore(
+    (store) => store.repo === repo && store.path === file.path && !store.browse,
+  );
   const count = useStore((store) => store.fileCounts.get(id));
   const picked = useStore((store) => pathPicked(store.selectDraft, repo, file.path));
   const setCurrent = useStore((store) => store.select);
@@ -282,6 +310,8 @@ function FileRow({
           pickTreePath(repo, file.path, paths);
           return;
         }
+        // A changed file is read in its card, so choosing one from browse mode leaves it.
+        if (useStore.getState().browse) useStore.getState().closeBrowse();
         setCurrent(repo, file.path);
         void revealCard(`[data-file="${CSS.escape(id)}"]`);
       }}
@@ -298,13 +328,40 @@ function FileRow({
   );
 }
 
+/** A file the review does not carry: it opens whole, in browse mode. */
+function UnchangedRow({ repo, path }: { repo: string; path: string }) {
+  const id = `${repo}/${path}`;
+  const selected = useStore(
+    (store) => store.browse && store.repo === repo && store.plainPath === path,
+  );
+  const count = useStore((store) => store.fileCounts.get(id));
+  return (
+    <button
+      type="button"
+      className={selected ? "file-row unchanged on" : "file-row unchanged"}
+      onClick={() => useStore.getState().openBrowse(repo, path)}
+    >
+      <span className="file-name">{path}</span>
+      <span className="spacer" />
+      <span className="unchanged-tag">unchanged</span>
+      {count && count.open > 0 ? (
+        <span className={`badge ${count.severity ?? ""}`}>{count.open}</span>
+      ) : null}
+    </button>
+  );
+}
+
 /** The open comments of a repository, in the colour of the worst of them. */
 function Counter({ count }: { count: Counters | undefined }) {
   if (!count || count.open === 0) return null;
   return <span className={`counter-open ${count.severity ?? ""}`}>{count.open}</span>;
 }
 
-type Branch = { repo: RepositoryChange; files: FileChange[] };
+/** A row of the `all files` tab: a file of the change set, or an unchanged one (`file: null`). */
+type TreeRow = { path: string; file: FileChange | null };
+
+/** `rows` is the `all files` tab's list, and `null` on the other two tabs. */
+type Branch = { repo: RepositoryChange; files: FileChange[]; rows: TreeRow[] | null };
 
 /**
  * Substring over the repository path and the file path. A repository whose own
@@ -313,14 +370,39 @@ type Branch = { repo: RepositoryChange; files: FileChange[] };
  */
 function filterTree(repositories: RepositoryChange[], query: string): Branch[] {
   const needle = query.trim().toLowerCase();
-  if (needle === "") return repositories.map((repo) => ({ repo, files: repo.files }));
+  if (needle === "") return repositories.map((repo) => ({ repo, files: repo.files, rows: null }));
 
   const branches: Branch[] = [];
   for (const repo of repositories) {
     const files = repo.path.toLowerCase().includes(needle)
       ? repo.files
       : repo.files.filter((file) => file.path.toLowerCase().includes(needle));
-    if (files.length > 0) branches.push({ repo, files });
+    if (files.length > 0) branches.push({ repo, files, rows: null });
+  }
+  return branches;
+}
+
+/** Every file of each repository: what is on disk and what the change set carries besides, a
+ * deletion; a path only the base has and the change set does not is a rename's old name. */
+function allFiles(
+  repositories: RepositoryChange[],
+  trees: Record<string, TreeState>,
+  query: string,
+): Branch[] {
+  const needle = query.trim().toLowerCase();
+  const branches: Branch[] = [];
+  for (const repo of repositories) {
+    const changed = new Map(repo.files.map((file) => [file.path, file]));
+    const paths = new Set(repo.files.map((file) => file.path));
+    for (const entry of trees[repo.path]?.tree?.files ?? []) {
+      if (entry.worktree) paths.add(entry.path);
+    }
+    const whole = needle === "" || repo.path.toLowerCase().includes(needle);
+    const rows = [...paths]
+      .filter((path) => whole || path.toLowerCase().includes(needle))
+      .sort(byCodePoint)
+      .map((path) => ({ path, file: changed.get(path) ?? null }));
+    if (rows.length > 0) branches.push({ repo, files: repo.files, rows });
   }
   return branches;
 }

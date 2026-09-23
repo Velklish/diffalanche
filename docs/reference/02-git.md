@@ -74,6 +74,10 @@ files. That is how `ref` mode skips one.
 | `ls-files --others --exclude-standard -z` | untracked files |
 | `check-ignore --stdin -z` | which of a burst's paths git ignores, for the watcher ([05-watcher.md](05-watcher.md)) |
 | `for-each-ref --format=… refs/heads refs/remotes` | the branches of the root, for `src/server/routes/branches.ts` ([07-server.md](07-server.md)) |
+| `ls-tree -r -z --full-tree <sha>` | the files of the base revision, for browsing |
+| `ls-files -z -s`, `ls-files -z --deleted` | the files on disk the index tracks, less the deleted ones, for browsing |
+| `ls-files -z --cached --others --exclude-standard -- :(literal)<path>` | whether a path is one git lists, before the working tree is read |
+| `cat-file -s <sha>:<path>`, `cat-file blob <sha>:<path>` | one file at the base revision: its size first, then its bytes |
 
 The change set comes from the **plumbing**, not from `git diff`. The porcelain
 refreshes the index on its way out, and a refresh takes `.git/index.lock` and
@@ -525,8 +529,43 @@ two copies had drifted: the CLI's dropped a warning the watcher's kept (DA-80).
   at the patch because that is where the copies drifted; taking the lock inside
   it would take a callback for each of those differences.
 
+## Browsing a repository
+
+`src/core/git/browse.ts` reads a repository outside its diff, for browse mode
+and for the context `↑ N lines` brings above a hunk ([08-ui.md](08-ui.md)).
+
+`listTree(cwd, sha)` is every file of the repository with where it exists:
+`base` from `ls-tree -r` of the resolved base, `worktree` from what the index
+tracks less what `ls-files --deleted` names, plus the untracked files the diff
+reader already lists. Blobs only — a submodule is a commit in the tree and a
+`160000` entry in the index, and there is nothing in it to open — and a
+conflicted path the index holds at three stages is one file. Sorted by code
+point, like the change set.
+
+`readFileAt(cwd, path, rev)` is one file whole, and every guard is about what
+the server could otherwise be made to read:
+
+- **The path is checked before git sees it.** `isRepositoryPath` takes a path as
+  the tree lists one — relative, forward slashes, no empty, `.` or `..` segment,
+  no backslash, no NUL — and anything else is `null` without a process started.
+- **On disk, only a path git lists is read.** `ls-files --cached --others
+  --exclude-standard` with the path as a `:(literal)` pathspec has to name it
+  back exactly, so an ignored file, anything under `.git`, and a pathspec that
+  would match a directory or a glob are all `null`. A tracked file deleted from
+  disk is still in the index; `lstat` finds nothing and that is `null` too.
+- **A link is read, not followed.** `lstat`, then `readlink`: the text is the
+  link's target, which is what git records for a tracked one — and a link that
+  points outside the repository has nothing outside read through it.
+- **At the base, `cat-file` and not `show`.** The blob as stored, with no
+  textconv and no filter; `cat-file -s` first, so a file over the size limit is
+  never read into memory.
+
+A file over `DEFAULT_MAX_FILE_BYTES` (512 KiB, the diff's own limit) is
+`omitted: "too-large"`, and one with a NUL byte is `omitted: "binary"` — the
+same two words, for the same reasons, as a file of the change set
+([Files listed without content](#files-listed-without-content)).
+
 ## What it does not do yet
 
-- Full-file content for browsing is Phase 2.
 - The whole diff of a repository is read into memory as one string before it is
   split, so `maxFileBytes` bounds what is carried, not what is read.

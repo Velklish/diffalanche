@@ -143,3 +143,35 @@ export type ScanResult = {
   repositories: Repository[];
   warnings: ScanWarning[];
 };
+
+/** One file of a repository as browsing lists it: where it exists, at the base and on disk. */
+export type TreeEntry = {
+  path: string;
+  /** Whether the base revision has it. */
+  base: boolean;
+  /** Whether the working tree has it, tracked or untracked and not ignored. */
+  worktree: boolean;
+};
+
+/** Every file of one repository, the base revision and the working tree merged. */
+export type RepositoryTree = {
+  repo: string;
+  /** The base revision the `base` column was read at; `null` when the base did not resolve. */
+  sha: string | null;
+  files: TreeEntry[];
+};
+
+/** Which side of the review a whole file is read from: the working tree or the base revision. */
+export type FileRevision = "worktree" | "base";
+
+/** One file read whole, for browsing and for the context around a hunk. */
+export type FileContent = {
+  repo: string;
+  path: string;
+  rev: FileRevision;
+  /** The base revision when `rev` is `base`, `null` for the working tree. */
+  sha: string | null;
+  /** The text, or `null` when the file is listed without it. */
+  text: string | null;
+  omitted: FileOmission | null;
+};

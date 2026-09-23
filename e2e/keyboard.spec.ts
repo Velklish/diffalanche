@@ -255,15 +255,9 @@ test("a letter under an open overlay belongs to the overlay", async ({ page }) =
   await page.keyboard.press("c");
   await expect(page.locator(".composer")).toBeHidden();
   await page.keyboard.press("b");
-  await expect(page.locator(".toast")).toBeHidden();
+  await expect(page.locator(".plain-card")).toHaveCount(0);
   // And the letters went nowhere else either.
   await expect(name).toHaveValue("ls-probe");
-});
-
-test("B says that browsing is Phase 2 and changes nothing", async ({ page }) => {
-  await open(page);
-  await page.keyboard.press("b");
-  await expect(page.locator(".toast")).toContainText("DA-37");
 });
 
 /** The same sentence said twice is two toasts: the second press starts its own
@@ -271,13 +265,16 @@ test("B says that browsing is Phase 2 and changes nothing", async ({ page }) => 
 test("saying the same thing again gives it the whole lifetime", async ({ page }) => {
   await open(page);
   const toast = page.locator(".toast");
+  // `Copy .md` says the same sentence on every press, copied or refused alike.
+  await page.getByRole("button", { name: "Export .md" }).click();
+  const copy = page.getByRole("button", { name: "Copy .md" });
 
-  await page.keyboard.press("b");
+  await copy.click();
   await expect(toast).toBeVisible();
   // Late in the first toast's life, and early enough to be sure of it: the
   // lifetime is 2.2 s, so a second press at 1.6 s carries the bar past 2.2 s.
   await page.waitForTimeout(1_600);
-  await page.keyboard.press("b");
+  await copy.click();
 
   // Where the first deadline was. Keyed on the text, the toast is gone by now.
   await page.waitForTimeout(900);

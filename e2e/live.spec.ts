@@ -159,6 +159,7 @@ test("an edit patches its own card, holds the reading position, and leaves the c
 
   const target = join(root, FIXTURE, edited);
   const original = readFileSync(target, "utf-8");
+  const recorded = await page.evaluate(() => window.__perf.settles.length);
   try {
     appendFileSync(target, "\n// an agent added this while the review was open\n");
 
@@ -181,6 +182,10 @@ test("an edit patches its own card, holds the reading position, and leaves the c
     expect(after.mutations.untouched).toBe(0);
     // The reading position held: what was under the reader is still there.
     expect(Math.abs(after.top - marks.top)).toBeLessThan(ROW_HEIGHT);
+    // The record lands a painted frame after the loop stops, so it is waited for, not read.
+    await expect
+      .poll(() => page.evaluate(() => window.__perf.settles.length))
+      .toBeGreaterThan(recorded);
     // And the record says the correction was made against the patch and not
     // past it: `grewAfter` counts from the frame the loop stopped on (08-ui.md).
     const settled = await page.evaluate(() => window.__perf.settles.at(-1) ?? null);

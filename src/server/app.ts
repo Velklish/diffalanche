@@ -44,6 +44,7 @@ import {
 } from "./request.ts";
 import type { ReviewService } from "./review.ts";
 import { listBranches } from "./routes/branches.ts";
+import { fileRoute, fileSource, treeRoute } from "./routes/browse.ts";
 
 export type AppOptions = {
   config: Config;
@@ -163,6 +164,10 @@ export function createApp({ activity, config, events, review, ui, verbose }: App
   // What the UI fetches after an event names it, and the stream that names it.
   app.get("/api/events", streamEvents(events));
 
+  // A repository of the review outside its diff: every file, and one file whole (DA-37).
+  app.get("/api/repos/:repo{.+}/tree", (c) => treeRoute(c, config, review, named(c)));
+  app.get("/api/repos/:repo{.+}/file", (c) => fileRoute(c, config, review, named(c)));
+
   app.get("/api/repos/:repo{.+}/diff", async (c) => {
     const repo = c.req.param("repo");
     const change = await review.repository(repo, named(c));
@@ -225,16 +230,21 @@ export function createApp({ activity, config, events, review, ui, verbose }: App
     if (repo !== null && !(await findRepositories(config)).includes(repo)) {
       throw new RequestError(`repo ${repo} is not a repository under the root`);
     }
-    const comment = await addComment(config.dataDir, session, {
-      repo,
-      path,
-      line: nullableLine(body, "line"),
-      endLine: nullableLine(body, "endLine"),
-      side: side(body),
-      severity: severity(body),
-      body: text(body, "body"),
-      ...author,
-    });
+    const comment = await addComment(
+      config.dataDir,
+      session,
+      {
+        repo,
+        path,
+        line: nullableLine(body, "line"),
+        endLine: nullableLine(body, "endLine"),
+        side: side(body),
+        severity: severity(body),
+        body: text(body, "body"),
+        ...author,
+      },
+      { source: fileSource(config) },
+    );
     review.invalidateComments(session);
     return c.json(comment, 201);
   });

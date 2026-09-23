@@ -1,8 +1,9 @@
-import { useEffect, useMemo } from "react";
+import { useEffect, useLayoutEffect, useMemo } from "react";
 import type { RepositoryChange, ResolvedBase } from "../../core/types.ts";
 import { Composer } from "../Composer.tsx";
 import { PROBE_Y } from "../reveal.ts";
 import { useStore } from "../store.ts";
+import { BrowseView } from "./BrowseView.tsx";
 import { FileCard } from "./FileCard.tsx";
 import { NoChanges } from "./NoChanges.tsx";
 import { FileCardSkeleton } from "./Skeleton.tsx";
@@ -50,9 +51,11 @@ export function CentrePanel() {
   const status = useStore((store) => store.status);
   const repositories = useStore((store) => store.repositories);
   const files = useStore((store) => store.files);
+  const browse = useStore((store) => store.browse);
   const indexById = useMemo(() => new Map(files.map((entry) => [entry.id, entry.index])), [files]);
 
   useCurrentFile(status);
+  useReturnFromBrowse(browse);
 
   if (status === "failed") {
     return (
@@ -80,14 +83,30 @@ export function CentrePanel() {
     );
   }
 
+  // Browsing folds the review away rather than unmounting it: its cards keep their heights, and
+  // `← back to review` lands where the reader left ([08-ui.md](../../../docs/reference/08-ui.md)).
   return (
     <main className="centre">
-      <ReviewComposer />
-      {repositories.map((repo) => (
-        <RepoSection key={repo.path} repo={repo} indexById={indexById} />
-      ))}
+      {browse ? <BrowseView /> : null}
+      <div className={browse ? "review-body away" : "review-body"}>
+        <ReviewComposer />
+        {repositories.map((repo) => (
+          <RepoSection key={repo.path} repo={repo} indexById={indexById} />
+        ))}
+      </div>
     </main>
   );
+}
+
+/** Back from browsing: the page scrolls to where the review was left, before it is painted. */
+function useReturnFromBrowse(browse: boolean): void {
+  useLayoutEffect(() => {
+    if (browse) return;
+    const back = useStore.getState().browseBack;
+    if (back === null) return;
+    window.scrollTo(0, back.scrollY);
+    useStore.setState({ browseBack: null });
+  }, [browse]);
 }
 
 /**

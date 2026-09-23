@@ -124,3 +124,58 @@ export function captureAnchor(
       `so line ${line} cannot be anchored on the ${side} side; anchor it on the ${other} side`,
   );
 }
+
+/** `@@ -a,b +c,d @@` as numbers; a count git leaves out is one. */
+function hunkRange(header: string): { old: [number, number]; new: [number, number] } | null {
+  const match = /^@@ -(\d+)(?:,(\d+))? \+(\d+)(?:,(\d+))? @@/.exec(header);
+  if (match === null) return null;
+  const [, a, b, c, d] = match;
+  return { old: [Number(a), Number(b ?? 1)], new: [Number(c), Number(d ?? 1)] };
+}
+
+/** Where a line outside every hunk's changes sits on the other side: shifted by what the hunks at
+ * or above it added or took away. */
+function otherSideLine(file: FileChange | null, side: Side, line: number): number {
+  let shift = 0;
+  for (const hunk of file?.hunks ?? []) {
+    const range = hunkRange(hunk.header);
+    if (range === null) continue;
+    const [start, count] = range[side];
+    // A hunk that starts at or above the line counts whole: a window beginning inside one begins in
+    // its trailing context, after every change it holds. A count of zero sits after line `start`.
+    if (count === 0 ? start >= line : start > line) break;
+    shift += range.new[1] - range.old[1];
+  }
+  return side === "new" ? line - shift : line + shift;
+}
+
+/** The anchor of a line the change set does not carry, read from the file itself; `hunk` is the
+ * header git would print for the context around it ([04-domain.md](../../../docs/reference/04-domain.md)). */
+export function captureFromFile(
+  text: string,
+  side: Side,
+  line: number,
+  file: FileChange | null,
+  name: string,
+): Anchor {
+  const lines = text.split("\n");
+  if (lines.at(-1) === "") lines.pop();
+  const index = line - 1;
+  const found = lines[index];
+  if (found === undefined) {
+    throw new DomainError(
+      "invalid-anchor",
+      `line ${line} of ${name} is past its end on the ${side} side: the file has ${lines.length} lines`,
+    );
+  }
+  const before = lines.slice(Math.max(0, index - CONTEXT), index);
+  const after = lines.slice(index + 1, index + 1 + CONTEXT);
+  const start = line - before.length;
+  const count = before.length + 1 + after.length;
+  const other = otherSideLine(file, side, start);
+  const hunk =
+    side === "new"
+      ? `@@ -${other},${count} +${start},${count} @@`
+      : `@@ -${start},${count} +${other},${count} @@`;
+  return { lineContent: found, hunk, before, after };
+}

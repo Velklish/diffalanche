@@ -113,6 +113,20 @@ export function measurePatch(
   return { height: heads * HUNK_HEAD_HEIGHT + rows * ROW_HEIGHT, width };
 }
 
+/** The rows lines of plain text take — the context `↑ N lines` put in — and the widest of them. */
+export function measureLines(
+  texts: string[],
+  columns: number | null,
+): { height: number; width: number } {
+  let rows = 0;
+  let width = 0;
+  for (const text of texts) {
+    rows += columns === null ? 1 : Math.max(1, Math.ceil(text.length / columns));
+    if (text.length > width) width = text.length;
+  }
+  return { height: rows * ROW_HEIGHT, width };
+}
+
 /**
  * A thread card is written text, so its height is not fixed the way a diff row
  * is; these are the parts of it `styles.css` does fix — the borders, the

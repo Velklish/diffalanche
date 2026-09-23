@@ -1,11 +1,7 @@
 import { baseSummary } from "../base.ts";
 import { useStore } from "../store.ts";
 
-/**
- * The hotkeys of the handoff's keyboard map, in the order it lists them. Every
- * one of them does something — `B` says that browsing is Phase 2 and does
- * nothing else ([keys.ts](../keys.ts)).
- */
+/** The hotkeys of the handoff's keyboard map, in the order it lists them ([keys.ts](../keys.ts)). */
 const HINTS: [string, string][] = [
   ["⌘K ⇧⇧", "search"],
   ["J K", "threads"],
@@ -23,6 +19,7 @@ const HINTS: [string, string][] = [
 export function StatusBar() {
   const session = useStore((store) => store.session);
   const open = useStore((store) => store.counters.counters.open);
+  const browse = useStore((store) => store.browse);
 
   return (
     <footer className="status-bar">
@@ -34,7 +31,8 @@ export function StatusBar() {
       ))}
       <span className="spacer" />
       <span className="context">
-        {baseSummary(session?.base)} · {open} threads in {session?.name ?? "—"}
+        {browse ? "browsing · read-only" : baseSummary(session?.base)} · {open} threads in{" "}
+        {session?.name ?? "—"}
       </span>
     </footer>
   );

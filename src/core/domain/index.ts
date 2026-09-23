@@ -1,7 +1,9 @@
-export { captureAnchor } from "./anchors.ts";
+export { captureAnchor, captureFromFile } from "./anchors.ts";
 export type {
+  AddOptions,
   AnchorLevels,
   CommentFilter,
+  FileSource,
   Message,
   NewComment,
   Verdict,

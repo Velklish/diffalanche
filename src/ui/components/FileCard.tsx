@@ -3,8 +3,15 @@ import { memo, useCallback, useEffect, useMemo, useRef, useState } from "react";
 import { worstSeverity } from "../../core/domain/counters.ts";
 import type { FileChange, FileOmission, FileStatus } from "../../core/types.ts";
 import { Composer } from "../Composer.tsx";
-import { codeColumnChars, hiddenLines, measurePatch, measureThreads } from "../measure.ts";
-import type { DiffSlots, LineEvents, LineMarkers } from "../renderers/ReactDiffFile.tsx";
+import { linesAbove, newSideLines } from "../context.ts";
+import {
+  codeColumnChars,
+  hiddenLines,
+  measureLines,
+  measurePatch,
+  measureThreads,
+} from "../measure.ts";
+import type { DiffSlots, HunkLines, LineEvents, LineMarkers } from "../renderers/ReactDiffFile.tsx";
 import { ReactDiffFile } from "../renderers/ReactDiffFile.tsx";
 import type { DiffView } from "../store.ts";
 import { useStore } from "../store.ts";
@@ -30,6 +37,12 @@ const MOUNT_MARGIN = 1000;
 
 /** Shared too, for a file nobody has commented on — which is most of them. */
 const NO_THREADS: Comment[] = [];
+
+/** And for a file with no context brought in above its hunks. */
+const NO_ABOVE: Record<number, number> = {};
+
+/** The lines of a patch that nothing asked to place anything on. */
+const NO_LINES = { lines: new Set<number>(), starts: [] as number[] };
 
 const CHIPS: Record<FileStatus, string | null> = {
   added: "new file",
@@ -59,13 +72,19 @@ export const FileCard = memo(function FileCard({ id, repo, file, index }: FileCa
   const collapsedCard = useStore((store) => store.collapsedFiles[id] === true);
   const open = useStore((store) => store.fileCounts.get(id)?.open ?? 0);
   const severity = useStore((store) => store.fileCounts.get(id)?.severity ?? null);
-  // Two scalars rather than one object: a selector that builds a range on every
-  // call has a new identity every time and would re-render the card on any
-  // change to the store at all.
-  const selFrom = useStore((store) => rangeOf(store.sel, repo, file.path, Math.min));
-  const selTo = useStore((store) => rangeOf(store.sel, repo, file.path, Math.max));
+  // Two scalars, not a range whose new identity would re-render the card on any store change;
+  // browse mode draws the selection and the form of its own file (08-ui.md, "Browse mode").
+  const selFrom = useStore((store) =>
+    store.browse ? null : rangeOf(store.sel, repo, file.path, Math.min),
+  );
+  const selTo = useStore((store) =>
+    store.browse ? null : rangeOf(store.sel, repo, file.path, Math.max),
+  );
   const composerLine = useStore((store) =>
-    store.composer && store.composer.repo === repo && store.composer.path === file.path
+    !store.browse &&
+    store.composer &&
+    store.composer.repo === repo &&
+    store.composer.path === file.path
       ? (store.composerEnd ?? store.composer.line)
       : null,
   );
@@ -73,6 +92,7 @@ export const FileCard = memo(function FileCard({ id, repo, file, index }: FileCa
   // — the one place in the card that belongs to the whole file.
   const composerOnFile = useStore(
     (store) =>
+      !store.browse &&
       store.composer !== null &&
       store.composer.repo === repo &&
       store.composer.path === file.path &&
@@ -89,6 +109,12 @@ export const FileCard = memo(function FileCard({ id, repo, file, index }: FileCa
   );
   const changed = useStore((store) => store.changed.get(id) ?? null);
   const collapsedHunks = useStore((store) => store.collapsedHunks[id]);
+  // Lines fetched for an older patch are numbered for it, so they are dropped with it.
+  const context = useStore((store) => {
+    const held = store.context[id];
+    return held !== undefined && held.patch === file.patch ? held : null;
+  });
+  const expandAbove = useStore((store) => store.expandAbove);
   const setDiffView = useStore((store) => store.setDiffView);
   const toggleFile = useStore((store) => store.toggleFile);
   const toggleHunk = useStore((store) => store.toggleHunk);
@@ -109,7 +135,41 @@ export const FileCard = memo(function FileCard({ id, repo, file, index }: FileCa
    * which is where it is reached from.
    */
   const hidden = useMemo(() => hiddenLines(file.patch, hunks), [file.patch, hunks]);
-  const anchored = useMemo(() => groupByLine(threads, hidden), [threads, hidden]);
+  // Parsed only for a card that has threads to place or context brought in: most have neither.
+  const placing = threads.length > 0 || context !== null;
+  const onPatch = useMemo(
+    () => (placing ? newSideLines(file.patch) : NO_LINES),
+    [placing, file.patch],
+  );
+  const above = context?.above ?? NO_ABOVE;
+  // The lines `↑ N lines` put in, less those of a hunk whose context is collapsed away.
+  const brought = useMemo(() => {
+    const byHunk = linesAbove(onPatch.starts, above);
+    return [...byHunk].flatMap(([hunk, lines]) => (hunks[hunk] === true ? [] : lines));
+  }, [onPatch, above, hunks]);
+  const shown = useMemo(() => {
+    const extra = new Set(brought);
+    return (line: number) => (onPatch.lines.has(line) || extra.has(line)) && !hidden.has(line);
+  }, [onPatch, brought, hidden]);
+  const anchored = useMemo(() => groupByLine(threads, shown), [threads, shown]);
+  const extra = useMemo(
+    () =>
+      measureLines(
+        brought.map((line) => context?.lines[line - 1] ?? ""),
+        columns,
+      ),
+    [brought, context, columns],
+  );
+  const expandable = useMemo(
+    () =>
+      (file.status === "modified" || file.status === "renamed") &&
+      !file.patch.includes("\ndiff --git "),
+    [file.status, file.patch],
+  );
+  const hunkLines = useMemo<HunkLines | null>(
+    () => (expandable ? { lines: context?.lines ?? null, above } : null),
+    [expandable, context, above],
+  );
   // The widgets are part of the card, so they are part of the height it claims
   // before it has ever been mounted; without them the scrollbar drifts.
   const widgets = useMemo(
@@ -190,6 +250,13 @@ export const FileCard = memo(function FileCard({ id, repo, file, index }: FileCa
         <button type="button" className="ghost small" onClick={commentOnFile}>
           Comment on file
         </button>
+        <button
+          type="button"
+          className="ghost small"
+          onClick={() => useStore.getState().openBrowse(repo, file.path)}
+        >
+          Browse repo
+        </button>
         <span className="segments">
           {(["split", "unified"] as DiffView[]).map((one) => (
             <button
@@ -215,10 +282,12 @@ export const FileCard = memo(function FileCard({ id, repo, file, index }: FileCa
         <DiffBody
           file={file}
           view={view}
-          height={shape.height + widgets}
-          width={shape.width}
+          height={shape.height + widgets + extra.height}
+          width={Math.max(shape.width, extra.width)}
           collapsed={hunks}
           onToggleHunk={(hunk) => toggleHunk(id, hunk)}
+          context={hunkLines}
+          onExpand={(hunk, count, max) => void expandAbove(id, repo, file, hunk, count, max)}
           slots={slots}
           lines={lines}
           markers={markers}
@@ -245,12 +314,12 @@ function rangeOf(
  * that opened it sat; a thread on the whole file has no line and is shown in
  * the rail only.
  */
-function groupByLine(threads: Comment[], hidden: Set<number>): Map<number, Comment[]> {
+function groupByLine(threads: Comment[], shown: (line: number) => boolean): Map<number, Comment[]> {
   const byLine = new Map<number, Comment[]>();
   for (const thread of threads) {
     if (thread.line === null) continue;
     const line = thread.endLine ?? thread.line;
-    if (hidden.has(line)) continue;
+    if (!shown(line)) continue;
     const bucket = byLine.get(line);
     if (bucket === undefined) byLine.set(line, [thread]);
     else bucket.push(thread);
@@ -304,7 +373,7 @@ function widgetRows(
 }
 
 /** The card of the rail, under the line it is about. */
-function InlineThread({ thread }: { thread: Comment }) {
+export function InlineThread({ thread }: { thread: Comment }) {
   return (
     <div className="thread-widget" data-thread-anchor={thread.id}>
       <ThreadCard
@@ -324,6 +393,8 @@ type DiffBodyProps = {
   width: number;
   collapsed: Record<number, boolean>;
   onToggleHunk: (hunk: number) => void;
+  context: HunkLines | null;
+  onExpand: (hunk: number, count: number, max: number) => void;
   slots: DiffSlots;
   lines: LineEvents;
   markers: LineMarkers;
@@ -339,6 +410,8 @@ function DiffBody({
   width,
   collapsed,
   onToggleHunk,
+  context,
+  onExpand,
   slots,
   lines,
   markers,
@@ -409,6 +482,8 @@ function DiffBody({
           view={view}
           collapsed={collapsed}
           onToggleHunk={onToggleHunk}
+          context={context}
+          onExpand={onExpand}
           slots={slots}
           lines={lines}
           markers={markers}

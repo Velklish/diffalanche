@@ -539,6 +539,20 @@ button:disabled {
   color: var(--tx);
 }
 
+/* A file the review does not carry reads a step quieter than one it does (handoff 8). */
+.file-row.unchanged {
+  color: var(--tx3);
+}
+
+.file-row.unchanged.on {
+  color: var(--tx);
+}
+
+.unchanged-tag {
+  font-size: 10px;
+  white-space: nowrap;
+}
+
 .file-name {
   overflow: hidden;
   text-overflow: ellipsis;
@@ -1105,6 +1119,10 @@ button:disabled {
   color: var(--nit);
 }
 
+.palette-tag.plain {
+  color: var(--tx3);
+}
+
 .palette-empty {
   padding: 8px;
   color: var(--tx3);
@@ -1364,7 +1382,8 @@ button:disabled {
   white-space: nowrap;
 }
 
-.hunk-context {
+.hunk-context,
+.hunk-expand {
   padding: 1px 7px;
   border: 1px solid var(--bd);
   border-radius: 5px;
@@ -1372,6 +1391,13 @@ button:disabled {
   color: var(--tx2);
   font: 10.5px / 1.5 var(--mono);
   white-space: nowrap;
+}
+
+/* A bordered control shows the focus on its border (DESIGN.md, Inputs and fields). */
+.hunk-context:focus-visible,
+.hunk-expand:focus-visible {
+  border-color: var(--accBd);
+  outline: none;
 }
 
 /* file card header */
@@ -2578,4 +2604,125 @@ button.counter:focus-visible {
 .context {
   color: var(--tx3);
   font: 10.5px / 1 var(--mono);
+}
+
+/* browse mode (DA-37) */
+
+/* The review is folded rather than unmounted: its cards keep their heights for the way back. */
+.review-body.away {
+  height: 0;
+  overflow: hidden;
+  visibility: hidden;
+}
+
+.plain-repo {
+  color: var(--tx3);
+  font: 11px / 1.4 var(--mono);
+}
+
+/* The header holds more than a diff card's does; the names give way, the controls never wrap. */
+.plain-card .file-head > :not(.spacer) {
+  flex: none;
+  white-space: nowrap;
+}
+
+.plain-card .file-head > .file-path,
+.plain-card .file-head > .plain-repo {
+  flex: 0 1 auto;
+  min-width: 0;
+  overflow: hidden;
+  text-overflow: ellipsis;
+}
+
+/* The repository gives way before the path: the path is what the reader opened. */
+.plain-card .file-head > .plain-repo {
+  flex-shrink: 100;
+}
+
+.plain-card .segments .segment {
+  width: auto;
+  height: 22px;
+  padding: 0 8px;
+  font: 10.5px / 1 var(--mono);
+}
+
+.plain-card .segment:disabled {
+  color: var(--tx3);
+  cursor: default;
+}
+
+.plain-lines {
+  padding: 4px 0;
+  font: 12px / 22px var(--mono);
+  overflow-x: auto;
+}
+
+.app.wrap .plain-lines {
+  overflow-x: hidden;
+}
+
+.plain-line {
+  display: flex;
+  min-width: max-content;
+  cursor: default;
+}
+
+.app.wrap .plain-line {
+  min-width: 0;
+}
+
+.plain-ln {
+  flex: 0 0 42px;
+  padding-right: 11px;
+  color: var(--ln);
+  text-align: right;
+  user-select: none;
+}
+
+.plain-code {
+  flex: 1;
+  padding: 0 10px;
+  color: var(--code);
+  white-space: pre;
+}
+
+.app.wrap .plain-code {
+  min-width: 0;
+  white-space: pre-wrap;
+  word-break: break-all;
+}
+
+/* The range the composer is drawn over, as in the diff: the wash and the bar, and numbers in
+   the accent text colour because `--ln` falls under AA on the wash (DA-22.1). */
+.plain-line.selected {
+  background: var(--accBg);
+}
+
+.plain-line.selected .plain-ln {
+  box-shadow: inset 3px 0 0 var(--acc);
+  color: var(--accTx);
+}
+
+.plain-line.marked.critical {
+  --marker: var(--crit);
+}
+
+.plain-line.marked.warning {
+  --marker: var(--warn);
+}
+
+.plain-line.marked.nit {
+  --marker: var(--nit);
+}
+
+.plain-line.marked.question {
+  --marker: var(--q);
+}
+
+.plain-line.marked .plain-ln {
+  box-shadow: inset 3px 0 0 var(--marker);
+}
+
+.plain-widgets .thread-widgets {
+  margin-left: 42px;
 }

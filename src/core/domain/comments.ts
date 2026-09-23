@@ -3,7 +3,7 @@
  * `docs/SPEC.md` section 5 "Comments" and "Agent", section 7 for the shape, and
  * [ADR-004](../../../docs/adr/adr-004-agent-contract.md) for who may do what.
  */
-import type { Comment, Reply, Role, Scope, Severity, Side } from "../storage/index.ts";
+import type { Anchor, Comment, Reply, Role, Scope, Severity, Side } from "../storage/index.ts";
 import {
   readComments,
   readDiffCache,
@@ -13,7 +13,7 @@ import {
   updateSession,
 } from "../storage/index.ts";
 import type { RepositoryChange } from "../types.ts";
-import { captureAnchor } from "./anchors.ts";
+import { captureAnchor, captureFromFile } from "./anchors.ts";
 import { isAwaiting, isUnanswered } from "./counters.ts";
 import { DomainError } from "./errors.ts";
 import type { Actor } from "./roles.ts";
@@ -157,11 +157,23 @@ async function changeSet(dataDir: string, session: string): Promise<RepositoryCh
   return cache.repositories;
 }
 
+/** A file read whole, on disk or at the base revision; `null` when it is not there to read. */
+export type FileSource = (
+  repo: string,
+  path: string,
+  rev: "worktree" | { sha: string },
+) => Promise<string | null>;
+
+/** `source` lets a line the change set does not carry be anchored from the file itself; without
+ * one such a line is refused, which is what the CLI keeps ([04-domain.md](../../../docs/reference/04-domain.md)). */
+export type AddOptions = { source?: FileSource };
+
 /** Writes a comment. A line anchor is filled from the change set of the session. */
 export async function addComment(
   dataDir: string,
   session: string,
   input: NewComment,
+  options: AddOptions = {},
 ): Promise<Comment> {
   await assertSession(dataDir, session);
   assertAnchorLevels(input);
@@ -178,7 +190,7 @@ export async function addComment(
   const anchor =
     line === null || repo === null || path === null || side === null
       ? null
-      : captureAnchor(await changeSet(dataDir, session), repo, path, side, line);
+      : await anchorOf(await changeSet(dataDir, session), repo, path, side, line, options.source);
 
   return updateSession(dataDir, session, (draft) => {
     // The guarantee, not a repeat of the cheap refusal above, and it says so:
@@ -214,6 +226,35 @@ export async function addComment(
     comments.push(comment);
     return comment;
   });
+}
+
+/** The change set's anchor, or the file's when the change set has no such line and a source can
+ * read it; a refusal the file cannot answer stays the change set's own. */
+async function anchorOf(
+  repositories: RepositoryChange[],
+  repo: string,
+  path: string,
+  side: Side,
+  line: number,
+  source: FileSource | undefined,
+): Promise<Anchor> {
+  try {
+    return captureAnchor(repositories, repo, path, side, line);
+  } catch (error) {
+    if (source === undefined || !(error instanceof DomainError)) throw error;
+    if (error.code !== "line-not-in-diff") throw error;
+    const repository = repositories.find((one) => one.path === repo);
+    const file = repository?.files.find((one) => one.path === path) ?? null;
+    // A file listed without its lines has none to anchor to, whichever side is read.
+    if (file !== null && file.omitted !== null) throw error;
+    const sha = repository?.base?.sha;
+    const rev = side === "new" ? "worktree" : sha === undefined ? null : { sha };
+    // The base has a renamed file under the name it had then.
+    const at = side === "old" ? (file?.oldPath ?? path) : path;
+    const text = rev === null ? null : await source(repo, at, rev);
+    if (text === null) throw error;
+    return captureFromFile(text, side, line, file, `${repo}/${path}`);
+  }
 }
 
 /**

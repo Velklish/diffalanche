@@ -16,9 +16,9 @@ a caller reads; the message is what a person reads.
 | `no-such-session` | a named session that is not in the data directory |
 | `no-current-session` | no `--review` and no `current` pointer |
 | `no-such-comment` | a comment id that is not in the session |
-| `invalid-anchor` | anchor levels that do not add up: a line without a file, a range that runs backwards |
+| `invalid-anchor` | anchor levels that do not add up: a line without a file, a range that runs backwards; a line past the end of the file it is read from |
 | `role-not-human` | `resolve` or `reopen` from anything but a human |
-| `line-not-in-diff` | a line anchor on a line the change set does not have |
+| `line-not-in-diff` | a line anchor on a line the change set does not have, when no file source could read it either |
 | `invalid-scope` | a scope that does not add up: a repository the root has not, a repository named twice, a path that is not one inside its repository, an edit a scope cannot express |
 | `out-of-scope` | a comment on something the review task is not about |
 | `scope-has-comments` | narrowing the scope would delete comments and nothing consented to that; the error carries their ids |
@@ -314,6 +314,33 @@ the `comment` command defaults the side to `new`, so a deleted file reaches it
 from the command line. The measure is the file's own hunks: a hunk with no line
 numbers on the side being asked about is not a candidate for "nearest" at all,
 which is different from being infinitely far from the line.
+
+**A line the change set does not carry can be anchored from the file itself**,
+when the caller gives `addComment` a source to read it with
+(`options.source`, a `FileSource`). The server does — it is how a comment on an
+unchanged file opened in browse mode, or on a line `↑ N lines` brought in, is
+written ([07-server.md](07-server.md)) — and the CLI does not, so an agent's
+`comment` on a line outside the diff is refused as before: the agent contract
+of [ADR-004](../adr/adr-004-agent-contract.md) anchors on the change set, and
+widening it is a decision of its own. The fallback runs only on a
+`line-not-in-diff` refusal, and the refusal stands whenever the file has
+nothing to give: a file of the change set listed without content, a side whose
+revision cannot be read — the `old` side of a repository the change set does
+not have, which carries no base — and a file the source cannot read at all,
+ignored or absent. `new` is read from the working tree and `old` — under the
+name the base has the file by, the old path of a rename — from the
+repository's resolved base.
+
+The anchor has **the same shape**: `lineContent` is the line, `before` and
+`after` up to three lines on each side of it, and `hunk` is the header git would
+print for that window if it were a hunk of context — `@@ -2,7 +2,7 @@` for line
+5 of an unchanged file. The other side's start is the anchored side's shifted
+by what the hunks above the window added or took away, so line 20 on disk of a
+file with two lines inserted at the top is `@@ -15,7 +17,7 @@`. A window that
+starts inside a hunk — the line is just below one — starts in its trailing
+context, after every change the hunk holds, so that hunk counts whole: new line 8
+under `@@ -1,5 +1,7 @@` is `@@ -3,7 +5,7 @@`. A line past the end of the file is `invalid-anchor`,
+naming how many lines it has.
 
 "Has no hunks in the change set" is kept for the file that really has none —
 `hunks: []` with `omitted: null`, which a change set read without hunks and a

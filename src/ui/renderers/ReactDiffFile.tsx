@@ -21,6 +21,7 @@ import python from "refractor/python";
 import tsx from "refractor/tsx";
 import typescript from "refractor/typescript";
 import type { FileChange } from "../../core/types.ts";
+import { CONTEXT_STEP, gapsAbove, withLinesAbove } from "../context.ts";
 import type { ChangedHunks } from "../patch.ts";
 import { mergedPatch } from "../patch.ts";
 import type { DiffView } from "../store.ts";
@@ -107,12 +108,19 @@ export type LineMarkers = {
   changed: ChangedHunks | null;
 };
 
+/** The working tree's lines, once fetched, and how many of them each hunk has above it; `null`
+ * for a file whose hunks cannot grow — an added, deleted or type-changed one. */
+export type HunkLines = { lines: string[] | null; above: Record<number, number> };
+
 export type ReactDiffFileProps = {
   file: FileChange;
   view: DiffView;
   /** Hunks whose outer context lines are hidden, by index in the file. */
   collapsed: Record<number, boolean>;
   onToggleHunk: (index: number) => void;
+  context: HunkLines | null;
+  /** `max` is how many lines lie above the hunk at all. */
+  onExpand: (index: number, count: number, max: number) => void;
   slots: DiffSlots;
   lines: LineEvents;
   markers: LineMarkers;
@@ -123,6 +131,8 @@ export function ReactDiffFile({
   view,
   collapsed,
   onToggleHunk,
+  context,
+  onExpand,
   slots,
   lines,
   markers,
@@ -136,9 +146,16 @@ export function ReactDiffFile({
   const parsed = useMemo(() => mergedPatch(file.patch, file.status), [file.patch, file.status]);
 
   const shown = useMemo(
-    () => (parsed?.hunks ?? []).map((hunk, index) => trimContext(hunk, collapsed[index] === true)),
-    [parsed, collapsed],
+    () =>
+      (parsed?.hunks ?? []).map((hunk, index) => {
+        const count = context?.lines ? (context.above[index] ?? 0) : 0;
+        const grown = context?.lines ? withLinesAbove(hunk, context.lines, count) : hunk;
+        return trimContext(grown, collapsed[index] === true);
+      }),
+    [parsed, collapsed, context],
   );
+  // What is still out of sight above each hunk, counted on the patch as it came.
+  const gaps = useMemo(() => gapsAbove(parsed?.hunks ?? []), [parsed]);
 
   const tokens = useMemo(() => {
     const language = LANGUAGES[file.path.split(".").pop() ?? ""];
@@ -215,6 +232,12 @@ export function ReactDiffFile({
               {markers.changed?.hunks.has(hunk.content) ? (
                 <HunkUpdated at={markers.changed.at} />
               ) : null}
+              {context === null || collapsed[index] === true ? null : (
+                <HunkExpandButton
+                  hidden={(gaps[index] ?? 0) - (context.above[index] ?? 0)}
+                  onExpand={(count) => onExpand(index, count, gaps[index] ?? 0)}
+                />
+              )}
               <HunkContextButton
                 hidden={shown[index]?.hidden ?? 0}
                 collapsed={collapsed[index] === true}
@@ -239,11 +262,24 @@ function HunkUpdated({ at }: { at: number }) {
   return <span className="hunk-updated">updated {elapsed(at, now)}</span>;
 }
 
-/**
- * The bundle holds three context lines around every change (`git diff -U3`), so
- * this is the whole of what can be shown or hidden today; Phase 2 asks the
- * server for more and the same control grows a second step.
- */
+/** `↑ N lines`: the working tree's lines above the hunk, a step at a time (DA-37). */
+function HunkExpandButton({
+  hidden,
+  onExpand,
+}: {
+  hidden: number;
+  onExpand: (count: number) => void;
+}) {
+  if (hidden <= 0) return null;
+  const count = Math.min(CONTEXT_STEP, hidden);
+  return (
+    <button type="button" className="hunk-expand" onClick={() => onExpand(count)}>
+      ↑ {count} lines
+    </button>
+  );
+}
+
+/** The bundled context (`git diff -U3`) hidden or shown, with what `↑ N lines` added to it. */
 function HunkContextButton({
   hidden,
   collapsed,

@@ -405,6 +405,34 @@ describe("a review the stream brought again", () => {
     expect(useStore.getState().focusId).toBe("c_one");
   });
 
+  it("keeps the trees of `all files` for the same session and base, and drops them otherwise", async () => {
+    const tree = { status: "ready" as const, tree: { repo: "repos/a", sha: "abc1234", files: [] } };
+    loaded();
+    useStore.setState({ session: document("ls-1").session as never, trees: { "repos/a": tree } });
+    answers("ls-1");
+    await useStore.getState().loadReview();
+    expect(useStore.getState().trees).toEqual({ "repos/a": tree });
+
+    // The same session with its base moved: the tree was read against the old commit.
+    const moved = document("ls-1");
+    moved.repositories = [
+      { ...repository([file()]), base: { mode: "head", ref: "HEAD", sha: "fed4321" } },
+    ];
+    vi.stubGlobal(
+      "fetch",
+      vi.fn((url: string) =>
+        Promise.resolve(new Response(JSON.stringify(url === "/api/config" ? {} : moved))),
+      ),
+    );
+    await useStore.getState().loadReview();
+    expect(useStore.getState().trees).toEqual({});
+
+    useStore.setState({ trees: { "repos/a": tree } });
+    answers("ls-2");
+    await useStore.getState().loadReview();
+    expect(useStore.getState().trees).toEqual({});
+  });
+
   it("drops it when the review is another session's", async () => {
     loaded();
     useStore.setState({ session: document("ls-1").session as never });

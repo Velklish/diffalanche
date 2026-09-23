@@ -1,18 +1,15 @@
 import type { KeyboardEvent } from "react";
-import { useCallback, useMemo } from "react";
+import { useCallback, useEffect, useMemo, useState } from "react";
+import { splitLines } from "../context.ts";
 import { revealCard, revealThread } from "../reveal.ts";
 import type { PreviewLine, SearchHit } from "../search.ts";
-import { preview, search } from "../search.ts";
-import { useStore } from "../store.ts";
+import { PREVIEW_LINES, preview, search } from "../search.ts";
+import { onTask, useStore } from "../store.ts";
+import type { FileContent } from "../types.ts";
 import { Overlay } from "./Overlay.tsx";
 
-/**
- * Global search of handoff section 6: 880 px by 60 vh over the scrim, the field
- * with the focus, the results on the left and a preview of the target on the
- * right. It covers what the MVP has — the files of the change set and the
- * comments of the session; symbols and the text of unchanged files are Phase 2
- * (`docs/SPEC.md` section 3, decision 13).
- */
+/** Global search of handoff section 6: the field, the results on the left, a preview of the
+ * target on the right ([08-ui.md](../../../docs/reference/08-ui.md), "Global search"). */
 export function GlobalSearch() {
   const open = useStore((store) => store.paletteOpen);
   return open ? <Palette /> : null;
@@ -23,11 +20,32 @@ function Palette() {
   const index = useStore((store) => store.palIdx);
   const files = useStore((store) => store.files);
   const comments = useStore((store) => store.comments);
+  const repositories = useStore((store) => store.repositories);
+  const trees = useStore((store) => store.trees);
   const setQuery = useStore((store) => store.setPaletteQuery);
   const setIndex = useStore((store) => store.setPalIdx);
   const close = useStore((store) => store.setPalette);
 
-  const hits = useMemo(() => search(query, files, comments), [query, files, comments]);
+  // The unchanged files are the trees', read when the modal opens and kept while the review is.
+  useEffect(() => {
+    const store = useStore.getState();
+    for (const repo of repositories) {
+      if (store.trees[repo.path] === undefined) void store.loadTree(repo.path);
+    }
+  }, [repositories]);
+  const unchanged = useMemo(() => {
+    const listed = new Set(files.map((entry) => entry.id));
+    return repositories.flatMap((repo) =>
+      (trees[repo.path]?.tree?.files ?? [])
+        .filter((entry) => entry.worktree && !listed.has(`${repo.path}/${entry.path}`))
+        .map((entry) => ({ repo: repo.path, path: entry.path })),
+    );
+  }, [repositories, trees, files]);
+
+  const hits = useMemo(
+    () => search(query, files, comments, unchanged),
+    [query, files, comments, unchanged],
+  );
   const selected = hits[Math.min(index, hits.length - 1)] ?? null;
 
   const choose = useCallback(
@@ -37,7 +55,13 @@ function Palette() {
         void revealThread(hit.id);
         return;
       }
-      useStore.getState().select(hit.repo, hit.path);
+      const store = useStore.getState();
+      if (hit.kind === "plain") {
+        store.openBrowse(hit.repo, hit.path);
+        return;
+      }
+      if (store.browse) store.closeBrowse();
+      store.select(hit.repo, hit.path);
       void revealCard(`[data-file="${CSS.escape(hit.id)}"]`);
     },
     [close],
@@ -150,6 +174,7 @@ function Preview({ hit }: { hit: SearchHit | null }) {
   const entry = files.find((one) => one.id === `${hit.repo}/${hit.path}`);
   const comment = hit.kind === "comment" ? comments.find((one) => one.id === hit.id) : undefined;
   const lines = entry === undefined ? [] : preview(entry.file.patch, hit.line);
+  if (hit.kind === "plain") return <PlainPreview hit={hit} />;
 
   return (
     <div className="palette-preview">
@@ -170,6 +195,52 @@ function Preview({ hit }: { hit: SearchHit | null }) {
         </div>
       )}
       {comment === undefined ? null : <p className="palette-body-text">{comment.body}</p>}
+    </div>
+  );
+}
+
+/** The first lines of a file the review does not carry, read when the row is selected. */
+function PlainPreview({ hit }: { hit: SearchHit }) {
+  const [shown, setShown] = useState<{ id: string; lines: PreviewLine[] | null } | null>(null);
+  useEffect(() => {
+    let live = true;
+    const query = `path=${encodeURIComponent(hit.path)}&rev=worktree`;
+    void fetch(onTask(`/api/repos/${hit.repo}/file?${query}`))
+      .then(async (response) => (response.ok ? ((await response.json()) as FileContent) : null))
+      .catch(() => null)
+      .then((content) => {
+        if (!live) return;
+        const text = content?.text ?? null;
+        const lines =
+          text === null
+            ? null
+            : splitLines(text)
+                .slice(0, PREVIEW_LINES)
+                .map((one, at) => ({ at, line: at + 1, text: one, kind: "context" as const }));
+        setShown({ id: hit.id, lines });
+      });
+    return () => {
+      live = false;
+    };
+  }, [hit.id, hit.repo, hit.path]);
+  const lines = shown?.id === hit.id ? shown.lines : [];
+
+  return (
+    <div className="palette-preview">
+      <div className="palette-where">
+        <span className="palette-path">{hit.path}</span>
+        <span className="palette-meta">{hit.repo}</span>
+      </div>
+      {lines === null ? (
+        <p className="palette-note">Этот файл показан без содержимого.</p>
+      ) : (
+        <div className="palette-code">
+          {lines.map((line) => (
+            <Line key={line.at} line={line} target={null} />
+          ))}
+        </div>
+      )}
+      <p className="palette-note">рабочее дерево · вне ревью</p>
     </div>
   );
 }

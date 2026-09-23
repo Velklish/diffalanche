@@ -45,9 +45,14 @@ test("a file badge is the number of open comments on that file", async ({ page }
   const bundle = await review(page);
 
   const expected = new Map<string, number>();
+  const changed = new Set(
+    bundle.repositories.flatMap((repo) => repo.files.map((file) => `${repo.path}/${file.path}`)),
+  );
   for (const comment of bundle.comments) {
     if (comment.status === "resolved" || !comment.repo || !comment.path) continue;
     const key = `${comment.repo}/${comment.path}`;
+    // This tab is the change set; a comment on a file outside it is counted in `all files`.
+    if (!changed.has(key)) continue;
     expected.set(key, (expected.get(key) ?? 0) + 1);
   }
   expect(expected.size).toBeGreaterThan(0);

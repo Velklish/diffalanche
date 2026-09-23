@@ -15,6 +15,7 @@ import { byCodePoint } from "../core/order.ts";
 import type { FileChange, RepositoryChange } from "../core/types.ts";
 import { firstAddedLine } from "./anchor.ts";
 import { baseArgument } from "./base.ts";
+import { splitLines } from "./context.ts";
 import { centreWidth, MIN_CENTRE, RAIL_WIDTH, SIDEBAR_WIDTH } from "./measure.ts";
 import type { ChangedHunks } from "./patch.ts";
 import { changedHunks, hasNewLine, mergeRepository } from "./patch.ts";
@@ -41,7 +42,10 @@ import type {
   Comment,
   CommentStatus,
   Counters,
+  FileContent,
+  FileRevision,
   Reply,
+  RepositoryTree,
   Review,
   ReviewCounters,
   ReviewDocument,
@@ -66,13 +70,20 @@ export type Theme = "dark" | "light";
  * mark is claimed once, so the two kinds are two marks and not one.
  */
 export type SelfWrite = "review" | "history";
-/**
- * The tabs of the sidebar. `changes` is the tree of handoff section 1.3;
- * `select` turns it into the picking surface a new review task is built on
- * (DA-55); `all files` is Phase 2 (DA-37) and is not rendered.
- */
+/** The sidebar's tabs: `changes` (handoff 1.3), `all files` for browsing (DA-37), and `select`,
+ * the picking surface a new review task is built on (DA-55). */
 export type SidebarTab = "changes" | "all" | "select";
 export type DiffView = "split" | "unified";
+/** The file browse mode shows, as the server answered for it; `key` drops a stale answer. */
+export type PlainFile = {
+  key: string;
+  status: LoadStatus;
+  content: FileContent | null;
+  failure: string | null;
+};
+export type TreeState = { status: LoadStatus; tree: RepositoryTree | null };
+/** The lines are the working tree's, fetched for this patch; a new patch makes them stale. */
+export type HunkContext = { patch: string; lines: string[]; above: Record<number, number> };
 export type RailScope = "file" | "all";
 export type ExportView = "rendered" | "raw";
 /**
@@ -142,6 +153,12 @@ const RAIL_KEY = "diffalanche.rail";
 const WRAP_KEY = "diffalanche.wrap";
 /** Which session's warnings were put away; kept for the tab, not for ever. */
 const DISMISSED_KEY = "diffalanche.warningsDismissed";
+
+/** The cards whose working-tree file is on its way for `↑ N lines`. */
+const expanding = new Set<string>();
+
+/** What browse mode shows before a file has been asked for. */
+const NO_PLAIN: PlainFile = { key: "", status: "loading", content: null, failure: null };
 
 /** The counters of a review with nothing in it: what the header shows while it loads. */
 const NO_COUNTERS: ReviewCounters = {
@@ -346,9 +363,39 @@ type NavigationSlice = {
   sidebarTab: SidebarTab;
   setSidebarTab: (tab: SidebarTab) => void;
   query: string;
+  /** Browse mode: one file of a repository shown whole in place of the review (DA-37). */
   browse: boolean;
+  plainRepo: string | null;
   plainPath: string | null;
-  plainRev: string | null;
+  plainRev: FileRevision;
+  /** The line browse mode was opened at, brought into view once the file is there. */
+  plainLine: number | null;
+  plain: PlainFile;
+  /** Where the review was left, so `← back to review` returns to the same place. */
+  browseBack: { repo: string | null; path: string | null; scrollY: number } | null;
+  /** The tree of every repository the `all files` tab or search asked for. */
+  trees: Record<string, TreeState>;
+  /** Working-tree lines `↑ N lines` put above a hunk, by file id ([context.ts](context.ts)). */
+  context: Record<string, HunkContext>;
+  openBrowse: (
+    repo: string,
+    path: string,
+    at?: { rev?: FileRevision; line?: number | null },
+  ) => void;
+  closeBrowse: () => void;
+  /** `B`: browse the current file, or go back to the review. */
+  toggleBrowse: () => void;
+  setPlainRev: (rev: FileRevision) => void;
+  loadTree: (repo: string) => Promise<void>;
+  /** `max` is the gap above the hunk: a press never brings in more than there is. */
+  expandAbove: (
+    id: string,
+    repo: string,
+    file: FileChange,
+    hunk: number,
+    count: number,
+    max: number,
+  ) => Promise<void>;
   /** Split or unified per file card, remembered across renders. */
   diffView: Record<string, DiffView>;
   /** Collapsed file cards, keyed by `FileEntry.id`. */
@@ -597,7 +644,16 @@ export const useStore = create<Store>()((set, get) => ({
       // Stamped here, not after the render: the harness measures from the moment
       // the response was parsed to the frame that showed it.
       perf.responseAt = performance.now();
-      set(fromDocument(document, get().diffView, get().session?.name ?? null, get().warnings));
+      const held = get();
+      set(
+        fromDocument(
+          document,
+          held.diffView,
+          held.session?.name ?? null,
+          held.warnings,
+          held.repositories,
+        ),
+      );
     } catch (error) {
       if (generation !== reading) return;
       set({ status: "failed", failure: reason(error) });
@@ -931,11 +987,120 @@ export const useStore = create<Store>()((set, get) => ({
   path: null,
   collapsedRepos: {},
   sidebarTab: "changes",
-  setSidebarTab: (sidebarTab) => set({ sidebarTab }),
+  setSidebarTab: (sidebarTab) => {
+    // The other two tabs are the review, so leaving `all files` for one of them leaves browsing.
+    if (sidebarTab !== "all" && get().browse) get().closeBrowse();
+    set({ sidebarTab });
+  },
   query: "",
   browse: false,
+  plainRepo: null,
   plainPath: null,
-  plainRev: null,
+  plainRev: "worktree",
+  plainLine: null,
+  plain: NO_PLAIN,
+  browseBack: null,
+  trees: {},
+  context: {},
+  openBrowse: (repo, path, at = {}) => {
+    const store = get();
+    const listed = store.files.find((one) => one.repo === repo && one.file.path === path);
+    // A deleted file is only at the base; everything else opens on what is on disk.
+    const rev = at.rev ?? (listed?.file.status === "deleted" ? "base" : "worktree");
+    set({
+      browse: true,
+      repo,
+      path,
+      plainRepo: repo,
+      plainPath: path,
+      plainRev: rev,
+      plainLine: at.line ?? null,
+      sidebarTab: "all",
+      browseBack: store.browse
+        ? store.browseBack
+        : { repo: store.repo, path: store.path, scrollY: pageScroll() },
+      composer: null,
+      composerEnd: null,
+      sel: null,
+      dragging: false,
+    });
+    void loadPlain(set, get);
+    if (store.trees[repo] === undefined) void get().loadTree(repo);
+  },
+  closeBrowse: () => {
+    const { browseBack, composer, plainPath, plainRepo } = get();
+    const onPlain = composer !== null && composer.repo === plainRepo && composer.path === plainPath;
+    set({
+      browse: false,
+      plainRepo: null,
+      plainPath: null,
+      plainLine: null,
+      plain: NO_PLAIN,
+      ...(browseBack === null ? {} : { repo: browseBack.repo, path: browseBack.path }),
+      // The form was written for the file that is leaving the screen.
+      ...(onPlain ? { composer: null, composerEnd: null, sel: null } : {}),
+    });
+  },
+  toggleBrowse: () => {
+    const store = get();
+    if (store.browse) {
+      store.closeBrowse();
+      set({ sidebarTab: "changes" });
+      return;
+    }
+    const entry =
+      store.files.find((one) => one.repo === store.repo && one.file.path === store.path) ??
+      store.files[0];
+    if (entry !== undefined) store.openBrowse(entry.repo, entry.file.path);
+  },
+  setPlainRev: (plainRev) => {
+    if (plainRev === get().plainRev) return;
+    set({ plainRev, composer: null, composerEnd: null, sel: null });
+    void loadPlain(set, get);
+  },
+  loadTree: async (repo) => {
+    set({ trees: { ...get().trees, [repo]: { status: "loading", tree: null } } });
+    const settle = (state: TreeState) => {
+      // A review read since the request asked for it dropped every tree it held.
+      if (get().trees[repo]?.status !== "loading") return;
+      set({ trees: { ...get().trees, [repo]: state } });
+    };
+    try {
+      const response = await fetch(onTask(`/api/repos/${repo}/tree`));
+      if (!response.ok) throw new Error((await refusal(response)).message);
+      settle({ status: "ready", tree: (await response.json()) as RepositoryTree });
+    } catch {
+      settle({ status: "failed", tree: null });
+    }
+  },
+  expandAbove: async (id, repo, file, hunk, count, max) => {
+    const held = get().context[id];
+    let lines = held !== undefined && held.patch === file.patch ? held.lines : null;
+    if (lines === null) {
+      // A second press while the file is on its way would add its lines twice.
+      if (expanding.has(id)) return;
+      expanding.add(id);
+      const read = await readFile(repo, file.path, "worktree").finally(() => expanding.delete(id));
+      if (typeof read === "string") {
+        set({ toast: raise(read) });
+        return;
+      }
+      if (read.text === null) {
+        set({ toast: raise(`${file.path} is ${read.omitted}: its context cannot be shown`) });
+        return;
+      }
+      lines = splitLines(read.text);
+    }
+    const now = get().context[id];
+    const above = now !== undefined && now.patch === file.patch ? now.above : {};
+    const grown = Math.min(max, (above[hunk] ?? 0) + count);
+    set({
+      context: {
+        ...get().context,
+        [id]: { patch: file.patch, lines, above: { ...above, [hunk]: grown } },
+      },
+    });
+  },
   diffView: {},
   collapsedFiles: {},
   collapsedHunks: {},
@@ -1024,6 +1189,14 @@ export const useStore = create<Store>()((set, get) => ({
     });
   },
   commentOnCurrentFile: () => {
+    const { browse, plain, plainRepo, plainPath, plainRev, plainLine } = get();
+    if (browse) {
+      // The file on the screen, at the line it was opened at, on the side it is read from.
+      if (plainRepo === null || plainPath === null || plain.content?.text == null) return;
+      const side = plainRev === "base" ? "old" : "new";
+      get().openComposer({ repo: plainRepo, path: plainPath, side, line: plainLine ?? 1 });
+      return;
+    }
     const { repo, path, files } = get();
     if (repo === null || path === null) return;
     const entry = files.find((one) => one.repo === repo && one.file.path === path);
@@ -1594,6 +1767,7 @@ function fromDocument(
   previous: Record<string, DiffView>,
   held: string | null,
   heldWarnings: ScanWarning[],
+  heldRepositories: RepositoryChange[] = [],
 ): Partial<Store> {
   let index = 0;
   const files = document.repositories.flatMap((repo) =>
@@ -1640,6 +1814,13 @@ function fromDocument(
           busy: {},
           collapsedHunks: {},
           collapsedFiles: {},
+          context: {},
+          browse: false,
+          plainRepo: null,
+          plainPath: null,
+          plainLine: null,
+          plain: NO_PLAIN,
+          browseBack: null,
           // The marks are about edits made while *this* review was open; the
           // next one has its own, and a hunk of it whose header happens to
           // match would otherwise be shown as freshly changed.
@@ -1653,7 +1834,17 @@ function fromDocument(
     // Split or unified is about a file and not about a review, so it is kept
     // for the files that are still in one.
     diffView: keptFor(files, previous),
+    // A tree is read against a base: another session or a moved base has the tab read it again.
+    ...(switched || basesMoved(heldRepositories, document.repositories) ? { trees: {} } : {}),
   };
+}
+
+/** Whether a repository shown before and now resolves its base to another commit. */
+function basesMoved(before: RepositoryChange[], after: RepositoryChange[]): boolean {
+  const held = new Map(before.map((repo) => [repo.path, repo.base?.sha ?? null]));
+  return after.some(
+    (repo) => held.has(repo.path) && held.get(repo.path) !== (repo.base?.sha ?? null),
+  );
 }
 
 /** The per-file view choices of the files the new review still has. */
@@ -1803,6 +1994,43 @@ function writeTaskInUrl(name: string | null): void {
   if (name === null) url.searchParams.delete("review");
   else url.searchParams.set("review", name);
   if (url.href !== location.href) history.pushState(null, "", url);
+}
+
+/** How far the page is scrolled, and zero where there is no page — the unit suite. */
+function pageScroll(): number {
+  return typeof window === "undefined" ? 0 : window.scrollY;
+}
+
+/** One file whole from the server, or the refusal to show in its place. */
+async function readFile(
+  repo: string,
+  path: string,
+  rev: FileRevision,
+): Promise<FileContent | string> {
+  try {
+    const query = `path=${encodeURIComponent(path)}&rev=${rev}`;
+    const response = await fetch(onTask(`/api/repos/${repo}/file?${query}`));
+    if (!response.ok) return (await refusal(response)).message;
+    return (await response.json()) as FileContent;
+  } catch (error) {
+    return reason(error);
+  }
+}
+
+/** The file browse mode is on, read again; an answer for a file the mode has left is dropped. */
+async function loadPlain(set: (partial: Partial<Store>) => void, get: () => Store): Promise<void> {
+  const { plainRepo: repo, plainPath, plainRev } = get();
+  if (repo === null || plainPath === null) return;
+  const key = `${repo}\n${plainPath}\n${plainRev}`;
+  set({ plain: { key, status: "loading", content: null, failure: null } });
+  const read = await readFile(repo, plainPath, plainRev);
+  if (get().plain.key !== key) return;
+  set({
+    plain:
+      typeof read === "string"
+        ? { key, status: "failed", content: null, failure: read }
+        : { key, status: "ready", content: read, failure: null },
+  });
 }
 
 /**

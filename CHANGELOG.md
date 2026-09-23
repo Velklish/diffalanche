@@ -43,6 +43,25 @@ and `bun run release` refuses a version that has no section. See
   development and CI, `bun run model:fetch` puts the pinned files in the cache and checks
   their SHA-256.
 
+- **A repository can be read outside its diff** (DA-37). The sidebar's `all files` tab lists
+  every file of each repository of the review, the unchanged ones marked `unchanged`; one of
+  those opens whole in place of the review — numbered from 1, read-only, with
+  `not in this review`, and `working tree` / `base <sha>` segments — and so does the file of
+  any card through its new `Browse repo` button, `B`, or a `file · unchanged` hit in global
+  search. `← back to review` and `B` return to the exact place the reading was: the review is
+  folded away while browsing, not unmounted. A comment can be left on a line there and lands
+  in the same session with its path; its anchor is captured from the file itself in the same
+  `{ lineContent, hunk, before, after }` shape, `hunk` being the header of the context window.
+  The CLI keeps refusing a line outside the change set, as the agent contract has it.
+- **`↑ N lines` brings in real context.** A hunk header's new control puts the working tree's
+  lines above the hunk into the diff, twenty at a time, up to the hunk above; `collapse context`
+  hides them with the bundled context.
+- **`GET /api/repos/:repo/tree` and `GET /api/repos/:repo/file?path=&rev=`** answer what browse
+  mode and the context read: every file with where it exists, the base revision and the working
+  tree merged, and one file whole. Both stay inside the task's scope, and the file route reads
+  only a path git lists — never an ignored file, `.git`, or a path stepping outside, and a link
+  as its target without following it.
+
 - **The check-run names branch protection must list are compared with the jobs that report
   them** (DA-111). `tests/ci-names.test.ts` expands the real names out of `ci.yml` — a job
   reports under its `name:` when it has one and under its id otherwise, and a matrix job

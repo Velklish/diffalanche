@@ -1,21 +1,13 @@
-/**
- * Global search (`docs/design/HANDOFF.md` section 6) over what the MVP has:
- * the files of the change set and the comments of the session. Unchanged files
- * come with browsing (DA-37), text search with the index (DA-38) and symbols
- * with tree-sitter (DA-39) — all Phase 2 (`docs/SPEC.md` section 3, decision
- * 13), so nothing here knows about them.
- *
- * Ranking is substring first and word overlap second, which is what a path and
- * a sentence both answer to: `store/live` finds `src/ui/store.ts` through the
- * words, and `live.ts` finds it whole.
- */
+/** Global search of handoff section 6: what it finds and how it ranks it are in
+ * [08-ui.md](../../docs/reference/08-ui.md), "Global search". */
 import { byCodePoint } from "../core/order.ts";
 import type { FileEntry } from "./store.ts";
 import type { Comment } from "./types.ts";
 
 /** One row of the results column. */
 export type SearchHit = {
-  kind: "file" | "comment";
+  /** `plain` is a file the review does not carry: it opens in browse mode. */
+  kind: "file" | "plain" | "comment";
   /** `<repo>/<path>` for a file, the thread's id for a comment. */
   id: string;
   repo: string;
@@ -24,14 +16,9 @@ export type SearchHit = {
   line: number | null;
   /** What the row shows: the path, or the first line of the comment. */
   label: string;
-  /**
-   * The tag beside it. The handoff's five are `file`, `file · unchanged`,
-   * `symbol`, `comment` and `comment · orphaned`; the MVP has two of them —
-   * unchanged files come with browsing (DA-37), text with the index (DA-38),
-   * symbols with tree-sitter (DA-39), and `orphaned` is not a status the format
-   * carries yet (Phase 3).
-   */
-  tag: "file" | "comment";
+  /** The tag beside it: the handoff's `file`, `file · unchanged` and `comment`; `symbol` is
+   * DA-39's, and `comment · orphaned` waits for the status Phase 3 adds. */
+  tag: "file" | "file · unchanged" | "comment";
   score: number;
 };
 
@@ -60,7 +47,12 @@ const PER_WORD = 12;
  * The hits of one query, best first. An empty query has no hits: the modal
  * opens on its placeholder rather than on a list of the whole review.
  */
-export function search(query: string, files: FileEntry[], comments: Comment[]): SearchHit[] {
+export function search(
+  query: string,
+  files: FileEntry[],
+  comments: Comment[],
+  unchanged: { repo: string; path: string }[] = [],
+): SearchHit[] {
   const needle = query.trim().toLowerCase();
   if (needle === "") return [];
   const words = needle.split(/\s+/).filter((word) => word !== "");
@@ -77,6 +69,21 @@ export function search(query: string, files: FileEntry[], comments: Comment[]): 
       line: null,
       label: entry.file.path,
       tag: "file",
+      score,
+    });
+  }
+  for (const { repo, path } of unchanged) {
+    const id = `${repo}/${path}`;
+    const score = rank(id.toLowerCase(), needle, words);
+    if (score === 0) continue;
+    hits.push({
+      kind: "plain",
+      id,
+      repo,
+      path,
+      line: null,
+      label: path,
+      tag: "file · unchanged",
       score,
     });
   }

@@ -273,3 +273,20 @@ describe("R", () => {
     expect(fetches).toEqual([]);
   });
 });
+
+describe("files outside the review", () => {
+  it("are found by path and tagged as unchanged", () => {
+    const hits = search(
+      "readme",
+      entries(["repos/a", "src/store.ts"]),
+      [],
+      [
+        { repo: "repos/a", path: "README.md" },
+        { repo: "repos/b", path: "docs/other.md" },
+      ],
+    );
+    expect(hits).toMatchObject([
+      { kind: "plain", id: "repos/a/README.md", path: "README.md", tag: "file · unchanged" },
+    ]);
+  });
+});

@@ -40,13 +40,17 @@ import type { FileStatus, ScanWarning } from "../core/types.ts";
 export type {
   BaseMode,
   FileChange,
+  FileContent,
   FileOmission,
+  FileRevision,
   FileStatus,
   RepositoryChange,
+  RepositoryTree,
   ResolvedBase,
   ReviewBundle,
   ReviewDocument,
   ScanWarning,
+  TreeEntry,
 } from "../core/types.ts";
 export type { ActivityEvent, ActivityVerb } from "../core/watcher/activity.ts";
 

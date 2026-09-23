@@ -87,10 +87,20 @@ The keyboard follows the design handoff:
 | `J` / `K` | the next and previous open thread of the whole review |
 | `C` | a comment on the first added line of the file being read |
 | `R` | resolves the focused thread |
+| `B` | browses the file being read whole, and goes back to the review |
 | `⌘⏎` | sends the comment being written |
 | `esc` | closes the topmost thing that is open |
 
-Search covers file paths and comment bodies; symbols and file text are Phase 2.
+Search covers file paths — the unchanged files of each repository too — and
+comment bodies; symbols and file text are Phase 2.
+
+Context outside the diff is one press away. `↑ 20 lines` on a hunk header brings
+the working tree's lines above it into the diff, and the sidebar's `all files`
+tab lists every file of each repository, the unchanged ones marked: one opens
+whole, read-only and numbered from 1, at the working tree or at the base, and a
+comment on its lines lands in the same session as any other. `Browse repo` on a
+file card and `B` open the file being read the same way; `← back to review`
+returns to where the reading was.
 
 A root with no session is not an error — the server says so and the UI offers to
 create one:

@@ -58,6 +58,17 @@ export async function revealThread(id: string): Promise<void> {
   if (thread === undefined || thread.repo === null) return;
 
   const file = thread.path === null ? null : `${thread.repo}/${thread.path}`;
+  // A file the review has no card for is read whole, and the thread is under its line there.
+  if (thread.path !== null && !store.files.some((entry) => entry.id === file)) {
+    const rev = thread.side === "old" ? "base" : "worktree";
+    store.openBrowse(thread.repo, thread.path, { rev, line: thread.endLine ?? thread.line });
+    return;
+  }
+  if (store.browse) {
+    // Leaving puts back the file the review was on; the thread's own is the one to show.
+    store.closeBrowse();
+    store.focusThread(id);
+  }
   const card =
     file === null
       ? `[data-repo-section="${CSS.escape(thread.repo)}"]`

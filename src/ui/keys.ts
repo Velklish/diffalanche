@@ -103,9 +103,7 @@ export function useKeys(): void {
         case "b":
         case "B":
           event.preventDefault();
-          // The handoff's `B` is browsing a repository outside the diff, which
-          // is Phase 2. Saying so is the whole behaviour until DA-37.
-          store.setToast("Обход репозитория — Phase 2 (DA-37)");
+          store.toggleBrowse();
           return;
         default:
       }
