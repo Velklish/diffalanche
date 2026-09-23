@@ -5,7 +5,7 @@
 import { parseDiff } from "react-diff-view";
 import { describe, expect, it } from "vitest";
 import { firstAddedLine } from "../src/ui/anchor.ts";
-import { hiddenLines, measurePatch } from "../src/ui/measure.ts";
+import { hiddenLines, measurePatch, oneColumn } from "../src/ui/measure.ts";
 import { hasNewLine, mergedPatch, splitHunks } from "../src/ui/patch.ts";
 import { preview } from "../src/ui/search.ts";
 
@@ -78,16 +78,18 @@ describe("a patch carrying both halves of a type change", () => {
   it("gives the card every hunk of the entry, under one `modify`", () => {
     // What the card mounts: the first parsed file alone would drop the link.
     expect(parseDiff(BOTH, { nearbySequences: "zip" })).toHaveLength(2);
-    const merged = mergedPatch(BOTH);
+    const merged = mergedPatch(BOTH, "modified");
     expect(merged?.hunks).toHaveLength(2);
     expect(merged?.type).toBe("modify");
   });
 
   it("leaves an ordinary one-patch entry exactly as the parser gave it", () => {
-    expect(mergedPatch(ADDED)).toEqual(parseDiff(ADDED, { nearbySequences: "zip" })[0]);
+    expect(mergedPatch(ADDED, "added")).toEqual(parseDiff(ADDED, { nearbySequences: "zip" })[0]);
     // An empty patch parses to one file, not none: a one-patch entry like any
     // other, and the merge must leave it exactly as it was.
-    expect(mergedPatch("")).toEqual(parseDiff("", { nearbySequences: "zip" })[0] ?? null);
+    expect(mergedPatch("", "modified")).toEqual(
+      parseDiff("", { nearbySequences: "zip" })[0] ?? null,
+    );
   });
 
   it("splits into the hunks git wrote, with no file header inside one", () => {
@@ -128,5 +130,32 @@ describe("a patch carrying both halves of a type change", () => {
     // One side of each patch is `/dev/null`, so there is no context to trim:
     // the value is empty for a reason, not by accident.
     expect(hiddenLines(BOTH, { 0: true, 1: true })).toEqual(new Set());
+  });
+});
+
+/** One half listed without content leaves the entry `modified` with the other half's
+ * patch alone in it, which parses as `add` or `delete` (DA-76.2, 02-git.md). */
+describe("a type change with one half omitted", () => {
+  it("is drawn in two columns, like the entry it is", () => {
+    const merged = mergedPatch(ADDED, "modified");
+    expect(merged?.type).toBe("modify");
+    expect(merged?.hunks).toEqual(parseDiff(ADDED, { nearbySequences: "zip" })[0]?.hunks);
+  });
+
+  it("is drawn in as many columns as the card is sized for, whichever half survived", () => {
+    // `react-diff-view` 3.3.3 draws `add` and `delete` in one column of the split
+    // view (`monotonous`); `codeColumnChars` sizes one column by `oneColumn`.
+    const drawnAlone = (type: string | undefined) => type === "add" || type === "delete";
+    const shapes = [
+      [ADDED, "added"],
+      [DELETED, "deleted"],
+      [BOTH, "modified"],
+      [ADDED, "modified"],
+      [DELETED, "modified"],
+    ] as const;
+    for (const [patch, status] of shapes) {
+      const drawn = drawnAlone(mergedPatch(patch, status)?.type);
+      expect(drawn, `${status}: ${patch.split("\n")[1]}`).toBe(oneColumn(status));
+    }
   });
 });

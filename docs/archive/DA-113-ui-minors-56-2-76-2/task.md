@@ -11,14 +11,14 @@ The run of 2026-09-23 touches `src/ui` anyway (DA-100.1, DA-102, DA-96), so the 
 
 ## Work to do
 
-- [DA-56.2](../minor/DA-56.2-non-text-contrast-unchecked.md) — non-text indicators have no contrast check: the design test covers text only, and WCAG 1.4.11 wants 3:1.
-- [DA-76.2](../minor/DA-76.2-merged-type-change-status-mismatch.md) — a merged type change is "modified" in the core and "add" in the renderer, and the card is sized from one while it is drawn from the other.
+- [DA-56.2](minor/DA-56.2-non-text-contrast-unchecked.md) — non-text indicators have no contrast check: the design test covers text only, and WCAG 1.4.11 wants 3:1.
+- [DA-76.2](minor/DA-76.2-merged-type-change-status-mismatch.md) — a merged type change is "modified" in the core and "add" in the renderer, and the card is sized from one while it is drawn from the other.
 
 Each entry is fixed, or closed with a stated reason why not; the outcome of each is one line in this batch's `result.md`.
 
 ## Out of scope
 
-- Minor entries of other scopes: 02-git, 03-storage, 04-domain, 05-watcher and 07-server go to [DA-114](../../archive/DA-114-core-minors-batch/task.md); 11-perf waits for the perf pass.
+- Minor entries of other scopes: 02-git, 03-storage, 04-domain, 05-watcher and 07-server go to [DA-114](../DA-114-core-minors-batch/task.md); 11-perf waits for the perf pass.
 
 ## Verification
 

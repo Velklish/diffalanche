@@ -348,7 +348,10 @@ change there first.
   plates. **Raised Chrome** (`panel3`): a file card's header, controls, chips,
   the active repository, the active segment.
 - **Divider** (`bd`) for every border and **Hairline** (`bd2`) for internal
-  splits and the seam between diff columns.
+  splits and the seam between diff columns. Both are **decoration**: every
+  boundary they draw — a repository's section, a panel, a control — is also named
+  by a bar, a heading or a label, which is why they sit at 1.2–1.4:1 against their
+  grounds and are not under the 3:1 check for non-text marks (DA-56.2).
 - **Primary Text** (`tx`), **Secondary Text** (`tx2`), **Tertiary Text** (`tx3`)
   — the last carries timestamps, counts, and captions.
 - **Selection** (`sel`): the selected file in the tree, and nothing else.
@@ -500,6 +503,20 @@ the session pill and the toast, 9 px on thread cards and count badges, 10 px on
 a file card and the panels, 12 px on modals. Nothing is a circle except the 7 px
 status dots.
 
+**A mark is information or decoration, and what stands beside it decides.** A dot
+beside a word or a number that says the same thing is decoration: the header's
+counters (`N open`, `N awaiting you`), the sidebar footer's `watching`, the
+feed's head (`N live`) and every line of the feed, whose sentence names what
+happened. A mark that is the only visible signal of its state is information,
+and WCAG 1.4.11 asks 3:1 of it against its ground: the history mark on the
+session pill (`acc` on `panel3`), the select-mode and scope-editor tick `✓` and
+`◆` (`acc` on `panel`, and `panel2` under the pointer) with its unpicked `·`
+(`tx3`), and the focus ring. `tests/design-contrast.test.ts` holds that list in
+its own group, at 3:1 and in both themes. The coloured marks clear it at 4.7:1
+or more; the ring does not — see Inputs and fields. A new mark copies the kind it
+is, not the nearest dot: a dot that becomes the only signal of something moves
+into that list.
+
 The form language is the plate: a rectangle with a 1 px border and a tonal fill,
 sized to its content and aligned to its neighbours. There are no cut corners, no
 clipping masks, no decorative geometry, and no gradients anywhere in the system.
@@ -583,7 +600,10 @@ adjustment.
 - **Focus:** the border becomes `accBd`. Interactive rows that have no border of
   their own take `outline: 1px solid var(--accBd)` on `:focus-visible` instead.
   Focus is always visible and always `accBd`; it is never removed and never a
-  glow.
+  glow. `accBd` is 1.6–2.0:1 against the grounds a focusable control sits on in
+  both themes, under the 3:1 WCAG 1.4.11 asks of the one signal of focus; the
+  contrast test carries those pairs as recorded exceptions, and the decision is
+  DA-56.7's.
 
 ### Navigation
 

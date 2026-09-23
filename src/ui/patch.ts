@@ -7,15 +7,18 @@
  */
 import type { FileData } from "react-diff-view";
 import { parseDiff } from "react-diff-view";
-import type { FileChange, RepositoryChange } from "../core/types.ts";
+import type { FileChange, FileStatus, RepositoryChange } from "../core/types.ts";
+import { oneColumn } from "./measure.ts";
 
 /** Every patch of one entry as one file to render ([02-git.md](../../docs/reference/02-git.md)). */
-export function mergedPatch(patch: string): FileData | null {
+export function mergedPatch(patch: string, status: FileStatus): FileData | null {
   const files = parseDiff(patch, { nearbySequences: "zip" });
   const first = files[0];
   if (first === undefined) return null;
-  if (files.length === 1) return first;
-  // `modify`, like the entry itself: the path is on both sides of the change.
+  const alone = first.type === "add" || first.type === "delete";
+  if (files.length === 1 && (!alone || oneColumn(status))) return first;
+  // `modify`, like the entry itself — with one half omitted too, since the card
+  // is sized from the entry's status and not from the half that survived.
   return { ...first, type: "modify", hunks: files.flatMap((one) => one.hunks) };
 }
 

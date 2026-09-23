@@ -15,6 +15,13 @@ and `bun run release` refuses a version that has no section. See
 
 ### Added
 
+- **The marks that carry a state without being text have a contrast check**
+  (DA-56.2). The history mark, the select-mode tick and its unpicked `·`, and the
+  focus ring are measured at WCAG 1.4.11's 3:1 in both themes, in a group of their
+  own beside the text pairs. The coloured marks clear it at 4.7:1 or more; the
+  focus ring (`accBd`) is 1.6–2.0:1 and is recorded as an exception until DA-56.7
+  decides its colour. `DESIGN.md` now says which dots are decoration — those
+  beside a word that says the same — and that the dividers are.
 - **The recovery paths of live update are tested** (DA-96). A `reload` frame
   reading the review again, the footer saying `reconnecting` while the browser
   retries and staying as it was once it has closed the stream, and the queue that
@@ -305,6 +312,12 @@ and `bun run release` refuses a version that has no section. See
   either. Two live paths still lose the ring *after* a restore that worked —
   creating a task from select mode, and `Change base` on the no-changes screen —
   and are DA-100.2. See [08-ui.md](docs/reference/08-ui.md).
+- **A type change with one half omitted is drawn in the two columns it is sized
+  for** (DA-76.2). Such an entry is `modified` with one patch left, which the
+  library parsed as `add` and drew in one column while the card sized itself as
+  two, so a wrapped line would have been counted at half its real width.
+  `mergedPatch` now takes the entry's status and asks the same `oneColumn()` the
+  sizing does. See [08-ui.md](docs/reference/08-ui.md).
 
 - **Five minor defects of the change set, the watcher and storage** (DA-114).
   `parseDiff` returns `{ files, notes }`, so the warning about the half of a type

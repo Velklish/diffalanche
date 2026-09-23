@@ -22,7 +22,7 @@ Each entry is fixed, or closed with a stated reason why not; the outcome of each
 ## Out of scope
 
 - [DA-76.4](../../backlog/minor/DA-76.4-parse-diff-may-cost-ten-ms-on-the-rescan-path.md) — a performance hypothesis; it needs a quiet machine and goes with the perf pass.
-- 08-ui entries: [DA-113](../../backlog/queue/DA-113-ui-minors-56-2-76-2.md).
+- 08-ui entries: [DA-113](../DA-113-ui-minors-56-2-76-2/task.md).
 
 ## Verification
 

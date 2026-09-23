@@ -133,7 +133,7 @@ export function ReactDiffFile({
    */
   // Every patch of the entry, not the first: this card is the one place both
   // halves of a file that changed type are shown.
-  const parsed = useMemo(() => mergedPatch(file.patch), [file.patch]);
+  const parsed = useMemo(() => mergedPatch(file.patch, file.status), [file.patch, file.status]);
 
   const shown = useMemo(
     () => (parsed?.hunks ?? []).map((hunk, index) => trimContext(hunk, collapsed[index] === true)),

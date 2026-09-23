@@ -54,6 +54,28 @@ const WASHED: { text: string; wash: string }[] = [
 /** Filled plates: the text is `onAcc` and the ground is the severity itself. */
 const FILLED = ["acc", "crit", "warn", "nit", "q", "ok"];
 
+/** WCAG 1.4.11 for a mark that carries a state without being text: its own bound over its own
+ * pairs, not a lower `AA` (DA-56.2). */
+const NON_TEXT = 3;
+
+/** The marks that are the only signal of their state, on the grounds they sit on; a dot beside
+ * a word that says the same is decoration and is not here (`DESIGN.md`, Shapes). */
+const MARKS: { mark: string; colour: string; grounds: string[] }[] = [
+  { mark: "history mark", colour: "acc", grounds: ["panel3"] },
+  { mark: "tick", colour: "acc", grounds: ["panel", "panel2"] },
+  { mark: "unpicked tick", colour: "tx3", grounds: ["panel", "panel2"] },
+  { mark: "focus ring", colour: "accBd", grounds: ["bg", "panel", "panel2", "panel3"] },
+];
+
+/** Under 3:1 and kept, because the ring is a rule of `DESIGN.md` and DA-56.7 owns it; a new
+ * pair under the bound fails, and so does one of these clearing it. */
+const BELOW_NON_TEXT = [
+  "focus ring on bg",
+  "focus ring on panel",
+  "focus ring on panel2",
+  "focus ring on panel3",
+];
+
 function tokens(selector: string): Map<string, string> {
   const css = readFileSync(`${root}/src/ui/tokens.css`, "utf-8");
   const block = new RegExp(`${selector}\\s*\\{(.*?)\\n\\}`, "s").exec(css);
@@ -88,19 +110,31 @@ function luminance(hex: string): number {
   return 0.2126 * (r as number) + 0.7152 * (g as number) + 0.0722 * (b as number);
 }
 
+function token(theme: Map<string, string>, name: string): string {
+  const value = theme.get(name);
+  if (value === undefined) throw new Error(`no --${name} in tokens.css`);
+  return value;
+}
+
 /** The WCAG relative-luminance ratio, lighter over darker. */
 function contrast(one: string, other: string): number {
   const [light, dark] = [luminance(one), luminance(other)].sort((a, b) => b - a);
   return ((light as number) + 0.05) / ((dark as number) + 0.05);
 }
 
+function marks(theme: Map<string, string>): { pair: string; ratio: number }[] {
+  const of = (name: string): string => token(theme, name);
+  return MARKS.flatMap(({ mark, colour, grounds }) =>
+    grounds.map((ground) => ({
+      pair: `${mark} on ${ground}`,
+      ratio: contrast(of(colour), of(ground)),
+    })),
+  );
+}
+
 function ratios(theme: Map<string, string>): { pair: string; ratio: number }[] {
   const found: { pair: string; ratio: number }[] = [];
-  const of = (name: string): string => {
-    const value = theme.get(name);
-    if (value === undefined) throw new Error(`no --${name} in tokens.css`);
-    return value;
-  };
+  const of = (name: string): string => token(theme, name);
   for (const { text, grounds } of PAIRS) {
     for (const ground of grounds) {
       found.push({ pair: `${text} on ${ground}`, ratio: contrast(of(text), of(ground)) });
@@ -130,5 +164,19 @@ describe("the contrast of the tokens the interface sets text in", () => {
   it("computes the ratio the way WCAG does", () => {
     expect(contrast("#ffffff", "#000000")).toBeCloseTo(21, 5);
     expect(contrast("#ffffff", "#ffffff")).toBeCloseTo(1, 5);
+  });
+});
+
+describe("the contrast of the marks that carry a state without being text", () => {
+  it("clears WCAG 1.4.11 in the dark theme, but for the recorded exceptions", () => {
+    const under = marks(tokens(":root")).filter((one) => one.ratio < NON_TEXT);
+    expect(under.map((one) => one.pair)).toEqual(BELOW_NON_TEXT);
+  });
+
+  it("clears WCAG 1.4.11 in the light theme, but for the recorded exceptions", () => {
+    const under = marks(tokens(':root\\[data-theme="light"\\]')).filter(
+      (one) => one.ratio < NON_TEXT,
+    );
+    expect(under.map((one) => one.pair)).toEqual(BELOW_NON_TEXT);
   });
 });

@@ -194,6 +194,8 @@ button:disabled {
   color: var(--acc);
 }
 
+/* Information or decoration by what stands beside it; one that is the only signal of a
+   state is held to 3:1 (`DESIGN.md`, Shapes). */
 .dot {
   width: 7px;
   height: 7px;

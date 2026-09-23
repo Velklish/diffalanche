@@ -33,10 +33,16 @@ export function centreWidth(pageWidth: number, sidebar: boolean, rail: boolean):
   return Math.max(pageWidth - panels, MIN_CENTRE);
 }
 
+/** Whether the split view draws an entry in one column: only one side of it exists.
+ * The card is sized from this and drawn from `mergedPatch`, which asks it too. */
+export function oneColumn(status: FileStatus): boolean {
+  return status === "added" || status === "deleted";
+}
+
 /** How many characters one code column holds, counted from the widths
  * `styles.css` fixes ([08-ui.md](../../docs/reference/08-ui.md)). */
 export function codeColumnChars(view: DiffView, status: FileStatus, centre: number): number {
-  const single = view === "unified" || status === "added" || status === "deleted";
+  const single = view === "unified" || oneColumn(status);
   const gutters = view === "split" && single ? 1 : 2;
   const code = (centre - CARD_CHROME - gutters * GUTTER) / (single ? 1 : 2) - CELL_PADDING;
   return Math.max(1, Math.floor(code / CH_PX));
