@@ -13,7 +13,7 @@
 
 - Pick the model and the inference runtime that runs under both Node and Bun (candidates: an ONNX runtime with int8 weights; measure load time and memory).
 - `src/core/ml/embed`: load once per process, embed a batch of texts, cache the model in a user-level directory for the npm channel.
-- Decide npm delivery and record it as an ADR closing the spec's open question 1.
+- Decide npm delivery and record it as an ADR closing the spec's open question 1. The ADR goes to the owner as **Proposed**, with the measurements behind it, and DA-34, DA-35 and DA-41 start only after the owner accepts it (owner, 2026-09-23).
 - `model status` reports the embedding model's location and version.
 
 ## What Phase 1 changed
