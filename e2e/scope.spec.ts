@@ -286,8 +286,8 @@ async function openNewTask(page: Page) {
   return opener;
 }
 
-/** The two ways an opener cannot take the ring back (DA-100.1), set by hand: the live
- * paths change the DOM only after the restore has run (DA-100.2, 08-ui.md). */
+/** The two ways an opener cannot take the ring back (DA-100.1), set by hand: an `Escape`
+ * starts no switch, so nothing on screen takes the opener away before the restore. */
 for (const [condition, spoil] of [
   ["has gone", (button: HTMLElement) => button.remove()],
   ["was disabled", (button: HTMLElement) => button.setAttribute("disabled", "")],
@@ -325,6 +325,22 @@ test("a restore with nowhere to go says so instead of doing nothing", async ({ p
     .poll(() => warnings)
     .toContain("the scope overlay closed and no control could take the focus back");
   // Leave the tree as the next test expects it.
+  await page.getByRole("button", { name: "changes" }).click();
+});
+
+/** The live path of DA-100.2: the task arrives, `New task…` is disabled under the ring, and
+ * the restore that waited for the switch hands it to the new task's `SCOPE` pill. */
+test("after a task is made from select mode the ring is on its SCOPE pill", async ({ page }) => {
+  await open(page);
+  await page.getByRole("button", { name: "select" }).click();
+  await page.locator(".file-row").first().click();
+  await page.getByRole("button", { name: "New task…" }).click();
+  const name = `ring-${Date.now().toString(36)}`;
+  await page.getByRole("textbox", { name: "name" }).fill(name);
+  await page.getByRole("button", { name: "Create" }).click();
+  await expect(page.locator(".pill-name").first()).toHaveText(name);
+
+  await expect(page.locator(".pill.scope")).toBeFocused();
   await page.getByRole("button", { name: "changes" }).click();
 });
 

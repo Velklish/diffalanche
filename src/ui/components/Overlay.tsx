@@ -1,6 +1,7 @@
 import type { ReactNode } from "react";
 import { useEffect, useRef } from "react";
 import type { Ladder } from "../overlays.ts";
+import { useStore } from "../store.ts";
 
 /** The scrim and panel of the handoff: the ring held inside, given back to
  * whatever opened the ladder, and `esc` owned by `keys.ts` (08-ui.md). */
@@ -80,14 +81,32 @@ function held(ladder: Ladder, by: 1 | -1): void {
 /** Read after the commit, not during it: React renders the arriving overlay
  * before it cleans up the leaving one, so a swap is only visible afterwards. */
 function leaveLadder(ladder: Ladder): void {
-  setTimeout(() => {
-    if ((MOUNTED.get(ladder) ?? 0) > 0) return;
-    const back = OPENERS.get(ladder) ?? null;
-    OPENERS.delete(ladder);
-    // An opener that is gone or disabled cannot hold it; the header's control for the ladder can.
-    if (takes(back) || takes(document.querySelector(`[data-ladder="${ladder}"]`))) return;
-    console.warn(`the ${ladder} overlay closed and no control could take the focus back`);
-  }, 0);
+  setTimeout(() => afterSwitch(() => setTimeout(() => restore(ladder), 0)), 0);
+}
+
+/** A switch replaces the review under the overlay that started it, and the opener with it:
+ * the restore waits for it to land (DA-100.2, 08-ui.md). */
+function afterSwitch(then: () => void): void {
+  if (!useStore.getState().switching) {
+    then();
+    return;
+  }
+  const stop = useStore.subscribe((state) => {
+    if (state.switching) return;
+    stop();
+    then();
+  });
+}
+
+function restore(ladder: Ladder): void {
+  if ((MOUNTED.get(ladder) ?? 0) > 0 || !OPENERS.has(ladder)) return;
+  const back = OPENERS.get(ladder) ?? null;
+  OPENERS.delete(ladder);
+  // A reader who put the ring somewhere while the switch ran keeps it there.
+  if (document.activeElement !== null && document.activeElement !== document.body) return;
+  // An opener that is gone or disabled cannot hold it; the header's control for the ladder can.
+  if (takes(back) || takes(document.querySelector(`[data-ladder="${ladder}"]`))) return;
+  console.warn(`the ${ladder} overlay closed and no control could take the focus back`);
 }
 
 /** Asked of the document rather than guessed: `isConnected` passes a disabled

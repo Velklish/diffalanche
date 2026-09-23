@@ -309,9 +309,14 @@ and `bun run release` refuses a version that has no section. See
   the ring ended on `<body>` and nothing said so. It now asks the document whether
   the opener took the ring, falls back to the `BASE` pill, the `SCOPE` pill,
   search or `Export`, and writes a `console.warn` when none of them can take it
-  either. Two live paths still lose the ring *after* a restore that worked —
-  creating a task from select mode, and `Change base` on the no-changes screen —
-  and are DA-100.2. See [08-ui.md](docs/reference/08-ui.md).
+  either. See [08-ui.md](docs/reference/08-ui.md).
+- **Creating a task from select mode, or changing the base from the no-changes
+  screen, leaves the focus on the header** (DA-100.2). Both close their overlay
+  before the review they asked for arrives, so the focus went back to the opener
+  and the arriving review then disabled it or took it off the screen, and the
+  focus fell to the page. The restore now waits while a switch is under way and
+  lands on the new task's `SCOPE` pill or the `BASE` pill; a reader who moved the
+  focus during the wait keeps it where they put it.
 - **A type change with one half omitted is drawn in the two columns it is sized
   for** (DA-76.2). Such an entry is `modified` with one patch left, which the
   library parsed as `add` and drew in one column while the card sized itself as

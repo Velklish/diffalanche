@@ -133,3 +133,61 @@ test("a session with an empty change set shows the no-changes screen", async ({ 
   await page.getByRole("button", { name: "Other session" }).click();
   await expect(page.getByRole("region", { name: "review sessions" })).toBeVisible();
 });
+
+/** The live path of DA-100.2: the base that brings changes takes this screen, and `Change base`
+ * with it, away; the restore waited for that and hands the ring to the `BASE` pill. */
+test("a base that brings changes leaves the ring on the BASE pill", async ({ page, request }) => {
+  const changed = (await (await request.get("/api/review")).json()) as typeof NO_CHANGES;
+  const empty = { ...changed, repositories: [], comments: [], counters: NO_CHANGES.counters };
+  let applied = false;
+  await page.route("**/api/review*", (route) => route.fulfill({ json: applied ? changed : empty }));
+  await page.route("**/api/sessions/*/base", (route) => {
+    applied = true;
+    return route.fulfill({ json: changed.session });
+  });
+  await ready(page);
+
+  await page.getByRole("button", { name: "Change base" }).click();
+  await page.getByRole("button", { name: "Apply" }).click();
+  await expect(page.locator(".file-card").first()).toBeVisible();
+
+  await expect(page.locator(".pill.base")).toBeFocused();
+});
+
+/** The restore is owed only to a ring that is nowhere (DA-100.2): one the reader put on the
+ * header while the review was held back is not taken from them. */
+test("a ring moved while the base is being applied stays where it was put", async ({
+  page,
+  request,
+}) => {
+  const changed = (await (await request.get("/api/review")).json()) as typeof NO_CHANGES;
+  const empty = { ...changed, repositories: [], comments: [], counters: NO_CHANGES.counters };
+  let applied = false;
+  let release = () => {};
+  const held = new Promise<void>((done) => {
+    release = done;
+  });
+  await page.route("**/api/review*", async (route) => {
+    if (!applied) return route.fulfill({ json: empty });
+    await held;
+    return route.fulfill({ json: changed });
+  });
+  await page.route("**/api/sessions/*/base", (route) => {
+    applied = true;
+    return route.fulfill({ json: changed.session });
+  });
+  await ready(page);
+
+  await page.getByRole("button", { name: "Change base" }).click();
+  await page.getByRole("button", { name: "Apply" }).click();
+  await expect(page.getByRole("dialog", { name: "base" })).toHaveCount(0);
+  // Exact: a repository row named `…/loads-search` arrives with the review.
+  const search = page.getByRole("button", { name: "search", exact: true });
+  await search.focus();
+  release();
+  await expect(page.locator(".toast")).toContainText("База сессии");
+  // Two macrotasks: the restore is queued one after the switch clears, and this after it.
+  await page.evaluate(() => new Promise((done) => setTimeout(() => setTimeout(done, 0), 0)));
+
+  await expect(search).toBeFocused();
+});
