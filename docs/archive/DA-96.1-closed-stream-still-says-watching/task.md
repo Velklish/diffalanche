@@ -10,7 +10,7 @@
 Found while pinning the connection state for DA-96, which put changing it out of
 scope. `onerror` sets `reconnecting` only while the browser is retrying:
 
-<!-- quote:../../../src/ui/live.ts -->
+<!-- quote:before:../../../src/ui/live.ts -->
 ```ts
   source.onerror = () => {
     if (source.readyState !== EventSource.CLOSED) store().setConnection("reconnecting");

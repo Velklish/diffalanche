@@ -214,3 +214,30 @@ test("an edit patches its own card, holds the reading position, and leaves the c
     );
   }
 });
+
+/** A stream answered with anything but a stream is closed for good by the browser, with no retry
+ * to wait on; the footer says so, and its `reconnect` makes a new one (DA-96.1). */
+test("a stream the browser gave up on says disconnected, and reconnect brings it back", async ({
+  page,
+}) => {
+  let refused = true;
+  await page.route("**/api/events*", (route) =>
+    refused ? route.fulfill({ status: 503, body: "" }) : route.fallback(),
+  );
+  await page.goto("/");
+  await page.waitForFunction(() => window.__perf?.ready === true);
+  const foot = page.locator(".sidebar-foot");
+  await expect(foot).toContainText("disconnected");
+  await expect(foot.locator(".dot")).not.toHaveClass(/pulse/);
+
+  refused = false;
+  const reads = page.waitForRequest((request) => new URL(request.url()).pathname === "/api/review");
+  // From the keyboard: the ring stays on the footer's line when the button leaves it.
+  await foot.getByRole("button", { name: "reconnect" }).focus();
+  await page.keyboard.press("Enter");
+  await expect(foot).toContainText("watching");
+  await expect(foot.getByRole("button", { name: "reconnect" })).toHaveCount(0);
+  await expect(foot).toBeFocused();
+  // What the page missed while it had no stream is read again, not replayed.
+  await reads;
+});

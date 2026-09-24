@@ -39,13 +39,14 @@ const PROBE_STEP = 12;
 type Anchor = { element: Element; top: number; scrollY: number } | null;
 
 export function startLive(): () => void {
-  let stop = connect();
-  // An open `EventSource` keeps the address it was made with, so a task switch
-  // has to make a new one or the window goes on declaring the task it left.
+  let stop = connect(false);
+  // A stream keeps the address it was made with: a task switch needs a new one, and so does the
+  // footer's `reconnect` for a stream the browser gave up on.
   const unsubscribe = useStore.subscribe((state, before) => {
-    if (state.reviewName === before.reviewName) return;
+    const asked = state.reconnects !== before.reconnects;
+    if (state.reviewName === before.reviewName && !asked) return;
     stop();
-    stop = connect();
+    stop = connect(asked);
   });
   return () => {
     unsubscribe();
@@ -53,7 +54,9 @@ export function startLive(): () => void {
   };
 }
 
-function connect(): () => void {
+/** `behind`: the page missed frames while it had no stream, and a new one has no `Last-Event-ID`
+ * to replay them by, so the review is read again once it is open (08-ui.md, DA-96.1). */
+function connect(behind: boolean): () => void {
   const store = () => useStore.getState();
   // The task this window is on, so the server knows whose comments to follow.
   // A **registry and not a filter**: the frames are still one broadcast on one
@@ -75,13 +78,19 @@ function connect(): () => void {
   // The stream answers as soon as it is subscribed, with a comment line, so
   // this fires on connect rather than fifteen seconds later with the first
   // heartbeat ([07-server.md](../../docs/reference/07-server.md)).
+  let missed = behind;
   source.onopen = () => {
     store().setConnection("watching");
     run(readActivity);
+    if (missed) run(() => store().loadReview());
+    missed = false;
   };
-  // `EventSource` reconnects on its own; the state says so while it does.
+  // `EventSource` reconnects on its own; the state says so while it does, and
+  // says it has stopped once the browser gives up: no frame will come again.
   source.onerror = () => {
-    if (source.readyState !== EventSource.CLOSED) store().setConnection("reconnecting");
+    store().setConnection(
+      source.readyState === EventSource.CLOSED ? "disconnected" : "reconnecting",
+    );
   };
 
   const on = <T>(name: string, handle: (data: T) => Promise<void> | void) => {

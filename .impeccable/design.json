@@ -469,6 +469,14 @@
       "css": ".ds-thread { padding: 10px; border: 1px solid var(--bd); border-radius: 9px; background: var(--panel3); animation: dcin 160ms ease-out; } .ds-thread-head { display: flex; align-items: center; gap: 8px; } .ds-thread-sev { padding: 1px 6px; border-radius: 4px; background: var(--crit); color: var(--onAcc); font: 600 9.5px/1.6 var(--mono); letter-spacing: 0.04em; } .ds-thread-anchor { color: var(--tx3); font: 10.5px/1 var(--mono); } .ds-thread-state { margin-left: auto; color: var(--acc); font: 10.5px/1 var(--mono); } .ds-thread-body { margin: 8px 0 0; color: var(--tx); font: 12.5px/1.55 var(--sans); }"
     },
     {
+      "name": "Footer action",
+      "kind": "button",
+      "refersTo": "button-footer-action",
+      "description": "reconnect in the sidebar footer (DA-96.1): a word of the footer's own mono line in accTx, no border or ground, so the footer keeps its height; its ring is the 1 px accent outline of a row, 2 px off the word.",
+      "html": "<button class=\"ds-foot-action\">reconnect</button>",
+      "css": ".ds-foot-action { margin-left: auto; padding: 0; border: 0; background: none; color: var(--accTx); font: 11px/1 var(--mono); cursor: pointer; } .ds-foot-action:hover { color: var(--tx); } .ds-foot-action:focus-visible { outline: 1px solid var(--acc); outline-offset: 2px; }"
+    },
+    {
       "name": "Toast",
       "kind": "custom",
       "refersTo": "toast",

@@ -150,8 +150,9 @@ const NO_SUGGESTIONS: SuggestPanel = { text: null, answer: null, asking: false, 
 /** Where a thread is drawn: under the line it is anchored to, and in the rail. */
 export type ReplyPlace = "widget" | "rail";
 
-/** What the sidebar footer says about the live stream ([08-ui.md]). */
-export type Connection = "connecting" | "watching" | "reconnecting";
+/** What the sidebar footer says about the live stream ([08-ui.md]); `disconnected` is a browser
+ * that has stopped retrying, which only a reconnect from the footer undoes (DA-96.1). */
+export type Connection = "connecting" | "watching" | "reconnecting" | "disconnected";
 
 /** How long a write keeps its author counted as live in the feed's header. */
 export const LIVE_WINDOW_MS = 120_000;
@@ -615,9 +616,13 @@ type ScannerSlice = {
  */
 type LiveSlice = {
   connection: Connection;
+  /** How many times the reader asked for a new stream; `live.ts` makes one on every change. */
+  reconnects: number;
   /** The hunks that changed while the review was open, by `FileEntry.id`. */
   changed: Map<string, ChangedHunks>;
   setConnection: (connection: Connection) => void;
+  /** The footer's `reconnect`: a new stream, and the review read again once it is open. */
+  reconnect: () => void;
   /**
    * One repository's change set as it now stands, or `null` when it has left
    * the review. Every file that says the same thing keeps the object it was
@@ -1504,8 +1509,10 @@ export const useStore = create<Store>()((set, get) => ({
 
   // live
   connection: "connecting",
+  reconnects: 0,
   changed: new Map(),
   setConnection: (connection) => set({ connection }),
+  reconnect: () => set({ reconnects: get().reconnects + 1 }),
   applyRepositoryDiff: (path, next, session) => {
     // The diff was fetched for the task that was on screen when the event
     // arrived; if the window has left it, merging would put one task's change

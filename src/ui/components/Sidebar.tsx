@@ -1,4 +1,4 @@
-import { type KeyboardEvent, useEffect, useMemo } from "react";
+import { type KeyboardEvent, useEffect, useMemo, useRef } from "react";
 import { byCodePoint } from "../../core/order.ts";
 import type { FileChange, RepositoryChange } from "../../core/types.ts";
 import { revealCard } from "../reveal.ts";
@@ -139,25 +139,37 @@ function SelectBar() {
   );
 }
 
-/** The dot beside the state: alive while the stream is, and quiet before it. */
+/** The dot beside the state: alive while the stream is, quiet before it, and still once it stopped. */
 const DOT: Record<Connection, string> = {
   watching: "ok pulse",
   reconnecting: "warn pulse",
   connecting: "",
+  disconnected: "crit",
 };
 
-/**
- * The footer of handoff section 1.3, saying what the live stream is doing. The
- * dot pulses while the page is being told about changes and while it is getting
- * that back; it stops only before the first frame has ever arrived
- * ([live.ts](../live.ts)).
- */
+/** The footer of handoff section 1.3, saying what the live stream is doing; its dot pulses while
+ * the stream is alive or being got back, and stands still before it and once it stopped. */
 function Watching() {
   const connection = useStore((store) => store.connection);
+  const reconnect = useStore((store) => store.reconnect);
+  const foot = useRef<HTMLDivElement>(null);
   return (
-    <div className="sidebar-foot">
+    // The ring goes to the line itself as `reconnect` leaves it, and reads the new state (DA-96.1).
+    <div className="sidebar-foot" ref={foot} tabIndex={-1}>
       <span className={`dot ${DOT[connection]}`} />
       {connection} · 127.0.0.1:{location.port || "4880"}
+      {connection === "disconnected" ? (
+        <button
+          type="button"
+          className="foot-action"
+          onClick={() => {
+            foot.current?.focus();
+            reconnect();
+          }}
+        >
+          reconnect
+        </button>
+      ) : null}
     </div>
   );
 }

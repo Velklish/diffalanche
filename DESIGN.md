@@ -565,6 +565,9 @@ adjustment.
   it is no louder than the loudest thing already allowed.
 - **Resolve:** filled `ok` with `onAcc` text; `Reopen` is the ghost variant of
   the same control.
+- **Footer action** (`reconnect`, DA-96.1): a word of the sidebar footer's own
+  mono line in `accTx`, with no border or ground, so the footer keeps its height
+  when it appears; its ring is the 1 px outline of a row, 2 px off the word.
 - **Segments** (`split`/`unified`, `☾`/`☀`, `working tree`/`base <sha>`): a
   6 px-radius group with a shared 1 px border, 26x26 cells, the active one
   filled `bd` with `tx` text.

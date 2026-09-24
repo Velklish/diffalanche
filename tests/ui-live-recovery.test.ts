@@ -63,17 +63,39 @@ describe("an error on the stream", () => {
     }
   });
 
-  it("leaves the footer as it was once the browser has given up", () => {
-    const { source, stop } = live(REFUSED);
+  it("says disconnected once the browser has given up, and reconnect reads the review again", async () => {
+    const { source, fetched, stop } = live(REFUSED);
+    const reviews = () => fetched.filter((url) => url.startsWith("/api/review"));
     try {
       source.readyState = 1;
       source.onopen?.();
 
-      // Not retried, so not `reconnecting`; what it should say instead is DA-96.1.
+      // Not retried, so not `reconnecting`: no frame will come again (DA-96.1).
       source.readyState = FakeSource.CLOSED;
       source.onerror?.();
+      expect(useStore.getState().connection).toBe("disconnected");
 
+      // The footer's press: a new stream, and once it is open the review it missed.
+      useStore.getState().reconnect();
+      // Said at once, before the new stream has answered: closing the old one says `connecting`.
+      expect(useStore.getState().connection).toBe("connecting");
+      const again = FakeSource.last as FakeSource;
+      expect(again).not.toBe(source);
+      expect(reviews()).toHaveLength(0);
+      again.readyState = 1;
+      again.onopen?.();
       expect(useStore.getState().connection).toBe("watching");
+      await vi.waitFor(() => expect(reviews()).toHaveLength(1));
+
+      // The browser's own reconnect of that stream replays by `Last-Event-ID`: nothing re-read.
+      again.readyState = 0;
+      again.onerror?.();
+      again.readyState = 1;
+      again.onopen?.();
+      await vi.waitFor(() =>
+        expect(fetched.filter((url) => url === "/api/activity")).toHaveLength(3),
+      );
+      expect(reviews()).toHaveLength(1);
     } finally {
       stop();
     }

@@ -527,6 +527,12 @@ and `bun run release` refuses a version that has no section. See
 
 ### Fixed
 
+- **A stream the browser has closed says `disconnected`, with a way back** (DA-96.1).
+  When the browser stopped retrying the live stream, the sidebar footer kept the
+  living dot and `watching` while no frame would arrive again. It now says
+  `disconnected` with a still `crit` dot and ends in `reconnect`, which makes a
+  new stream and reads the review again once it is open, since a new stream has
+  nothing to replay the missed frames by.
 - **The comment form says the row the arrows chose, and the model going away**
   (DA-36.1). The chosen suggestion was marked only by `aria-current` on a row
   that never takes the focus, so a screen reader heard nothing as `↑` / `↓`

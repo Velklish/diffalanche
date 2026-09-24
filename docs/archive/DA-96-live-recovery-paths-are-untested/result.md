@@ -6,4 +6,4 @@
 
 **Documentation in the same pass.** `docs/reference/08-ui.md` › UI tests (why unit tests and not a browser spec, and the shared stub); `CHANGELOG.md`, `### Added`.
 
-**Filed, not closed.** [DA-96.1](../../backlog/minor/DA-96.1-closed-stream-still-says-watching.md), `minor`: once the browser has closed the stream the footer still says `watching`; this task pinned that behaviour and did not change it, as its Out of scope says.
+**Filed, not closed.** [DA-96.1](../DA-96.1-closed-stream-still-says-watching/task.md), `minor`: once the browser has closed the stream the footer still says `watching`; this task pinned that behaviour and did not change it, as its Out of scope says.

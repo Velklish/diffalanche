@@ -588,6 +588,30 @@ button:disabled {
   font: 11px / 1 var(--mono);
 }
 
+/* The footer's one action is a word of its line, so the footer keeps its height (DA-96.1). */
+.foot-action {
+  margin-left: auto;
+  padding: 0;
+  border: 0;
+  background: none;
+  color: var(--accTx);
+  font: inherit;
+}
+
+.foot-action:hover {
+  color: var(--tx);
+}
+
+.foot-action:focus-visible {
+  outline: 1px solid var(--acc);
+  outline-offset: 2px;
+}
+
+.sidebar-foot:focus-visible {
+  outline: 1px solid var(--acc);
+  outline-offset: -1px;
+}
+
 /* right column */
 
 .rail-tabs {
