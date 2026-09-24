@@ -353,7 +353,7 @@ and `bun run release` refuses a version that has no section. See
   `wall per step, ms: …` on stderr — Bun's start, the server, the browser, the
   first render, the scroll, each measured action and the closes — and the gate
   prints the UI build's time, each repetition's wall time and its own. Measured
-  on a quiet machine, the 600-frame scroll is 77–79 % of a 13 s repetition;
+  on a quiet machine, the 600-frame scroll is 76–79 % of a 13 s repetition;
   what the harness sets up per process is about 0.8 s of it and the build 0.4 s
   ([11-perf.md](docs/reference/11-perf.md#where-a-runs-time-goes)).
 - **The perf gate states what it resolves, takes five repetitions, and has a
