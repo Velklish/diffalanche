@@ -9,7 +9,7 @@ Node through `@hono/node-server` ([ADR-002](../adr/adr-002-stack-and-delivery.md
 
 ```ts
 const server = await startReviewServer({ config, ui, verbose });
-// { url: "http://127.0.0.1:4880", port: 4880, review, close }
+// { url: "http://127.0.0.1:4880", port: 4880, review, windows, close }
 ```
 
 `config` is the loaded `Config` ([03-storage.md](03-storage.md)); `ui` is where
@@ -17,7 +17,10 @@ the built page comes from, and without it the page is a 404 naming the command
 that builds it; `verbose` turns on request logging; `recursive: false` makes the
 watcher walk the reviewed trees instead of watching them, for a filesystem whose
 notifications cannot be trusted ([05-watcher.md](05-watcher.md)). `close()` stops the watcher
-and the socket.
+and the socket. `windows()` names the tasks the open live streams are on — what
+the watcher follows besides `current` — for a harness that has to know a window's
+stream has ended on the server's side, which is later than the client's
+([The task a request is about](#the-task-a-request-is-about)).
 
 Starting does four things before the socket opens: it creates the data directory
 if it is not there, scans the root, starts the watcher of
@@ -315,6 +318,27 @@ read of the same scope would only delay the frame. That is the one move the UI
 makes itself — creating the first task of a root — and the window that made it
 reads its review without waiting for the frame.
 
+**An edit the read took in is still news for the other tasks.** An edit made
+while the read runs, before the read reaches its repository, is in what the read
+hands over, so the rescan that edit starts compares the tree with a cache that
+already has it and finds nothing new. When the edit brought the repository back
+to what the replaced `diff.json` said — a revert of a change made while nobody
+followed the task — the read found no difference either, and a document another
+task held, showing the repository as it was before the revert, heard of it from
+nothing. DA-55.7 reproduced that: `tests/server.test.ts`, "drops another task's
+document when a move's read absorbed an edit back to the old cache", reverts the
+edit from inside the read and waited 20 s for the document of the task `current`
+left to drop it. So **the first rescan of each repository after a move reports
+it to `onRepositoryChanged` whatever it finds** ([05-watcher.md](05-watcher.md)),
+and to nothing else — no frame, no activity line. Its cost is once per
+repository per move: when that rescan was a save with the same bytes, the
+documents of other tasks that could show the repository are built again on their
+next read, which is what a repository outside the current task's scope costs
+them on every burst. Telling the absorbed rescans from the rest was the
+alternative and was left: an edit is absorbed when it lands before the read
+reaches its repository, and its notification can arrive after the read has
+ended, so no moment of arrival separates the two.
+
 The price is the scope's repositories **on every move of `current`** to a task
 that has a cache, paid before the frame goes out, plus one parse of the file it
 replaces — including a move to a task whose held document was still true: the
@@ -354,14 +378,21 @@ watcher rescans one session, so a cache it handed over is about the session it
 was following at the time, or about the one it read on its way to following it;
 once `current` moves on, what it holds is as frozen as the file, and it is
 dropped rather than served. Both doors are the same rule:
-a build consults it only when it is building the followed session, and so does
-the reconciliation on the way out.
+a build consults it only when it is building the followed session, and the
+reconciliation on the way out consults it when the session is the followed one
+at either end of the build. The end counts because of a move: a request made
+while the move's read runs starts a build of a task that is not followed yet, and
+a rescan that lands after the move and before the build resolves hands its change
+set to `adopt` and signals nothing, since `repositoryChanged` passes the followed
+session over. A build judged by its start alone was then kept without that
+rescan, until the next one patched it (DA-55.7, "takes the rescan of a task that
+became the followed one while its build ran").
 
 ### Keeping a held document honest
 
 A held document's change set ages, because only the followed session's is
-refreshed by a rescan. Two different things can make it wrong, and only one of
-them has a signal today.
+refreshed by a rescan, and what it carries of its task's own files ages when a
+terminal writes them. Each has its signal.
 
 **The working tree moved.** The watcher reports every repository that moved,
 whatever the current task is about ([05-watcher.md](05-watcher.md)) — its change
@@ -382,16 +413,73 @@ holding one is for.
 
 **The task's own `review.json` changed** — `review base --review X` from a
 terminal, say. The watcher compares the metadata of every session a window is
-open on, so `session-changed` arrives naming X and that document is dropped. It
-is the second half of what a held document needs, and it is why a task with no
-window on it is not followed: nothing would read the result.
+open on, so `session-changed` arrives naming X and that document is dropped.
 
-**A comment write is neither.** `POST /api/comments` and the three routes beside
-it re-read the comments of that session and keep its change set, because a
-comment does not move the working tree. The document then carries the
-`session.updatedAt` of the moment it was built — the same thing the watcher's own
-metadata comparison leaves out, and for the same reason: a write bumps
-`updatedAt` without changing what the review *is*.
+**A task nobody follows was written to.** A document stays held after its window
+closes, and the watcher reads the comments and the metadata of the tasks it
+follows and no others ([05-watcher.md](05-watcher.md)). So a terminal's
+`review comment`, `reply` or `resolve`, or a base or scope change, into a task
+with no window reached no event, and the next window that opened it by
+`?review=` — or the window on the pointer, once `current` moved to it — was
+served the document from before. DA-55.7 reproduced both halves in
+`tests/server.test.ts`, "a held document of a task nobody follows": the comment
+was not in the document, and a scope set from a terminal left the old session
+in it.
+
+So **every change the watcher sees in the data directory marks every held
+document**, whatever file changed and whichever task it is about: the watcher's
+`onDataChanged` is the server's `dataChanged`, which reads nothing and moves a
+counter per document. The next read of a marked document reads its task's
+`review.json` and `comments.json` again. A base or a scope that moved drops the
+document and builds it again, because its change set answers a question the task
+no longer asks; anything else is patched in — the session and the comments —
+and the change set is kept; and when neither file says anything the document does
+not already say, which is what a burst about another task leaves, the document
+and its serialised bytes stay as they were. The patch is laid on the document as
+it is when the files have been read, so a rescan that patched it meanwhile is not
+undone ("keeps a rescan that landed while a held document's files were read
+again"); and a re-read that lands after one asked for later leaves that one's
+document in place, because its own files are the older ("keeps the later one
+when the earlier one lands last", `tests/review-reread.test.ts`). The followed tasks are marked too: the watcher takes the first snapshot
+of a task it starts following in silence, so a write that lands just then is in
+nobody's news. The mark is set on the change itself, before the burst's 100 ms
+of quiet, so a window opened in that time is not served the old document; the
+moment between a write and its notification is what is left.
+
+It costs the small files of one task per held document per burst, paid by that
+document's next read: `review.json` for the session, then the comments through
+the domain's `list`, which stats `review.json` and reads it a second time for
+the scope it filters by, and reads `comments.json`. The session and that scope
+therefore come from two reads, and a scope written between them leaves one
+answer inconsistent — the comments filtered by a scope the session does not
+carry; the write's own mark is already set, so the next read corrects it. On the synthetic review — 200 comments, a document of 2.2 MB — on
+2026-09-24 on the 8-core machine this was written on, under a load average of
+18–20 (busy, so an upper bound), on Bun, with 41 reads each: a held document was
+served in a median of 0.22 and 0.24 ms, and the first read after a burst in 1.2
+and 1.3 ms, where serialising the document again would have added 2.2 ms more.
+Neither is on the path "Update after an edit" of `docs/SPEC.md` section 6
+measures, although that path does make a burst: a rescan takes the session's lock
+to write `diff.json`, and the lock is a change of the data directory like any
+other — the watcher cannot leave it out, since a runtime may report a comment
+write under the lock's name alone. So the fetch a `diff-changed` frame makes for
+a repository of `current` answers from the held change set and reads neither
+file ("answers a repository of the current task after a burst without reading
+its files again"); the comments and the session are the document's to re-read,
+not the repository's.
+
+The other shape was weighed and left: re-reading what a move of `current` and the
+opening of a stream are about to serve. A window asks for its document when it
+opens its stream, not after it, and the stream sends a new client nothing — the
+review it just loaded is its state — so a read at the stream's opening comes
+after a document it cannot correct; and a move is one of the two ways to reach a
+held document, where a mark on the change covers both.
+
+**A comment write through the API is the same read, named.** `POST
+/api/comments` and the three routes beside it mark only that session's document,
+and its next read re-reads the comments and `review.json` and keeps its change
+set, because a comment does not move the working tree. The session it reads
+carries the `updatedAt` the write bumped; what the review *is* did not change,
+so it is patched in and nothing is built.
 
 ### How many documents are held
 
@@ -404,7 +492,9 @@ moving `current` changes which document a request without `?review=` resolves
 to, not what any document says, and the watcher announces it as `current-changed`
 — which drops no document, precisely because nothing about that session changed
 ([05-watcher.md](05-watcher.md)). Every other write names the session it changed,
-and only that session's document is dropped.
+and only that session's document is dropped; the file it writes also marks every
+held document for a read of its task's small files, which drops none of them
+unless its base or scope moved.
 
 `warnings` is everything the scan and the reads had to say — `ScanWarning[]`,
 the directories that could not be read and the bases that did not resolve
@@ -484,7 +574,8 @@ The *document* of a named task is not served from that cache either:
 `GET /api/review?review=<name>` builds it from a read of the scope's
 repositories, so a window opened after the code changed shows the change it was
 opened to see. That read is paid once per session for as long as the document is
-held, and the document is held only until a repository it could show changes —
+held, and the document is held only until a repository it could show changes,
+or its base or scope does —
 see [Keeping a held document honest](#keeping-a-held-document-honest).
 
 The routes that name their session in the path — `PUT /api/sessions/:name/base`,

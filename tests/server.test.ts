@@ -11,7 +11,13 @@ import { generate, PROFILES } from "../scripts/synth.ts";
 import { findRepositories } from "../src/core/change-set.ts";
 import type { Config } from "../src/core/config/index.ts";
 import { loadConfig } from "../src/core/config/index.ts";
-import { addComment, createSession, deleteSession, useSession } from "../src/core/domain/index.ts";
+import {
+  addComment,
+  createSession,
+  deleteSession,
+  setScope,
+  useSession,
+} from "../src/core/domain/index.ts";
 import type { DiffCache } from "../src/core/storage/index.ts";
 import { NoSuchSessionError, readDiffCache, writeDiffCache } from "../src/core/storage/index.ts";
 import type { ReviewDocument } from "../src/core/types.ts";
@@ -50,6 +56,7 @@ const NATIVE_WATCH = process.env.DIFFALANCHE_TEST_RUNTIME !== "bun";
 /** An SSE response read as text as it arrives: enough to ask whether a frame has come. */
 function listen(response: Response): {
   heard: (event: string) => boolean;
+  said: (text: string) => boolean;
   close: () => Promise<void>;
 } {
   const reader = (response.body as ReadableStream<Uint8Array>).getReader();
@@ -68,6 +75,7 @@ function listen(response: Response): {
   })();
   return {
     heard: (event) => text.includes(`event: ${event}\n`),
+    said: (needle) => text.includes(needle),
     close: async () => {
       await reader.cancel().catch(() => undefined);
     },
@@ -213,6 +221,34 @@ describe("what a write costs the next reader", () => {
     // not charge the next reader of the review for the whole change set.
     expect(after.repositories).toBe(before.repositories);
     expect(after.totals).toBe(before.totals);
+  });
+
+  it("keeps a held document through a burst of the data directory that did not touch its task", async () => {
+    const service = createReviewService(config);
+    const before = await service.document(NAMED);
+    service.dataChanged();
+    // The same object, so the same serialised bytes: the burst cost two small reads.
+    expect(await service.document(NAMED)).toBe(before);
+  });
+
+  it("answers a repository of the current task after a burst without reading its files again", async () => {
+    let reads = 0;
+    const counted = new Proxy(config, {
+      get: (target, key, receiver) => {
+        if (key === "dataDir") reads += 1;
+        return Reflect.get(target, key, receiver);
+      },
+    });
+    const service = createReviewService(counted);
+    const held = await service.document();
+    const first = held.repositories[0];
+    if (first === undefined) throw new Error("the change set is empty");
+    // Every rescan's lock is a burst too, and this is the fetch its frame makes.
+    service.dataChanged();
+    reads = 0;
+    expect(await service.repository(first.path)).toBe(first);
+    // The pointer and nothing else: `review.json` and the comments are not what it answers with.
+    expect(reads).toBe(1);
   });
 });
 
@@ -830,6 +866,62 @@ describe("the change set a document is built from", () => {
     expect(await service.document(NAMED)).not.toBe(built);
   });
 
+  it("keeps a rescan that landed while a held document's files were read again", async () => {
+    const rescan = await marked(SESSION);
+    let armed: (() => void) | null = null;
+    // Sprung at the next read of the data directory: the re-read, once it has taken the document.
+    const reading = new Proxy(config, {
+      get: (target, key, receiver) => {
+        if (key === "dataDir" && armed !== null) {
+          const run = armed;
+          armed = null;
+          run();
+        }
+        return Reflect.get(target, key, receiver);
+      },
+    });
+    const service = createReviewService(reading, { watched: () => SESSION });
+    await service.document(SESSION);
+    await addComment(config.dataDir, SESSION, {
+      severity: "nit",
+      body: "written while the change set moved",
+      author: "kim.p",
+      role: "human",
+    });
+    service.dataChanged();
+    const asked = service.document(SESSION);
+    let patched = false;
+    armed = () => {
+      patched = service.adopt(SESSION, rescan);
+    };
+    await asked;
+    expect(patched).toBe(true);
+    expect(firstFile(await service.document(SESSION)).patch).toContain(MARK);
+  });
+
+  it("takes the rescan of a task that became the followed one while its build ran", async () => {
+    // A cache on disk for the mark to be made from.
+    await createReviewService(config).document(NAMED);
+    const rescan = await marked(NAMED);
+    const scan = building(config);
+    let watching: string | null = SESSION;
+    const service = createReviewService(scan.config, { watched: () => watching });
+    let settled = false;
+    const reading = service.document(NAMED).then((document) => {
+      settled = true;
+      return document;
+    });
+    await scan.started();
+    expect(settled).toBe(false);
+    // `current` lands on the task while its build runs, which is what a request made during the
+    // move's read meets: from here the watcher's rescans are about this task.
+    watching = NAMED;
+    expect(service.adopt(NAMED, rescan)).toBe(false);
+    service.repositoryChanged(firstFile(rescan).repo);
+    await reading;
+    expect(firstFile(await service.document(NAMED)).patch).toContain(MARK);
+  });
+
   it("charges a comment write the comments and not the change set", async () => {
     const service = createReviewService(config);
     const before = await service.document(NAMED);
@@ -869,4 +961,200 @@ describe("the change set a document is built from", () => {
       writeFileSync(onDisk, kept);
     }
   });
+});
+
+describe("a held document of a task nobody follows", () => {
+  type Listener = ReturnType<typeof listen>;
+
+  /** `SESSION` current and `NAMED` beside it, in a data directory of its own: the tasks that
+   * prove a burst was read are created here and must not reach the shared fixture. */
+  async function ownDataDir(): Promise<string> {
+    const dataDir = mkdtempSync(join(tmpdir(), "diffalanche-unfollowed-"));
+    await createSession(dataDir, SESSION, { mode: "head" });
+    await createSession(dataDir, NAMED, { mode: "head" }, undefined, { use: false });
+    return dataDir;
+  }
+
+  /** Creates a task and waits for its frame, which ends every burst before it. Repeated while
+   * the watch arms: a write made then is lost rather than late (05-watcher.md). */
+  async function barrier(dataDir: string, stream: Listener, name: string): Promise<void> {
+    const deadline = performance.now() + 30_000;
+    for (let attempt = 0; ; attempt += 1) {
+      const task = `${name}-${attempt}`;
+      await createSession(dataDir, task, { mode: "head" }, undefined, { use: false });
+      const patience = performance.now() + 2_000;
+      while (performance.now() < patience) {
+        if (stream.said(`"name":"${task}"`)) return;
+        await new Promise((done) => setTimeout(done, 5));
+      }
+      if (performance.now() > deadline) throw new Error("the data directory's watch never spoke");
+    }
+  }
+
+  async function reviewOf(url: string, name: string): Promise<ReviewDocument> {
+    return (await (await fetch(`${url}/api/review?review=${name}`)).json()) as ReviewDocument;
+  }
+
+  /** A server on its own data directory, a window on `current` that hears every frame, and a
+   * document of `NAMED` held by a window that opened it by name and went away. */
+  async function held(): Promise<{
+    dataDir: string;
+    server: Awaited<ReturnType<typeof startReviewServer>>;
+    current: Listener;
+    document: ReviewDocument;
+    close: () => Promise<void>;
+  }> {
+    const dataDir = await ownDataDir();
+    const server = await startReviewServer({
+      config: { ...config, dataDir, port: 0 },
+      ui,
+      ...(NATIVE_WATCH ? {} : { recursive: false }),
+    });
+    const current = listen(await fetch(`${server.url}/api/events`));
+    await barrier(dataDir, current, "armed");
+    const document = await reviewOf(server.url, NAMED);
+    // A window that goes away takes its connection with it: an abort, since under Bun cancelling
+    // the body alone leaves the connection open and the window counted.
+    const gone = new AbortController();
+    const window = listen(
+      await fetch(`${server.url}/api/events?review=${NAMED}`, { signal: gone.signal }),
+    );
+    gone.abort();
+    await window.close();
+    // The client's end reaches the server later, and until then the watcher still follows the
+    // task: the write below would be a followed task's, which is not the case under test.
+    const deadline = performance.now() + 20_000;
+    while (server.windows().includes(NAMED)) {
+      if (performance.now() > deadline) throw new Error("the server never saw the window close");
+      await new Promise((done) => setTimeout(done, 5));
+    }
+    return {
+      dataDir,
+      server,
+      current,
+      document,
+      close: async () => {
+        await current.close();
+        await server.close();
+        rmSync(dataDir, { recursive: true, force: true });
+      },
+    };
+  }
+
+  it("carries a comment the CLI wrote while no window was on the task", async () => {
+    const run = await held();
+    try {
+      expect(run.document.comments).toEqual([]);
+      const written = await addComment(run.dataDir, NAMED, {
+        severity: "nit",
+        body: "written from a terminal while no window was on the task",
+        author: "kim.p",
+        role: "human",
+      });
+      await barrier(run.dataDir, run.current, "read");
+      // The window's end reached the server before the write, so no frame named the comment and
+      // only the burst's mark can bring it into the document.
+      expect(run.current.said(written.id)).toBe(false);
+      const again = await reviewOf(run.server.url, NAMED);
+      expect(again.comments.map((one) => one.id)).toContain(written.id);
+    } finally {
+      await run.close();
+    }
+  }, 120_000);
+
+  /** One call made, once armed, where a walk of the root asks for `exclude`: the start of a move's
+   * read, before any repository. A rescan and the symbol index read `root` alone. */
+  function absorbing(of: Config): { config: Config; arm: (run: () => void) => void } {
+    let armed: (() => void) | null = null;
+    const config = new Proxy(of, {
+      get: (target, key, receiver) => {
+        if (key === "exclude" && armed !== null) {
+          const run = armed;
+          armed = null;
+          run();
+        }
+        return Reflect.get(target, key, receiver);
+      },
+    });
+    return {
+      config,
+      arm: (run) => {
+        armed = run;
+      },
+    };
+  }
+
+  it("drops another task's document when a move's read absorbed an edit back to the old cache", async () => {
+    const EDIT = "// an edit made while nothing followed the task";
+    const dataDir = await ownDataDir();
+    const own = { ...config, dataDir, port: 0 };
+    // The cache `NAMED` keeps from its last read, and an edit made since, while nothing followed it.
+    const { repositories } = await createReviewService(own).document(NAMED);
+    const repo = repositories[0]?.path;
+    const file = repositories[0]?.files[0]?.path;
+    if (repo === undefined || file === undefined) throw new Error("the change set is empty");
+    const onDisk = join(root, repo, file);
+    const kept = readFileSync(onDisk, "utf8");
+    writeFileSync(onDisk, `${kept}${EDIT}\n`);
+    const shown = (document: ReviewDocument): string =>
+      document.repositories.find((one) => one.path === repo)?.files.find((one) => one.path === file)
+        ?.patch ?? "";
+    const move = absorbing(own);
+    const server = await startReviewServer({
+      config: move.config,
+      ui,
+      ...(NATIVE_WATCH ? {} : { recursive: false }),
+    });
+    const current = listen(await fetch(`${server.url}/api/events`));
+    try {
+      await barrier(dataDir, current, "armed");
+      expect(shown(await reviewOf(server.url, SESSION))).toContain(EDIT);
+      // The revert lands inside the read `review use` starts: the read finds what the old cache
+      // said, and the revert's own rescan finds nothing the new one does not.
+      let reverted = false;
+      move.arm(() => {
+        writeFileSync(onDisk, kept);
+        reverted = true;
+      });
+      const deadline = performance.now() + 30_000;
+      while (!current.heard("current-changed")) {
+        if (performance.now() > deadline) throw new Error("the watcher never followed the task");
+        // biome-ignore lint/correctness/useHookAtTopLevel: the domain's `review use`, not a React hook
+        await useSession(dataDir, NAMED);
+        const until = performance.now() + 2_000;
+        while (!current.heard("current-changed") && performance.now() < until) {
+          await new Promise((done) => setTimeout(done, 5));
+        }
+      }
+      expect(reverted).toBe(true);
+      // The task `current` left holds a document of the edit: it has to go once the tree is back.
+      const patience = performance.now() + 20_000;
+      let after = shown(await reviewOf(server.url, SESSION));
+      while (after.includes(EDIT) && performance.now() < patience) {
+        await new Promise((done) => setTimeout(done, 20));
+        after = shown(await reviewOf(server.url, SESSION));
+      }
+      expect(after).not.toContain(EDIT);
+    } finally {
+      writeFileSync(onDisk, kept);
+      await current.close();
+      await server.close();
+      rmSync(dataDir, { recursive: true, force: true });
+    }
+  }, 120_000);
+
+  it("carries a scope the CLI set while no window was on the task", async () => {
+    const run = await held();
+    try {
+      expect(run.document.repositories.some((one) => one.path !== inScope)).toBe(true);
+      const scope = [{ repo: inScope, paths: null }];
+      await setScope(run.dataDir, NAMED, scope, await findRepositories(config));
+      await barrier(run.dataDir, run.current, "read");
+      const again = await reviewOf(run.server.url, NAMED);
+      expect(again.session.scope).toEqual(scope);
+      expect(again.repositories.filter((one) => one.path !== inScope)).toEqual([]);
+    } finally {
+      await run.close();
+    }
+  }, 120_000);
 });

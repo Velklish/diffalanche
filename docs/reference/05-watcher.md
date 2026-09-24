@@ -25,6 +25,7 @@ const watcher = await startWatcher({ config, scan, bus, activity });
 | `onRescan` | the session the rescan was about and the change set as it left it, for a caller that keeps it in memory |
 | `onRepositoryChanged` | a repository that moved, **whatever the current task is about**: its change set inside the task's scope, its files outside |
 | `sessions` | the tasks windows are open on, asked on every burst of the data directory |
+| `onDataChanged` | the data directory changed — any file of it but the two it leaves out below, about any task — said on the change itself, before the burst's quiet and before anything is read, and on a takeover by the walk; the server marks its held documents with it ([07-server.md](07-server.md)) |
 | `recursive` | `false` walks every tree instead of watching it; the default asks the runtime |
 | `onError` | a rescan that failed; without it the failure is silent |
 | `onFallback` | a recursive watch died and the walk took its place; said once |
@@ -51,6 +52,11 @@ what it already has, paid once per move. A session with no `diff.json` is not
 read, since there is nothing to trust. The read is a task of the queue, so a rescan an edit starts meanwhile
 waits for it: an edit right after `review use` is announced after the read, not
 inside the 300 ms of `docs/SPEC.md` section 6 ([07-server.md](07-server.md)).
+And the read can take in an edit made while it runs, so that edit's rescan finds
+nothing new: after a move, **the first rescan of each repository reports it to
+`onRepositoryChanged` whatever it finds**, once, so a document another task holds
+of that repository is not left showing what the edit replaced
+([07-server.md](07-server.md)).
 
 `startWatcher` resolves once every tree is being watched for real. **The
 guarantee is the walk's**: it takes its baseline before it reports anything, and
@@ -361,7 +367,9 @@ quite the same thing**:
   `diff-changed`. The rescan compares the recomputed entry with the cached one,
   so reaching that point means the change set really moved: a file touched
   without its content changing — a build output, a save with the same bytes —
-  announces nothing.
+  announces nothing. The exception is the first rescan of a repository after
+  `current` moves, which reports it here and nowhere else whatever it found: it
+  compared with a cache the move's read wrote, which may already hold the edit.
 - **Outside it**, from the burst itself, right after the ignore check. Nothing
   reads that repository, so nothing can say whether its content changed; the
   burst is the whole of what is known. A write that changes no line still
@@ -392,6 +400,11 @@ its entry is dropped when it leaves. Otherwise a window opening on a task with
 history would be told its whole history is new; a reconnect therefore costs one
 silent snapshot rather than a burst. The three comment events carry the name of
 the session their thread belongs to, so a window can drop what is not its own
+([07-server.md](07-server.md)).
+
+A task no window is on is not followed, and a write into its files is no event
+at all. What the server holds of such a task is kept honest by `onDataChanged`
+instead, which says that the data directory changed and nothing about what
 ([07-server.md](07-server.md)).
 
 The cost is bounded by the number of open windows rather than by the number of

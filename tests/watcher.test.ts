@@ -1207,6 +1207,42 @@ describe("a watcher whose watches die under it", () => {
       await settle();
     }
   }, 60_000);
+
+  it("says the data directory changed when the walk takes over its watch", async () => {
+    const failures = new Map<string, () => void>();
+    const dataDir = mkdtempSync(join(tmpdir(), "diffalanche-takeover-data-"));
+    mkdirSync(join(dataDir, "reviews"), { recursive: true });
+    let changed = 0;
+    const taken = await startWatcher({
+      config: { ...config, dataDir },
+      scan: found,
+      bus: createEventBus(),
+      activity: createActivityLog(),
+      pollIntervalMs: 40,
+      onDataChanged: () => {
+        changed += 1;
+      },
+      // Watches that deliver nothing: the takeover is the only thing here that can speak.
+      native: (options, onFailure) => {
+        failures.set(options.dir, onFailure);
+        return { polling: false, ready: Promise.resolve(), close: () => undefined };
+      },
+    });
+    try {
+      expect(changed).toBe(0);
+      // A write made while the watch died is in the walk's baseline, so a held document hears
+      // of it from the takeover or from nothing.
+      (failures.get(dataDir) as () => void)();
+      const deadline = performance.now() + 20_000;
+      while (changed === 0 && performance.now() < deadline) {
+        await new Promise((done) => setTimeout(done, 5));
+      }
+      expect(changed).toBe(1);
+    } finally {
+      await taken.close();
+      rmSync(dataDir, { recursive: true, force: true });
+    }
+  }, 60_000);
 });
 
 describe("a watcher that walks from the start", () => {

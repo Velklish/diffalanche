@@ -93,6 +93,9 @@ export type WatcherOptions = {
   /** Every session's `review.json` as a burst of the data directory listed it, for a holder that
    * compares what it holds: a session gone, or made again under its name (05-watcher.md, DA-40). */
   onSessions?: (reviews: ReadonlyMap<string, Review | null>) => void;
+  /** The data directory changed, said on the change itself and before any burst is read:
+   * whatever it wrote, about whichever task (05-watcher.md). */
+  onDataChanged?: () => void;
   /** A rescan that failed. Without this the failure is silent. */
   onError?: (error: unknown) => void;
   /** A watch died and the walk took its place; said once (05-watcher.md). */
@@ -148,6 +151,9 @@ export async function startWatcher(options: WatcherOptions): Promise<Watcher> {
   let queue: Promise<void> = Promise.resolve();
   let closed = false;
   let fellBack = false;
+  // The repositories rescanned since `current` last moved; until then a rescan that finds
+  // nothing may be an edit the move's read took in, which no other task heard of (05-watcher.md).
+  const settled = new Set<string>(scan.repositories.map((repository) => repository.path));
 
   /**
    * Debounce with a ceiling: a change resets the wait, but never past
@@ -247,7 +253,7 @@ export async function startWatcher(options: WatcherOptions): Promise<Watcher> {
     // person sees must not wait for a file of megabytes. A file that was
     // touched without its content changing — a build output, a save with the
     // same bytes — is not a change of the review and says nothing at all.
-    await rescanRepository(config, followed, repo, (outcome) => {
+    const rescanned = await rescanRepository(config, followed, repo, (outcome) => {
       options.onRescan?.(followed, outcome.cache);
       // From inside the rescan, so it says the change set moved rather than
       // that a file was written: a save with the same bytes reaches no one.
@@ -256,6 +262,10 @@ export async function startWatcher(options: WatcherOptions): Promise<Watcher> {
       activity.diffChanged(repo);
       if (outcome.warningsChanged) bus.emit({ type: "warnings", list: outcome.cache.warnings });
     });
+    // Once per repository per move, the repository is said to have moved whatever the rescan
+    // found: it compared with a cache the move's read wrote, not with what others hold.
+    if (!rescanned.changed && !settled.has(repo)) options.onRepositoryChanged?.(repo);
+    settled.add(repo);
   }
 
   /** The tasks followed: the current one, and the ones windows are open on. */
@@ -331,6 +341,7 @@ export async function startWatcher(options: WatcherOptions): Promise<Watcher> {
       return { repositories: [], warnings: null };
     });
     session = next;
+    settled.clear();
     if (session === null) return;
     // The comments of the session switched to are not news: they are the new
     // baseline, and a file that cannot be read is the same transition as below.
@@ -477,11 +488,13 @@ export async function startWatcher(options: WatcherOptions): Promise<Watcher> {
       // again"; each read is compared with the last, so a read that finds
       // nothing new says nothing.
       onChange: () => {
+        options.onDataChanged?.();
         schedule("data", () => enqueue(reloadData));
       },
       // Read again for the same reason a repository is: the three files may
       // have moved while nothing was watching them.
       onFallback: () => {
+        options.onDataChanged?.();
         schedule("data", () => enqueue(reloadData));
         reportFallback();
       },

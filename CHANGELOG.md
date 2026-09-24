@@ -513,6 +513,27 @@ and `bun run release` refuses a version that has no section. See
 
 ### Fixed
 
+- **A task opened again by name shows what a terminal wrote to it while no window
+  was on it** (DA-55.7). The server keeps the document of a task after its window
+  closes, and the watcher reads the files of the tasks it follows only, so a
+  `review comment`, `reply`, `resolve`, or a base or scope change written from a
+  terminal into such a task was missing from the next window on `?review=`, and
+  from the window on `current` once `current` moved to it. Every change the watcher
+  sees in the data directory now marks every held document, and the next read of
+  one reads its task's `review.json` and `comments.json` again: a moved base or
+  scope builds it again, anything else is patched in, and a burst about another
+  task leaves it and its bytes alone — 1.2–1.3 ms against 0.22–0.24 ms for a held
+  document on the synthetic review, on a busy machine. The fetch a live update
+  makes for a repository of `current` reads neither file. Two narrower corners of
+  a move of `current` closed with it: a build of the task started during the
+  move's read now takes a rescan that landed after the move, where it was kept
+  without it; and the first rescan of each repository after a move reports the
+  repository whatever it finds, so a revert the move's read took in drops the
+  documents other tasks hold of the edit it undid. A rescan that landed while a
+  held document's files were read is no longer undone by that read, nor a later
+  re-read by an earlier one that lands last
+  ([07-server.md](docs/reference/07-server.md#keeping-a-held-document-honest)).
+
 - **The suites stopped holding numbers the machine decides** (DA-60). A wait is
   now a condition with a generous deadline, an order the platform guarantees, a
   duration the test makes itself, or — for a party it cannot see — a wait derived

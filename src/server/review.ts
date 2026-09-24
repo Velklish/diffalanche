@@ -114,6 +114,9 @@ export type ReviewService = {
   /** Only the comments of that session changed: a small file, where rebuilding the
    * document would charge the next reader for the whole change set. */
   invalidateComments: (session: string) => void;
+  /** Something in the data directory changed: every held document reads its task's two small
+   * files again before it is next served ([07-server.md](../../docs/reference/07-server.md)). */
+  dataChanged: () => void;
   /** Every repository under the root with whether it has changes: the first-run screen. */
   summary: () => Promise<ScanSummary>;
   /** The change set of the whole root, the task's scope ignored but its **base**
@@ -133,9 +136,9 @@ type Held = {
   /** Repositories that changed while this session's document was being built, judged
    * against its scope when the build resolves and it has one. */
   signalled: string[];
-  /** The write this session's comments were last known to be behind. */
+  /** The write this session's comments, or its `review.json`, were last known to be behind. */
   commentsWritten: number;
-  /** The write the held comments are known to cover, taken when the read was asked for. */
+  /** The write the held comments and session are known to cover, taken when the read was asked for. */
   staleComments: number;
 };
 
@@ -182,20 +185,44 @@ export function createReviewService(
     return made;
   }
 
-  async function documentOf(session: string, asked: number): Promise<ReviewDocument> {
+  /** `files: false` answers with the held change set as it is, for a caller that reads nothing else. */
+  async function documentOf(session: string, asked: number, files = true): Promise<ReviewDocument> {
     const entry = entryOf(session);
     const cached = entry.document;
     if (cached !== null) {
-      if (entry.commentsWritten <= entry.staleComments) return cached;
+      if (!files || entry.commentsWritten <= entry.staleComments) return cached;
       const started = entry.version;
+      // `review.json` as well: a terminal writes both, and a task nobody follows hears of
+      // neither but through the data directory's burst (07-server.md).
+      const review = await readReview(config.dataDir, session);
       const comments = await list(config.dataDir, session);
-      const reread = { ...cached, comments, counters: countReview(comments) };
+      if (
+        !sameBase(review.base, cached.session.base) ||
+        !sameScope(review.scope, cached.session.scope)
+      ) {
+        // The change set answers a question the task no longer asks, so it is built again.
+        if (entry.version === started) {
+          entry.version += 1;
+          entry.document = null;
+          entry.payload = null;
+        }
+        return documentOf(session, asked);
+      }
       // An invalidation that landed during the read threw this document away,
       // and a re-read of its comments must not put it back.
-      if (entry.version !== started) return reread;
+      if (entry.version !== started) {
+        return { ...cached, session: review, comments, counters: countReview(comments) };
+      }
+      // What is held now, which a rescan may have patched while the files were read.
+      const held = entry.document ?? cached;
+      // A re-read asked for later has already landed: its files are newer than these.
+      if (asked < entry.staleComments) return held;
       // The read covers the writes up to the moment it was asked for; one that
       // landed after that is not covered, so the flag it set stays set.
       if (asked > entry.staleComments) entry.staleComments = asked;
+      // A burst about another task leaves this one's bytes, and their serialisation, alone.
+      if (sameJson(review, held.session) && sameJson(comments, held.comments)) return held;
+      const reread = { ...held, session: review, comments, counters: countReview(comments) };
       entry.document = reread;
       entry.payload = null;
       return reread;
@@ -211,9 +238,9 @@ export function createReviewService(
       entry.pending = build(config, session, entry, followed).then(
         (built) => {
           entry.pending = null;
-          // A rescan may have landed while this was building: what it handed
-          // over is newer than the file this read, so it settles the change set.
-          const settled = followed ? withAdopted(built, entry) : built;
+          // A rescan that landed while this was building settles the change set — also one of a
+          // task `current` reached meanwhile, which signals nothing (07-server.md).
+          const settled = followed || watched() === session ? withAdopted(built, entry) : built;
           // What changed while this was building is judged now, against the
           // scope the built document carries: a repository this task is not
           // about must not cost it its place.
@@ -257,7 +284,10 @@ export function createReviewService(
     repository: async (repo, session) => {
       if (session !== undefined) return freshRepository(config, session, repo);
       const asked = writes;
-      const document = await documentOf(await resolveSessionName(config.dataDir), asked);
+      // The live update's own fetch: a burst of the data directory, which every rescan's lock is,
+      // must not charge it two reads of files it does not answer with (07-server.md).
+      const name = await resolveSessionName(config.dataDir);
+      const document = await documentOf(name, asked, false);
       return document.repositories.find((one) => one.path === repo) ?? null;
     },
     adopt: (session, cache) => {
@@ -331,6 +361,12 @@ export function createReviewService(
       entry.commentsWritten = writes;
       entry.payload = null;
     },
+    dataChanged: () => {
+      // Every held session, followed or not: the watcher baselines a task it has just
+      // started following without a word, and that write would be lost here too.
+      writes += 1;
+      for (const entry of sessions.values()) entry.commentsWritten = writes;
+    },
     summary: async () => summarise(config),
     candidates: async (session) => candidatesOf(config, session),
   };
@@ -343,6 +379,11 @@ function trim(sessions: Map<string, Held>): void {
     if (sessions.size <= DOCUMENT_CACHE_LIMIT) break;
     if (entry.pending === null) sessions.delete(name);
   }
+}
+
+/** Whether two reads of a small file say the same thing: what keeps a held document's bytes. */
+function sameJson(left: unknown, right: unknown): boolean {
+  return JSON.stringify(left) === JSON.stringify(right);
 }
 
 /** Whether a cache answers the question this session asks — which is not whether it is fresh. */

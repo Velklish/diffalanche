@@ -42,6 +42,9 @@ export type ReviewServer = {
   port: number;
   /** The review behind the routes, for a harness that wants the numbers without a request. */
   review: ReviewService;
+  /** The tasks live streams are on, which the watcher follows: for a harness that has to know
+   * a window's stream has ended on the server's side and not only on its own. */
+  windows: () => string[];
   close: () => Promise<void>;
 };
 
@@ -83,6 +86,8 @@ export async function startReviewServer(options: ReviewServerOptions): Promise<R
     // from the document cache: a connection exists exactly while a window does,
     // and a cache's eviction answers a question about memory (05-watcher.md).
     sessions: () => events.sessions(),
+    // A held document of a task nobody follows hears of a terminal's write from nothing else.
+    onDataChanged: review.dataChanged,
     onError: (error) => {
       // The session was deleted under the rescan: `current` is on its way elsewhere, nothing failed.
       if (error instanceof NoSuchSessionError) return;
@@ -165,6 +170,7 @@ export async function startReviewServer(options: ReviewServerOptions): Promise<R
     url: `http://127.0.0.1:${server.port}`,
     port: server.port,
     review,
+    windows: () => events.sessions(),
     close: async () => {
       // The streams end first: a socket that waits for an open connection to
       // finish would wait for one that never does.

@@ -67,7 +67,7 @@ review round and **equally unreproduced**:
    and when it resolves after the move it is kept without the change set a later
    rescan handed over:
 
-<!-- quote:../../../src/server/review.ts -->
+<!-- quote:before:../../../src/server/review.ts -->
 ```ts
           const settled = followed ? withAdopted(built, entry) : built;
 ```
