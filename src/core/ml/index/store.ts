@@ -3,8 +3,8 @@
 import { readFile } from "node:fs/promises";
 import { join } from "node:path";
 import { writeFileAtomic } from "../../storage/atomic.ts";
-import type { Severity } from "../../storage/index.ts";
-import { makeDir, SCHEMA_VERSION, SEVERITIES } from "../../storage/index.ts";
+import type { Severity, SeveritySource } from "../../storage/index.ts";
+import { isSeveritySource, makeDir, SCHEMA_VERSION, SEVERITIES } from "../../storage/index.ts";
 import type { EmbeddingIdentity } from "../embed/model.ts";
 
 /** One comment of one session, with what a suggestion shows of it. */
@@ -12,6 +12,8 @@ export type IndexEntry = {
   session: string;
   id: string;
   severity: Severity;
+  /** Who chose it: an `auto` nobody confirmed does not vote (09-ml.md, "Suggestions"). */
+  severitySource: SeveritySource;
   repo: string | null;
   path: string | null;
   line: number | null;
@@ -114,6 +116,10 @@ function record(value: unknown, field: string): Record<string, unknown> {
     : fail(field, "expected an object");
 }
 
+function severitySource(value: unknown, field: string): SeveritySource {
+  return isSeveritySource(value) ? value : fail(field, "not a severity source");
+}
+
 /** Checked down to the length of the vectors: a torn or hand-edited file is rebuilt, not half-read. */
 function parseIndex(bytes: Buffer): EmbeddingIndex {
   const newline = bytes.indexOf(0x0a);
@@ -143,10 +149,18 @@ function parseIndex(bytes: Buffer): EmbeddingIndex {
     if (!(SEVERITIES as readonly string[]).includes(severity)) {
       fail(`${field}.severity`, "not a severity");
     }
+    const session = string(entry.session, `${field}.session`);
+    // Written before the index kept the source: `manual` as storage reads it, until the session's
+    // fingerprint, dropped below, has the next update take it from comments.json.
+    if (entry.severitySource === undefined) delete sessions[session];
     return {
-      session: string(entry.session, `${field}.session`),
+      session,
       id: string(entry.id, `${field}.id`),
       severity: severity as Severity,
+      severitySource:
+        entry.severitySource === undefined
+          ? "manual"
+          : severitySource(entry.severitySource, `${field}.severitySource`),
       repo: nullable(entry.repo, `${field}.repo`, string),
       path: nullable(entry.path, `${field}.path`, string),
       line: nullable(entry.line, `${field}.line`, number),

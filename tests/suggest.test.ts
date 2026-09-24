@@ -15,7 +15,7 @@ import { openServerEmbedder } from "../src/core/ml/embed/open.ts";
 import { startSpawnedEmbedder } from "../src/core/ml/embed/spawned.ts";
 import type { Neighbour } from "../src/core/ml/index/index.ts";
 import { proposeSeverity } from "../src/core/ml/suggest/index.ts";
-import type { Severity } from "../src/core/storage/index.ts";
+import type { Severity, SeveritySource } from "../src/core/storage/index.ts";
 import { createActivityLog } from "../src/core/watcher/index.ts";
 import { createApp } from "../src/server/app.ts";
 import type { UiAssets } from "../src/server/assets.ts";
@@ -27,11 +27,17 @@ import { comment, makeSession } from "./helpers/session.ts";
 
 const noUi: UiAssets = { read: async () => null };
 
-function neighbour(severity: Severity, similarity: number, id = `c_${similarity}`): Neighbour {
+function neighbour(
+  severity: Severity,
+  similarity: number,
+  id = `c_${similarity}`,
+  severitySource: SeveritySource = "manual",
+): Neighbour {
   return {
     session: "s",
     id,
     severity,
+    severitySource,
     repo: null,
     path: null,
     line: null,
@@ -69,6 +75,19 @@ describe("the severity the neighbours vote for", () => {
     const split = proposeSeverity([neighbour("warning", 0.9), neighbour("question", 0.9, "b")]);
     // A tie goes to the nearer of the two, and half the weight is all it has.
     expect(split).toEqual({ severity: "warning", confidence: 0.5 });
+  });
+
+  it("leaves out a severity the model chose until an agent confirms it", () => {
+    const auto = neighbour("critical", 0.95, "a", "auto");
+    expect(proposeSeverity([auto, neighbour("nit", 0.94, "b")])).toEqual({
+      severity: "nit",
+      confidence: 1,
+    });
+    const confirmed = neighbour("critical", 0.95, "a", "confirmed:claude");
+    expect(proposeSeverity([confirmed, neighbour("nit", 0.94, "b")])?.severity).toBe("critical");
+    // The floor is the nearest comment that votes: one the model labelled proposes nothing alone.
+    expect(proposeSeverity([auto, neighbour("nit", 0.85, "b")])).toBeNull();
+    expect(proposeSeverity([auto])).toBeNull();
   });
 });
 
@@ -131,6 +150,7 @@ describe("GET /api/suggest", () => {
       session: "alpha",
       id: "c_a2",
       severity: "warning",
+      severitySource: "manual",
       repo: "repos/core/cargos-api",
       path: "src/a.ts",
       line: 42,

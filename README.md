@@ -75,9 +75,10 @@ While you type, the form lists the five nearest comments from every past review
 — `↑` / `↓` choose one and `TAB` takes its text and severity — and the `AUTO`
 chip, chosen by default, leaves the severity to the vote of those comments when
 you send. The thread says `auto` until an agent agrees with the label in its
-reply (`reply --confirm-severity`) and then `labelled by <agent>`. While the
-embedding model is away (`diffalanche model status`) the form says so, keeps
-`AUTO` out of reach, and asks again after a pause.
+reply (`reply --confirm-severity`) and then `labelled by <agent>`; until then the
+label is left out of later votes, so a history written with `AUTO` does not vote
+for itself. While the embedding model is away (`diffalanche model status`) the
+form says so, keeps `AUTO` out of reach, and asks again after a pause.
 
 The review keeps itself current: when an agent edits a file, replies, or
 resolves a thread, the page hears it from the server and patches only what
@@ -263,7 +264,7 @@ flags, and `tests/readme-cli.test.ts` fails if the two ever disagree.
 | `resolve <id> --role human [--note <text>] [--author <name>]` | close a thread; `--role human` is required |
 | `reopen <id> --role human [--note <text>] [--author <name>]` | open a thread again; `--role human` is required |
 | `export [--status <open\|all>] [--format <md\|json>]` | the review as markdown grouped by repository |
-| `suggest [--json] --body <text>` | past comments like this one from every review session, and the severity they vote for |
+| `suggest [--json] --body <text>` | past comments like this one from every review session, and the severity they vote for; one the model chose and nobody confirmed does not vote |
 | `index rebuild` | embed every comment of every review session again and write the embedding index |
 | `index status [--json]` | what the embedding index holds, and what it is missing |
 | `model status [--json]` | the embedding model: its version, where it is cached, and whether it and its runtime are there |

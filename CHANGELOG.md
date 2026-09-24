@@ -325,6 +325,20 @@ and `bun run release` refuses a version that has no section. See
 
 ### Changed
 
+- **A severity the model chose no longer votes in later suggestions** (DA-36.2).
+  A comment sent with `AUTO` stored its neighbours' vote as its severity, and the
+  embedding index kept the severity without who chose it, so the next similar
+  text counted that label like any other: a history written with `AUTO` left on
+  confirmed itself. Each index entry now carries the comment's `severitySource`,
+  and a neighbour whose source is `auto` is listed among the five but left out of
+  the vote — the 0.86 line and the weights start at the nearest one that votes.
+  `manual` and `confirmed:<author>` vote as before, and an agent's
+  `reply --confirm-severity` reaches the index at its next update without an
+  embedding. `suggest --json` and `GET /api/suggest` carry `severitySource` on
+  every suggestion. An index written before reads each entry as `manual` and its
+  sessions again at the next update, which takes every source from
+  `comments.json` and embeds nothing.
+
 - **The focus ring can be seen** (DA-56.7). Every ring was `--accBd`, 1.6–2.0:1
   against the grounds it is drawn on — under the 3:1 WCAG 1.4.11 asks of the
   only signal of focus — and it showed nothing on a control whose resting border

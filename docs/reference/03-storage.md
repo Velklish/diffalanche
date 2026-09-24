@@ -359,6 +359,11 @@ author after the colon; anything else is refused with the field named. Absent
 or `null` reads as `manual`: a comment written before the field existed had its
 severity chosen by whoever wrote it. `confirmedBy(source)` in `types.ts` reads
 the author back out, for the CLI's `show` and the UI's thread marker alike.
+`isSeveritySource(value)` beside it is the one test of the three shapes: this
+parser and the embedding index's call it, so a source storage learns to write is
+one the index reads, rather than a file it refuses and rebuilds. The index keeps
+the field in its entries, and an `auto` nobody confirmed does not vote in a
+later suggestion ([09-ml.md](09-ml.md#suggestions)).
 
 The `base` of `review.json` is the change-set reader's own `BaseSpec`
 ([02-git.md](02-git.md)): storage parses it, git resolves it, and one name means

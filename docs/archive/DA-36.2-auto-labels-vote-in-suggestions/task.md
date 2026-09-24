@@ -11,7 +11,7 @@ Finding discovered while working on DA-36. A comment sent with `AUTO` stores the
 neighbours' vote as its `severity`, with `severitySource: "auto"`. The index
 entry keeps the severity and not its source:
 
-<!-- quote:../../../src/core/ml/index/store.ts -->
+<!-- quote:before:../../../src/core/ml/index/store.ts -->
 export type IndexEntry = {
   session: string;
   id: string;
@@ -20,7 +20,7 @@ export type IndexEntry = {
 
 and the vote counts every neighbour's severity alike:
 
-<!-- quote:../../../src/core/ml/suggest/index.ts -->
+<!-- quote:before:../../../src/core/ml/suggest/index.ts -->
     weights.set(one.severity, (weights.get(one.severity) ?? 0) + weight);
 <!-- /quote -->
 

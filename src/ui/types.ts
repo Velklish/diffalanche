@@ -29,7 +29,7 @@ export type {
 /** Worst first (`docs/SPEC.md` section 3, decision 7): the order of the composer's chips. */
 export { confirmedBy, SEVERITIES } from "../core/storage/types.ts";
 
-import type { Base, ReviewStatus, Scope, Severity } from "../core/storage/types.ts";
+import type { Base, ReviewStatus, Scope, Severity, SeveritySource } from "../core/storage/types.ts";
 import type { FileStatus, ScanWarning } from "../core/types.ts";
 
 export type {
@@ -147,6 +147,7 @@ export type Suggestion = {
   session: string;
   id: string;
   severity: Severity;
+  severitySource: SeveritySource;
   repo: string | null;
   path: string | null;
   line: number | null;

@@ -73,6 +73,15 @@ export function confirmedBy(source: SeveritySource): string | null {
   return source.startsWith(CONFIRMED) ? source.slice(CONFIRMED.length) : null;
 }
 
+/** One test for every reader of the field, so a new source is read the day storage writes it. */
+export function isSeveritySource(value: unknown): value is SeveritySource {
+  if (typeof value !== "string") return false;
+  return (
+    (SEVERITY_SOURCES as readonly string[]).includes(value) ||
+    !!confirmedBy(value as SeveritySource)
+  );
+}
+
 /** Where a line comment sits in the change set; the input for Phase 3 re-anchoring. */
 export type Anchor = {
   lineContent: string;

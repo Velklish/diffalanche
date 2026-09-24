@@ -175,9 +175,10 @@ in the route's own `app.get(path, guard, handler)`.
 `GET /api/suggest?body=<text>` answers `SuggestAnswer`
 `{ severity: { severity, confidence } | null, suggestions: [...] }`: the five
 comments nearest the text across every review session, each with its session,
-id, severity, repository, file, line, text and similarity, and the severity they
-vote for ([09-ml.md](09-ml.md#suggestions)). It is not scoped by `?review=`: a
-suggestion is history, and the history is every session. A `body` that is
+id, severity, `severitySource`, repository, file, line, text and similarity, and
+the severity they vote for, which a severity the model chose and nobody confirmed
+takes no part in ([09-ml.md](09-ml.md#suggestions)). It is not scoped by
+`?review=`: a suggestion is history, and the history is every session. A `body` that is
 missing or blank is a 400. The composer asks it as the reviewer types
 ([08-ui.md](08-ui.md#commenting)), which writes the shape again on its side
 and holds the two together in `tests/ui-wire.test.ts`.

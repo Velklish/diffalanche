@@ -30,7 +30,7 @@ import type {
 } from "./types.ts";
 import {
   COMMENT_STATUSES,
-  confirmedBy,
+  isSeveritySource,
   READABLE_VERSIONS,
   REVIEW_STATUSES,
   ROLES,
@@ -140,10 +140,7 @@ function parseReply(file: string, field: string, value: unknown): Reply {
 /** Absent in a comment written before DA-36, whose severity its writer chose: that reads `manual`. */
 function parseSeveritySource(file: string, field: string, value: unknown): SeveritySource {
   if (value === undefined || value === null) return "manual";
-  if (value === "auto" || value === "manual") return value;
-  if (typeof value === "string" && confirmedBy(value as SeveritySource)) {
-    return value as SeveritySource;
-  }
+  if (isSeveritySource(value)) return value;
   return fail(
     file,
     field,

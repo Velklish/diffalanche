@@ -27,17 +27,19 @@ export type Suggestions = {
   index: EmbeddingIndex;
 };
 
-/** The severity with the most weight, and its share of all the weight as the confidence. */
+/** The severity with the most weight, and its share of all the weight as the confidence. A severity
+ * the model chose and nobody confirmed does not vote, or a history left on `AUTO` confirms itself. */
 export function proposeSeverity(
   neighbours: readonly Neighbour[],
   temperature: number = TEMPERATURE,
   floor: number = FLOOR,
 ): SeverityProposal | null {
-  const best = neighbours[0]?.similarity;
+  const voters = neighbours.filter((one) => one.severitySource !== "auto");
+  const best = voters[0]?.similarity;
   if (best === undefined || best < floor) return null;
   const weights = new Map<Severity, number>();
   let total = 0;
-  for (const one of neighbours) {
+  for (const one of voters) {
     const weight = Math.exp((one.similarity - best) / temperature);
     weights.set(one.severity, (weights.get(one.severity) ?? 0) + weight);
     total += weight;

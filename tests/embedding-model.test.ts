@@ -196,6 +196,7 @@ describe("the index with the model", () => {
     expect(answer.suggestions[0]).toMatchObject({
       session: "synth",
       severity: "critical",
+      severitySource: "manual",
       body: "Missing the region in the cache key: two tariffs collide here.",
       similarity: expect.any(Number),
     });

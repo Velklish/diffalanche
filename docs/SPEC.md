@@ -96,7 +96,7 @@ flowchart LR
 
 ### Phase 2 — suggestions and context
 
-- While typing a comment, the user sees similar past comments from all sessions and accepts one with a single keystroke. The tool proposes a severity based on similar comments; a comment sent with the proposal is marked as labelled automatically until an agent confirms it.
+- While typing a comment, the user sees similar past comments from all sessions and accepts one with a single keystroke. The tool proposes a severity based on similar comments; a comment sent with the proposal is marked as labelled automatically until an agent confirms it, and until then its label does not count toward later proposals.
 - The user opens any file of a repository at the base revision or the working tree and expands the context around a hunk.
 - Global search also finds text in any file and symbols by name in any repository of the review.
 - The user deletes a review session.

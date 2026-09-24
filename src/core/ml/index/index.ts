@@ -55,6 +55,7 @@ function entryOf(session: string, comment: Comment): IndexEntry {
     session,
     id: comment.id,
     severity: comment.severity,
+    severitySource: comment.severitySource,
     repo: comment.repo,
     path: comment.path,
     line: comment.line,

@@ -30,7 +30,7 @@ written yet. Of the `model` group, `model status` and `model pull --embedding` e
 | `diffalanche resolve <id> --role human [--note <text>] [--author]` | close a thread |
 | `diffalanche reopen <id> --role human [--note <text>] [--author]` | open it again |
 | `diffalanche export [--status <open\|all>] [--format <md\|json>]` | the review as markdown grouped by repository |
-| `diffalanche suggest [--json] --body <text>` | the five past comments nearest the text across every review session, with their sources, and the severity they vote for; see [09-ml.md](09-ml.md#suggestions) |
+| `diffalanche suggest [--json] --body <text>` | the five past comments nearest the text across every review session, with their sources, and the severity they vote for, which a severity the model chose and nobody confirmed takes no part in; see [09-ml.md](09-ml.md#suggestions) |
 | `diffalanche index rebuild` | embeds every comment of every review session again and writes the index; see [09-ml.md](09-ml.md#index-rebuild-and-index-status) |
 | `diffalanche index status [--json]` | what the index holds, what it is missing, and what built it, read without the model |
 | `diffalanche model pull [--embedding]` | puts the embedding model and its runtime into the user cache now rather than on first use, with the download's progress on standard error; see [09-ml.md](09-ml.md#delivery) |

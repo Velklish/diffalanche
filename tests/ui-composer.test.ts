@@ -16,6 +16,7 @@ function row(id: string, severity: Severity, body: string): Suggestion {
     session: "synth",
     id,
     severity,
+    severitySource: "manual",
     repo: null,
     path: null,
     line: null,

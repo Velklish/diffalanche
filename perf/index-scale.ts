@@ -54,6 +54,7 @@ function fake(size: number): EmbeddingIndex {
       session: `s${row % 50}`,
       id: `c_${row}`,
       severity: "warning",
+      severitySource: "manual",
       repo: "repos/g/a",
       path: "src/A.cs",
       line: row % 400,

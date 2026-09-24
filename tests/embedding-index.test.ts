@@ -6,10 +6,10 @@ import { tmpdir } from "node:os";
 import { join } from "node:path";
 import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
 import { run } from "../src/cli/run.ts";
-import { addComment, deleteSession } from "../src/core/domain/index.ts";
+import { addComment, deleteSession, reply } from "../src/core/domain/index.ts";
 import { modelDirectory } from "../src/core/ml/embed/cache.ts";
 import { EMBEDDING_MODEL, embeddingIdentity } from "../src/core/ml/embed/model.ts";
-import type { EmbeddingIndex } from "../src/core/ml/index/index.ts";
+import type { EmbeddingIndex, IndexEntry } from "../src/core/ml/index/index.ts";
 import {
   indexPath,
   indexStatus,
@@ -17,8 +17,14 @@ import {
   readIndex,
   updateIndex,
 } from "../src/core/ml/index/index.ts";
+import { writeIndex } from "../src/core/ml/index/store.ts";
 import { suggest } from "../src/core/ml/suggest/index.ts";
-import { readComments, sessionDir, writeComments } from "../src/core/storage/index.ts";
+import {
+  commentsPath,
+  readComments,
+  sessionDir,
+  writeComments,
+} from "../src/core/storage/index.ts";
 import { dataIgnore } from "../src/core/watcher/index.ts";
 import type { UiAssets } from "../src/server/assets.ts";
 import { comment, makeSession } from "./helpers/session.ts";
@@ -61,6 +67,12 @@ function fakeEmbedder(identity = embeddingIdentity()) {
       return texts.map(vectorOf);
     },
   };
+}
+
+/** The JSON line of `index.bin`, as it is on disk. */
+function headerOf(dataDir: string): string {
+  const bytes = readFileSync(indexPath(dataDir));
+  return bytes.toString("utf8", 0, bytes.indexOf(0x0a));
 }
 
 function vectorFor(index: EmbeddingIndex, session: string, id: string): number[] {
@@ -240,6 +252,130 @@ describe("the index with an embedder that is a function of the text", () => {
     expect(await indexStatus(dataDir, embeddingIdentity())).toMatchObject({ missing: 0, gone: 0 });
   });
 
+  it("keeps who chose each severity, and takes a confirmation without embedding", async () => {
+    const left = await addComment(dataDir, "beta", {
+      severity: "nit",
+      severitySource: "auto",
+      body: "left to the model",
+      author: "kim.p",
+      role: "human",
+    });
+    const { index } = await updateIndex(dataDir, fakeEmbedder());
+    expect(index.entries.map((entry) => `${entry.id} ${entry.severitySource}`)).toEqual([
+      "c_a1 manual",
+      "c_a2 manual",
+      "c_b1 manual",
+      `${left.id} auto`,
+    ]);
+    await reply(dataDir, "beta", left.id, {
+      author: "claude",
+      role: "agent",
+      body: "agreed",
+      confirmSeverity: true,
+    });
+    const fake = fakeEmbedder();
+    const again = await updateIndex(dataDir, fake);
+    expect(fake.embedded).toEqual([]);
+    const read = (await readIndex(dataDir)).index;
+    for (const entries of [again.index.entries, read?.entries ?? []]) {
+      expect(entries.find((entry) => entry.id === left.id)?.severitySource).toBe(
+        "confirmed:claude",
+      );
+    }
+  });
+
+  it("takes the sources an index written without them lacks, and embeds nothing", async () => {
+    const left = await addComment(dataDir, "beta", {
+      severity: "nit",
+      severitySource: "auto",
+      body: "left to the model",
+      author: "kim.p",
+      role: "human",
+    });
+    const { index } = await updateIndex(dataDir, fakeEmbedder());
+    // What a build from before the source writes: the same index with no severitySource.
+    const older = index.entries.map(({ severitySource: _, ...entry }) => entry);
+    await writeIndex(dataDir, { ...index, entries: older as IndexEntry[] });
+    expect(headerOf(dataDir)).not.toContain("severitySource");
+    const { index: read, problem } = await readIndex(dataDir);
+    expect(problem).toBeNull();
+    // Read as storage reads a comment without the field, and every session with entries unread.
+    expect(read?.entries.every((entry) => entry.severitySource === "manual")).toBe(true);
+    expect(read?.sessions).toEqual({});
+
+    const fake = fakeEmbedder();
+    const { index: taken, update } = await updateIndex(dataDir, fake);
+    expect(fake.embedded).toEqual([]);
+    expect(update).toMatchObject({ embedded: 0, kept: 4, dropped: 0, rebuilt: null });
+    expect(taken.entries.find((entry) => entry.id === left.id)?.severitySource).toBe("auto");
+    expect(headerOf(dataDir)).toContain('"severitySource":"auto"');
+    expect(Object.keys(taken.sessions)).toEqual(["alpha", "beta"]);
+
+    // A source that is none of the three is a hand-edited file: rebuilt, not half-read.
+    const edited = index.entries.map((entry) => ({ ...entry, severitySource: "confirmed:" }));
+    await writeIndex(dataDir, { ...index, entries: edited as IndexEntry[] });
+    expect((await readIndex(dataDir)).problem).toContain(
+      "entries[0].severitySource: not a severity source",
+    );
+  });
+
+  it("keeps an older index's entries of a broken comments.json `manual` until it is fixed", async () => {
+    const left = await addComment(dataDir, "beta", {
+      severity: "nit",
+      severitySource: "auto",
+      body: "left to the model",
+      author: "kim.p",
+      role: "human",
+    });
+    const { index } = await updateIndex(dataDir, fakeEmbedder());
+    const older = index.entries.map(({ severitySource: _, ...entry }) => entry);
+    await writeIndex(dataDir, { ...index, entries: older as IndexEntry[] });
+    const good = readFileSync(commentsPath(dataDir, "beta"), "utf8");
+    writeFileSync(commentsPath(dataDir, "beta"), "{ not json");
+
+    const broken = await updateIndex(dataDir, fakeEmbedder());
+    expect(broken.update.warnings).toHaveLength(1);
+    expect(broken.index.entries.find((entry) => entry.id === left.id)?.severitySource).toBe(
+      "manual",
+    );
+    expect(Object.keys(broken.index.sessions)).toEqual(["alpha"]);
+    expect(Object.keys((await readIndex(dataDir)).index?.sessions ?? {})).toEqual(["alpha"]);
+
+    writeFileSync(commentsPath(dataDir, "beta"), good);
+    const fake = fakeEmbedder();
+    const fixed = await updateIndex(dataDir, fake);
+    expect(fake.embedded).toEqual([]);
+    expect(fixed.index.entries.find((entry) => entry.id === left.id)?.severitySource).toBe("auto");
+    expect(Object.keys(fixed.index.sessions)).toEqual(["alpha", "beta"]);
+  });
+
+  it("lists a comment the model labelled, and leaves it out of the vote until confirmed", async () => {
+    // The same text as beta's critical, labelled `nit` by the model and nearer in the row order.
+    const left = await addComment(dataDir, "alpha", {
+      severity: "nit",
+      severitySource: "auto",
+      body: "the cache key misses the region",
+      author: "kim.p",
+      role: "human",
+    });
+    const body = "the cache key misses the region";
+    const first = await suggest(dataDir, fakeEmbedder(), body);
+    expect(first.suggestions.slice(0, 2).map((one) => `${one.id} ${one.severitySource}`)).toEqual([
+      `${left.id} auto`,
+      "c_b1 manual",
+    ]);
+    expect(first.severity?.severity).toBe("critical");
+
+    await reply(dataDir, "alpha", left.id, {
+      author: "claude",
+      role: "agent",
+      body: "agreed",
+      confirmSeverity: true,
+    });
+    // Confirmed, it votes like any other: a tie at the same text, and the nearer row wins it.
+    expect((await suggest(dataDir, fakeEmbedder(), body)).severity?.severity).toBe("nit");
+  });
+
   it("reads a session again when only the inode of its comments.json changed", async () => {
     const { index } = await updateIndex(dataDir, fakeEmbedder());
     const print = index.sessions.alpha as { mtimeMs: number; size: number; ino: number };
@@ -387,6 +523,7 @@ describe("the index with an embedder that is a function of the text", () => {
         session: `s${row % 50}`,
         id: `c_${row}`,
         severity: "nit" as const,
+        severitySource: "manual" as const,
         repo: null,
         path: null,
         line: null,

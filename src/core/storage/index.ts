@@ -37,6 +37,7 @@ export type {
 } from "./types.ts";
 export {
   confirmedBy,
+  isSeveritySource,
   ROLES,
   SCHEMA_VERSION,
   SEVERITIES,
