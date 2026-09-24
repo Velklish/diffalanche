@@ -284,7 +284,9 @@ test("saying the same thing again gives it the whole lifetime", async ({ page })
   });
   const lifetimes = () =>
     page.evaluate(() => (window as unknown as { __lifetimes: number }).__lifetimes);
-  // `Copy .md` says the same sentence on every press, copied or refused alike.
+  // `Copy .md` says the same sentence on every press; granted, it is the short answer the handoff
+  // drew, whose lifetime is the 2.2 s counted here — a refusal is longer and lives longer (DA-102.1).
+  await page.context().grantPermissions(["clipboard-read", "clipboard-write"]);
   await page.getByRole("button", { name: "Export .md" }).click();
   const copy = page.getByRole("button", { name: "Copy .md" });
 
@@ -303,6 +305,46 @@ test("saying the same thing again gives it the whole lifetime", async ({ page })
 
   // And it still goes away on its own, 2.2 s after the second press.
   await page.clock.runFor(1_400);
+  await expect(toast).toBeHidden();
+});
+
+/** A refusal is a sentence written for the CLI, and it stays as long as it takes to read; a short
+ * answer keeps the handoff's 2.2 s, which the test above holds (DA-102.1). */
+test("a long refusal stays on screen longer than a short answer", async ({ page }) => {
+  await page.clock.install();
+  await open(page);
+  await page.clock.pauseAt(await page.evaluate(() => Date.now() + 60_000));
+  // 116 characters, DA-102's storage refusal: 2.2 s and 50 ms for each of the 56 past 60.
+  const refusal =
+    'comments.json of "synth" cannot be read: comments[3].line is "7a", which is not a whole number'.padEnd(
+      116,
+      ".",
+    );
+  await page.route("**/api/sessions/*/base", (route) =>
+    route.fulfill({ status: 400, json: { error: "bad-request", message: refusal } }),
+  );
+  await page.evaluate(() => {
+    const held = window as unknown as { __lifetimes: number[] };
+    const set = window.setTimeout;
+    held.__lifetimes = [];
+    window.setTimeout = ((handler: TimerHandler, ms?: number, ...rest: unknown[]) => {
+      if ((ms ?? 0) >= 2_200) held.__lifetimes.push(ms as number);
+      return set(handler, ms, ...rest);
+    }) as typeof window.setTimeout;
+  });
+  const lifetimes = () =>
+    page.evaluate(() => (window as unknown as { __lifetimes: number[] }).__lifetimes);
+
+  await page.getByRole("button", { name: /BASE/ }).click();
+  await page.getByRole("button", { name: "Apply" }).click();
+  const toast = page.locator(".toast");
+  await expect(toast).toHaveText(refusal);
+  await expect.poll(lifetimes).toContain(5_000);
+
+  // Past where 2.2 s would have ended it, and still there; gone once its own 5 s are up.
+  await page.clock.runFor(2_300);
+  await expect(toast).toBeVisible();
+  await page.clock.runFor(2_800);
   await expect(toast).toBeHidden();
 });
 

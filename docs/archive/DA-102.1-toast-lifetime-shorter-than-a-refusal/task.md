@@ -13,7 +13,7 @@ refusal is a sentence written for the CLI: the storage one names the file and th
 field. The test of DA-102 uses one of 82 characters behind a 34-character
 prefix: 116 in all. The toast's lifetime does not depend on what it says:
 
-<!-- quote:../../../src/ui/components/Toast.tsx -->
+<!-- quote:before:../../../src/ui/components/Toast.tsx -->
 ```tsx
 /** Bottom centre, 2.2 seconds, as the handoff's "Тосты" says. */
 const LIFETIME_MS = 2200;

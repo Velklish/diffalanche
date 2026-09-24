@@ -606,7 +606,9 @@ adjustment.
   `accBg` inside `accBd`. `panel` and not `panel3`, because light `crit` and
   `warn` text fall under 4.5:1 on `panel3`.
 - **Toast:** 8 px radius on `panel3` with the small shadow, `9px 14px`, bottom
-  centre, 2.2 seconds.
+  centre, 2.2 seconds for a text of up to 60 characters — every answer the
+  handoff draws — and 50 ms more for each character past them, up to 10 s: a
+  refusal is a sentence written for the CLI and is read, not glanced at.
 
 ### Inputs and fields
 

@@ -527,6 +527,12 @@ and `bun run release` refuses a version that has no section. See
 
 ### Fixed
 
+- **A long toast stays long enough to be read** (DA-102.1). A refusal the
+  server or the store puts in the toast is a sentence written for the CLI —
+  DA-102's storage refusal is 116 characters — and it had the same 2.2 seconds
+  as `Markdown скопирован`. A toast of up to 60 characters, every answer the
+  handoff draws, still lives 2.2 s; each character past that adds 50 ms, up to
+  10 s, so that refusal now stays 5 s.
 - **A thread on the old side sits under the deleted line it names** (DA-37.2).
   The file card grouped threads by line number alone, so a comment written with
   `comment --side old` on a deleted line sat under the new-side line of the same

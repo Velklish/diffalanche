@@ -160,7 +160,7 @@ export const LIVE_WINDOW_MS = 120_000;
 const ACTIVITY_KEPT = 200;
 
 /** A message and the press that raised it: two identical strings are two
- * toasts, and the second gets its own 2.2 seconds ([08-ui.md]). */
+ * toasts, and the second gets its own lifetime ([08-ui.md]). */
 type Raised = { text: string; seq: number };
 
 let raised = 0;

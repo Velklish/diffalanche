@@ -6,4 +6,4 @@
 
 **Documentation in the same pass.** `docs/reference/08-ui.md` › Store (the refusal rule, the silent background reads, where `refusal()` lives) and the UI tests paragraph on the shared `EventSource` stub; `CHANGELOG.md`, `### Fixed`.
 
-**Filed, not closed.** [DA-102.1](../../backlog/minor/DA-102.1-toast-lifetime-shorter-than-a-refusal.md), `minor`: a server's refusal sentence gets the same 2.2 seconds in the toast as any short answer; the toast's lifetime is the handoff's, so it waits in `minor/`.
+**Filed, not closed.** [DA-102.1](../DA-102.1-toast-lifetime-shorter-than-a-refusal/task.md), `minor`: a server's refusal sentence gets the same 2.2 seconds in the toast as any short answer; the toast's lifetime is the handoff's, so it waits in `minor/`.

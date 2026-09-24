@@ -472,7 +472,7 @@
       "name": "Toast",
       "kind": "custom",
       "refersTo": "toast",
-      "description": "The 2.2-second confirmation at the bottom centre. One of the only two things in the system that casts a shadow.",
+      "description": "The confirmation at the bottom centre: 2.2 seconds for a text of up to 60 characters, 50 ms more for each character past them, 10 seconds at most (DA-102.1). One of the only two things in the system that casts a shadow.",
       "html": "<div class=\"ds-toast\">Комментарий сохранён</div>",
       "css": ".ds-toast { display: inline-block; padding: 9px 14px; border: 1px solid var(--bd); border-radius: 8px; background: var(--panel3); box-shadow: var(--shadowSm); color: var(--tx); font: 12.5px/1.5 var(--sans); animation: dcin 140ms ease-out; }"
     }
