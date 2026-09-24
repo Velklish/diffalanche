@@ -1,6 +1,16 @@
 /** `src/core/ml/index` and `index rebuild` / `index status` with an embedder that is a function
  * of the text and nothing else; the half with the model is tests/embedding-model.test.ts. */
-import { mkdtempSync, readdirSync, readFileSync, rmSync, statSync, writeFileSync } from "node:fs";
+import {
+  chmodSync,
+  mkdirSync,
+  mkdtempSync,
+  readdirSync,
+  readFileSync,
+  rmSync,
+  statSync,
+  symlinkSync,
+  writeFileSync,
+} from "node:fs";
 import { rm } from "node:fs/promises";
 import { tmpdir } from "node:os";
 import { join } from "node:path";
@@ -24,10 +34,11 @@ import {
   readComments,
   sessionDir,
   writeComments,
+  writeReview,
 } from "../src/core/storage/index.ts";
 import { dataIgnore } from "../src/core/watcher/index.ts";
 import type { UiAssets } from "../src/server/assets.ts";
-import { comment, makeSession } from "./helpers/session.ts";
+import { comment, makeSession, review } from "./helpers/session.ts";
 
 const noUi: UiAssets = { read: async () => null };
 const DIMENSIONS = 8;
@@ -375,6 +386,55 @@ describe("the index with an embedder that is a function of the text", () => {
     // Confirmed, it votes like any other: a tie at the same text, and the nearer row wins it.
     expect((await suggest(dataDir, fakeEmbedder(), body)).severity?.severity).toBe("nit");
   });
+
+  it("keeps what it had of a comments.json its stat is refused, and says so", async () => {
+    // A session with no comments.json yet: its fingerprint is `null`, which a refusal must not match.
+    await writeReview(dataDir, "gamma", review("gamma"));
+    const { index: first } = await updateIndex(dataDir, fakeEmbedder());
+    const before = statSync(indexPath(dataDir)).mtimeMs;
+    // The listing reads review.json and passes the session; the link's target is behind a file.
+    writeFileSync(join(dataDir, "plain"), "not a directory\n");
+    const link = (session: string) => {
+      rmSync(commentsPath(dataDir, session), { force: true });
+      symlinkSync(join(dataDir, "plain", "comments.json"), commentsPath(dataDir, session));
+      return (
+        `${commentsPath(dataDir, session)}: could not be read: ` +
+        "a file is in the way of one of its parents; its comments were not indexed again"
+      );
+    };
+    const gamma = link("gamma");
+    const alone = await updateIndex(dataDir, fakeEmbedder(), { current: first });
+    expect(alone.update.warnings).toEqual([gamma]);
+
+    const alpha = link("alpha");
+    const { index, update } = await updateIndex(dataDir, fakeEmbedder());
+    expect(update.warnings).toEqual([alpha, gamma]);
+    expect(index.entries.map((entry) => entry.id)).toEqual(["c_a1", "c_a2", "c_b1"]);
+    const again = await updateIndex(dataDir, fakeEmbedder(), { current: index });
+    expect(again.update.warnings).toEqual([alpha, gamma]);
+    expect(statSync(indexPath(dataDir)).mtimeMs).toBe(before);
+  });
+
+  it.skipIf(process.getuid?.() === 0)(
+    "says a comments.json behind a directory it may not enter is refused, not its errno",
+    async () => {
+      await updateIndex(dataDir, fakeEmbedder());
+      const locked = join(dataDir, "locked");
+      mkdirSync(locked);
+      rmSync(commentsPath(dataDir, "alpha"));
+      symlinkSync(join(locked, "comments.json"), commentsPath(dataDir, "alpha"));
+      chmodSync(locked, 0o000);
+      try {
+        const { update } = await updateIndex(dataDir, fakeEmbedder());
+        expect(update.warnings).toEqual([
+          `${commentsPath(dataDir, "alpha")}: could not be read: permission denied; ` +
+            "its comments were not indexed again",
+        ]);
+      } finally {
+        chmodSync(locked, 0o755);
+      }
+    },
+  );
 
   it("reads a session again when only the inode of its comments.json changed", async () => {
     const { index } = await updateIndex(dataDir, fakeEmbedder());

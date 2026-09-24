@@ -13,7 +13,7 @@ reads of the session files through `readError`, and since DA-99.2 so do
 takes a fingerprint of each session's `comments.json` with a `stat` of its own
 and keeps the `ENOENT`-only shape:
 
-<!-- quote:../../../src/core/ml/index/index.ts -->
+<!-- quote:before:../../../src/core/ml/index/index.ts -->
 ```ts
   try {
     const info = await stat(commentsPath(dataDir, session));

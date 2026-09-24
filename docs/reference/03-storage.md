@@ -425,6 +425,14 @@ than blaming a parent:
 `EISDIR` stays out of both, for the reason above: `config.json` made a
 directory reaches exit code 2 with its stack, and a listing never meets it.
 
+The embedding index takes a `stat` of every session's `comments.json` for its
+fingerprint and words it through the same `readError` (DA-99.3): the listing
+reads `review.json` and passes a session whose `comments.json` is a link into a
+directory nobody may enter, or through a file, and that `stat` was a raw errno at
+exit code 2 under `suggest` and `index rebuild`. It is now a warning of the
+update, and the session keeps what was indexed of it
+([09-ml.md](09-ml.md#bringing-it-up-to-date)).
+
 The `scope` of `review.json` is checked for being a scope at all and no further:
 a list of entries with a `repo` and, when it has them, a list of `paths`; absent
 or `null` is the whole root. An empty list is refused, and so is an empty

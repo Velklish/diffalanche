@@ -6,6 +6,7 @@ import {
   commentsPath,
   listSessionNames,
   readComments,
+  readError,
   StorageError,
   timestamp,
 } from "../../storage/index.ts";
@@ -41,12 +42,13 @@ async function exists(path: string): Promise<boolean> {
 
 /** Taken before the file is read, so a write landing between the two is seen next time. */
 async function fingerprint(dataDir: string, session: string): Promise<Fingerprint> {
+  const path = commentsPath(dataDir, session);
   try {
-    const info = await stat(commentsPath(dataDir, session));
+    const info = await stat(path);
     return { mtimeMs: info.mtimeMs, size: info.size, ino: info.ino };
   } catch (error) {
     if ((error as NodeJS.ErrnoException).code === "ENOENT") return null;
-    throw error;
+    throw readError(error, path);
   }
 }
 
@@ -119,10 +121,20 @@ export async function updateIndex(
     return { index: { ...index, vectors: new Float32Array(0) }, update };
   }
   const prints = new Map<string, Fingerprint>();
-  for (const session of listing.names) prints.set(session, await fingerprint(dataDir, session));
+  // A `stat` storage refuses is left to the session's read, which says why and keeps what it had.
+  const refused = new Set<string>();
+  for (const session of listing.names) {
+    try {
+      prints.set(session, await fingerprint(dataDir, session));
+    } catch (error) {
+      if (!(error instanceof StorageError)) throw error;
+      refused.add(session);
+    }
+  }
   // Nothing written since: the index as it is, not a copy of it.
   if (
     previous !== null &&
+    refused.size === 0 &&
     listing.names.length === Object.keys(previous.sessions).length &&
     listing.names.every((session) =>
       samePrint((previous as EmbeddingIndex).sessions[session], prints.get(session) ?? null),
@@ -150,7 +162,11 @@ export async function updateIndex(
   for (const session of listing.names) {
     const print = prints.get(session) ?? null;
     const carried = bySession.get(session) ?? [];
-    if (previous !== null && samePrint(previous.sessions[session], print)) {
+    if (
+      !refused.has(session) &&
+      previous !== null &&
+      samePrint(previous.sessions[session], print)
+    ) {
       sessions[session] = print;
       rows.push(...carried);
       continue;
@@ -169,7 +185,8 @@ export async function updateIndex(
       continue;
     }
     changed = true;
-    sessions[session] = print;
+    // Refused, it has no fingerprint to keep: read again next time, rather than matched as absent.
+    if (!refused.has(session)) sessions[session] = print;
     for (const comment of comments) {
       const row = old.get(`${session}\u0000${comment.id}`);
       const same = row !== undefined && previous?.entries[row]?.body === comment.body;

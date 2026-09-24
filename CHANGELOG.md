@@ -527,6 +527,16 @@ and `bun run release` refuses a version that has no section. See
 
 ### Fixed
 
+- **A `comments.json` the embedding index may not `stat` is a warning, not a raw
+  errno** (DA-99.3). The index fingerprints every session's `comments.json` with
+  a `stat` of its own, which rethrew anything but `ENOENT`; the listing reads
+  only `review.json`, so a `comments.json` that is a link into a directory nobody
+  may enter, or through a file, stopped `suggest` and `index rebuild` at exit
+  code 2.
+  The `stat` now goes through storage's `readError`, and such a session is read
+  and kept as a broken `comments.json` is: named in the update's warnings —
+  `could not be read: permission denied` — with what was indexed of it kept.
+
 - **A task opened again by name shows what a terminal wrote to it while no window
   was on it** (DA-55.7). The server keeps the document of a task after its window
   closes, and the watcher reads the files of the tasks it follows only, so a
