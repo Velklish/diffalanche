@@ -7,7 +7,16 @@ import { promisify } from "node:util";
 import { afterAll, beforeAll, describe, expect, it } from "vitest";
 import { PLAYWRIGHT, runSuite } from "../e2e/quiet.ts";
 import type { Budget, GateRow } from "../perf/budgets.ts";
-import { BUDGETS, evaluate, fails, formatTable, RUNNER_ALLOWANCE } from "../perf/budgets.ts";
+import {
+  BUDGETS,
+  compare,
+  evaluate,
+  fails,
+  formatComparison,
+  formatTable,
+  RUNNER_ALLOWANCE,
+  resolution,
+} from "../perf/budgets.ts";
 import { assertErasable, fixtureDrift } from "../perf/fixture.ts";
 import type { Measurement } from "../perf/harness.ts";
 import { parseArgs, SCRATCH_SESSION, twoSessions } from "../perf/harness.ts";
@@ -672,5 +681,85 @@ describe("the UI suite's load precondition", () => {
     expect(await runSuite([], late)).toBe(1);
     expect(late.said).toHaveLength(1);
     expect(late.said[0]).toMatch(/^\nunable to measure: .* during the suite, so the red/);
+  });
+});
+
+describe("the comparison of two trees", () => {
+  // Nine a side, the procedure's default, from one machine's spread of the update line.
+  const spread = [262, 275, 281, 284, 286, 290, 294, 303, 311];
+  const side = (shift: number) =>
+    spread.map((updateMs) => measurement({ updateMs: updateMs + shift }));
+  const update = (rows: ReturnType<typeof compare>) =>
+    rows.find((row) => row.label === "Update after an edit in one repository");
+
+  it("finds no difference between two sides drawn from one spread", () => {
+    // Other samples of the same spread, whose median is further off than the closest split's.
+    const other = [264, 273, 282, 287, 291, 293, 298, 305, 309].map((updateMs) =>
+      measurement({ updateMs }),
+    );
+    const rows = compare(side(0), other);
+    expect(update(rows)).toMatchObject({ base: 286, branch: 291, verdict: "no difference" });
+    expect(rows.every((row) => row.verdict === "no difference")).toBe(true);
+  });
+
+  it("calls a line worse or better only past what its own samples resolve", () => {
+    const resolves = resolution(spread, spread);
+    expect(resolves).toBeGreaterThan(0);
+    expect(update(compare(side(0), side(60)))?.verdict).toBe("worse");
+    expect(update(compare(side(60), side(0)))?.verdict).toBe("better");
+    expect(update(compare(side(0), side(Math.floor(resolves / 2))))?.verdict).toBe("no difference");
+  });
+
+  it("resolves nothing on a line that never moves, so any count there is a difference", () => {
+    const quiet = spread.map(() => measurement({ scrollLongTasks: 0 }));
+    const loud = spread.map(() => measurement({ scrollLongTasks: 1 }));
+    const count = (rows: ReturnType<typeof compare>) =>
+      rows.find((row) => row.label === "Scrolling the diff: long tasks");
+    expect(count(compare(quiet, quiet))).toMatchObject({ resolves: 0, verdict: "no difference" });
+    expect(count(compare(quiet, loud))?.verdict).toBe("worse");
+  });
+
+  it("prints each side with what it is held by, a count by its mean", () => {
+    const table = formatComparison(compare(side(0), side(0)), 9);
+    expect(table).toContain("| Metric | Base, 9 runs | Branch, 9 runs | Difference | Resolves | |");
+    expect(table).toContain(
+      "| Scrolling the diff: long tasks | 0 tasks, mean | 0 tasks, mean | 0 tasks | ±0 tasks | no difference |",
+    );
+    expect(table).toContain("| Update after an edit in one repository | 286 ms, median |");
+  });
+
+  it("refuses fewer than eight runs a side, where no difference could come out as one", () => {
+    // A hundred milliseconds apart and still inside what six a side resolve: the hole it closes.
+    const six = spread.slice(0, 6);
+    expect(
+      resolution(
+        six,
+        six.map((value) => value + 100),
+      ),
+    ).toBeGreaterThanOrEqual(100);
+    const few = (count: number, shift: number) =>
+      spread.slice(0, count).map((updateMs) => measurement({ updateMs: updateMs + shift }));
+    expect(() => compare(few(3, 0), few(3, 100))).toThrow(/at least 8 runs a side, got 3 and 3/);
+    expect(() => compare(few(7, 0), few(7, 100))).toThrow(/at least 8 runs a side, got 7 and 7/);
+    expect(update(compare(few(8, 0), few(8, 100)))?.verdict).toBe("worse");
+  });
+
+  it("leaves a line with a sample it cannot trust not measured, as the gate does", () => {
+    for (const untrusted of [0, Number.NaN, null as unknown as number]) {
+      const broken = side(0).map((one, index) =>
+        index === 4 ? { ...one, updateMs: untrusted } : one,
+      );
+      const rows = compare(broken, side(0));
+      expect(update(rows)?.verdict).toBe("not measured");
+      expect(rows.filter((row) => row.verdict === "not measured")).toHaveLength(1);
+      expect(formatComparison(rows, 9)).toContain(
+        "| Update after an edit in one repository | not measured | not measured | | | not measured |",
+      );
+    }
+  });
+
+  it("gives the same answer for the same samples", () => {
+    const shifted = spread.map((value) => value + 7);
+    expect(resolution(spread, shifted)).toBe(resolution(spread, shifted));
   });
 });

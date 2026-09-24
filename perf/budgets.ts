@@ -141,3 +141,104 @@ export function formatTable(rows: GateRow[], runs: number): string {
   ];
   return `${lines.join("\n")}\n\n${CPU_PER_FRAME_NOTE}.\n`;
 }
+
+/** How often identical trees may differ by more than a line resolves: once in a hundred. */
+const RESOLVES = 0.99;
+const SHUFFLES = 10_000;
+
+/** Under eight a side, over one split in a hundred reaches the largest difference of medians
+ * (1.30 % at six, 1.17 % at seven, 0.31 % at eight), so none could pass the threshold (11-perf.md). */
+export const MINIMUM_RUNS = 8;
+
+type Comparison = {
+  label: string;
+  unit: string;
+  /** What the sides are held by: the median of a duration, the mean of a count. */
+  statistic: "median" | "mean";
+  base: number;
+  branch: number;
+  resolves: number;
+  verdict: "worse" | "better" | "no difference" | "not measured";
+};
+
+/** A seeded generator, so the same samples always give the same answer. */
+function seeded(seed: number): () => number {
+  let state = seed >>> 0;
+  return () => {
+    state = (state + 0x6d2b79f5) >>> 0;
+    let t = state;
+    t = Math.imul(t ^ (t >>> 15), t | 1);
+    t ^= t + Math.imul(t ^ (t >>> 7), t | 61);
+    return ((t ^ (t >>> 14)) >>> 0) / 4_294_967_296;
+  };
+}
+
+function mean(values: number[]): number {
+  return values.reduce((sum, value) => sum + value, 0) / values.length;
+}
+
+/** The difference of `statistic` that a random split of these samples into two sides of the same
+ * sizes exceeds once in a hundred: the smallest difference this run can tell from noise. */
+export function resolution(base: number[], branch: number[], statistic = median): number {
+  const pooled = [...base, ...branch];
+  const random = seeded(110);
+  const differences: number[] = [];
+  for (let shuffle = 0; shuffle < SHUFFLES; shuffle += 1) {
+    for (let i = pooled.length - 1; i > 0; i -= 1) {
+      const j = Math.floor(random() * (i + 1));
+      [pooled[i], pooled[j]] = [pooled[j] as number, pooled[i] as number];
+    }
+    const left = statistic(pooled.slice(0, base.length));
+    differences.push(Math.abs(statistic(pooled.slice(base.length)) - left));
+  }
+  differences.sort((a, b) => a - b);
+  return differences[Math.floor(RESOLVES * (differences.length - 1))] as number;
+}
+
+/** Every measured line of the budget table; higher is worse on all of them. A count is held by
+ * its mean: a median of mostly zeros moves from 0 to 1 on any split, and resolves nothing. */
+export function compare(base: Measurement[], branch: Measurement[]): Comparison[] {
+  if (base.length < MINIMUM_RUNS || branch.length < MINIMUM_RUNS) {
+    throw new Error(
+      `a comparison takes at least ${MINIMUM_RUNS} runs a side, got ${base.length} and ${branch.length}`,
+    );
+  }
+  return BUDGETS.flatMap(({ label, field, unit }): Comparison[] => {
+    if (field === null) return [];
+    const statistic = unit === "ms" ? median : mean;
+    const name = unit === "ms" ? "median" : "mean";
+    const left = base.map((one) => one[field]);
+    const right = branch.map((one) => one[field]);
+    // The gate's rule for a sample it cannot trust (DA-69): the line is not compared at all.
+    if (![...left, ...right].every((value) => trustworthy(value, unit))) {
+      const nothing = { base: Number.NaN, branch: Number.NaN, resolves: Number.NaN };
+      return [{ label, unit, statistic: name, ...nothing, verdict: "not measured" }];
+    }
+    const resolves = resolution(left, right, statistic);
+    const difference = statistic(right) - statistic(left);
+    const verdict =
+      Math.abs(difference) <= resolves ? "no difference" : difference > 0 ? "worse" : "better";
+    const held = { base: statistic(left), branch: statistic(right) };
+    return [{ label, unit, statistic: name, ...held, resolves, verdict }];
+  });
+}
+
+export function formatComparison(rows: Comparison[], runs: number): string {
+  const lines = [
+    `| Metric | Base, ${runs} runs | Branch, ${runs} runs | Difference | Resolves | |`,
+    "|---|---|---|---|---|---|",
+    ...rows.map((row) => {
+      if (row.verdict === "not measured") {
+        return `| ${row.label} | not measured | not measured | | | not measured |`;
+      }
+      const difference = round(row.branch - row.base);
+      const signed = difference > 0 ? `+${difference}` : `${difference}`;
+      const held = `${row.unit}, ${row.statistic}`;
+      return (
+        `| ${row.label} | ${round(row.base)} ${held} | ${round(row.branch)} ${held} | ` +
+        `${signed} ${row.unit} | ±${round(row.resolves)} ${row.unit} | ${row.verdict} |`
+      );
+    }),
+  ];
+  return `${lines.join("\n")}\n`;
+}

@@ -3,12 +3,13 @@
  * Chromium over the synthetic review and reports the numbers of the budget
  * table.
  */
+import { execFileSync } from "node:child_process";
 import { appendFile, readFile, rm, writeFile } from "node:fs/promises";
 import { join } from "node:path";
 import type { Page } from "@playwright/test";
 import { chromium } from "@playwright/test";
 import type { Config } from "../src/core/config/index.ts";
-import { loadConfig } from "../src/core/config/index.ts";
+import { fixtureEnv, loadConfig } from "../src/core/config/index.ts";
 import {
   addComment,
   createSession,
@@ -259,6 +260,27 @@ async function taskDuration(cdp: { send: (method: "Performance.getMetrics") => P
     );
   }
   return metric.value;
+}
+
+/** One repetition is one `perf/run.ts` process in the tree it measures: a second browser in one
+ * process stalls on Bun (DA-25.2, 11-perf.md "The gate"); the environment is passed, not assigned. */
+export function measureOnce(fixture: string, variant: string, cwd = process.cwd()): Measurement {
+  const stdout = execFileSync(
+    "bun",
+    ["perf/run.ts", "--fixture", fixture, "--variant", variant, "--runs", "1"],
+    {
+      cwd,
+      stdio: ["ignore", "pipe", "inherit"],
+      encoding: "utf8",
+      env: { ...process.env, ...fixtureEnv() },
+    },
+  );
+  const results = JSON.parse(stdout) as Measurement[];
+  const measurement = results[0];
+  if (results.length !== 1 || measurement === undefined) {
+    throw new Error(`perf/run.ts printed ${results.length} measurements, one was expected`);
+  }
+  return measurement;
 }
 
 export function median(values: number[]): number {

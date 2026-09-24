@@ -7,7 +7,7 @@
 
 This is a task in its own right and not a finding under a parent, which is why
 it carries no cost label: it asks for the gate's own resolution to be known and
-stated, which no single task owns. [DA-109](../../archive/DA-109-reference-frame-tables-are-tied-to-nothing-that-fails/task.md) sits here on the same footing.
+stated, which no single task owns. [DA-109](../DA-109-reference-frame-tables-are-tied-to-nothing-that-fails/task.md) sits here on the same footing.
 
 ## Context
 
@@ -76,11 +76,11 @@ budget, and it is then also used for A/B comparisons it cannot resolve.
 ## Out of scope
 
 - The budgets themselves, and which lines are over them. Those are
-  [DA-56.5](DA-56.5-scroll-does-not-fit-the-120-fps-frame.md),
-  [DA-56.6](DA-56.6-update-step-lives-in-da-55.md) and
-  [DA-69.1](DA-69.1-long-task-count-follows-the-machine.md).
+  [DA-56.5](../../backlog/queue/DA-56.5-scroll-does-not-fit-the-120-fps-frame.md),
+  [DA-56.6](../../backlog/queue/DA-56.6-update-step-lives-in-da-55.md) and
+  [DA-69.1](../../backlog/queue/DA-69.1-long-task-count-follows-the-machine.md).
 - The load precondition and what it reads, which is
-  [DA-54.5](../../archive/DA-54.5-load-precondition-reads-one-minute-only/task.md). Both runs above
+  [DA-54.5](../DA-54.5-load-precondition-reads-one-minute-only/task.md). Both runs above
   passed it; this task is about what happens after it passes.
 - Making the suites faster.
 

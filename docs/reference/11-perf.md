@@ -353,7 +353,7 @@ bun perf/run.ts --runs 3
 |---|---|
 | `--fixture <dir>` | Root of a synthetic review made by `bun run synth`. Default `.perf/fixture` |
 | `--variant <name>` | Measure only this variant; repeatable. Default: all of them. There is one, `default` |
-| `--runs <n>` | Repetitions per variant: a whole number of at least 1, anything else is an error. Default 1 for `perf/run.ts`, 3 for the gate |
+| `--runs <n>` | Repetitions per variant: a whole number of at least 1, anything else is an error. Default 1 for `perf/run.ts`, 5 for the gate, 9 a side for `perf/compare.ts` |
 | `--embedding <main\|child>` | `perf/run.ts` only: rebuild the embedding index in a loop inside the server's process while the page is measured — the model on the server's own thread or in the process the server runs it in — and print on stderr how long each run took and how late a 5 ms timer fired ([09-ml.md](09-ml.md#in-a-process-of-its-own)) |
 | `--lag` | `perf/run.ts` only: the timer of `--embedding` with no model, the baseline to hold it against |
 
@@ -443,8 +443,8 @@ the two and not either one.
 `perf/gate.ts` is the gate around it:
 
 ```sh
-bun run perf                       # three runs, medians against the budgets
-bun run perf -- --runs 5           # more runs
+bun run perf                       # five runs, medians against the budgets
+bun run perf -- --runs 7           # more runs
 bun run perf -- --fixture /tmp/x   # another fixture
 ```
 
@@ -466,7 +466,7 @@ the path, exit code 1, and nothing deleted. `perf/fixture.ts` holds the check;
 The gate makes the synthetic review when `.perf/fixture` is not what the
 generator wrote — checked against `synth.json` rather than assumed, and the
 reason is printed before the regeneration — always rebuilds the UI, since a gate
-that measures a stale build measures nothing, and then runs the harness three times on the page
+that measures a stale build measures nothing, and then runs the harness five times on the page
 as it ships — **each repetition in a process of its own**, `perf/run.ts --runs 1`
 with its own server and browser, the number read back from its stdout. The
 second browser one process launches after a whole measurement stalls on Bun:
@@ -475,7 +475,8 @@ own timeouts do not fire, while a process that measures once and exits
 completes every time. The cause is not found; the shape that works is what the
 gate runs.
 It prints one row per budget line and exits 1 when the **median** of any line is
-over its ceiling. One slow run does not fail the build; two do.
+over its ceiling. Two slow runs do not fail the build; three do. Five and not
+three since DA-110, below.
 
 **Which numbers are enforced where.** On a development machine the ceilings
 are the specification's numbers, as the table prints them. On a GitHub-hosted
@@ -590,11 +591,19 @@ commit had measured in the same quiet twenty minutes earlier — CPU per frame
 leave the tail DA-54.5 measured, whose fifteen-minute figure stood at 2.39 per
 core; that takes load the chain does not bring, and it is what the wait is for.
 The UI suite is the gate a chain on its own does hold up, because it starts
-where the minute peaks: the 25 s above, after which all 151 of its specs passed.
-The wait is 300 s because that is one time constant of the
-five-minute figure: long enough for the figure to come down once the load that
-raised it has stopped, and short enough that a machine another session keeps
-busy is refused within five minutes rather than held.
+where the minute peaks: 5 to 35 s over five chains of 2026-09-24, the 25 s above
+among them. In four of the five all 151 of its specs passed; the fifth is
+DA-54.6.
+The wait is 300 s, one time constant of the five-minute figure, and that bounds
+what it can wait out rather than promising to wait anything out: in one time
+constant a damped mean closes 1 − 1/e of its distance to what is left, so even
+if the load that raised it stops as the wait begins, a five-minute figure above
+about b + e·(2.5 − b) per core is still over the ceiling when the wait runs out,
+and the gate declines. With this machine's own background b at about 0.44 per
+core that is about 6 per core, 48 on 8 cores. The bound is arithmetic on the
+damping and has not been measured. A shorter wait would decline on the tail of
+a busy session as the gate did before; a longer one would hold the gate on a
+machine another session keeps busy instead of refusing it.
 
 Why the same ceiling and a wait, and not the other three candidates DA-54.5
 weighed:
@@ -630,7 +639,7 @@ three runs of the gate. A count of runnable work at about one per core does not
 tell those two mornings apart. That the count treats all eight cores alike while
 two of this machine's are efficiency cores, so that what the harness gets
 depends on what else holds the performance ones, is a hypothesis the numbers fit
-and nothing here has tested. What follows from it is not a tighter ceiling — the
+and nothing here has tested (DA-110.1). What follows from it is not a tighter ceiling — the
 two readings overlap — but that a red near a budget, on a machine the
 precondition passed, is still attributed by alternating runs of the branch and
 the base under one hold of the lock, not by the gate's own run.
@@ -835,8 +844,149 @@ The gate is the last of the seven `gates` of `backslop.json` — the seventh —
 reported, and it is the `perf` job of `.github/workflows/ci.yml`, which
 installs Chromium, generates the fixture, and runs the gate — the gate builds
 the UI itself, so the job does not; the table lands in the run summary through
-`GITHUB_STEP_SUMMARY`. One local run takes about 33 seconds on
-an M1 Pro, plus 4 seconds when the fixture has to be generated first.
+`GITHUB_STEP_SUMMARY`. One local run takes about 67 seconds on
+an M1 Pro — five repetitions of about 13 s each and the UI build — plus about
+6 seconds when the fixture has to be generated first (DA-110's series of
+2026-09-24).
+
+### What the gate resolves, and comparing two trees
+
+A verdict against a budget and a comparison of two trees are different
+questions, and until DA-110 the gate was used for both without anybody knowing
+what it could see. This is what it can see, measured.
+
+**The measurement.** Two worktrees of one commit, `f9cda1b`, so every difference
+between them is the machine's; one hold of `/tmp/da-perf.lock` from 05:11 to
+05:30 UTC on 2026-09-24, an 8-core M1 Pro (six performance cores, two
+efficiency), one-minute averages 3.5–10.6 and five-minute ones 5.5–8.2 across
+the hold, read every five seconds, with swap 16.9 of 18.4 GB used. First the gate itself, `bun run perf -- --runs 5`, eight times, the two
+trees alternated A B B A A B B A; then forty `perf/run.ts` processes, twenty a
+tree, in the same order. All forty-eight exited 0. The pool for the resolution
+is the forty processes and repetitions two to five of the eight gate runs,
+seventy-two samples; the resolution is the difference of medians that two sides
+drawn from that pool exceed once in a hundred draws, at the number of samples a
+side named.
+
+| Line | Median | One process, lowest–highest | The gate's median of its first three, eight runs | Resolves, 3 a side: the gate before DA-110 | Resolves, 5 a side: one gate run against another | Resolves, 9 a side: the comparison |
+|---|---|---|---|---|---|---|
+| First render | 104.8 ms | 84.9–150.0 | 100.6–109.9 | 42.6 ms (41 %) | 37.8 ms | 7.4 ms (7 %) |
+| Scrolling: long tasks | 0 | 0–0 | 0 every run | — | — | — |
+| Scrolling: CPU per frame | 8.0 ms | 7.9–8.2 | 7.9–8.1 | 0.2 ms (2 %) | 0.1 ms | 0.1 ms (1 %) |
+| Opening the comment form | 24.0 ms | 23.2–31.5 | 23.8–30.4 | 6.2 ms (26 %) | 2.5 ms | 1.4 ms (6 %) |
+| Jumping to a file | 10.4 ms | 9.5–16.6 | 7.7–12.3 | 3.2 ms (31 %) | 2.5 ms | 2.2 ms (21 %) |
+| Switching review sessions | 72.3 ms | 57.9–100.0 | 69.9–79.3 | 16.3 ms (23 %) | 12.2 ms | 8.3 ms (11 %) |
+| Update after an edit | 284.5 ms | 257–341 | 281–303 | 33 ms (12 %) | 25 ms | 19 ms (7 %) |
+
+Read a row as: two runs of today's five-repetition gate on a quiet machine can
+disagree by the "5 a side" column on identical code — the update line by 25 ms,
+where three repetitions allowed 33 — so a difference smaller than that between
+two single runs is not a difference; the last column is what the comparison
+below resolves at its default. **The long-task count has no resolution in milliseconds
+and needs none.** Identical code read 0 in 79 of 80 samples of the window —
+one repetition of one gate run read 2 — and the median was 0 in every run, so
+a median above zero is outside what the machine did here; what DA-69.1 says
+about the count on a busy machine stands.
+
+**The two runs DA-110 was opened on were the machine.** On 2026-09-22 two runs
+of the gate on trees of identical executable content, `e3224ca` and `5e0ee24`,
+at one-minute averages of 7.52 and 8.82, disagreed by 18 % on the update line and
+25 % on the session switch, and one of them measured CPU per frame 10.3 ms. The
+same `5e0ee24`, alternated with `f9cda1b` in three runs of the gate each right
+after the window above (05:30–05:34 UTC, one-minute 4.8–7.6), measured CPU per
+frame 7.8–7.9 ms, the update 275–287 ms and the switch 64.1–71.2 ms: inside the
+quiet spread, and a quarter under what it measured that evening. The gate's
+resolution on a quiet machine is the table; on the evening of 2026-09-22 it was
+whatever that machine was doing, and the load average said about one per core
+both times. The same alternation shows one real difference between those two
+commits: first render 85.7–87.2 ms on `5e0ee24` against 104.7–106.5 on
+`f9cda1b`, three runs each, the ranges twenty milliseconds apart — the cost
+DA-37.5 suspects, still far inside the 500 ms budget.
+
+**Five repetitions, and no warm-up rule.** Over the pool, the median of three
+update samples on this commit comes out over the 300 ms budget in 7 % of draws,
+the median of five in 3 %, of seven in 1 % — and the first three repetitions of
+one of the eight gate runs above did cross it, at 303 ms, where its five did
+not. So the gate takes five: it halves how often the one line that sits near
+its budget flaps on a quiet machine, for about 26 s more a run. Seven would
+cost 52 s for two more points. A trimmed statistic would
+change nothing the median does not already do with one slow repetition in five.
+The price beside the time: a line is `UNMEASURED` when any one of its samples
+cannot be trusted (DA-69), so five repetitions give such a line five chances
+where three gave it three.
+The first repetition of a run was not warmer or slower as a rule: across the
+eight runs it was above the median of the other four in 4, 3, 2, 5, 4 and 5 of 8
+on the six millisecond lines. The exception is first render right after the
+fixture was generated — +45.1 and +13.9 ms in the two runs that generated one —
+and one slow repetition in five is what the median is for, so nothing is
+discarded by rule.
+
+**Comparing two trees: `bun perf/compare.ts`.** "Is this branch worse than its
+base" is not answered by one run of the gate a side — the "5 a side" column says
+why — and it is answered by this:
+
+```sh
+git worktree add --detach /tmp/base <base>      # the base, beside this tree
+(cd /tmp/base && bun install && bun run perf)   # its dependencies and its own fixture, once
+until mkdir /tmp/da-perf.lock 2>/dev/null; do sleep 15; done
+bun perf/compare.ts --base /tmp/base            # nine a side by default: --runs <n>
+rmdir /tmp/da-perf.lock
+```
+
+It reads both trees' fixtures and refuses one that drifted — each is its own
+gate's to make and erase, so it names the tree to run `bun run perf` in rather
+than touching it — then asks the load precondition as the gate does, builds the
+UI in both trees, and runs one `perf/run.ts` process of each tree in turn, the
+order turning every round (base, branch, branch, base, …) so a machine drifting
+one way loads both sides alike. Every sample goes to stderr with the load
+beside it. The table holds, for every measured line, both medians, the
+difference, and what **this run** resolves: the difference of medians that a
+random split of its own eighteen samples into two sides of nine exceeds once in
+a hundred splits, from a seeded generator so the same samples always answer the
+same. The long-task count is held by its mean instead, and the table says so:
+nine zeros against nine ones split any way at random put one side's median at
+0 and the other's at 1, so a median there resolves nothing, where the mean
+tells the two apart. A line whose difference is inside that is `no difference`; past it,
+`worse` or `better`. A line with a sample the gate would not trust — absent, not
+finite, or an exact zero on a millisecond line (DA-69) — is `not measured` and
+not compared. It exits 1 when a line is worse or not measured, and it declines
+on load as the gate does — a comparison on a busy machine resolves less, and says so in
+its own last column before it would say anything wrong. Nine a side is the
+default because it is where the update line resolves 7 % on a quiet machine,
+about four minutes of the lock; `--runs` takes more, and refuses fewer than
+eight. Under eight a side no difference could pass, however large: the median
+of a side is its middle sample or two, so of all the ways to split two sides
+that do not overlap at all, many reach the same largest difference of medians
+as the split the run observed — counted over every split of nine values
+against the same nine plus 100 ms, 1.30 % of them at six a side, 1.17 % at
+seven, 0.31 % at eight and 0.29 % at nine. Over one in a hundred, the
+threshold is that largest difference itself, and a hundred milliseconds comes
+out `no difference`; at eight and nine it has room.
+
+**One line of seven will sometimes differ on identical trees, and a difference
+is two runs that agree.** Each line is held to one split in a hundred, and six
+of the seven lines move — the long-task count sat at zero — so a comparison of
+identical trees names some line `worse` or `better` about once in seventeen
+runs. It is not held to one in a hundred for the seven together because the
+median cannot get there at these sizes: that would be one split in seven
+hundred a line, under the 0.29 % floor above, and nothing at all could come
+out as a difference. So a line that comes out `worse` is compared again, and it
+is a difference when the second run agrees on the same line.
+
+**Run on identical trees four times, it found no difference on 27 of the 28
+lines.** On 2026-09-24, 06:19–06:27 UTC under one hold, one-minute averages
+4.7–8.4 and five-minute ones 6.1–7.3: a worktree at `edc7f5c` against two
+worktrees at `f9cda1b`, nine a side each time. What they measure is the same
+code — `git diff f9cda1b edc7f5c -- src/ scripts/ perf/run.ts` is empty, and
+`perf/harness.ts` differs by the one function that spawns it. Both runs said
+`no difference` on all seven lines and exited 0. They resolved the update line
+to ±7 and ±10 ms, the switch to ±10.5 and ±10.2 ms, CPU per frame to ±0.1 and
+±0.2 ms and first render to ±6.7 and ±5.5 ms, in line with the table above;
+the largest difference either found was the switch's −9.5 ms, against ±10.2.
+The same two comparisons from `d121039`, 06:54–07:02 UTC, one-minute 6.9–7.9:
+against the first base the switch came out `better`, −7.8 ms against ±7.1,
+the medians 78.2 and 70.4 ms, and every other line of both runs `no
+difference`. That is the one line
+in seventeen runs above, and what the second run is for.
 
 ### A red the machine caused
 
@@ -855,13 +1005,14 @@ add --detach <dir> <base>`, never a checkout that moves the branch's tree. Then:
   load at the first red is part of the proof.
 
 For a line of `bun run perf` "on its own" is not one more run of the gate, which
-cannot resolve a difference of the size in question, but processes of the base
-and the branch alternated under one hold of `/tmp/da-perf.lock`, several a side,
-and never a single pair. The first recorded instance of the proof is DA-54.4's,
-on 2026-09-21: `e2e/live.spec.ts` › "an edit patches its own card, holds the
-reading position, and leaves the composer open" failed at
-`expect(settled).not.toBeNull()` on a branch at a load average of 23.16, and
-passed on that branch at 9.15 and on its base `ed81928` at 9.87.
+cannot resolve a difference of the size in question, but `bun perf/compare.ts`
+against the base under one hold of `/tmp/da-perf.lock` — above — and never a
+single pair. The observation the rule grew from is DA-54.4's, on 2026-09-21:
+`e2e/live.spec.ts` › "an edit patches its own card, holds the reading position,
+and leaves the composer open" failed at `expect(settled).not.toBeNull()` on a
+branch at a load average of 23.16, and passed on that branch at 9.15 and on its
+base `ed81928` at 9.87 — one run of the whole suite each, which is less than
+the rule asks, so it is where the rule came from and not a proof by it.
 
 ## Waits in the suites
 
@@ -963,7 +1114,7 @@ is a red that no longer means anything, so each number has one owner:
 
 | Number | Owner | How it is held |
 |---|---|---|
-| The five budgets of `docs/SPEC.md` section 6 | `bun run perf` | the median of three repetitions, times `RUNNER_ALLOWANCE` on a runner, declined on a busy machine |
+| The five budgets of `docs/SPEC.md` section 6 | `bun run perf` | the median of five repetitions, times `RUNNER_ALLOWANCE` on a runner, declined on a busy machine |
 | 300 ms on top of one rescan: the watcher's own share of an update | `tests/watcher.test.ts`, "rescans the edited repository alone and has the new hunk in diff.json in time" | the median of three edits, each less one rescan of that repository timed beside it once the watcher's write has landed; only where the tree is watched |
 | One frame for a jump from the tree | `e2e/sidebar.spec.ts`, "choosing a file brings its card into view on the frame the click produced" | the card is in view on the frame the click produced; the 50 ms is the gate's |
 | 750 ms from a task made elsewhere to the header mark | `e2e/history.spec.ts`, `MARK_CEILING_MS` | one sample, 2.5 times the 300 ms of a live update; no gate line measures the mark, and the spec says why |

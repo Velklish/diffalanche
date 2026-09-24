@@ -325,16 +325,40 @@ and `bun run release` refuses a version that has no section. See
 
 ### Changed
 
-- **The UI suite asks the load precondition first** (DA-54.4). `bun run
-  test:ui` is a suite about time, and a busy machine reddened a live-update spec
-  a quiet one passes, while `bun run perf` beside it declined on the same load.
-  The script now runs `e2e/quiet.ts` before Playwright: the precondition of
-  `perf/load.ts` — the one- and five-minute averages, the wait of up to 300 s —
-  and on a machine that stays busy `unable to measure: … before the suite` with
-  exit 1, before the build, the fixture and the browser. It is not a Playwright
-  global setup because Playwright starts `webServer` before one. It is off on a
-  GitHub-hosted runner, and `DIFFALANCHE_PERF_IGNORE_LOAD=1` switches it off
-  here too, with **Not evidence.** printed — one variable for one precondition.
+- **The perf gate states what it resolves, takes five repetitions, and has a
+  comparison of two trees** (DA-110). Two runs of the gate on identical code
+  had disagreed by a quarter, and the same gate was used to judge differences of
+  six percent between a branch and its base. Measured on two worktrees of one
+  commit on a quiet machine, [11-perf.md](docs/reference/11-perf.md) now holds,
+  per line, what one run of the five-repetition gate resolves against another
+  and what a comparison of nine processes a side does — the update line 25 ms and
+  19 ms, CPU per frame 0.1 and 0.1 ms — and the quarter was the machine: the tree it was
+  measured on reads inside the quiet spread today. The gate takes the median of
+  five repetitions instead of three, which halves how often the update line
+  flaps at its budget on a quiet machine; the first repetition is kept, since it
+  was not warmer or slower as a rule. `bun perf/compare.ts --base <dir>` is the
+  answer to "is this branch worse than its base": one `perf/run.ts` process of
+  each tree in turn, base and branch alternated, each line's difference of
+  medians held against what that run's own samples resolve, `worse`, `better`,
+  `no difference`, or `not measured` for a line with a sample the gate would not
+  trust, and exit 1 when a line is worse or not measured; it refuses fewer than
+  eight runs a side, where no difference could come out as one. A single run
+  names some line of seven different on identical trees about once in
+  seventeen, so a `worse` counts when a second run agrees.
+- **The UI suite asks the load precondition, before and after** (DA-54.4). `bun
+  run test:ui` is a suite about time, and a busy machine reddened a live-update
+  spec a quiet one passes, while `bun run perf` beside it declined on the same
+  load. The script is now `bun e2e/quiet.ts`, which runs Playwright between two
+  readings of `perf/load.ts`: before, the one- and five-minute averages and the
+  wait of up to 300 s, and on a machine that stays busy `unable to measure: …
+  before the suite` with exit 1, before the build, the fixture and the browser;
+  after, a red run whose busier end was over the ceiling keeps its exit code
+  and gets `unable to measure: … during the suite` under the report, and a run a
+  signal ended leaves with 128 and the signal's number and names it. It is not
+  a Playwright global setup because Playwright starts `webServer` before one.
+  It is off on a GitHub-hosted runner, and `DIFFALANCHE_PERF_IGNORE_LOAD=1`
+  switches the wait off here too — one variable for one precondition — and
+  prints **Not evidence.** only when the load is over the ceiling.
   How a red is proved to be the machine's is written once, for every gate, in
   [11-perf.md](docs/reference/11-perf.md#a-red-the-machine-caused).
 - **The load precondition reads the five-minute average too, and waits for a
