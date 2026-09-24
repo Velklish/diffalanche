@@ -39,7 +39,13 @@ function prepare(fixture: string): void {
     const left = fixtureDrift(fixture);
     if (left !== null) throw new Error(`${fixture} ${left} after it was regenerated`);
   }
+  const built = performance.now();
   execFileSync("bun", ["run", "build:ui"], { stdio: "inherit", env: ENV });
+  process.stderr.write(`build:ui: ${seconds(performance.now() - built)} s\n`);
+}
+
+function seconds(ms: number): number {
+  return Math.round(ms / 100) / 10;
 }
 
 async function main(): Promise<void> {
@@ -63,9 +69,11 @@ async function main(): Promise<void> {
 
   const measurements: Measurement[] = [];
   for (let run = 0; run < runs; run += 1) {
+    const spawned = performance.now();
     const measurement = measureOnce(options.fixture, GATE_VARIANT.name);
     measurements.push(measurement);
-    process.stderr.write(`run ${run + 1}/${runs}: ${JSON.stringify(measurement)}\n`);
+    const wall = seconds(performance.now() - spawned);
+    process.stderr.write(`run ${run + 1}/${runs} in ${wall} s: ${JSON.stringify(measurement)}\n`);
   }
 
   // A GitHub-hosted runner gets the named allowance; a development machine the
@@ -86,6 +94,7 @@ async function main(): Promise<void> {
     ? `**Not evidence.** ${describeLoad(load)}: these numbers are about the machine.\n\n`
     : "";
   process.stdout.write(banner + table);
+  process.stderr.write(`the gate took ${seconds(performance.now())} s\n`);
 
   const summary = process.env.GITHUB_STEP_SUMMARY;
   if (summary) appendFileSync(summary, `## Performance budgets\n\n${banner}${table}`);

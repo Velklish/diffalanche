@@ -374,11 +374,6 @@
         "name": "dcin",
         "value": "opacity 0 -> 1 with translateY(var(--dcin-shift)) -> 0, 140-160ms ease-out",
         "purpose": "Everything that appears: overlays, the composer, a new thread, a card the stream brought in. Defined as a keyframe in src/ui/tokens.css; the travel is the --dcin-shift token, which prefers-reduced-motion takes to 0 so the fade stays and the movement goes."
-      },
-      {
-        "name": "dcpulse",
-        "value": "opacity 1 -> 0.35 -> 1, 2.4s ease-in-out infinite",
-        "purpose": "Everything alive: the watching dot and live agent indicators. 1.1s while the model is searching for an anchor. Defined as a keyframe in src/ui/tokens.css; prefers-reduced-motion stops it with the dot lit rather than caught mid-fade."
       }
     ],
     "focusRings": [
@@ -538,9 +533,9 @@
         "body": "Every border is 1 px. Weight is carried by colour — bd for a real edge, bd2 for an internal split — not by thickness. The only exception is the severity marker on a commented line, which is box-shadow: inset 3px 0 0 <severity>, an inset bar rather than an elevation."
       },
       {
-        "name": "The Two-Keyframe Rule",
+        "name": "The One-Keyframe Rule",
         "section": "shapes",
-        "body": "dcin for arrival, dcpulse for a heartbeat. A third animation is a new decision, not a flourish."
+        "body": "dcin for arrival. Nothing animates without end: something alive says so with its colour and a word, and the pulse it had was taken out by the owner's decision of 2026-09-24 (DA-115). A second animation is a new decision, not a flourish."
       }
     ],
     "dos": [
@@ -549,7 +544,7 @@
       "Do give a new surface a tone from the bg/panel/panel2/panel3 ladder and a 1 px bd border (The Flat Workspace Rule).",
       "Do keep both themes in step. A token added for one theme is added for the other in the same edit, and light is designed as warm paper, not as inverted dark.",
       "Do show focus with acc — a border change on a bordered control, a 1 px outline on a row that has none.",
-      "Do use dcin for anything that appears and dcpulse for anything alive.",
+      "Do use dcin for anything that appears, and colour and a word for anything alive.",
       "Do keep panel widths fixed and let the window scroll below 1560 px.",
       "Do use text symbols (▾ ▸ ⌕ ☾ ☀ ✓ ↑ ↓ ↵ ⏎ ⌘ ⇧ ◆) for iconography."
     ],

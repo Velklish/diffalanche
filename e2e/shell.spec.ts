@@ -66,23 +66,24 @@ test("the empty shell in the light theme", async ({ page }) => {
   });
 });
 
-test("nothing pulses for a reader who asked for less motion", async ({ page }) => {
+test("nothing on the page animates without end", async ({ page }) => {
+  await open(page);
+  // The live dot pulsed for as long as the stream was up, until the owner took it out (DA-115):
+  // at the perf gate's frame rate an endless animation composites on about three cores.
+  await expect(page.locator(".sidebar-foot")).toContainText("watching");
+  const endless = await page.evaluate(() =>
+    document
+      .getAnimations()
+      .filter((one) => one.effect?.getComputedTiming().iterations === Number.POSITIVE_INFINITY)
+      .map((one) => (one as CSSAnimation).animationName ?? "an animation without a name"),
+  );
+  expect(endless).toEqual([]);
+});
+
+test("a reader who asked for less motion gets arrivals without their travel", async ({ page }) => {
   await page.emulateMedia({ reducedMotion: "reduce" });
   await open(page);
-  // The footer's dot is the element that pulses, and it is a plain dot until
-  // the stream has answered: without this the test would pass on a page that
-  // has nothing to animate.
-  await expect(page.locator(".sidebar-foot")).toContainText("watching");
-
-  const moving = await page.evaluate(() =>
-    [...document.querySelectorAll("*")]
-      .map((one) => getComputedStyle(one).animationName)
-      .filter((name) => name !== "none" && name !== ""),
-  );
-  // `dcpulse` runs for as long as the review is open, so it is the one that
-  // matters; `dcin` is an entrance that has already finished by now, and what
-  // reduced motion takes from it is the travel, not the fade (DA-22.1).
-  expect(moving).not.toContain("dcpulse");
+  // What reduced motion takes from `dcin` is the travel, not the fade (DA-22.1).
   expect(
     await page.evaluate(() =>
       getComputedStyle(document.documentElement).getPropertyValue("--dcin-shift").trim(),

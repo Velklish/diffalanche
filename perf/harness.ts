@@ -61,6 +61,10 @@ export type Measurement = {
 /** How many frames one pass over the whole review is given. */
 const SCROLL_FRAMES = 600;
 
+/** A frame starts when the last one is done, not on a 60 Hz tick: the scroll takes what its
+ * frames cost instead of ten seconds (11-perf.md, "Where a run's time goes"). */
+export const BROWSER_ARGS = ["--disable-frame-rate-limit"];
+
 type PageMetrics = { firstRender: number | null; files: number; longTasks: LongTaskEntry[] };
 type LongTaskEntry = { start: number; duration: number };
 type ScrollOutcome = {
@@ -75,23 +79,41 @@ type ScrollOutcome = {
 const PROBE_MARK = "diffalanche measured the update after an edit here";
 const PROBE_LINE = `\n// ${PROBE_MARK}\n`;
 
+/** Wall time of each step of this process, the first from its start: where a repetition's
+ * seconds go (11-perf.md, "Where a run's time goes"). Printed by `printLaps`. */
+const laps: string[] = [];
+let lapFrom = 0;
+
+export function lap(step: string): void {
+  const now = performance.now();
+  laps.push(`${step} ${Math.round(now - lapFrom)}`);
+  lapFrom = now;
+}
+
+export function printLaps(): void {
+  process.stderr.write(`wall per step, ms: ${laps.join(", ")}\n`);
+}
+
 export async function measure(
   baseUrl: string,
   variant: VariantSpec,
   fixture: string,
   sessions: Sessions,
 ): Promise<Measurement> {
-  const browser = await chromium.launch();
+  const browser = await chromium.launch({ args: BROWSER_ARGS });
+  lap("launch");
   try {
     const context = await browser.newContext({ viewport: { width: 1600, height: 1000 } });
     const page = await context.newPage();
     const cdp = await context.newCDPSession(page);
     await cdp.send("Performance.enable");
+    lap("page");
 
     await page.goto(`${baseUrl}/?${variant.query}`, { waitUntil: "commit" });
     await page.waitForFunction(() => window.__perf?.ready === true, undefined, {
       timeout: 120_000,
     });
+    lap("load");
 
     const loaded = (await page.evaluate(() => ({
       firstRender: window.__perf.firstRender,
@@ -111,14 +133,17 @@ export async function measure(
       { step, frames: SCROLL_FRAMES },
     )) as ScrollOutcome;
     const after = await taskDuration(cdp);
+    lap("scroll");
 
     const composerOpenMs = (await page.evaluate(() => window.__perf.openComposer())) as number;
+    lap("composer");
     const jumps: number[] = [];
     for (const index of [loaded.files - 1, Math.floor(loaded.files / 2), 0]) {
       jumps.push(
         (await page.evaluate((i: number) => window.__perf.jumpToFile(i), index)) as number,
       );
     }
+    lap("jumps");
 
     // One pass first, printed and not budgeted: the line is about a return
     // visit, and the first build of a session is a cold path (11-perf.md).
@@ -128,6 +153,7 @@ export async function measure(
     )) as number;
     await page.evaluate((name: string) => window.__perf.switchSession(name), sessions.current);
     process.stderr.write(`first switch to a session, cold: ${round(cold)} ms\n`);
+    lap("cold switch");
 
     // Both ways, and the slower of them counts: the run has to leave the
     // fixture on the session it found it on, so the switch back happens either
@@ -140,10 +166,12 @@ export async function measure(
       (name: string) => window.__perf.switchSession(name),
       sessions.current,
     )) as number;
+    lap("switch");
 
     // Last, and on the session the fixture came in on: the edit is measured
     // against the change set the page is actually showing.
     const updateMs = await measureUpdate(page, baseUrl, fixture);
+    lap("update");
     await context.close();
 
     const scrollLongTaskMs = scroll.longTasks.reduce((sum, task) => sum + task.duration, 0);
@@ -163,6 +191,7 @@ export async function measure(
     };
   } finally {
     await browser.close();
+    lap("close");
   }
 }
 
@@ -303,12 +332,15 @@ export async function withServer<T>(
   // than through `loadConfig`: the harness takes whatever is free.
   const config = { ...(await loadConfig({ root: fixture })), port: 0 };
   const server = await startReviewServer({ config, ui: directoryAssets("dist/ui") });
+  lap("server");
   let sessions: Sessions | undefined;
   try {
     // After the document: the scratch session copies the change set this call
     // writes, and built before it the first repetition switched to an empty rail.
     const { totals } = await server.review.document();
+    lap("document");
     sessions = await twoSessions(config);
+    lap("sessions");
     process.stderr.write(
       `fixture ${fixture}: ${totals.repositories} repositories, ` +
         `${totals.files} files, ${totals.lines} lines, ` +
@@ -320,6 +352,7 @@ export async function withServer<T>(
     // other session, and the next run would measure that one.
     if (sessions !== undefined) await makeCurrent(config.dataDir, sessions.current);
     await server.close();
+    lap("server close");
   }
 }
 

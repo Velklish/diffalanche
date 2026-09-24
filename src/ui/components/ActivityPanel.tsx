@@ -25,7 +25,7 @@ export function ActivityPanel() {
   return (
     <section className="feed" aria-label="agent activity">
       <button type="button" className="feed-head" aria-expanded={open} onClick={toggleFeed}>
-        <span className={live > 0 ? "dot ok pulse" : "dot"} />
+        <span className={live > 0 ? "dot ok" : "dot"} />
         AGENT ACTIVITY
         <span className="spacer" />
         <span className="feed-live">{live} live</span>
@@ -62,7 +62,7 @@ function FeedRow({ event, now }: { event: ActivityEvent; now: number }) {
  * that changed with nobody's name on it — the three the handoff draws.
  */
 function dot(event: ActivityEvent): string {
-  if (event.verb === "editing") return "ok pulse";
+  if (event.verb === "editing") return "ok";
   return event.verb === "changed" ? "diff" : "acc";
 }
 

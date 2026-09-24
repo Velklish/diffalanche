@@ -73,7 +73,7 @@ button:disabled {
 }
 
 /* The stub appears when its panel goes, so it arrives the way everything that
-   appears does (The Two-Keyframe Rule). The one in a panel is always there. */
+   appears does (The One-Keyframe Rule). The one in a panel is always there. */
 .header .panel-toggle {
   animation: dcin 140ms ease-out;
 }
@@ -156,7 +156,7 @@ button:disabled {
  * interruption. It is `.dot.acc` — the 7 px status dot, the one circle the
  * system has (`DESIGN.md`, Shapes) — and this adds only what a dot inside the
  * pill needs: a size a flex row may not squeeze, and `dcin`, because it appears
- * (The Two-Keyframe Rule).
+ * (The One-Keyframe Rule).
  */
 .pill-mark {
   flex: none;
@@ -222,22 +222,6 @@ button:disabled {
 /* A change with nobody's name on it: the feed's quietest line. */
 .dot.diff {
   background: var(--bd);
-}
-
-.dot.pulse {
-  animation: dcpulse 2.4s ease-in-out infinite;
-}
-
-/*
- * A heartbeat that is not beating still has to say the stream is alive, so the
- * dot stops lit rather than caught mid-fade. `dcin` keeps its fade and loses
- * its travel through `--dcin-shift` in `tokens.css`.
- */
-@media (prefers-reduced-motion: reduce) {
-  .dot.pulse {
-    animation: none;
-    opacity: 1;
-  }
 }
 
 .ghost {
@@ -1947,7 +1931,7 @@ button.chip {
  * brings with it costs more CPU per scrolled frame than the budget of
  * `docs/SPEC.md` section 6 has.
  */
-/* Anything that appears, appears the same way (DESIGN.md, The Two-Keyframe Rule). */
+/* Anything that appears, appears the same way (DESIGN.md, The One-Keyframe Rule). */
 .rail-list .thread,
 .thread-widget .thread {
   animation: dcin 160ms ease-out;

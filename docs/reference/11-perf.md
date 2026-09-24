@@ -382,7 +382,17 @@ afterwards, so the fixture is what it was.
 
 The scroll is one pass over the whole review at up to 600 frames, so the step is
 `scrollHeight / 600` — far faster than a person scrolls, which is the point: it
-is the stress case, not the typical one. Frame rate is not measured, because a
+is the stress case, not the typical one. **The frames are not paced** (DA-115):
+Chromium is launched with `--disable-frame-rate-limit`, so a frame starts as
+soon as the one before it is done instead of on a 60 Hz tick, and the pass takes
+what its 600 frames cost — about 5 s on an M1 Pro — rather than 600 × 16.7 ms.
+The same holds for every other line, since each ends at `afterPaint`, the next
+frame the browser draws: without the limit that frame comes when the work is
+done, not at the next tick. The flag is `BROWSER_ARGS` in `perf/harness.ts`, and
+`tests/perf.test.ts` › "launches Chromium with the frame-rate limit off, so the
+scroll is not paced at 60 Hz" holds it: taking it out is red in the unit suite
+before it quietly makes every reading of this section a 60 Hz one again. Frame
+rate is not measured, because a
 headless runner cannot measure it (`docs/SPEC.md` section 6); the long-task
 count and the CPU time per frame stand in for it, and 120 fps stays a manual
 check on a 120 Hz display.
@@ -509,6 +519,17 @@ frame from 8.3 to 9.5 while the allowance stayed 2.5, which carried the runner
 ceiling from 20.8 to 23.8 against the same measured 17.3 and turned fifteen
 percent of headroom into thirty-eight, letting a regression the size of the
 runner's own reading pass on CI unnoticed.
+
+**DA-115 left the budget and the multiplier where they were, and the runner's
+reading behind them is a 60 Hz one.** The owner kept 9.5 and 2.1 on 2026-09-24,
+so the rule above is not triggered. But the 17.3 ms of DA-5.1 is a reading of
+the 60 Hz harness, and nobody has run the unpaced one on `ubuntu-latest`: this
+repository's runs are local until a push. If a runner comes down in this
+machine's proportion, 0.92–0.94, to about 16 ms, the CI ceiling of about 20 is
+about 24 % over it instead of fifteen — the looser gate DA-56.4's rule exists
+against. That is an assumption from one machine's shift and not a reading; the
+first `perf` job after DA-115 is the reading, and recomputing the multiplier
+from it by the rule is DA-115.1.
 
 **What `bun run perf` means off a runner, and when it declines to say.** Off a
 runner, and only there: `GITHUB_ACTIONS=true` turns the precondition off
@@ -775,7 +796,8 @@ different and the gate says which — `over budget: …` and `not measured: …`
 
 The switch row is from the run that made that line warm (DA-24.1); the rest of
 the sample is the older capture it was written with, and the two are not one
-run.
+run. The CPU-per-frame reading, 8.7 ms, was taken at 60 Hz, before DA-115, and
+is not comparable with one taken now.
 
 **Switching review sessions** covers the whole wait — the press, the request,
 the read, the render — and fails the build like any other line. **It is the
@@ -830,24 +852,137 @@ the reader waits for.
 against.** The specification asks for 120 fps and a headless runner cannot
 measure frame rate, so the gate checks the two things it can: no long task at
 all, and CPU time per frame. One frame of 120 fps is 8.3 ms, and that is what
-`docs/SPEC.md` section 6 asks for — but on 2026-09-21 this machine measured
+`docs/SPEC.md` section 6 asks for.
+
+*How 9.5 was set, at 60 Hz, before DA-115.* On 2026-09-21 this machine measured
 8.5 to 9.1 ms over nine commits of the main branch, with no trend and no commit
 of that range responsible (DA-56.4). A budget no commit meets gates nothing, so
-the number the gate enforces is 9.5: about four percent over the worst reading
-taken where ADR-013's precondition lets the gate answer at all, which still
-catches a regression of the size the line was written for — removing the sticky
-bar cost 0.8 ms. 10.0 ms would leave ten percent and catch almost nothing; 9.2
-would sit against the worst reading and bring back the flapping ADR-013 exists
-against. Closing the gap to 8.3 is its own work and has not been attempted.
+the number the gate enforced was 9.5: about four percent over the worst reading
+taken where ADR-013's precondition lets the gate answer at all, which caught a
+regression of the size the line was written for — removing the sticky bar cost
+0.8 ms. 10.0 ms would have left ten percent and caught almost nothing; 9.2
+would have sat against the worst reading and brought back the flapping ADR-013
+exists against. The readings of this section from before DA-115 are all of
+that harness.
+
+*What 9.5 means unpaced, since DA-115.* **The line's meaning changed, and a
+reading from before is not comparable with one from after.** The same code reads
+0.5 to 0.9 ms a frame lower unpaced, 0.6 at the median (**Where a run's time
+goes**, above). Taken this way on 2026-09-24, at one to two runnable tasks per
+core, the final page read 8.0–8.4 ms in the repetitions of its gate run and
+8.0–8.2 as the median of each side of its comparisons: at the edge of the frame
+of 120 fps, with no room to spare. **The owner kept the ceiling at 9.5 that
+day**, over 8.8 and 8.5, the two numbers put to the owner with the readings
+below. Unpaced, 9.5 is about 13 % over the worst of those readings rather than
+the four percent it was set at, so **a regression of up to about 1 ms passes the local gate**: the sticky
+bar's 0.8 ms on 8.1 is 8.9, under 9.5. What the other ceilings would have done:
+over the day's 66 alternated repetitions of the final page, all at one to two
+and a half per core, a median of five drawn from them came out over 8.8 in none
+of 100 000 draws, over 8.5 in 2.4 % and over 8.3 in 5.3 %; the 60 Hz harness's
+54 repetitions of the same morning put a median over 9.5 in 1.4 %.
+
+*Open: the page at rest.* It was not measured unpaced: the machine stayed at one
+to two per core all morning. Three gate runs of the harness's earlier shapes —
+the pulse still in the page, or stopped by reduced motion — read 7.3–7.6 ms, two
+of them at lower loads and one at a higher, against the final page's 8.0–8.4;
+what separates them is not known. Closing the gap to 8.3 is DA-56.5.
 
 The gate is the last of the seven `gates` of `backslop.json` — the seventh — so it runs before any task is
 reported, and it is the `perf` job of `.github/workflows/ci.yml`, which
 installs Chromium, generates the fixture, and runs the gate — the gate builds
 the UI itself, so the job does not; the table lands in the run summary through
-`GITHUB_STEP_SUMMARY`. One local run takes about 67 seconds on
-an M1 Pro — five repetitions of about 13 s each and the UI build — plus about
-6 seconds when the fixture has to be generated first (DA-110's series of
-2026-09-24).
+`GITHUB_STEP_SUMMARY`. One local run takes about 45 seconds on
+an M1 Pro — five repetitions of about 9 s each and the UI build — plus about
+6 seconds when the fixture has to be generated first; it took about 67 before
+DA-115 let the frames run unpaced. Where those seconds go is the next section.
+
+### Where a run's time goes
+
+Every repetition prints one line on stderr when its process ends — `wall per
+step, ms: start 212, server 466, …` — with the wall time of each step of that
+process, the first counted from the process's own start; the gate prints the
+build's time, each repetition's wall time in its `run k/n` line, and its own at
+the end, `the gate took <n> s`. The steps, in the order a repetition takes them,
+before and after DA-115 took the frame-rate limit off:
+
+| Step | What it is | Wall, 60 Hz frames | Wall, unpaced frames |
+|---|---|---|---|
+| `start` | Bun starting and importing the harness, Playwright with it | 208–226 ms | 214–244 ms |
+| `server` | the configuration, the scan of the fixture and the watcher: `startReviewServer` | 381–466 ms | 459–526 ms |
+| `document`, `sessions` | the review document, which the server already holds, and the scratch session checked or rebuilt | 0 ms, 18–37 ms | 0 ms, 23–26 ms |
+| `launch`, `page` | Chromium launched, a context, a page and its CDP session | 103–119 ms, 46–61 ms | 121–259 ms, 63–171 ms |
+| `load` | the page opened until it reports ready: the first render | 258–547 ms | 352–816 ms |
+| `scroll` | the 600 frames of the scroll | **10 025–10 264 ms** | **4 886–5 279 ms** |
+| `composer`, `jumps` | the composer opened, three jumps to a file | 24–27 ms, 92–111 ms | 32–41 ms, 105–143 ms |
+| `cold switch`, `switch` | the unmeasured pair of switches, then the measured pair | 428–469 ms, 149–162 ms | 565–761 ms, 146–375 ms |
+| `update` | the edit and its restore, each waited for until the card painted it | 877–913 ms | 1 010–1 291 ms |
+| `close`, `server close` | the browser and the server closed | 25–33 ms, 2–31 ms | 34–39 ms, 4–21 ms |
+| the process | spawned by the gate until it exited | 12.9–13.2 s | 8.6–9.2 s |
+| the gate | five repetitions and the UI build, the fixture already there | 65.8 s | 44.9 s |
+
+Each column is one run of the gate, `bun run perf`, five repetitions, under a
+hold of `/tmp/da-perf.lock` on 2026-09-24: the first on `cd3debe` with these
+lines added (`21cf286`), 07:55–07:56 UTC, load averages 5.1–5.2 over one minute
+and 6.5–6.9 over five on 8 cores; the second on the tree this section describes,
+08:32–08:33 UTC, 7.9–8.9 and 10.8–10.9. The machine was busier for the second,
+which is most of why every step but the scroll came out a little slower in it —
+the steps have nothing in common with the frame rate but the machine. A run that
+regenerates the fixture takes about 6 s more.
+
+**The scroll was 76–79 % of every repetition**: 600 frames paced by
+`requestAnimationFrame` at the 60 Hz a headless page is given, 16.7 ms a frame
+whatever the frame costs. Everything the harness sets up per process — `start`,
+`server`, `sessions`, `launch`, `page`, the two closes — comes to about 0.8 s a
+repetition, 4 s a run, and the build to 0.4 s, so the other two candidates of
+DA-115 — one process for all five repetitions, which waits on DA-25.2's stall,
+and skipping a build that is already current — would save a few seconds between
+them, and neither was taken.
+
+**What was cut: the 60 Hz tick** (DA-115, the owner's decision of 2026-09-24).
+Chromium is launched with `--disable-frame-rate-limit`: the scroll is the same
+600 frames of the same step over the same review, and a frame starts when the
+one before it is done, so the pass takes what its frames cost, about 5 s, and
+the gate about 45 s instead of about 66. Fewer frames or a longer step would
+have cut the same seconds and changed what a frame is; this changes only when
+the next one starts. What it changes in the numbers, measured:
+
+- **CPU per frame reads lower, and a reading from before DA-115 is not
+  comparable with one from after.** The same code, alternated with the 60 Hz
+  harness under one hold, read 0.5 to 0.9 ms a frame less in each of the six
+  comparisons of the day the load let answer — the flag alone, the flag with
+  reduced motion, and the final page, two runs each — 0.6 at the median; past
+  what the run resolves in one of the final page's two, at the edge of it in
+  the other. Where the difference goes is not measured; that the harness
+  at 60 Hz charged each frame for work that is paid per second rather than per
+  frame is a hypothesis, and it is DA-56.5's to test. The ceiling did not
+  move with it, by the owner's decision, and what 9.5 means now is **The
+  CPU-per-frame ceiling**, below.
+- **The other six lines did not move there, and the session switch moved later.** `bun perf/compare.ts` between this
+  tree and `21cf286`, nine a side, twice, 08:42–08:56 UTC at one-minute loads of
+  1.1–2.4 per core: first render, the long-task count, the composer, the file
+  jump, the session switch and the update after an edit came out `no difference`
+  in both runs. A third run, 08:33–08:37, declined: another session's work put
+  the machine at 4.5 per core halfway through. The long-task count is the line
+  the shorter pass could have moved; pooled over the day's alternated runs it
+  was above zero in 10 of 71 repetitions against 19 of 54 at 60 Hz, which no
+  single comparison resolves. Three later runs against `cd3debe` put the
+  session switch 23–31 ms higher unpaced, one of them past its resolution:
+  **Switching sessions swings with the machine unpaced**, below, and DA-115.3.
+- **The page is measured as it ships, and has no endless animation to measure.**
+  The live dot's pulse, `dcpulse`, ran for as long as the stream was up, and
+  without the frame-rate limit Chromium composited it without pause: the page
+  idle took 1.32–1.34 CPU-seconds a second in the GPU process and 1.04–1.05 in
+  the renderer, about two and a half cores, against 0.02 and 0.02 at 60 Hz
+  (08:30 UTC, one-minute load 7–9). Those cores were the server's: with the
+  pulse still in the page, the flag alone made the update after an edit 40 and
+  59 ms slower in two comparisons against the 60 Hz harness. Reduced motion
+  for the harness's page closed that and was measured, but the owner took the
+  pulse out of the product instead ([08-ui.md](08-ui.md)): the page idle now
+  takes 0.00 and 0.00 with the flag, and the harness opens it with default
+  motion. What the gate no longer sees is the pulse's cost, which at 60 Hz was
+  the 0.02 + 0.02 above — nothing a reader could feel. `e2e/shell.spec.ts` ›
+  "nothing on the page animates without end" keeps a second endless animation
+  from reaching the gate unnoticed.
 
 ### What the gate resolves, and comparing two trees
 
@@ -855,7 +990,7 @@ A verdict against a budget and a comparison of two trees are different
 questions, and until DA-110 the gate was used for both without anybody knowing
 what it could see. This is what it can see, measured.
 
-**The measurement.** Two worktrees of one commit, `f9cda1b`, so every difference
+**The measurement, before DA-115, at 60 Hz.** Two worktrees of one commit, `f9cda1b`, so every difference
 between them is the machine's; one hold of `/tmp/da-perf.lock` from 05:11 to
 05:30 UTC on 2026-09-24, an 8-core M1 Pro (six performance cores, two
 efficiency), one-minute averages 3.5–10.6 and five-minute ones 5.5–8.2 across
@@ -886,6 +1021,73 @@ and needs none.** Identical code read 0 in 79 of 80 samples of the window —
 one repetition of one gate run read 2 — and the median was 0 in every run, so
 a median above zero is outside what the machine did here; what DA-69.1 says
 about the count on a busy machine stands.
+
+**Measured again unpaced, since DA-115.** Two worktrees of one tree — `6b99da6`
+with the frame-rate limit off, the tree DA-115 landed as — alternated
+twenty-four a side under one hold, 08:45–08:53 UTC on 2026-09-24, with the same
+tree's side of two comparisons against the 60 Hz harness and one run of its
+gate: seventy-one repetitions. The machine was not DA-110's quiet one: the
+busier of the one- and five-minute averages stood at 1.0 to 2.5 per core
+throughout, and a morning of other sessions' work never let it lower. So the
+table carries, beside it, the 60 Hz harness's fifty-four repetitions of the same
+morning (08:02–08:56, the base side of six comparisons), and it is the two
+columns side by side that say what the frame rate did to the resolution; the
+table above stays what a quiet machine resolves at 60 Hz.
+
+| Line | Unpaced: median | lowest–highest | Resolves, 5 a side | Resolves, 9 a side | 60 Hz, same morning: 5 a side | 9 a side |
+|---|---|---|---|---|---|---|
+| First render | 113.3 ms | 108.5–167.1 | 11.7 ms | 9.0 ms | 55.7 ms | 46.0 ms |
+| Scrolling: long tasks | 0, mean 0.15 | 0–2, above 0 in 10 of 71 | — | — | — | — |
+| Scrolling: CPU per frame | 8.2 ms | 7.8–9.8 | 0.6 ms | 0.3 ms | 1.1 ms | 0.7 ms |
+| Opening the comment form | 26.5 ms | 24.6–34.6 | 4.2 ms | 3.0 ms | 5.4 ms | 3.5 ms |
+| Jumping to a file | 11.7 ms | 3.9–15.5 | 4.2 ms | 2.1 ms | 3.5 ms | 2.9 ms |
+| Switching review sessions | 88.2 ms | 64.5–189.4 | 32.3 ms | 22.8 ms | 15.0 ms | 11.8 ms |
+| Update after an edit | 314 ms | 288–536 | 60 ms | 41 ms | 68 ms | 49 ms |
+
+Read against its neighbour, the unpaced harness resolves as well as the 60 Hz
+one on a machine this busy, or better, on every line but the session switch,
+whose unpaced repetitions spread from 64.5 to 132.6 ms in the alternated runs
+and to 189.4 in one repetition of the gate run — why that line spread wider
+unpaced is not known; against the quiet table above, both resolve worse, which
+is the morning and not the harness. The long-task count was above zero in
+10 of 71 unpaced repetitions and 19 of 54 at 60 Hz — the pass is half as long,
+so half as much of the machine's other work lands inside it — and a median of
+five drawn from those 71 came out above zero in 3.6 draws in a hundred, where
+the 60 Hz repetitions of the same morning did in 26. Measuring
+this table again on a quiet machine is open: it is what the comparison's
+default of nine a side should be checked against when one is had.
+
+**Switching sessions swings with the machine unpaced, and the owner landed the
+flag knowing it** (2026-09-24). The line's run-to-run spread is not only wider
+unpaced; its level moves. Every comparison of the day between the unpaced tree
+and the 60 Hz one, nine a side, the switch row of each (one- and five-minute
+load on 8 cores):
+
+| Base | Time, UTC | Base → unpaced | Verdict | Load |
+|---|---|---|---|---|
+| `21cf286` | 08:42–08:45 | 85.3 → 88.8 ms, +3.5 ±9 | no difference | 5.7–9.3 / 14.1–18.7 |
+| `21cf286` | 08:53–08:56 | 80.2 → 79.4 ms, −0.8 ±12.7 | no difference | 8.5–14.4 / 10.8–12.0 |
+| `cd3debe` | 09:12–09:16 | 79.6 → 111.1 ms, +31.5 ±40.4 | no difference | 10.0–19.0 / 11.7–14.2 |
+| `cd3debe` | 09:42–09:46 | 83.1 → 109.9 ms, +26.8 ±25.2 | worse | 10.8–19.7 / 13.6–15.0 |
+| `cd3debe` | 09:47–09:50 | 80.9 → 103.8 ms, +22.9 ±24 | no difference | 7.0–9.2 / 10.2–12.3 |
+
+The 60 Hz side stayed at 80–85 ms in all five; the unpaced side, the same page
+and harness each time, read 79 to 111. By DA-110's rule one `worse` that a
+second run does not repeat is not a difference, and none was; but three runs in
+a row leaned the same way, with the unpaced median at the line's 100 ms budget.
+The gate went red on it once in the day's four unpaced runs: on `5bf8800` at
+2.4 runnable tasks per core its repetitions read 220.2, 128.7, 216.6, 100.6 and
+108.2 ms, median 128.7, and the rerun of the same tree read 86.2. **A red
+switch line in `bun run perf` is expected until DA-115.3 is done**, and is read
+with its five values and the load beside it, not as a regression by itself.
+The lead, not a proven cause: the same tree with every animation and transition
+switched off after load, against itself as it ships, 09:51–09:54 UTC, read
+70.0 ms (65.8–74.9) against 79.2 (62.9–135.0), −9.2 ±9.2 — no difference by a
+hair, and the slow outliers gone with the animations. `dcin`, the entrance the
+switched-to review plays for 140–160 ms, runs unpaced too, and may take the
+processor the second switch of the harness's pair needs. In that same window
+the tree as it ships read the 60 Hz level, 79.2, so the 23–31 ms is not a level
+of the tree: it comes and goes with the machine.
 
 **The two runs DA-110 was opened on were the machine.** On 2026-09-22 two runs
 of the gate on trees of identical executable content, `e3224ca` and `5e0ee24`,

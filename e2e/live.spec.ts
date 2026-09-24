@@ -228,7 +228,7 @@ test("a stream the browser gave up on says disconnected, and reconnect brings it
   await page.waitForFunction(() => window.__perf?.ready === true);
   const foot = page.locator(".sidebar-foot");
   await expect(foot).toContainText("disconnected");
-  await expect(foot.locator(".dot")).not.toHaveClass(/pulse/);
+  await expect(foot.locator(".dot")).toHaveClass(/crit/);
 
   refused = false;
   const reads = page.waitForRequest((request) => new URL(request.url()).pathname === "/api/review");

@@ -325,7 +325,7 @@ change there first.
 - **Pale Sage** / **Deep Sage** (`nit`): `nit`.
 - **Muted Periwinkle** (`q`): `question` — deliberately the same value as the
   accent. A question is a request for attention, not a defect.
-- **Living Green** (`ok`): `Resolve` and the pulsing `watching` dot. The only
+- **Living Green** (`ok`): `Resolve` and the `watching` dot. The only
   colour attached to something that is alive rather than something that is
   wrong.
 
@@ -524,24 +524,23 @@ The form language is the plate: a rectangle with a 1 px border and a tonal fill,
 sized to its content and aligned to its neighbours. There are no cut corners, no
 clipping masks, no decorative geometry, and no gradients anywhere in the system.
 
-**Motion** is two keyframes and no more. `dcin` — `opacity 0→1` with
+**Motion** is one keyframe and no more. `dcin` — `opacity 0→1` with
 `translateY(var(--dcin-shift))→0` over 140–160 ms ease-out — is how anything
-appears: an overlay, the composer, a new thread, the model's proposal.
-`dcpulse` — `opacity 1→0.35→1` over 2.4 s ease-in-out, infinite — marks
-something alive: the `watching` dot and the live agent indicators, at 1.1 s
-while the model is searching. Nothing else animates; a data update repaints the
-affected lines and threads, never the card.
+appears: an overlay, the composer, a new thread, the model's proposal. Nothing
+else animates; a data update repaints the affected lines and threads, never the
+card. Something alive — the `watching` dot, a live agent in the activity
+panel — says so with its colour and the word beside it, and stands still: the
+pulse it had was taken out on 2026-09-24 by the owner's decision (DA-115,
+[08-ui.md](docs/reference/08-ui.md)).
 
-`prefers-reduced-motion: reduce` keeps both meanings and drops the movement:
-`--dcin-shift` becomes `0px`, so an arrival still fades in without travelling,
-and `dcpulse` stops with the dot lit rather than caught mid-fade — a heartbeat
-that is not beating still has to say the stream is alive. It is a token and a
-media query, not a third keyframe.
+`prefers-reduced-motion: reduce` keeps the meaning and drops the movement:
+`--dcin-shift` becomes `0px`, so an arrival still fades in without travelling.
+It is a token and a media query, not a second keyframe.
 
 ### Named Rules
 
-**The Two-Keyframe Rule.** `dcin` for arrival, `dcpulse` for a heartbeat. A
-third animation is a new decision, not a flourish.
+**The One-Keyframe Rule.** `dcin` for arrival. Nothing animates without end; a
+second animation is a new decision, not a flourish.
 
 ## Components
 
@@ -683,7 +682,7 @@ same mark as an inline SVG data URI. There is no raster file.
   dark.
 - **Do** show focus with `acc` — a border change on a bordered control, a 1 px
   outline on a row that has none — and let it outrank a resting `accBd` border.
-- **Do** use `dcin` for anything that appears and `dcpulse` for anything alive.
+- **Do** use `dcin` for anything that appears, and colour and a word for anything alive.
 - **Do** keep panel widths fixed and let the window scroll below the floor; a
   panel that is in the way comes off the screen whole (The Panels-Do-Not-Shrink
   Rule).

@@ -81,7 +81,7 @@
  * How far `dcin` moves what it brings in. It is a token rather than a literal
  * so that `prefers-reduced-motion` can take it to zero: the arrival keeps its
  * fade — which is what says something appeared — and loses the travel, without
- * a second keyframe (`DESIGN.md`, The Two-Keyframe Rule).
+ * a second keyframe (`DESIGN.md`, The One-Keyframe Rule).
  */
 :root {
   --dcin-shift: 4px;
@@ -98,22 +98,10 @@
   }
 }
 
-@keyframes dcpulse {
-  0%,
-  100% {
-    opacity: 1;
-  }
-  50% {
-    opacity: 0.35;
-  }
-}
-
 /*
  * A reader who has asked their system for less motion gets the state changes
  * and not the movement: `dcin` fades without travelling. The travel is a token
- * so that this is a value and not a second keyframe; `dcpulse` is stopped in
- * `styles.css`, where the rule that starts it lives — that file is loaded after
- * this one, and an override has to sit where it can win.
+ * so that this is a value and not a second keyframe.
  */
 @media (prefers-reduced-motion: reduce) {
   :root {

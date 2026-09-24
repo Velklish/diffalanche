@@ -139,16 +139,15 @@ function SelectBar() {
   );
 }
 
-/** The dot beside the state: alive while the stream is, quiet before it, and still once it stopped. */
+/** The dot beside the state, in its colour; still in every state, the word says which (08-ui.md). */
 const DOT: Record<Connection, string> = {
-  watching: "ok pulse",
-  reconnecting: "warn pulse",
+  watching: "ok",
+  reconnecting: "warn",
   connecting: "",
   disconnected: "crit",
 };
 
-/** The footer of handoff section 1.3, saying what the live stream is doing; its dot pulses while
- * the stream is alive or being got back, and stands still before it and once it stopped. */
+/** The footer of handoff section 1.3, saying what the live stream is doing. */
 function Watching() {
   const connection = useStore((store) => store.connection);
   const reconnect = useStore((store) => store.reconnect);

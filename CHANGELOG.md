@@ -325,6 +325,37 @@ and `bun run release` refuses a version that has no section. See
 
 ### Changed
 
+- **The perf gate takes about 45 s instead of about 66, and CPU per frame is
+  taken with the frames unpaced** (DA-115). The harness launches Chromium with
+  `--disable-frame-rate-limit`: the same 600 frames of the same step, each
+  started when the one before it is done instead of on a 60 Hz tick, so the
+  scroll takes about 5 s instead of 10 and a repetition about 9 s instead of 13;
+  `tests/perf.test.ts` holds the flag.
+  Against the 60 Hz harness, nine a side twice on the final page, the other six
+  lines came out `no difference`, though the session switch swings with the
+  machine unpaced — 79–111 ms over the day, at its 100 ms budget, so a red
+  switch line is expected until DA-115.3; CPU per frame reads 0.5–0.9 ms lower on the
+  same code, so a reading from before is not comparable with one from after.
+  The owner kept its ceiling at 9.5 ms and the runner allowance at 2.1: unpaced,
+  9.5 is about 13 % over the day's worst reading instead of 4 %, so a regression
+  of up to about 1 ms now passes the local gate, and 8.3 ms stays the goal of
+  `docs/SPEC.md` section 6. Whether 2.1 still fits a runner is DA-115.1
+  ([11-perf.md](docs/reference/11-perf.md#where-a-runs-time-goes)).
+- **The live dots no longer pulse** (DA-115). The footer's `watching` and
+  `reconnecting` dots and the activity panel's live ones stand still in their
+  colour, the word beside them saying the state; `dcpulse` is gone and `dcin`
+  is the only keyframe. The owner's decision of 2026-09-24, on a measurement: at
+  the frame rate the perf gate now draws at, the endless pulse kept Chromium
+  compositing on about two and a half cores while the page sat idle, against
+  0.02 + 0.02 CPU-seconds a second at 60 Hz ([08-ui.md](docs/reference/08-ui.md)).
+  `e2e/shell.spec.ts` holds that nothing on the page animates without end.
+- **The perf gate says where its time goes** (DA-115). Every repetition prints
+  `wall per step, ms: …` on stderr — Bun's start, the server, the browser, the
+  first render, the scroll, each measured action and the closes — and the gate
+  prints the UI build's time, each repetition's wall time and its own. Measured
+  on a quiet machine, the 600-frame scroll is 77–79 % of a 13 s repetition;
+  what the harness sets up per process is about 0.8 s of it and the build 0.4 s
+  ([11-perf.md](docs/reference/11-perf.md#where-a-runs-time-goes)).
 - **The perf gate states what it resolves, takes five repetitions, and has a
   comparison of two trees** (DA-110). Two runs of the gate on identical code
   had disagreed by a quarter, and the same gate was used to judge differences of

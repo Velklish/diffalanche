@@ -123,6 +123,12 @@ makes `perf` red for everybody until that task lands — and measuring without
 failing locally, which leaves the line guarded nowhere, since a runner ceiling
 of 20.75 would have passed almost any regression.
 
+Since DA-115 the harness takes the line with the frames unpaced, and the same
+code reads 0.5–0.9 ms lower that way; the owner kept the gate at 9.5 ms on
+2026-09-24, which is now about 13 % over the worst reading rather than four.
+The numbers of this record are 60 Hz readings
+([11-perf.md](../reference/11-perf.md#where-a-runs-time-goes)).
+
 ## Consequences
 
 - A red `bun run perf` on a development machine now means the code. A run that

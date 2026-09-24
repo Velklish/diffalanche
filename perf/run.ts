@@ -3,9 +3,10 @@
 import { loadConfig } from "../src/core/config/index.ts";
 import { startEmbedding } from "./embedding.ts";
 import type { Measurement } from "./harness.ts";
-import { measure, parseArgs, VARIANTS, withServer } from "./harness.ts";
+import { lap, measure, parseArgs, printLaps, VARIANTS, withServer } from "./harness.ts";
 
 async function main(): Promise<void> {
+  lap("start");
   const options = parseArgs(process.argv.slice(2));
   const chosen =
     options.variants.length === 0
@@ -26,6 +27,7 @@ async function main(): Promise<void> {
     }
     if (load !== null) process.stderr.write(`event loop: ${JSON.stringify(await load.stop())}\n`);
   });
+  printLaps();
   process.stdout.write(`${JSON.stringify(results, null, 2)}\n`);
 }
 

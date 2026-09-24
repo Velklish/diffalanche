@@ -401,7 +401,7 @@ bun perf/run.ts      # one run, raw numbers
 ```
 
 `bun run perf` is a gate: it fails when the median of any budget line of the
-specification is over budget. It takes about a minute. On a busy machine it
+specification is over budget. It takes about 45 seconds. On a busy machine it
 first waits up to five minutes for the load averages to settle, and says
 `unable to measure` rather than a verdict when they do not
 ([11-perf.md](docs/reference/11-perf.md#the-gate)).

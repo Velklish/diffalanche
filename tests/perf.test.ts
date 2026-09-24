@@ -19,7 +19,7 @@ import {
 } from "../perf/budgets.ts";
 import { assertErasable, fixtureDrift } from "../perf/fixture.ts";
 import type { Measurement } from "../perf/harness.ts";
-import { parseArgs, SCRATCH_SESSION, twoSessions } from "../perf/harness.ts";
+import { BROWSER_ARGS, parseArgs, SCRATCH_SESSION, twoSessions } from "../perf/harness.ts";
 import type { Load } from "../perf/load.ts";
 import {
   afterRed,
@@ -78,6 +78,11 @@ describe("perf arguments", () => {
     expect(parseArgs(["--embedding", "main"]).lag).toEqual({ embedding: "main" });
     expect(parseArgs(["--embedding", "child"]).lag).toEqual({ embedding: "child" });
     expect(() => parseArgs(["--embedding", "gpu"])).toThrow(/--embedding takes main or child/);
+  });
+
+  it("launches Chromium with the frame-rate limit off, so the scroll is not paced at 60 Hz", () => {
+    // Without it the line means something else and nothing else says so (11-perf.md, DA-115).
+    expect(BROWSER_ARGS).toContain("--disable-frame-rate-limit");
   });
 });
 
