@@ -325,6 +325,18 @@ and `bun run release` refuses a version that has no section. See
 
 ### Changed
 
+- **The UI suite asks the load precondition first** (DA-54.4). `bun run
+  test:ui` is a suite about time, and a busy machine reddened a live-update spec
+  a quiet one passes, while `bun run perf` beside it declined on the same load.
+  The script now runs `e2e/quiet.ts` before Playwright: the precondition of
+  `perf/load.ts` — the one- and five-minute averages, the wait of up to 300 s —
+  and on a machine that stays busy `unable to measure: … before the suite` with
+  exit 1, before the build, the fixture and the browser. It is not a Playwright
+  global setup because Playwright starts `webServer` before one. It is off on a
+  GitHub-hosted runner, and `DIFFALANCHE_PERF_IGNORE_LOAD=1` switches it off
+  here too, with **Not evidence.** printed — one variable for one precondition.
+  How a red is proved to be the machine's is written once, for every gate, in
+  [11-perf.md](docs/reference/11-perf.md#a-red-the-machine-caused).
 - **The load precondition reads the five-minute average too, and waits for a
   quiet machine before it declines** (DA-54.5). The one-minute average forgets a
   burst of work within a minute of its stopping, so `bun run perf` was refused

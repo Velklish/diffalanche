@@ -412,7 +412,10 @@ tests run against that fixture, and only the shell tests stub an empty review to
 measure the shell on its own. It needs Chromium, the same one the performance
 harness uses. The screenshot baselines were taken on macOS, so the two specs that
 compare against them skip on any other platform and say so; the rest of the
-suite runs in CI too.
+suite runs in CI too. Off CI it first asks the load precondition `bun run perf`
+asks, and on a machine that stays busy it says `unable to measure` without
+building or running anything; a red run that ended on a busy machine says so
+under the report ([reference/08-ui.md](docs/reference/08-ui.md#ui-tests)).
 
 `bun run test:e2e` is the other Playwright suite: the acceptance criteria of the
 specification, one named test each, run against the binary rather than the

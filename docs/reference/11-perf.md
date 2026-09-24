@@ -555,11 +555,13 @@ So the precondition reads the one- and five-minute averages and holds both to th
 one `LOAD_CEILING`, and before the run it waits for them instead of refusing: it
 reads the machine every five seconds, the interval the kernel refreshes the
 averages on, for up to `QUIET_WAIT_MS` in `perf/load.ts`, 300 s, and says so at
-both ends of the wait:
+both ends of the wait — here the UI suite's, which asks the same precondition,
+at the start of `bun run test:ui` in a `gates` chain on `fa471a4`, right after
+`test:bun`:
 
 ```
-waiting up to 300 s for a quiet machine: load averages <1 min> and <5 min> over one and five minutes on <n> cores are <each over n> per core, ceiling 2.5
-quiet after <seconds> s: load averages …
+waiting up to 300 s for a quiet machine: load averages 28.3 and 13.59 over one and five minutes on 8 cores are 3.54 and 1.7 per core, ceiling 2.5
+quiet after 25 s: load averages 19.53 and 12.71 over one and five minutes on 8 cores are 2.44 and 1.59 per core, ceiling 2.5
 ```
 
 It declines only when the wait runs out, and names the wait: `unable to measure:
@@ -567,8 +569,8 @@ load averages … before the run, after waiting 300 s`. After the run only the
 reading changes: the busier end, now of two averages, decides whether the table
 is evidence.
 
-**A chain on its own never makes it wait, and the wait is for what is not the
-chain.** The base of DA-54.5, `f9cda1b`, run as `gates` runs it on 2026-09-24
+**A chain on its own does not make `perf` wait, and the wait is for what is not
+the chain.** The base of DA-54.5, `f9cda1b`, run as `gates` runs it on 2026-09-24
 with nothing else started on the machine — its own background at a one-minute
 average of about 3.5 on 8 cores — and the load read every five seconds:
 
@@ -587,7 +589,9 @@ commit had measured in the same quiet twenty minutes earlier — CPU per frame
 8.0 ms against 7.9–8.1, update 284 ms against 281–303. So a chain alone does not
 leave the tail DA-54.5 measured, whose fifteen-minute figure stood at 2.39 per
 core; that takes load the chain does not bring, and it is what the wait is for.
-It is 300 s because that is one time constant of the
+The UI suite is the gate a chain on its own does hold up, because it starts
+where the minute peaks: the 25 s above, after which all 151 of its specs passed.
+The wait is 300 s because that is one time constant of the
 five-minute figure: long enough for the figure to come down once the load that
 raised it has stopped, and short enough that a machine another session keeps
 busy is refused within five minutes rather than held.
@@ -833,6 +837,31 @@ installs Chromium, generates the fixture, and runs the gate — the gate builds
 the UI itself, so the job does not; the table lands in the run summary through
 `GITHUB_STEP_SUMMARY`. One local run takes about 33 seconds on
 an M1 Pro, plus 4 seconds when the fixture has to be generated first.
+
+### A red the machine caused
+
+A red read as the machine's is proved, not declared, and this is the one place
+the rule is written, for every gate of the chain. The proof names the verdict,
+quotes its assertion in full, runs that verdict again on its own twice, on a
+machine the load precondition calls quiet, with `uptime` and the exit code beside
+each run, and runs it on the base commit in a worktree of its own — `git worktree
+add --detach <dir> <base>`, never a checkout that moves the branch's tree. Then:
+
+- red again on its own, and green on the base: the branch's, whatever the load
+  was when it first went red;
+- red again, and red on the base the same way: the base's, and the report says
+  so with the base's run beside it;
+- green both times on its own, and green on the base: the machine's, and the
+  load at the first red is part of the proof.
+
+For a line of `bun run perf` "on its own" is not one more run of the gate, which
+cannot resolve a difference of the size in question, but processes of the base
+and the branch alternated under one hold of `/tmp/da-perf.lock`, several a side,
+and never a single pair. The first recorded instance of the proof is DA-54.4's,
+on 2026-09-21: `e2e/live.spec.ts` › "an edit patches its own card, holds the
+reading position, and leaves the composer open" failed at
+`expect(settled).not.toBeNull()` on a branch at a load average of 23.16, and
+passed on that branch at 9.15 and on its base `ed81928` at 9.87.
 
 ## Waits in the suites
 

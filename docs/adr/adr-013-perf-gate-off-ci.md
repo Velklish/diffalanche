@@ -82,7 +82,9 @@ run it does that without measuring at all, because a minute of browser time
 that cannot produce a verdict is a minute spent on nothing. Declining *after*
 the run, when the load rose during it, still prints the table — the numbers are
 worth seeing — but under a `**Not evidence.**` banner and without the
-`over budget:` line, so nothing in the output reads as a verdict.
+`over budget:` line, so nothing in the output reads as a verdict. Since DA-54.4
+the same precondition, at both ends and with the same bypass, stands around
+`bun run test:ui` too ([08-ui.md](../reference/08-ui.md#ui-tests)).
 
 `bun run perf` therefore has three reds and says which: a line **over budget**, a
 line the gate has **no number it can trust** (`UNMEASURED`, from

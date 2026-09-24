@@ -54,7 +54,7 @@ export function describeLoad(load: Load, ceiling = LOAD_CEILING): string {
   return `load averages ${one} and ${five} over one and five minutes on ${load.cores} cores are ${onePerCore} and ${fivePerCore} per core, ceiling ${ceiling}`;
 }
 
-type Wait = {
+export type Wait = {
   read?: () => Load;
   sleep?: (ms: number) => Promise<void>;
   say?: (line: string) => void;
@@ -96,13 +96,34 @@ export async function beforeRun(
 }
 
 /** The red both gates give a busy machine, in the same words (ADR-013). */
-export function declineOnLoad(load: Load, when: string): never {
-  process.stderr.write(
-    `\nunable to measure: ${describeLoad(load)} ${when}. ` +
-      `Run it on a quiet machine, or set ${IGNORE_LOAD}=1 to measure anyway ` +
-      "and take the verdict as an indication rather than as evidence.\n",
+export function refusal(load: Load, when: string): string {
+  return (
+    `unable to measure: ${describeLoad(load)} ${when}. ` +
+    `Run it on a quiet machine, or set ${IGNORE_LOAD}=1 to measure anyway ` +
+    "and take the verdict as an indication rather than as evidence."
   );
+}
+
+export function declineOnLoad(load: Load, when: string): never {
+  process.stderr.write(`\n${refusal(load, when)}\n`);
   process.exit(1);
+}
+
+/** What a red run that ended on a busy machine prints under its result — the red stands, and the
+ * line says the machine decided it as much as the code — or `null`; off on a hosted runner. */
+export function afterRed(
+  exit: number,
+  started: Load,
+  ended: Load,
+  when: string,
+  env: NodeJS.ProcessEnv = process.env,
+): string | null {
+  const load = busier(started, ended);
+  if (exit === 0 || env.GITHUB_ACTIONS === "true" || !tooBusy(load)) return null;
+  return (
+    `unable to measure: ${describeLoad(load)} ${when}, so the red is not evidence about ` +
+    'the code until it is proved (docs/reference/11-perf.md, "A red the machine caused").'
+  );
 }
 
 function round(value: number): number {

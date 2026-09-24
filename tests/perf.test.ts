@@ -5,6 +5,7 @@ import { dirname, join, resolve } from "node:path";
 import { fileURLToPath } from "node:url";
 import { promisify } from "node:util";
 import { afterAll, beforeAll, describe, expect, it } from "vitest";
+import { PLAYWRIGHT, runSuite } from "../e2e/quiet.ts";
 import type { Budget, GateRow } from "../perf/budgets.ts";
 import { BUDGETS, evaluate, fails, formatTable, RUNNER_ALLOWANCE } from "../perf/budgets.ts";
 import { assertErasable, fixtureDrift } from "../perf/fixture.ts";
@@ -12,6 +13,7 @@ import type { Measurement } from "../perf/harness.ts";
 import { parseArgs, SCRATCH_SESSION, twoSessions } from "../perf/harness.ts";
 import type { Load } from "../perf/load.ts";
 import {
+  afterRed,
   beforeRun,
   busier,
   describeLoad,
@@ -589,5 +591,86 @@ describe("the wait for a quiet machine", () => {
       expect(await beforeRun(env, clock)).toEqual({ load: busy, measure: true });
       expect(clock.slept).toEqual([]);
     }
+  });
+});
+
+describe("the UI suite's load precondition", () => {
+  const at = (perCore: number): Load => ({
+    averages: [perCore * 8, perCore * 8],
+    cores: 8,
+    perCore: [perCore, perCore],
+  });
+
+  /** A suite whose load reads `readings` in turn and whose Playwright answers `answer`. */
+  function suite(
+    answer: { status: number | null; signal: NodeJS.Signals | null },
+    ...readings: Load[]
+  ) {
+    const spawned: { command: string; args: string[] }[] = [];
+    const said: string[] = [];
+    let next = 0;
+    return {
+      spawned,
+      said,
+      env: {},
+      waitMs: 0,
+      read: () => readings[Math.min(next++, readings.length - 1)] as Load,
+      sleep: async () => {},
+      say: (line: string) => {
+        said.push(line);
+      },
+      spawn: (command: string, args: string[]) => {
+        spawned.push({ command, args });
+        return answer;
+      },
+    };
+  }
+
+  it("is asked by `bun run test:ui` before Playwright starts the build and the server", async () => {
+    const scripts = JSON.parse(readFileSync(join(REPO_ROOT, "package.json"), "utf8")).scripts;
+    expect(scripts["test:ui"]).toBe("bun e2e/quiet.ts");
+    const busy = suite({ status: 0, signal: null }, at(3));
+    expect(await runSuite([], busy)).toBe(1);
+    expect(busy.spawned).toEqual([]);
+    expect(busy.said.join("\n")).toMatch(/unable to measure: .* before the suite, after waiting/);
+  });
+
+  it("hands Playwright its arguments as given and leaves with Playwright's exit code", async () => {
+    const quiet = suite({ status: 3, signal: null }, at(1));
+    expect(await runSuite(["e2e/shell.spec.ts", "-g", "a -- b"], quiet)).toBe(3);
+    expect(quiet.spawned).toEqual([
+      {
+        command: PLAYWRIGHT,
+        args: ["test", "--config", "e2e/playwright.config.ts", "e2e/shell.spec.ts", "-g", "a -- b"],
+      },
+    ]);
+    expect(quiet.said).toEqual([]);
+  });
+
+  it("leaves with 128 and the signal's number when a signal ended Playwright, and blames no load", async () => {
+    const killed = suite({ status: null, signal: "SIGTERM" }, at(1), at(3));
+    expect(await runSuite([], killed)).toBe(128 + 15);
+    expect(killed.said).toEqual(["\nplaywright ended on SIGTERM"]);
+  });
+
+  it("says a red that ended on a busy machine is not evidence, and keeps quiet otherwise", () => {
+    const line = afterRed(1, at(1), at(3), "during the suite", {});
+    expect(line).toMatch(
+      /^unable to measure: load averages 24 and 24 .* during the suite, so the red/,
+    );
+    // The busier end decides, whichever end it is.
+    expect(afterRed(1, at(3), at(1), "during the suite", {})).toMatch(/^unable to measure: /);
+    expect(afterRed(0, at(3), at(3), "during the suite", {})).toBeNull();
+    expect(afterRed(1, at(1), at(2), "during the suite", {})).toBeNull();
+    expect(afterRed(1, at(3), at(3), "during the suite", { GITHUB_ACTIONS: "true" })).toBeNull();
+    // Under the bypass the line is still printed: the bypass measures, it does not vouch.
+    expect(afterRed(1, at(3), at(3), "during the suite", { [IGNORE_LOAD]: "1" })).not.toBeNull();
+  });
+
+  it("prints that line under a red suite that ended busy, and keeps the red", async () => {
+    const late = suite({ status: 1, signal: null }, at(1), at(3));
+    expect(await runSuite([], late)).toBe(1);
+    expect(late.said).toHaveLength(1);
+    expect(late.said[0]).toMatch(/^\nunable to measure: .* during the suite, so the red/);
   });
 });
