@@ -103,6 +103,11 @@ export type ReviewService = {
   adopt: (session: string, cache: DiffCache) => boolean;
   /** Something changed underneath that session: its document is built again when next asked for. */
   invalidate: (session: string) => void;
+  /** The session was deleted: what is held for it goes, the change set a rescan handed over too. */
+  forget: (session: string) => void;
+  /** The sessions a burst of the data directory listed: one held that is gone, or whose document
+   * was built for another `createdAt` — deleted and made again — is forgotten (07-server.md). */
+  sessionsRead: (reviews: ReadonlyMap<string, Review | null>) => void;
   /** A repository under the root changed: every held document that could show it,
    * bar the followed session's, is dropped ([07-server.md](../../docs/reference/07-server.md)). */
   repositoryChanged: (repo: string) => void;
@@ -280,6 +285,25 @@ export function createReviewService(
       entry.payload = null;
       // `adopted` stands: a write to the data directory is not a change of the
       // working tree, and the rescan's change set is still the newest there is.
+    },
+    forget: (session) => {
+      const entry = sessions.get(session);
+      if (entry === undefined) return;
+      // A build in flight settles into an entry nothing holds any more.
+      entry.version += 1;
+      sessions.delete(session);
+    },
+    sessionsRead: (reviews) => {
+      for (const [name, entry] of [...sessions]) {
+        const listed = reviews.get(name);
+        // Unreadable this burst is not gone: a file caught mid-write keeps what is held for it.
+        if (listed === null) continue;
+        const built = entry.document?.session.createdAt;
+        if (listed === undefined || (built !== undefined && built !== listed.createdAt)) {
+          entry.version += 1;
+          sessions.delete(name);
+        }
+      }
     },
     repositoryChanged: (repo) => {
       const followed = watched();

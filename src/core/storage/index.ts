@@ -3,18 +3,19 @@
  * written. `docs/SPEC.md` section 7 defines the layout, `docs/reference/03-storage.md`
  * describes what this module does with it.
  */
+import { randomUUID } from "node:crypto";
 import type { Dirent } from "node:fs";
-import { mkdir, readdir, readFile, stat } from "node:fs/promises";
+import { mkdir, readdir, readFile, rename, rm, stat } from "node:fs/promises";
 import { resolve } from "node:path";
 import { writeFileAtomic } from "./atomic.ts";
-import { StorageError } from "./errors.ts";
+import { NoSuchSessionError, StorageError } from "./errors.ts";
 import type { LockOptions } from "./lock.ts";
 import { withLock } from "./lock.ts";
 import { parseComments, parseDiffCache, parseReview, toJson } from "./schema.ts";
 import type { Comment, DiffCache, Review, SessionListing } from "./types.ts";
 import { SCHEMA_VERSION } from "./types.ts";
 
-export { StorageError } from "./errors.ts";
+export { NoSuchSessionError, StorageError } from "./errors.ts";
 
 export { withLock } from "./lock.ts";
 
@@ -191,7 +192,7 @@ export function timestamp(): string {
 export async function readReview(dataDir: string, name: string): Promise<Review> {
   const path = reviewPath(dataDir, name);
   const text = await readText(path);
-  if (text === null) throw new StorageError(path, null, "no such review session");
+  if (text === null) throw new NoSuchSessionError(path);
   return parseReview(path, text);
 }
 
@@ -257,6 +258,26 @@ export async function writeCurrent(dataDir: string, name: string): Promise<void>
   await writeFileAtomic(currentPath(dataDir), `${name}\n`);
 }
 
+/** No session is current: the pointer goes, which is what a missing file already reads as. */
+export async function clearCurrent(dataDir: string): Promise<void> {
+  await rm(currentPath(dataDir), { force: true });
+}
+
+/** Deletes a session under its lock (DA-40): renamed out of `reviews/` in one step, so a reader finds
+ * all of it or none, then removed ([03-storage.md](../../../docs/reference/03-storage.md)). */
+export async function removeSession(dataDir: string, name: string): Promise<void> {
+  const dir = sessionDir(dataDir, name);
+  const aside = resolve(dataDir, `.deleted-${randomUUID()}`);
+  await withLock(dir, async (held) => {
+    if (!(await sessionExists(dataDir, name))) {
+      throw new NoSuchSessionError(reviewPath(dataDir, name));
+    }
+    await held.assertHeld();
+    await rename(dir, aside);
+  });
+  await rm(aside, { recursive: true, force: true });
+}
+
 // ---------------------------------------------------------------------------
 // writing comments
 // ---------------------------------------------------------------------------
@@ -297,10 +318,11 @@ export async function updateSession<T>(
   // Before the lock, so a mistyped name does not leave an empty session
   // directory behind that every later listing warns about.
   if (create === undefined && !(await sessionExists(dataDir, name))) {
-    throw new StorageError(path, null, "no such review session");
+    throw new NoSuchSessionError(path);
   }
 
-  await ensureSessionDir(dataDir, name);
+  // A writer of a session that is there makes no directory: one deleted meanwhile stays deleted.
+  if (create !== undefined) await ensureSessionDir(dataDir, name);
   return withLock(
     sessionDir(dataDir, name),
     async (held) => {
@@ -310,7 +332,7 @@ export async function updateSession<T>(
         throw new StorageError(path, null, "review session already exists");
       }
       if (!exists && create === undefined) {
-        throw new StorageError(path, null, "no such review session");
+        throw new NoSuchSessionError(path);
       }
 
       let comments: Comment[] | null = null;

@@ -91,7 +91,7 @@ flowchart LR
 - An agent gets open comments that have no answer yet, for one repository or all, including line text and context.
 - An agent replies in a thread and opens new comments under its own name.
 - An agent proposes a review task for the work it has just done: it names the repositories and the files, creates the task without moving `current`, and hands the human its address.
-- An agent does not resolve comments, and does not close or reopen a task.
+- An agent does not resolve comments, and does not close, reopen, or delete a task.
 - Several agents work on several tasks at the same time, each naming its own with `--review`.
 
 ### Phase 2 — suggestions and context
@@ -243,7 +243,7 @@ Every command accepts `--review <name>` (default: the current session) and `--da
 | `review scope add [--repo <path>]… [--path <repo>:<file>]…` | widen the scope |
 | `review scope remove [--repo <path>]… [--path <repo>:<file>]… [--drop-comments]` | narrow it; without `--drop-comments`, and with comments under what is being removed, exit code 1, nothing written, the message naming the count and the ids |
 | `review close [<name>] --role human [--author]`, `review reopen [<name>] --role human [--author]` | set `status`; `closedBy` comes from `--author` and `closedAt` from the clock; any other role is refused with exit code 1, as it is for `resolve` |
-| `review delete <name>` | delete a session (Phase 2) |
+| `review delete <name> --role human [--yes]` | delete a session with its comments (Phase 2); any other role is refused with exit code 1; without `--yes` it asks on the terminal, and with no terminal it refuses; a deleted current session moves `current` to the session updated last, or clears it |
 | `diff [--repo] [--json\|--patch]` | the current change set, the same one the UI shows |
 | `list [--status open\|resolved\|all] [--repo] [--severity] [--unanswered] [--json]` | comments; `--unanswered` — the last message of the thread is from a human |
 | `show <id> [--json]` | one comment with its thread and anchor |
@@ -270,7 +270,7 @@ The repository ships two skills, following the pattern of difit and diffity.
 
 Reply rules: a reply is at most three sentences — one when the issue is fixed (a second only when the fix touched something the comment did not name), three when the agent declines (what stands, why, what would change the answer); no restating of the comment, no greeting, no lists. Several agents work on several sessions at the same time; each names its own with `--review` and signs with its own `--author`.
 
-An agent that has just written code proposes the review of it: `review new <name> --repo … --path … --no-use` creates the task with the repositories and the files it touched, leaves `current` where it is, and prints the address the human opens. It never closes a task, exactly as it never resolves a comment — both refuse any role but `human` ([ADR-004](adr/adr-004-agent-contract.md), [ADR-010](adr/adr-010-review-task-scope.md)). A `comment` on something outside the task's scope is refused by name: the change belongs to another task, and the refusal says what this one is about so the agent can widen the scope or open its own.
+An agent that has just written code proposes the review of it: `review new <name> --repo … --path … --no-use` creates the task with the repositories and the files it touched, leaves `current` where it is, and prints the address the human opens. It never closes or deletes a task, exactly as it never resolves a comment — all three refuse any role but `human` ([ADR-004](adr/adr-004-agent-contract.md), [ADR-010](adr/adr-010-review-task-scope.md)). A `comment` on something outside the task's scope is refused by name: the change belongs to another task, and the refusal says what this one is about so the agent can widen the scope or open its own.
 
 ## 10. Phases
 

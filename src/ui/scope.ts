@@ -198,6 +198,12 @@ export function confirmQuestion(removed: string[], count: number, open: number):
   return `Убрать ${what} и удалить ${comments} (${open} ${plural(open, "открыт", "открыто", "открыто")})?`;
 }
 
+/** The other one (DA-40): a task deleted takes every comment of it, the closed ones too. */
+export function deleteQuestion(name: string, count: number, open: number): string {
+  const comments = `${count} ${plural(count, "комментарий", "комментария", "комментариев")}`;
+  return `Удалить задачу ${name} и ${comments} (${open} ${plural(open, "открыт", "открыто", "открыто")})?`;
+}
+
 function plural(n: number, one: string, few: string, many: string): string {
   const hundred = n % 100;
   if (hundred >= 11 && hundred <= 14) return many;

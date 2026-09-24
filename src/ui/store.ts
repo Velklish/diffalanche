@@ -326,6 +326,9 @@ type SessionsSlice = {
    * Neither route moves `current`: they name their session in the path.
    */
   setTaskStatus: (name: string, status: ReviewStatus) => Promise<void>;
+  /** `DELETE /api/sessions/:name` once the row's question is answered (DA-40); a window on the task
+   * goes where `current` points afterwards, or to the first run when nothing is left. */
+  deleteTask: (name: string) => Promise<void>;
 };
 
 /**
@@ -916,6 +919,30 @@ export const useStore = create<Store>()((set, get) => ({
       // from the same read.
       await loadSessions(set);
       set({ switching: false, toast: raise(`review ${verb} ${name}`) });
+    } catch (error) {
+      set({ switching: false, toast: raise(reason(error)) });
+    }
+  },
+  deleteTask: async (name) => {
+    if (get().switching) return;
+    const here = get().session?.name === name;
+    set({ switching: true });
+    try {
+      // The watcher tells a window on the task that it changed; this one already knows.
+      if (here) get().markSelf("review", name);
+      const response = await fetch(`/api/sessions/${encodeURIComponent(name)}`, {
+        method: "DELETE",
+        headers: { "content-type": "application/json" },
+      });
+      if (!response.ok) throw new Error((await refusal(response)).message);
+      const deleted = (await response.json()) as { current: string | null; moved: boolean };
+      if (here) {
+        // `current-changed` for the session it moved to is this page's doing too.
+        if (deleted.moved && deleted.current !== null) get().markSelf("review", deleted.current);
+        await get().showTask(null);
+      }
+      await loadSessions(set);
+      set({ switching: false, toast: raise(`review delete ${name}`) });
     } catch (error) {
       set({ switching: false, toast: raise(reason(error)) });
     }

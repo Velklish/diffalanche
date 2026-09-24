@@ -15,6 +15,23 @@ and `bun run release` refuses a version that has no section. See
 
 ### Added
 
+- **`review delete` and deleting a task from the sessions menu** (DA-40).
+  `diffalanche review delete <name> --role human [--yes]` removes the session's
+  directory with its comments: any other role is refused with exit code 1, as
+  `review close` refuses it, and without `--yes` it asks on the terminal and
+  refuses when there is none. A deleted current session moves `current` to the
+  session updated last, or clears it. The UI's row carries `Delete`, which asks
+  in the row's place — the count of comments, `Отмена` focused, `Удалить` red —
+  and a window on the deleted task moves to `current`; `DELETE
+  /api/sessions/:name` deletes as the configured human and drops what the
+  server held for the task. The directory goes in one rename under the
+  session's lock, and nothing brings it back: the lock refuses a writer that
+  waited on it, or a late scan, and a session gone under a write is the server's
+  404 `no-such-session`. A delete from the CLI beside a running server is
+  forgotten too: every burst of the data directory hands the server its listing,
+  and a held document of a session gone, or made again under its name, goes. `Ctrl-C` and `Ctrl-D` at the question are a no. The embedding index is
+  left to its next reader, which drops the deleted session's comments —
+  measured at 33–38 ms once over 5 000 of them.
 - **Suggestions from history and `AUTO` in the comment form** (DA-36). While a
   comment is typed, `FROM YOUR HISTORY` lists the five nearest past comments of
   every session from `GET /api/suggest`, asked once typing pauses for 200 ms and

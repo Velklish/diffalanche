@@ -30,6 +30,8 @@ a caller reads; the message is what a person reads.
 ```ts
 createSession(dataDir, name, base, title?, { scope?, use? }?): Promise<Review>
 useSession(dataDir, name): Promise<Review>
+deleteSession(dataDir, name, { role }): Promise<{ current, moved }>
+assertDeletable(dataDir, name, { role }): Promise<void>
 setBase(dataDir, name, base): Promise<Review>
 listSessions(dataDir): Promise<SessionList>
 readSession(dataDir, name): Promise<Review>
@@ -55,6 +57,44 @@ ordinary refusal and the loser of that race come back with the same code.
 switching to a session does not change it. `setBase` writes the new base and
 bumps `updatedAt`, as does every comment write
 ([03-storage.md](03-storage.md#read-modify-write)).
+
+`deleteSession` removes the session's directory and everything in it (DA-40).
+It asks what `closeSession` asks, in the same order: a name that is not a
+session is `no-such-session` before a role that is not `human` is
+`role-not-human`, and both write nothing. Deleting is a human's gesture for the
+reason closing is, and more so — nothing brings the directory back. The check
+is `sessionExists`, not a read: a `review.json` broken by hand is still a
+session, and deleting it is the one command that can make it go.
+`assertDeletable` is those checks alone, for the CLI, which asks a person before
+it deletes and must not ask a question whose answer would be refused.
+
+**When the deleted session was current, `current` moves** to the session with
+the latest `updatedAt` that is left — the one worked on last, which is what the
+history lists first — or goes, when nothing is left, and the answer says which
+(`moved`, `current`). One whose `review.json` cannot be read is passed over: a
+pointer to a session nothing can read is a second problem handed to the next
+command. `current` is written without a lock, so two deletes at once could leave
+it naming the session the other one took; the delete therefore checks, after it
+wrote the pointer, that the session named is still there, and chooses again
+when it is not. The move follows the removal rather than preceding it: in the moment
+between the two, `current` names a session that is not there, which every
+reader already answers with `no-such-session`, where moving first and then
+failing to delete would leave the pointer moved off a session that stayed.
+
+**The embedding index is left to its reader.** `deleteSession` does not touch
+`index/index.bin`: every reader brings the index up to date before it answers
+([09-ml.md](09-ml.md#bringing-it-up-to-date)), the update reads the session
+list, and a session that is not in it has its rows dropped and the file
+rewritten. So no reader ever returns a deleted session's comments, and between
+the delete and the next reader `index status` counts them as `gone`. Measured on
+2026-09-24 with a function for an embedder (the drop embeds nothing, so the
+model does not enter it), three runs each at load averages of 10–16: a data
+directory of two sessions of 200 comments, one deleted — `deleteSession` 1.4–3.3
+ms, the next reader's update 1.1–1.9 ms against 0.5–2.8 ms for an update that
+found nothing new; two sessions of 5 000 — `deleteSession` 2.4–2.7 ms, the next
+update 32.7–37.8 ms against 6.7–11.1 ms. A hook in the delete would have moved
+the same rewrite into it and made the domain a second writer of a file only the
+index module writes today, for a cost the next suggestion pays once.
 
 `resolveSessionName` is the fallback every command of `docs/SPEC.md` section 8
 shares: the session it was given, else the current one, else a refusal. It lives
@@ -443,7 +483,6 @@ reader can paste back into `review base`.
 
 ## What it does not do yet
 
-- Deleting a session (Phase 2, DA-40).
 - The counters are read on every `listSessions` call: every session's
   `comments.json` and `diff.json` are opened. On a data directory with hundreds
   of sessions that will matter. The watcher reads every session's `review.json`

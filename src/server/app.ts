@@ -8,6 +8,7 @@ import {
   assertScope,
   closeSession,
   createSession,
+  deleteSession,
   exportMarkdown,
   get as getComment,
   list,
@@ -387,6 +388,15 @@ export function createApp({
     const session = await reopenSession(config.dataDir, c.req.param("name"), author);
     review.invalidate(session.name);
     return c.json(session);
+  });
+
+  // Deleted by the human the UI is, and nothing held for it stays: a document of a task that is
+  // gone would be served to a window that still names it (DA-40, 07-server.md).
+  app.delete("/api/sessions/:name", async (c) => {
+    const name = c.req.param("name");
+    const deleted = await deleteSession(config.dataDir, name, author);
+    review.forget(name);
+    return c.json({ name, ...deleted });
   });
 
   app.put("/api/sessions/:name/base", async (c) => {

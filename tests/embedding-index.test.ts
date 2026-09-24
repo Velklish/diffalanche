@@ -6,7 +6,7 @@ import { tmpdir } from "node:os";
 import { join } from "node:path";
 import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
 import { run } from "../src/cli/run.ts";
-import { addComment } from "../src/core/domain/index.ts";
+import { addComment, deleteSession } from "../src/core/domain/index.ts";
 import { modelDirectory } from "../src/core/ml/embed/cache.ts";
 import { EMBEDDING_MODEL, embeddingIdentity } from "../src/core/ml/embed/model.ts";
 import type { EmbeddingIndex } from "../src/core/ml/index/index.ts";
@@ -17,6 +17,7 @@ import {
   readIndex,
   updateIndex,
 } from "../src/core/ml/index/index.ts";
+import { suggest } from "../src/core/ml/suggest/index.ts";
 import { readComments, sessionDir, writeComments } from "../src/core/storage/index.ts";
 import { dataIgnore } from "../src/core/watcher/index.ts";
 import type { UiAssets } from "../src/server/assets.ts";
@@ -192,6 +193,19 @@ describe("the index with an embedder that is a function of the text", () => {
     const { index, update } = await updateIndex(dataDir, fakeEmbedder());
     expect(update).toMatchObject({ embedded: 0, kept: 1, dropped: 2, sessions: 1 });
     expect(index.entries.map((entry) => entry.id)).toEqual(["c_b1"]);
+  });
+
+  it("leaves a deleted session to its next reader, and no reader returns its comments", async () => {
+    await updateIndex(dataDir, fakeEmbedder());
+    // `deleteSession` touches no index (DA-40): until something reads it, the entries are gone ones.
+    await deleteSession(dataDir, "beta", { role: "human" });
+    expect(await indexStatus(dataDir, embeddingIdentity())).toMatchObject({ gone: 1 });
+
+    const fake = fakeEmbedder();
+    const answer = await suggest(dataDir, fake, "the cache key misses the region");
+    expect(answer.update).toMatchObject({ embedded: 0, dropped: 1, sessions: 1 });
+    expect(answer.suggestions.map((one) => one.session)).toEqual(["alpha", "alpha"]);
+    expect(await indexStatus(dataDir, embeddingIdentity())).toMatchObject({ gone: 0 });
   });
 
   it("embeds every comment again when the model, the runtime or the platform changed", async () => {

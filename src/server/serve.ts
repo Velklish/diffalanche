@@ -6,7 +6,7 @@
 import type { Config } from "../core/config/index.ts";
 import { DomainError } from "../core/domain/index.ts";
 import { scan } from "../core/index.ts";
-import { ensureDataDir } from "../core/storage/index.ts";
+import { ensureDataDir, NoSuchSessionError } from "../core/storage/index.ts";
 import type { Watcher } from "../core/watcher/index.ts";
 import { createActivityLog, createEventBus, startWatcher } from "../core/watcher/index.ts";
 import { closeApp, createApp } from "./app.ts";
@@ -77,11 +77,15 @@ export async function startReviewServer(options: ReviewServerOptions): Promise<R
     activity,
     onRescan: review.adopt,
     onRepositoryChanged: review.repositoryChanged,
+    // Deleted, or deleted and made again, by any process: what the server held for it goes.
+    onSessions: review.sessionsRead,
     // The tasks windows are open on, taken from the live streams rather than
     // from the document cache: a connection exists exactly while a window does,
     // and a cache's eviction answers a question about memory (05-watcher.md).
     sessions: () => events.sessions(),
     onError: (error) => {
+      // The session was deleted under the rescan: `current` is on its way elsewhere, nothing failed.
+      if (error instanceof NoSuchSessionError) return;
       process.stderr.write(
         `rescan failed: ${error instanceof Error ? error.message : String(error)}\n`,
       );

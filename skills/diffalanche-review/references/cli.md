@@ -18,7 +18,8 @@ status, the comment counters, the repositories of the last scan, and the scope.
 `--json` gives `{"sessions": [...], "warnings": [...]}`, each session with
 `name`, `title`, `base`, `scope`, `status`, `createdAt`, `updatedAt`, `current`,
 `open`, `resolved`, and `repositories` (`null` when the session has never been
-scanned).
+scanned). Sessions are deleted by a human, never by you: `review delete` refuses
+any role but `human`.
 
 ## review new --no-use — proposing the task
 

@@ -8,10 +8,12 @@ import { execFileSync, spawn } from "node:child_process";
 import { chmodSync, existsSync, mkdirSync, readFileSync, rmSync, writeFileSync } from "node:fs";
 import { createServer } from "node:net";
 import { join } from "node:path";
+import { PassThrough } from "node:stream";
 import { fileURLToPath } from "node:url";
 import { afterEach, beforeEach, describe, expect, it } from "vitest";
 import { processOutput } from "../src/cli/output.ts";
 import { run } from "../src/cli/run.ts";
+import { confirmOnTerminal } from "../src/cli/stdin.ts";
 import { VERSION } from "../src/cli/version.ts";
 import type { UiAssets } from "../src/server/assets.ts";
 import { makeRoot, REPOS } from "./helpers/fixture-root.ts";
@@ -270,6 +272,84 @@ describe("review sessions", () => {
     const table = await inRoot("review", "list");
     expect(table.err).toContain("no review.json");
     expect(table.out).toContain("* alpha");
+  });
+
+  it("deletes a session with --role human --yes, and current moves to what is left", async () => {
+    await inRoot("review", "new", "alpha");
+    await inRoot("review", "new", "beta");
+    const deleted = await inRoot("review", "delete", "beta", "--role", "human", "--yes");
+    expect(deleted).toEqual({
+      code: 0,
+      out: "review session beta is deleted; alpha is current now\n",
+      err: "",
+    });
+    expect(existsSync(dataFile("reviews", "beta"))).toBe(false);
+    expect(readFileSync(dataFile("current"), "utf8")).toBe("alpha\n");
+
+    const last = await inRoot("review", "delete", "alpha", "--role", "human", "--yes");
+    expect(last.out).toBe("review session alpha is deleted; no session is current now\n");
+    expect(existsSync(dataFile("current"))).toBe(false);
+  });
+
+  it("refuses an unknown name and any role but human, and deletes nothing", async () => {
+    await inRoot("review", "new", "alpha");
+    const missing = await inRoot("review", "delete", "nothing", "--role", "human", "--yes");
+    expect(missing.code).toBe(1);
+    expect(missing.err).toContain('no review session "nothing"');
+    // An agent is refused before it is asked anything, with or without --yes.
+    for (const extra of [["--yes"], []]) {
+      const agent = await inRoot("review", "delete", "alpha", ...extra);
+      expect(agent.code).toBe(1);
+      expect(agent.err).toContain("only a human may delete a review task");
+    }
+    expect(existsSync(dataFile("reviews", "alpha", "review.json"))).toBe(true);
+  });
+
+  it("asks on a terminal, and refuses without one unless --yes is given", async () => {
+    await inRoot("review", "new", "alpha");
+    const asked: string[] = [];
+    const answering = (answer: boolean | null) =>
+      run(["review", "delete", "alpha", "--role", "human", "--root", root], noUi, {
+        out: () => {},
+        err: (text) => asked.push(text),
+        confirm: async (question) => {
+          asked.push(question);
+          return answer;
+        },
+      });
+
+    expect(await answering(null)).toBe(1);
+    expect(asked.join("")).toContain("no terminal to ask on; pass --yes");
+    expect(await answering(false)).toBe(1);
+    expect(asked).toContain("delete review session alpha and its 0 comments?");
+    expect(asked.join("")).toContain("review session alpha was not deleted");
+    expect(existsSync(dataFile("reviews", "alpha"))).toBe(true);
+
+    expect(await answering(true)).toBe(0);
+    expect(existsSync(dataFile("reviews", "alpha"))).toBe(false);
+  });
+
+  it("takes y on the terminal as yes, and Ctrl-D or Ctrl-C as no rather than hanging", async () => {
+    const terminal = () => Object.assign(new PassThrough(), { isTTY: true });
+    const yes = terminal();
+    const asked = confirmOnTerminal("delete?", yes, new PassThrough());
+    yes.write("y\n");
+    expect(await asked).toBe(true);
+
+    // Ctrl-D ends the input before a line came.
+    const ended = terminal();
+    const closed = confirmOnTerminal("delete?", ended, new PassThrough());
+    ended.end();
+    expect(await closed).toBe(false);
+
+    // Ctrl-C reaches readline as the character only on a terminal it drives: the output says so.
+    const interrupted = terminal();
+    const out = Object.assign(new PassThrough(), { isTTY: true, columns: 80 });
+    const stopped = confirmOnTerminal("delete?", interrupted, out);
+    interrupted.write("\u0003");
+    expect(await stopped).toBe(false);
+
+    expect(await confirmOnTerminal("delete?", new PassThrough(), new PassThrough())).toBeNull();
   });
 
   it("refuses every session command with no current session and no --review", async () => {

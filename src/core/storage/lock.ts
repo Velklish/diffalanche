@@ -6,10 +6,10 @@
  */
 import { randomUUID } from "node:crypto";
 import { mkdir, readFile, rename, rm, stat } from "node:fs/promises";
-import { join } from "node:path";
+import { dirname, join } from "node:path";
 import { setTimeout as sleep } from "node:timers/promises";
 import { writeFileAtomic } from "./atomic.ts";
-import { StorageError } from "./errors.ts";
+import { NoSuchSessionError, StorageError } from "./errors.ts";
 import { toJson } from "./schema.ts";
 
 /** How long a holder claims the lock for; past that another writer takes it over. */
@@ -108,6 +108,10 @@ async function acquire(lockDir: string, token: string, staleMs: number): Promise
   try {
     await mkdir(lockDir);
   } catch (error) {
+    // The session directory is gone: deleted while this writer waited for it (DA-40).
+    if ((error as NodeJS.ErrnoException).code === "ENOENT") {
+      throw new NoSuchSessionError(dirname(lockDir));
+    }
     if ((error as NodeJS.ErrnoException).code !== "EEXIST") throw error;
     await takeOverIfStale(lockDir);
     return false;

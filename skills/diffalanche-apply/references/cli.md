@@ -13,7 +13,8 @@ $ diffalanche review list
 ```
 
 The `*` is the current session. Every command below uses it unless you pass
-`--review cargo-flags`. The columns after the base are the status, the comment
+`--review cargo-flags`. Sessions are deleted by a human, never by you: `review
+delete` refuses any role but `human`. The columns after the base are the status, the comment
 counters, the repositories of the last scan, and the scope — what the task is
 about, or the whole root when it is about everything.
 

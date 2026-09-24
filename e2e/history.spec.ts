@@ -1,5 +1,5 @@
 import { execFileSync } from "node:child_process";
-import { readFileSync } from "node:fs";
+import { existsSync, readFileSync } from "node:fs";
 import { join } from "node:path";
 import { fileURLToPath } from "node:url";
 import type { APIRequestContext, Page } from "@playwright/test";
@@ -144,7 +144,7 @@ async function listen(page: Page): Promise<void> {
         const heard: Record<string, number> = {};
         (window as unknown as { __heard: Record<string, number> }).__heard = heard;
         const source = new EventSource("/api/events");
-        for (const type of ["session-changed", "sessions-changed"]) {
+        for (const type of ["session-changed", "sessions-changed", "current-changed"]) {
           source.addEventListener(type, (event) => {
             const { name } = JSON.parse((event as MessageEvent<string>).data) as { name: string };
             heard[`${type} ${name}`] = (heard[`${type} ${name}`] ?? 0) + 1;
@@ -367,4 +367,103 @@ test("a task this window closes raises no mark of its own", async ({ page, reque
   // menu open and all.
   cli("review", "new", `else-${Date.now().toString(36)}`, "--base", "head", "--no-use");
   await expect(page.locator(".pill-mark")).toBeVisible({ timeout: MARK_CEILING_MS });
+});
+
+test("a task is deleted from its row after a question, and Отмена deletes nothing", async ({
+  page,
+}) => {
+  const name = "ls-delete-row";
+  cli("review", "new", name, "--no-use");
+  cli("comment", "--review", name, "--severity", "nit", "--body", "a finding to lose");
+  await open(page);
+  await page.locator(".pill").first().click();
+  const row = page
+    .locator(".session-row")
+    .filter({ has: page.locator(".session-name", { hasText: name }) });
+
+  await row.getByRole("button", { name: "Delete", exact: true }).click();
+  const question = page.getByRole("group", {
+    name: `Удалить задачу ${name} и 1 комментарий (1 открыт)?`,
+  });
+  await expect(question).toBeVisible();
+  // The ring lands on the answer that deletes nothing, and goes back where it was with it.
+  await expect(question.getByRole("button", { name: "Отмена" })).toBeFocused();
+  await question.getByRole("button", { name: "Отмена" }).click();
+  await expect(row.getByRole("button", { name: "Delete", exact: true })).toBeFocused();
+  expect(existsSync(join(DATA, "reviews", name))).toBe(true);
+
+  await row.getByRole("button", { name: "Delete", exact: true }).click();
+  await question.getByRole("button", { name: "Удалить", exact: true }).click();
+  await expect(page.locator(".toast")).toContainText(`review delete ${name}`);
+  await expect(row).toHaveCount(0);
+  expect(existsSync(join(DATA, "reviews", name))).toBe(false);
+  // The ring went to the row that took the deleted one's place, not to the document.
+  await expect
+    .poll(() => page.evaluate(() => document.activeElement?.matches("[data-session-delete]")))
+    .toBe(true);
+  // The window was on another task, and stays on it.
+  await expect(page.locator(".pill-name").first()).toHaveText(SESSION);
+});
+
+test("deleting the task this window is on takes the window to the current one", async ({
+  page,
+}) => {
+  const name = "ls-delete-here";
+  cli("review", "new", name, "--no-use");
+  await page.goto(`/?review=${name}`);
+  await page.waitForFunction(() => window.__perf?.ready === true);
+  await expect(page.locator(".pill-name").first()).toHaveText(name);
+
+  await page.locator(".pill").first().click();
+  const row = page
+    .locator(".session-row")
+    .filter({ has: page.locator(".session-name", { hasText: name }) });
+  await row.getByRole("button", { name: "Delete", exact: true }).click();
+  await page.getByRole("button", { name: "Удалить", exact: true }).click();
+
+  await expect(page.locator(".toast")).toContainText(`review delete ${name}`);
+  await expect(page.locator(".pill-name").first()).toHaveText(SESSION);
+  expect(new URL(page.url()).searchParams.get("review")).toBeNull();
+  expect(existsSync(join(DATA, "reviews", name))).toBe(false);
+});
+
+test("deleting the current task from a window on current reads the next current once", async ({
+  page,
+}) => {
+  const name = "ls-delete-current";
+  await open(page);
+  await expect(page.locator(".sidebar-foot")).toContainText("watching");
+  await listen(page);
+  try {
+    // Made current with the page already listening, so the frame of that move is counted out
+    // before the delete's own: a window without `?review=` follows it to the new task.
+    cli("review", "new", name);
+    await arrived(page, `current-changed ${name}`, 0);
+    await expect(page.locator(".pill-name").first()).toHaveText(name);
+    const reads: string[] = [];
+    page.on("request", (request) => {
+      if (new URL(request.url()).pathname === "/api/review") reads.push(request.url());
+    });
+
+    await page.locator(".pill").first().click();
+    const row = page
+      .locator(".session-row")
+      .filter({ has: page.locator(".session-name", { hasText: name }) });
+    await row.getByRole("button", { name: "Delete", exact: true }).click();
+    await page.getByRole("button", { name: "Удалить", exact: true }).click();
+    await expect(page.locator(".toast")).toContainText(`review delete ${name}`);
+
+    const listed = JSON.parse(cli("review", "list", "--json")) as {
+      sessions: { name: string; current: boolean }[];
+    };
+    const now = listed.sessions.find((one) => one.current)?.name;
+    expect(now).toBeDefined();
+    await expect(page.locator(".pill-name").first()).toHaveText(now as string);
+    // The frame the move of `current` sends has arrived and was the page's own: one read, not two.
+    await arrived(page, `current-changed ${now}`, 0);
+    expect(reads).toHaveLength(1);
+  } finally {
+    // The specs after this one are written against the fixture's own current session.
+    cli("review", "use", SESSION);
+  }
 });

@@ -5,19 +5,20 @@
 import { mkdirSync, mkdtempSync, readFileSync, rmSync, writeFileSync } from "node:fs";
 import { networkInterfaces, tmpdir } from "node:os";
 import { join } from "node:path";
-import type { Hono } from "hono";
+import { Hono } from "hono";
 import { afterAll, beforeAll, describe, expect, it } from "vitest";
 import { generate, PROFILES } from "../scripts/synth.ts";
 import { findRepositories } from "../src/core/change-set.ts";
 import type { Config } from "../src/core/config/index.ts";
 import { loadConfig } from "../src/core/config/index.ts";
-import { addComment, createSession, useSession } from "../src/core/domain/index.ts";
+import { addComment, createSession, deleteSession, useSession } from "../src/core/domain/index.ts";
 import type { DiffCache } from "../src/core/storage/index.ts";
-import { readDiffCache, writeDiffCache } from "../src/core/storage/index.ts";
+import { NoSuchSessionError, readDiffCache, writeDiffCache } from "../src/core/storage/index.ts";
 import type { ReviewDocument } from "../src/core/types.ts";
 import { createActivityLog } from "../src/core/watcher/index.ts";
 import { createApp } from "../src/server/app.ts";
 import type { UiAssets } from "../src/server/assets.ts";
+import { errorResponse } from "../src/server/errors.ts";
 import { createEventStream } from "../src/server/events.ts";
 import { createReviewService } from "../src/server/review.ts";
 import { startReviewServer } from "../src/server/serve.ts";
@@ -212,6 +213,77 @@ describe("what a write costs the next reader", () => {
     // not charge the next reader of the review for the whole change set.
     expect(after.repositories).toBe(before.repositories);
     expect(after.totals).toBe(before.totals);
+  });
+});
+
+/** What the page sends with a write, so the CSRF guard reads it as one (07-server.md). */
+const JSON_TYPE = { "content-type": "application/json" };
+
+describe("a deleted task", () => {
+  it("forgets what it held for it, so a task made again under the name is read afresh", async () => {
+    const service = createReviewService(config);
+    await createSession(config.dataDir, "again", { mode: "head" }, "first", { use: false });
+    expect((await service.document("again")).session.title).toBe("first");
+
+    // Deleted and made again by a CLI beside the server: nothing tells the service but `forget`.
+    await deleteSession(config.dataDir, "again", { role: "human" });
+    await createSession(config.dataDir, "again", { mode: "head" }, "second", { use: false });
+    service.forget("again");
+    expect((await service.document("again")).session.title).toBe("second");
+    await deleteSession(config.dataDir, "again", { role: "human" });
+  });
+
+  it("is deleted by DELETE /api/sessions/:name, and the route refuses a task there is not", async () => {
+    await createSession(config.dataDir, "doomed", { mode: "head" }, undefined, { use: false });
+    expect((await app.request("/api/review?review=doomed")).status).toBe(200);
+
+    const deleted = await app.request("/api/sessions/doomed", {
+      method: "DELETE",
+      headers: JSON_TYPE,
+    });
+    expect(deleted.status).toBe(200);
+    // `synth` stays current: the task deleted was not.
+    expect(await deleted.json()).toEqual({ name: "doomed", current: SESSION, moved: false });
+    const after = await app.request("/api/review?review=doomed");
+    expect(after.status).toBe(404);
+    expect(await after.json()).toMatchObject({ error: "no-such-session" });
+
+    const missing = await app.request("/api/sessions/doomed", {
+      method: "DELETE",
+      headers: JSON_TYPE,
+    });
+    expect(missing.status).toBe(404);
+  });
+
+  it("forgets a task a CLI deleted and made again beside a running server, with no call of its own", async () => {
+    const server = await startReviewServer({ config: { ...config, port: 0 }, ui });
+    const title = async () => {
+      const response = await fetch(`${server.url}/api/review?review=made-again`);
+      return ((await response.json()) as ReviewDocument).session.title;
+    };
+    try {
+      await createSession(config.dataDir, "made-again", { mode: "head" }, "first", { use: false });
+      expect(await title()).toBe("first");
+      // What `review delete` and `review new` do from a terminal beside the server.
+      await deleteSession(config.dataDir, "made-again", { role: "human" });
+      await createSession(config.dataDir, "made-again", { mode: "head" }, "second", { use: false });
+      // The watcher's burst is what tells the server: a frame's deadline, not a budget (11-perf.md).
+      await expect.poll(title, { timeout: 20_000 }).toBe("second");
+    } finally {
+      await server.close();
+      await deleteSession(config.dataDir, "made-again", { role: "human" });
+    }
+  });
+
+  it("answers a session gone under a write with 404 no-such-session, not the 500 of storage", async () => {
+    const probe = new Hono();
+    probe.get("/", () => {
+      throw new NoSuchSessionError("/data/reviews/gone");
+    });
+    probe.onError(errorResponse);
+    const answer = await probe.request("/");
+    expect(answer.status).toBe(404);
+    expect(await answer.json()).toMatchObject({ error: "no-such-session" });
   });
 });
 

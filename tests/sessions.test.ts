@@ -6,6 +6,7 @@ import { afterEach, beforeEach, describe, expect, it } from "vitest";
 import {
   createSession,
   DomainError,
+  deleteSession,
   listSessions,
   parseBaseArgument,
   resolveSessionName,
@@ -18,12 +19,15 @@ import {
   dataDirOf,
   diffCachePath,
   ensureDataDir,
+  NoSuchSessionError,
   readCurrent,
   readReview,
   reviewPath,
   SCHEMA_VERSION,
   StorageError,
+  sessionDir,
   updateComments,
+  withLock,
   writeDiffCache,
 } from "../src/core/storage/index.ts";
 import { comment } from "./helpers/session.ts";
@@ -238,6 +242,88 @@ describe("listSessions", () => {
 
   it("is empty on a data directory with no sessions", async () => {
     expect(await listSessions(dataDir)).toEqual({ sessions: [], warnings: [] });
+  });
+});
+
+describe("deleteSession", () => {
+  const HUMAN = { role: "human" } as const;
+
+  it("deletes a session that is not current and leaves current where it was", async () => {
+    await createSession(dataDir, "one", { mode: "head" });
+    await createSession(dataDir, "two", { mode: "head" });
+    await updateComments(dataDir, "one", (comments) => comments.push(comment("c_aaaaaa")));
+
+    expect(await deleteSession(dataDir, "one", HUMAN)).toEqual({ current: "two", moved: false });
+    expect(existsSync(sessionDir(dataDir, "one"))).toBe(false);
+    expect(await readCurrent(dataDir)).toBe("two");
+    expect((await listSessions(dataDir)).sessions.map((one) => one.name)).toEqual(["two"]);
+  });
+
+  it("moves current to the session updated last when it deletes the current one", async () => {
+    await createSession(dataDir, "older", { mode: "head" });
+    // A floor under a millisecond stamp, so each write is later: load only lengthens it.
+    await sleep(2);
+    await createSession(dataDir, "newer", { mode: "head" });
+    await sleep(2);
+    // Updated after `newer` was made, so it is the one updated last, not the one made last.
+    await updateComments(dataDir, "older", (comments) => comments.push(comment("c_aaaaaa")));
+    await sleep(2);
+    await createSession(dataDir, "doomed", { mode: "head" });
+
+    expect(await deleteSession(dataDir, "doomed", HUMAN)).toEqual({
+      current: "older",
+      moved: true,
+    });
+    expect(await readCurrent(dataDir)).toBe("older");
+
+    await deleteSession(dataDir, "newer", HUMAN);
+    expect(await deleteSession(dataDir, "older", HUMAN)).toEqual({ current: null, moved: true });
+    expect(existsSync(currentPath(dataDir))).toBe(false);
+  });
+
+  it("refuses a session that is not there and a role that is not human, and deletes nothing", async () => {
+    await createSession(dataDir, "kept", { mode: "head" });
+    const missing = await deleteSession(dataDir, "nope", HUMAN).catch((caught) => caught);
+    expect(missing).toMatchObject({ code: "no-such-session" });
+    const agent = await deleteSession(dataDir, "kept", { role: "agent" }).catch((caught) => caught);
+    expect(agent).toMatchObject({ code: "role-not-human" });
+    expect(await readReview(dataDir, "kept")).toMatchObject({ name: "kept" });
+    expect(await readCurrent(dataDir)).toBe("kept");
+  });
+
+  it("deletes a session whose review.json is broken, which no other command can read", async () => {
+    await createSession(dataDir, "broken", { mode: "head" });
+    writeFileSync(reviewPath(dataDir, "broken"), "{ not json");
+    await deleteSession(dataDir, "broken", HUMAN);
+    expect(existsSync(sessionDir(dataDir, "broken"))).toBe(false);
+  });
+
+  it("refuses a writer that waited on the lock of a session deleted meanwhile, and makes no directory", async () => {
+    await createSession(dataDir, "gone", { mode: "head" });
+    const dir = sessionDir(dataDir, "gone");
+    let waiter: Promise<unknown> = Promise.resolve();
+    await withLock(dir, async () => {
+      // Queued behind the lock this body holds, then left with no directory to lock.
+      waiter = withLock(dir, async () => undefined).catch((caught: unknown) => caught);
+      rmSync(dir, { recursive: true, force: true });
+    });
+    expect(await waiter).toBeInstanceOf(NoSuchSessionError);
+    // Nor does a scan that ends after the deletion put the directory back: every writer of
+    // `diff.json` writes under the lock, and the lock is what refuses it.
+    const late = withLock(dir, () =>
+      writeDiffCache(dataDir, "gone", {
+        version: SCHEMA_VERSION,
+        base: { mode: "head" },
+        scope: null,
+        rootWarnings: [],
+        root,
+        repositories: [],
+        totals: { repositories: 0, files: 0, lines: 0 },
+        warnings: [],
+      }),
+    );
+    await expect(late).rejects.toBeInstanceOf(NoSuchSessionError);
+    expect(existsSync(dir)).toBe(false);
   });
 });
 

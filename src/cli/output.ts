@@ -12,6 +12,9 @@ export type Output = {
    * gives its own rather than reading the runner's own standard input.
    */
   input?: () => Promise<string>;
+  /** A yes-or-no question for `review delete`, and `null` with no terminal to ask on; the entry
+   * points leave it out and `src/cli/stdin.ts` asks, a test answers for itself. */
+  confirm?: (question: string) => Promise<boolean | null>;
 };
 
 /** What a stream of a real process looks like to this module. */

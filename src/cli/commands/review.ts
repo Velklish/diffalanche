@@ -5,9 +5,11 @@
  */
 import { findRepositories } from "../../core/change-set.ts";
 import {
+  assertDeletable,
   assertScope,
   closeSession,
   createSession,
+  deleteSession,
   formatBase,
   formatScope,
   isEmptyChange,
@@ -23,6 +25,7 @@ import {
   widenScope,
 } from "../../core/domain/index.ts";
 import type { Scope } from "../../core/storage/index.ts";
+import { readComments } from "../../core/storage/index.ts";
 import type { Arguments } from "../args.ts";
 import { choice, flag, noExtra, positional, text, texts } from "../args.ts";
 import type { Command } from "../command.ts";
@@ -30,6 +33,7 @@ import { DEFAULT_AUTHOR, DEFAULT_ROLE, ROLES } from "../comments.ts";
 import type { Context } from "../context.ts";
 import { UsageError } from "../errors.ts";
 import { json, table } from "../output.ts";
+import { confirmOnTerminal } from "../stdin.ts";
 
 /** The base a session gets when `review new` is not told one. */
 const DEFAULT_BASE = "head";
@@ -402,6 +406,55 @@ export const reviewReopen: Command = {
       role: choice(args, "role", ROLES) ?? DEFAULT_ROLE,
     });
     context.io.out(`review session ${review.name} is open again\n`);
+    return 0;
+  },
+};
+
+export const reviewDelete: Command = {
+  spec: {
+    name: "review delete",
+    arguments: "<name>",
+    about: "delete a review session with its comments; only a human may",
+    options: {
+      role: { type: "string", value: "<human|agent>", about: "only a human may delete a task" },
+      yes: { type: "boolean", about: "delete without the question; what a script passes" },
+    },
+  },
+  run: async (context, args) => {
+    const name = positional(args, 0, "<name>");
+    noExtra(args, 1);
+    const { dataDir } = await context.config();
+    const by = { role: choice(args, "role", ROLES) ?? DEFAULT_ROLE };
+    if (!flag(args, "yes")) {
+      await assertDeletable(dataDir, name, by);
+      // A session broken by hand is deleted all the same; only the count in the question is lost.
+      // The whole file, not the scope's share of it: the whole file is what goes.
+      const count = await readComments(dataDir, name).then(
+        (all) => all.length,
+        () => null,
+      );
+      const what =
+        count === null ? "" : ` and its ${count} ${count === 1 ? "comment" : "comments"}`;
+      const answer = await (context.io.confirm ?? confirmOnTerminal)(
+        `delete review session ${name}${what}?`,
+      );
+      if (answer === null) {
+        throw new UsageError(
+          "review delete: no terminal to ask on; pass --yes to delete without the question",
+        );
+      }
+      if (!answer) {
+        context.io.err(`review session ${name} was not deleted\n`);
+        return 1;
+      }
+    }
+    const deleted = await deleteSession(dataDir, name, by);
+    const after = !deleted.moved
+      ? ""
+      : deleted.current === null
+        ? "; no session is current now"
+        : `; ${deleted.current} is current now`;
+    context.io.out(`review session ${name} is deleted${after}\n`);
     return 0;
   },
 };

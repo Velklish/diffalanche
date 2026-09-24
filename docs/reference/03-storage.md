@@ -65,7 +65,8 @@ review writes it too ([11-perf.md](11-perf.md)).
 | `writeComments(dataDir, name, comments)` | replaces `comments.json` whole |
 | `readDiffCache(dataDir, name)` | `diff.json`, or `null` before the first scan |
 | `writeDiffCache(dataDir, name, diff)` | replaces `diff.json` whole |
-| `readCurrent(dataDir)`, `writeCurrent(dataDir, name)` | the current-session pointer |
+| `readCurrent(dataDir)`, `writeCurrent(dataDir, name)`, `clearCurrent(dataDir)` | the current-session pointer; `clearCurrent` removes the file, which reads as no current session |
+| `removeSession(dataDir, name)` | deletes a session's directory under its lock (DA-40) |
 | `sessionExists(dataDir, name)` | whether `review.json` is there, whatever is in it |
 | `listSessionNames(dataDir)` | `{ names, warnings }` |
 
@@ -83,6 +84,37 @@ listing.
 `sessionExists(dataDir, name)` answers from `review.json` being there, not from
 it parsing. A session whose file was broken by hand still exists, and a caller
 that treated it as absent would overwrite it.
+
+**A session is deleted in one rename.** `removeSession` takes the session's
+lock, checks `review.json` is still there, and renames the whole directory out
+of `reviews/` to `<dataDir>/.deleted-<uuid>` before it removes it: a reader
+finds all of the session or none of it, never a directory half emptied that the
+listing would report as not a session. The lock moves with the directory, and
+its release finds nothing at its path — the ordinary case after a takeover. A
+process killed between the rename and the removal leaves the renamed directory
+at the root of the data directory, where no listing looks.
+
+**Nothing brings a deleted session's directory back, and the lock is what
+holds that.** Every writer of a session's files writes under its lock — the
+comment and metadata writes through `updateSession`, and every writer of
+`diff.json`, a scan included, through `withLock`. The lock's `mkdir` of `.lock`
+answers `ENOENT` once the directory is gone, and that is a refusal before the
+body runs: a writer that waited on a deleted session, or a scan that ends after
+its session was deleted, writes nothing and makes no directory. The one step
+that could have made one on the way to the lock is `updateSession`'s own
+`ensureSessionDir`, and it now runs only for a session being created: a writer
+that checked for the session just before it went is refused at the lock like
+the others.
+
+**A session that is not there is one error**, `NoSuchSessionError` — a
+`StorageError` of its own, whichever step found it gone: a read of
+`review.json`, the check before a write, the check inside the lock, or the
+lock's `ENOENT`. The server answers it with the 404 `no-such-session` a missing
+session gets anywhere else, where a plain `StorageError` is its 500
+([07-server.md](07-server.md)): a reply racing a delete is told the session is
+gone, not that storage failed. The server's watcher does not report it as a
+failed rescan either: a rescan of the deleted current session meets it until
+`current` has moved.
 
 ## Atomic writes
 
@@ -461,6 +493,10 @@ later.
   as it is read, and the write puts them on disk.
 - The lock covers one session directory. `current` and `config.json` sit outside
   every session and are written atomically but unlocked; two processes switching
-  sessions at the same instant leave one of the two names, never a mixture.
+  sessions at the same instant leave one of the two names, never a mixture. A
+  delete moving `current` checks, after it wrote the pointer, that the session
+  it named is still there, and chooses again when a second delete took it
+  meanwhile ([04-domain.md](04-domain.md)). What stays open is a delete racing a
+  `review use`: the last of the two to write wins.
 - Nothing writes `config.json`: it is read and never rewritten. Writing it from
   the UI is Phase 2.

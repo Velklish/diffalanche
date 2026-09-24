@@ -1,6 +1,7 @@
+import { useEffect, useRef, useState } from "react";
 import { formatBase } from "../base.ts";
 import { afterPaint } from "../perf.ts";
-import { historyScopeLabel } from "../scope.ts";
+import { deleteQuestion, historyScopeLabel } from "../scope.ts";
 import { useStore } from "../store.ts";
 import { relativeTime } from "../time.ts";
 import type { ReviewStatus, SessionSummary } from "../types.ts";
@@ -145,6 +146,12 @@ function SessionRow({
   switching: boolean;
 }) {
   const closed = session.status === "closed";
+  const [asking, setAsking] = useState(false);
+  if (asking) {
+    return (
+      <DeleteQuestion session={session} switching={switching} onCancel={() => setAsking(false)} />
+    );
+  }
   return (
     <div className={rowClass(here, closed)}>
       <button
@@ -213,8 +220,96 @@ function SessionRow({
       >
         {closed ? "Reopen" : "Close"}
       </button>
+      {/* Deleting asks first, in the row it is about (DA-40): the question replaces the row. */}
+      <button
+        type="button"
+        className="ghost small session-status"
+        data-session-delete={session.name}
+        disabled={switching}
+        onClick={() => setAsking(true)}
+      >
+        Delete
+      </button>
     </div>
   );
+}
+
+/** The question before a task is deleted, in its row's place, with the ring on `Отмена` so an `⏎`
+ * deletes nothing ([08-ui.md](../../../docs/reference/08-ui.md), "Deleting a task"). */
+function DeleteQuestion({
+  session,
+  switching,
+  onCancel,
+}: {
+  session: SessionSummary;
+  switching: boolean;
+  onCancel: () => void;
+}) {
+  const question = deleteQuestion(session.name, session.open + session.resolved, session.open);
+  const cancel = useRef<HTMLButtonElement>(null);
+  // Once, as the question appears: a ref that focused on every render took the ring back from
+  // wherever the reader had moved it, on every keystroke in the menu's own fields.
+  useEffect(() => {
+    cancel.current?.focus();
+  }, []);
+  return (
+    <fieldset className="session-row asking" aria-label={question}>
+      <p className="confirm-question">{question}</p>
+      <p className="confirm-note">Каталог задачи уходит с диска целиком, вернуть его нельзя.</p>
+      <div className="session-confirm">
+        <span className="spacer" />
+        <button
+          type="button"
+          className="ghost small"
+          ref={cancel}
+          // Once `Удалить` is pressed the delete is under way, and cancelling is no longer true.
+          disabled={switching}
+          onClick={() => {
+            onCancel();
+            void afterPaint().then(() => focusDelete(session.name));
+          }}
+        >
+          Отмена
+        </button>
+        <button
+          type="button"
+          className="primary small danger"
+          disabled={switching}
+          onClick={() => void remove(session.name)}
+        >
+          Удалить
+        </button>
+      </div>
+    </fieldset>
+  );
+}
+
+/** The delete, and the ring after it: the row it was on is gone, so it goes to the `Delete` of the
+ * row that took its place — the next, else the one before — or to the create form's name field. */
+async function remove(name: string): Promise<void> {
+  const before = useStore.getState().sessions.map((one) => one.name);
+  const at = before.indexOf(name);
+  const held = document.activeElement;
+  await useStore.getState().deleteTask(name);
+  await afterPaint();
+  // A reader who moved while the delete ran keeps where they are, as `press` has it.
+  const now = document.activeElement;
+  if (now !== null && now !== document.body && now !== held) return;
+  const left = useStore.getState().sessions.map((one) => one.name);
+  if (left.includes(name)) return;
+  const next = before.slice(at + 1).find((one) => left.includes(one));
+  const previous = before
+    .slice(0, at)
+    .reverse()
+    .find((one) => left.includes(one));
+  const neighbour = next ?? previous;
+  if (neighbour !== undefined) focusDelete(neighbour);
+  else document.querySelector<HTMLElement>('.menu-create input[aria-label="name"]')?.focus();
+}
+
+/** Back on the row's own `Delete`, where the reader was before the question. */
+function focusDelete(name: string): void {
+  document.querySelector<HTMLElement>(`[data-session-delete="${CSS.escape(name)}"]`)?.focus();
 }
 
 /**

@@ -318,8 +318,21 @@ the current session changes and an open window would otherwise never hear that
 it exists ([ADR-010](../adr/adr-010-review-task-scope.md)). It is read from the
 status of every session under `reviews/`, one small file each, on every burst
 the data directory produces — the cost `listSessions` already pays per request
-([04-domain.md](04-domain.md)). A session that disappears says nothing: deleting
-one is Phase 2 (DA-40).
+([04-domain.md](04-domain.md)). A session that disappears says nothing
+(DA-40): the frame's `status` has no value for "gone", and the history is read
+afresh whenever the menu opens. A window on the deleted task hears
+`session-changed` for it, reads the review again and gets `no-such-session`; a
+deleted current session moves `current`, which is `current-changed`, read before
+it is followed like any other move.
+
+What the burst does hand over is the listing itself: `onSessions(reviews)`, every
+session's `review.json` as the burst read it, after the statuses are compared.
+The server's `sessionsRead` compares it with what it holds
+([07-server.md](07-server.md)). The watcher keeps no memory of its own for this:
+a delete and a `review new` inside one debounce look the same by name, and the
+only baseline that tells them apart is the `createdAt` of the document the
+server built — which a session created, read and made again before the watcher
+first listed it never gave the watcher at all.
 
 **One press can produce both.** Closing the *current* task writes a `status`
 that `metadataOf` reads and that the session snapshot compares, so

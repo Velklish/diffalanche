@@ -152,6 +152,7 @@ alike** — and answers for the current session without it. See
 | `PUT /api/sessions/:name/base` | change the base of a session |
 | `PUT /api/sessions/:name/scope` | replace the scope of a session |
 | `POST /api/sessions/:name/close`, `/reopen` | the status of a review task |
+| `DELETE /api/sessions/:name` | delete a review task, as the human the UI is |
 | anything else | a file of the built UI, or `index.html` |
 
 An unknown path under `/api` is a 404 saying so rather than the page: the UI
@@ -831,6 +832,7 @@ either, which is why only a human ever resolves a thread through this server.
 | `PUT /api/sessions/:name/base` | `base` | `review.json` with the new base |
 | `PUT /api/sessions/:name/scope` | `scope`, `dropComments` | `review.json` with the new scope, or 409 |
 | `POST /api/sessions/:name/close`, `/reopen` | — | `review.json` with the new status |
+| `DELETE /api/sessions/:name` | — | `{ name, current, moved }`: where `current` is now, and whether the delete moved it |
 
 `severitySource` is `auto` when the composer's `AUTO` chose `severity` from the
 suggestions' vote, and `manual` — also what its absence means — when the
@@ -899,6 +901,25 @@ What the request itself is wrong about is a `400` with `error: "invalid-request"
 naming the field: a body that is not a JSON object, a severity that is not one
 of the four, an empty comment. What the *review* is wrong about is the domain's
 own refusal with its own code.
+
+`DELETE /api/sessions/:name` deletes as the configured user with `role: human`,
+the way `close` is signed (DA-40, [04-domain.md](04-domain.md)), and then
+**forgets** the task: `forget` drops the document the server held for it, its
+serialised payload, and the change set a rescan handed over, where `invalidate`
+keeps the entry and only drops the document. A held document of a deleted task
+would otherwise be served, as it was, to a window that still names it — and to a
+task made again under the same name. **A delete from a CLI beside the server is
+forgotten the same way**: every burst of the data directory hands the service
+the listing it read (`onSessions`, [05-watcher.md](05-watcher.md)), and
+`sessionsRead` drops what is held for a session that is not in it, or whose held
+document was built for another `createdAt` — deleted and made again under its
+name. A session whose `review.json` could not be read in that burst keeps what
+is held for it: a file caught mid-write is not a session gone. A task that
+is not there is the 404 of `no-such-session`, and so is one deleted while a
+write was on its way to its lock (`NoSuchSessionError`,
+[03-storage.md](03-storage.md)). The
+page sends the route `content-type: application/json` with no body, as it does
+`close`: the CSRF guard reads a write without one as a form.
 
 ### Who may write
 

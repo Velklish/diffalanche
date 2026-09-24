@@ -1796,12 +1796,8 @@ button:disabled {
   outline: none;
 }
 
-/*
- * The primary in the one place a press destroys review data: the same control,
- * filled `crit` instead of `acc`. It is the colour of a filled critical badge
- * and no louder (`DESIGN.md`, The One Loud Thing Rule) — here the loud thing is
- * not a finding but the deletion of one.
- */
+/* The primary where a press destroys review data, filled `crit`: no louder than a critical badge
+   (`DESIGN.md`, The One Loud Thing Rule, and Buttons for the two places it is). */
 .primary.danger {
   background: var(--crit);
 }
@@ -2626,6 +2622,33 @@ button.chip {
 
 .overlay.confirm .picker-foot {
   padding: 12px 14px 14px;
+}
+
+/* The question before a delete takes the row's place and its width (DA-40). */
+.session-row.asking {
+  min-width: 0;
+  margin: 0;
+  border: 0;
+  flex-direction: column;
+  align-items: stretch;
+  gap: 0;
+  padding: 0 0 8px;
+  background: var(--panel2);
+}
+
+.session-row.asking .confirm-question {
+  padding: 10px 9px 0;
+  font-size: 12.5px;
+}
+
+.session-row.asking .confirm-note {
+  padding: 6px 9px 0;
+}
+
+.session-confirm {
+  display: flex;
+  gap: 7px;
+  padding: 10px 9px 0;
 }
 
 /* export */

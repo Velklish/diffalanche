@@ -3,13 +3,16 @@
  * changing its base. `docs/SPEC.md` sections 4, 5, and 8; the on-disk side is
  * `src/core/storage`.
  */
-import type { Base, Review, Scope } from "../storage/index.ts";
+import type { Base, Review, Role, Scope } from "../storage/index.ts";
 import {
+  clearCurrent,
   listSessionNames,
+  NoSuchSessionError,
   readComments,
   readCurrent,
   readDiffCache,
   readReview,
+  removeSession,
   reviewPath,
   SCHEMA_VERSION,
   StorageError,
@@ -19,6 +22,7 @@ import {
   writeCurrent,
 } from "../storage/index.ts";
 import { DomainError } from "./errors.ts";
+import { assertHuman } from "./roles.ts";
 import type { SessionList, SessionSummary } from "./types.ts";
 
 /**
@@ -164,6 +168,70 @@ export async function setBase(dataDir: string, name: string, base: Base): Promis
     draft.review = { ...draft.review, base };
     return draft.review;
   });
+}
+
+/** What a deletion left: the session `current` names now, and whether it was moved to it. */
+type Deleted = { current: string | null; moved: boolean };
+
+/** Deletes a session and everything in its directory (DA-40): only a human does, as only a human
+ * closes a task, and a deleted `current` moves to the session updated last (04-domain.md). */
+export async function deleteSession(
+  dataDir: string,
+  name: string,
+  by: { role: Role },
+): Promise<Deleted> {
+  await assertDeletable(dataDir, name, by);
+  try {
+    await removeSession(dataDir, name);
+  } catch (error) {
+    // Deleted by someone else between the check above and the lock: the same answer.
+    if (error instanceof NoSuchSessionError) {
+      throw new DomainError("no-such-session", `no review session "${name}"`);
+    }
+    throw error;
+  }
+  const current = await readCurrent(dataDir);
+  if (current !== name) return { current, moved: false };
+  // `current` is written unlocked: a second delete may take the session chosen here meanwhile,
+  // so the choice is made again until the pointer names one that is there (03-storage.md).
+  for (;;) {
+    const next = await mostRecent(dataDir);
+    if (next === null) {
+      await clearCurrent(dataDir);
+      return { current: null, moved: true };
+    }
+    await writeCurrent(dataDir, next);
+    if (await sessionExists(dataDir, next)) return { current: next, moved: true };
+  }
+}
+
+/** What `deleteSession` checks before it writes, for a caller that asks a person first: a question
+ * whose answer would be refused is not asked. */
+export async function assertDeletable(
+  dataDir: string,
+  name: string,
+  by: { role: Role },
+): Promise<void> {
+  assertSessionName(name);
+  // Asked before the role, as `closeSession` asks: a mistyped name answers "no review session".
+  // A `review.json` broken by hand is still a session, and deleting it is how it goes.
+  if (!(await sessionExists(dataDir, name))) {
+    throw new DomainError("no-such-session", `no review session "${name}"`);
+  }
+  assertHuman(by, "delete a review task");
+}
+
+/** The session updated last, from `review.json` alone; one that cannot be read is passed over. */
+async function mostRecent(dataDir: string): Promise<string | null> {
+  let best: { name: string; updatedAt: string } | null = null;
+  for (const name of (await listSessionNames(dataDir)).names) {
+    const review = await readReview(dataDir, name).catch(() => null);
+    if (review === null) continue;
+    if (best === null || review.updatedAt > best.updatedAt) {
+      best = { name, updatedAt: review.updatedAt };
+    }
+  }
+  return best?.name ?? null;
 }
 
 /**

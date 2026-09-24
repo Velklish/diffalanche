@@ -3,7 +3,7 @@
 `src/cli` is the whole agent contract: its flags, its output, and its exit codes
 are what a skill is written against ([ADR-004](../adr/adr-004-agent-contract.md)).
 The commands of `docs/SPEC.md` section 8 that exist today are below; the Phase 2
-and Phase 4 rows — `model pull` without `--embedding`, `insights`, and `review delete` — are not
+and Phase 4 rows — `model pull` without `--embedding` and `insights` — are not
 written yet. Of the `model` group, `model status` and `model pull --embedding` exist.
 
 ## Commands
@@ -21,6 +21,7 @@ written yet. Of the `model` group, `model status` and `model pull --embedding` e
 | `diffalanche review scope remove [--repo <path>]… [--path <repo>:<file>]… [--drop-comments]` | narrows it |
 | `diffalanche review close [<name>] --role human [--author <name>]` | marks the task closed |
 | `diffalanche review reopen [<name>] --role human [--author <name>]` | opens it again |
+| `diffalanche review delete <name> --role human [--yes]` | deletes the session with its comments, and moves `current` when it named it |
 | `diffalanche diff [--repo <path>] [--json\|--patch]` | the change set of the session; rewrites `diff.json` |
 | `diffalanche list [--status <open\|resolved\|all>] [--repo <path>] [--severity <s>] [--unanswered] [--json]` | the comments of the session; default status `open` |
 | `diffalanche show <id> [--json]` | one comment with its thread and its anchor |
@@ -115,6 +116,36 @@ other role with exit code 1, changing nothing — the rule `resolve` has had sin
 the threads are in. `closedBy` is `--author` and `closedAt` is the clock.
 Closing marks the task; `comment`, `reply`, and `resolve` all still work on a
 closed one.
+
+## Deleting a task
+
+`review delete <name>` removes the session's directory and everything in it
+(DA-40, [04-domain.md](04-domain.md)). Only a human deletes a task, as only a
+human closes one: without `--role human` it is exit code 1, `only a human may
+delete a review task`, and nothing is asked or deleted. A name that is not a
+session is exit code 1 before that.
+
+Without `--yes` it asks on the terminal first — `delete review session
+ls-240372 and its 12 comments? [y/N]` on standard error, `y` or `yes` deletes,
+anything else is exit code 1 with `review session ls-240372 was not deleted` —
+`Ctrl-D` and `Ctrl-C` included, which end the question as a no rather than
+leaving the command waiting. The count is of the whole `comments.json`, not of
+the scope's share of it: the whole file is what goes.
+With no terminal to ask on — a pipe, a script, an agent's shell — it refuses
+with exit code 1 and says to pass `--yes`: the question is the human's, and a
+command that deleted because nobody was there to say no would be the one that
+lost a review. The question is asked after the name and the role are checked,
+so it is never asked about a deletion that would be refused. A session whose
+`review.json` or `comments.json` cannot be read is deleted all the same; the
+question just leaves the count out.
+
+```
+$ diffalanche review delete ls-240372 --role human --yes
+review session ls-240372 is deleted; synth is current now
+```
+
+When the session was current, the line says where `current` went: to the
+session updated last, or `no session is current now`.
 
 ## Global flags
 

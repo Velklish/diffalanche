@@ -254,6 +254,7 @@ flags, and `tests/readme-cli.test.ts` fails if the two ever disagree.
 | `review scope remove [--repo <path>]… [--path <repo>:<file>]… [--drop-comments]` | narrow it; without `--drop-comments` a removal that would delete comments is exit code 1 and writes nothing |
 | `review close [<name>] --role human [--author <name>]` | mark a review session closed; comments still work on a closed one; `--role human` is required |
 | `review reopen [<name>] --role human [--author <name>]` | open a closed review session again; `--role human` is required |
+| `review delete <name> --role human [--yes]` | delete a review session with its comments; `--role human` is required, and without `--yes` it asks on the terminal and refuses when there is none |
 | `diff [--repo <path>] [--json] [--patch]` | the change set of the review session; rewrites `diff.json` |
 | `list [--status <open\|resolved\|all>] [--repo <path>] [--severity <critical\|warning\|nit\|question>] [--unanswered] [--json]` | the comments of the review session |
 | `show <id> [--json]` | one comment with its thread and its anchor |

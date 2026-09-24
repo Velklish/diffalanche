@@ -90,6 +90,9 @@ export type WatcherOptions = {
   /** The tasks windows are open on, asked on every burst of the data directory
    * ([05-watcher.md](../../../docs/reference/05-watcher.md)). */
   sessions?: () => string[];
+  /** Every session's `review.json` as a burst of the data directory listed it, for a holder that
+   * compares what it holds: a session gone, or made again under its name (05-watcher.md, DA-40). */
+  onSessions?: (reviews: ReadonlyMap<string, Review | null>) => void;
   /** A rescan that failed. Without this the failure is silent. */
   onError?: (error: unknown) => void;
   /** A watch died and the walk took its place; said once (05-watcher.md). */
@@ -277,7 +280,9 @@ export async function startWatcher(options: WatcherOptions): Promise<Watcher> {
     // readable burst would find no difference and say nothing.
     const reviews = listed ?? (await readFollowed(config, followed));
     reloadMetadata(followed, reviews);
-    if (listed !== null) reloadSessions(listed);
+    if (listed === null) return;
+    reloadSessions(listed);
+    options.onSessions?.(listed);
   }
 
   /** A session's whole change set read from the working tree and handed over, where a `diff.json` last
@@ -344,12 +349,8 @@ export async function startWatcher(options: WatcherOptions): Promise<Watcher> {
     announce(moved);
   }
 
-  /**
-   * Every session, not only the current one: a task created or closed anywhere
-   * in the data directory is news for an open window, which says a new task
-   * appeared without becoming it (`docs/SPEC.md` section 5). A session that
-   * disappears says nothing — deleting one is Phase 2 (DA-40).
-   */
+  /** Every session's status, news for any open window; a session that disappears says nothing, the
+   * frame having no status for it ([05-watcher.md](../../../docs/reference/05-watcher.md)). */
   function reloadSessions(reviews: Map<string, Review | null>): void {
     // A listing that failed never reaches here: what was known stays known,
     // because replacing it with an empty snapshot would make every session news

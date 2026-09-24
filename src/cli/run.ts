@@ -23,6 +23,7 @@ import { reply } from "./commands/reply.ts";
 import {
   reviewBase,
   reviewClose,
+  reviewDelete,
   reviewList,
   reviewNew,
   reviewReopen,
@@ -56,6 +57,7 @@ const COMMANDS: Command[] = [
   reviewScopeRemove,
   reviewClose,
   reviewReopen,
+  reviewDelete,
   diff,
   list,
   show,

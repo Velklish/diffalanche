@@ -37,7 +37,8 @@ gets it wrong on its own:
   a misread comment costs an edit nobody asked for, in a working tree the human
   may not have committed.
 - **The refusal.** Neither skill calls `resolve` or `reopen`, and both say not
-  to reach for `--role human` when the CLI refuses. The refusal is the domain's,
+  to reach for `--role human` when the CLI refuses. Their CLI references say the
+  same of `review delete` in one line: a human deletes a session. The refusal is the domain's,
   not the skill's, so an agent that never read a skill cannot close a thread
   either; the skills exist so an agent does not spend a turn discovering that.
 

@@ -33,7 +33,9 @@ export {
 } from "./scope.ts";
 
 export {
+  assertDeletable,
   createSession,
+  deleteSession,
   formatBase,
   listSessions,
   parseBaseArgument,

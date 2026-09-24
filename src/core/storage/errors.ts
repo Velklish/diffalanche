@@ -16,3 +16,12 @@ export class StorageError extends Error {
     this.field = field;
   }
 }
+
+/** The session is not there, whichever step found it gone — a read, the check before a write, or
+ * the lock of one deleted meanwhile: the server's 404 `no-such-session`, not its 500. */
+export class NoSuchSessionError extends StorageError {
+  constructor(file: string) {
+    super(file, null, "no such review session");
+    this.name = "NoSuchSessionError";
+  }
+}

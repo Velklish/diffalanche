@@ -9,7 +9,7 @@ import { HTTPException } from "hono/http-exception";
 import type { DomainErrorCode } from "../core/domain/index.ts";
 import { DomainError, ScopeCommentsError } from "../core/domain/index.ts";
 import { ModelError } from "../core/ml/embed/errors.ts";
-import { StorageError } from "../core/storage/index.ts";
+import { NoSuchSessionError, StorageError } from "../core/storage/index.ts";
 
 /** The body of every refusal: the code to branch on, the message to show. */
 export type ErrorBody = { error: string; message: string };
@@ -105,6 +105,10 @@ export function errorResponse(error: Error, c: Context): Response {
   }
   if (error instanceof DomainError) {
     return c.json<ErrorBody>({ error: error.code, message: error.message }, statusOf(error));
+  }
+  // A session deleted while this request was on its way: the answer a missing one gets.
+  if (error instanceof NoSuchSessionError) {
+    return c.json<ErrorBody>({ error: "no-such-session", message: error.message }, 404);
   }
   if (error instanceof StorageError) {
     return c.json<ErrorBody>({ error: "storage", message: error.message }, 500);
