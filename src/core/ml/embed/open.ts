@@ -1,17 +1,11 @@
 /** The doors to the embedder for a command or a route: the platform is checked and the files are
- * put in place before the runtime is imported, so nothing else pays for `onnxruntime-node`. */
+ * put in place before the model's process starts, so nothing else pays for `onnxruntime-node`. */
 import { join } from "node:path";
 import { modelStatus, runtimeDirectory } from "./cache.ts";
 import { assets, delivery, missingFrom, provide } from "./delivery.ts";
-import type { Embedder } from "./embedder.ts";
 import { ModelError } from "./errors.ts";
 import { currentPlatform, EMBEDDING_MODEL, EMBEDDING_PLATFORMS } from "./model.ts";
-import { startThreadedEmbedder, type ThreadedEmbedder } from "./threaded.ts";
-
-/** Where a patched build's `onnxruntime-node` loads its binding from (scripts/build.ts). */
-declare global {
-  var __diffalancheOrtBinding: string | undefined;
-}
+import { type SpawnedEmbedder, startSpawnedEmbedder } from "./spawned.ts";
 
 /** Nothing on stderr: a caller that wants the download's progress passes its own. */
 const quiet = () => {};
@@ -60,21 +54,12 @@ async function put(
   return undefined;
 }
 
-/** On the calling thread: for a command, which has nothing else to serve. */
+/** For a command: the files put in place first, with their progress, then the process started. */
 export async function openEmbedder(
   location: string,
   progress?: (text: string) => void,
-): Promise<Embedder> {
-  globalThis.__diffalancheOrtBinding = await prepare(location, progress);
-  let module: typeof import("./embedder.ts");
-  try {
-    module = await import("./embedder.ts");
-  } catch (error) {
-    throw new ModelError(
-      `the embedding runtime could not be loaded: ${error instanceof Error ? error.message : String(error)}`,
-    );
-  }
-  return module.embedder(location);
+): Promise<SpawnedEmbedder> {
+  return startSpawnedEmbedder(location, { binding: await prepare(location, progress) });
 }
 
 /** Whether a preparation would only look: nothing to download or write out. */
@@ -84,12 +69,12 @@ async function inPlace(location: string): Promise<boolean> {
   return (await missingFrom(assets(EMBEDDING_MODEL, platform), location)).length === 0;
 }
 
-/** On a thread of its own, for the server: a request does not wait for 180 MB, it is refused while
- * the files arrive in the background and then told how that ended (09-ml.md, "Delivery"). */
-export async function openThreadedEmbedder(
+/** For the server: a request does not wait for 180 MB, it is refused while the files arrive in the
+ * background and then told how that ended (09-ml.md, "Delivery"). */
+export async function openServerEmbedder(
   location: string,
   progress?: (text: string) => void,
-): Promise<ThreadedEmbedder> {
+): Promise<SpawnedEmbedder> {
   const failure = failed.get(location);
   if (failure !== undefined) {
     failed.delete(location);
@@ -101,5 +86,5 @@ export async function openThreadedEmbedder(
       `the embedding model is being put in place in ${location}: suggestions follow once it is there`,
     );
   }
-  return startThreadedEmbedder(location, { binding: await prepare(location, progress) });
+  return startSpawnedEmbedder(location, { binding: await prepare(location, progress) });
 }

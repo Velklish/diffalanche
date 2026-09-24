@@ -26,6 +26,7 @@ The canonical project documentation. For current work, use `npx github:Velklish/
 | [adr/adr-013-perf-gate-off-ci.md](adr/adr-013-perf-gate-off-ci.md) | Off CI the perf gate declines to answer on a busy machine rather than answering wrongly | Accepted |
 | [adr/adr-014-embedding-model-and-npm-delivery.md](adr/adr-014-embedding-model-and-npm-delivery.md) | The embedding model, its runtime, and how it reaches the npm channel | Accepted |
 | [adr/adr-015-symbol-index-binding.md](adr/adr-015-symbol-index-binding.md) | The symbol index runs web-tree-sitter with VS Code's WASM grammars, built in the background | Accepted |
+| [adr/adr-016-model-in-a-process-of-its-own.md](adr/adr-016-model-in-a-process-of-its-own.md) | The embedding model runs in a process of its own, the index and its search where they are | Accepted |
 
 ## Cross-cutting principles
 

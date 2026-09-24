@@ -191,6 +191,12 @@ $XDG_CACHE_HOME/diffalanche/models/multilingual-e5-small-761b726dd34f/   # ~/.ca
 - **An Intel Mac** (darwin-x64) gets neither: the runtime has no build for it, and
   suggestions are not available there.
 
+The model runs in a process of its own, started by the first `suggest`, `index
+rebuild` or suggestion `serve` is asked for — `node dist/embed-child.js` for the
+npm package, the binary itself for a binary — and peaks at 630–750 MiB while the
+command or the server that started it keeps the index. A command ends it when it has
+answered, and `serve` keeps it until it stops.
+
 `diffalanche model status` says where the model is expected and whether it and
 the runtime are there. Deleting the directory is safe: the next use fetches or
 writes it again. A new version with another model or runtime gets a directory of
@@ -587,7 +593,7 @@ point at the commit before it.
   secret `NPM_TOKEN`, with the workflow's OIDC token as the provenance
   attestation. The six binaries stay out of the tarball: they are release
   assets, and `files` in `package.json` excludes them; the package is the bundle,
-  its embedding thread `dist/embed-worker.js`, and the UI. Without the secret the
+  the model's process `dist/embed-child.js`, and the UI. Without the secret the
   step is skipped with a notice, and the GitHub release is the whole release.
 
 The release page appears only once its binaries are on it: the release is

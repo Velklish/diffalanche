@@ -62,8 +62,8 @@ describe("perf arguments", () => {
     expect(parseArgs([]).lag).toBeNull();
     expect(parseArgs(["--lag"]).lag).toEqual({ embedding: null });
     expect(parseArgs(["--embedding", "main"]).lag).toEqual({ embedding: "main" });
-    expect(parseArgs(["--embedding", "worker"]).lag).toEqual({ embedding: "worker" });
-    expect(() => parseArgs(["--embedding", "gpu"])).toThrow(/--embedding takes main or worker/);
+    expect(parseArgs(["--embedding", "child"]).lag).toEqual({ embedding: "child" });
+    expect(() => parseArgs(["--embedding", "gpu"])).toThrow(/--embedding takes main or child/);
   });
 });
 

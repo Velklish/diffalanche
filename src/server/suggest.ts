@@ -1,10 +1,10 @@
-/** `GET /api/suggest`: one worker thread for the model, started by the first request, and the
+/** `GET /api/suggest`: one process for the model, started by the first request, and the
  * requests one at a time ([07-server.md](../../docs/reference/07-server.md#suggestions)). */
 import { stat } from "node:fs/promises";
 import { defaultCacheHome, modelDirectory } from "../core/ml/embed/cache.ts";
 import type { Embedder } from "../core/ml/embed/embedder.ts";
 import { EMBEDDING_MODEL } from "../core/ml/embed/model.ts";
-import { openThreadedEmbedder } from "../core/ml/embed/open.ts";
+import { openServerEmbedder } from "../core/ml/embed/open.ts";
 import type { EmbeddingIndex } from "../core/ml/index/index.ts";
 import { indexPath } from "../core/ml/index/index.ts";
 import type { Suggestions } from "../core/ml/suggest/index.ts";
@@ -15,7 +15,7 @@ export type SuggestAnswer = Pick<Suggestions, "severity" | "suggestions">;
 
 export type SuggestService = {
   suggest: (body: string) => Promise<SuggestAnswer>;
-  /** Ends the thread, if one was started. */
+  /** Ends the model's process, if one was started. */
   close: () => Promise<void>;
 };
 
@@ -27,11 +27,11 @@ async function stamp(path: string): Promise<string | null> {
   return info === null ? null : `${info.size}:${info.mtimeMs}`;
 }
 
-/** `open` is the worker thread of the user cache's model; a test hands its own. */
+/** `open` is the process of the user cache's model; a test hands its own. */
 export function createSuggestService(
   dataDir: string,
   open: () => Promise<Opened> = () =>
-    openThreadedEmbedder(modelDirectory(defaultCacheHome(), EMBEDDING_MODEL), (text) =>
+    openServerEmbedder(modelDirectory(defaultCacheHome(), EMBEDDING_MODEL), (text) =>
       process.stderr.write(text),
     ),
 ): SuggestService {
@@ -43,7 +43,7 @@ export function createSuggestService(
     suggest(body) {
       if (started === null) {
         const starting = open();
-        // A model that was absent, or a thread that has ended, is started again on the next request.
+        // A model that was absent, or a process that has ended, is started again on the next request.
         const forget = () => {
           if (started === starting) started = null;
         };

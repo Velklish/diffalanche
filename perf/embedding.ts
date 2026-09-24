@@ -1,10 +1,10 @@
 /** `perf/run.ts --embedding`: `index rebuild` in a loop inside the server's process while the
  * page is measured, and how long the event loop was held (11-perf.md, DA-34.1). */
 import { defaultCacheHome, modelDirectory } from "../src/core/ml/embed/cache.ts";
+import { embedder as embedderHere } from "../src/core/ml/embed/embedder.ts";
 import { EMBEDDING_MODEL } from "../src/core/ml/embed/model.ts";
 import { openEmbedder } from "../src/core/ml/embed/open.ts";
-import type { ThreadedEmbedder } from "../src/core/ml/embed/threaded.ts";
-import { startThreadedEmbedder } from "../src/core/ml/embed/threaded.ts";
+import type { SpawnedEmbedder } from "../src/core/ml/embed/spawned.ts";
 import { updateIndex } from "../src/core/ml/index/index.ts";
 
 type EmbeddingLoad = {
@@ -25,18 +25,18 @@ function summary(values: number[]): { median: number; p99: number; max: number }
   return { median: round(at(0.5)), p99: round(at(0.99)), max: round(sorted.at(-1) ?? 0) };
 }
 
-/** `main` on the server's own thread, `worker` where the server runs it, `null` the loop alone;
- * the model is loaded before the timing starts, and `stop` waits for the pass under way. */
+/** `main` on the server's own thread, `child` in the process the server runs it in, `null` the loop
+ * alone; the model is loaded before the timing starts, and `stop` waits for the pass under way. */
 export async function startEmbedding(
   dataDir: string,
-  where: "main" | "worker" | null,
+  where: "main" | "child" | null,
 ): Promise<{ stop: () => Promise<EmbeddingLoad> }> {
   const location = modelDirectory(defaultCacheHome(), EMBEDDING_MODEL);
   const loaded =
     where === "main"
-      ? await openEmbedder(location)
-      : where === "worker"
-        ? await startThreadedEmbedder(location)
+      ? await embedderHere(location)
+      : where === "child"
+        ? await openEmbedder(location)
         : null;
   const runs: number[] = [];
   const embedder = loaded && {
@@ -70,7 +70,7 @@ export async function startEmbedding(
       stopping = true;
       await loop;
       clearInterval(timer);
-      if (where === "worker") await (loaded as ThreadedEmbedder).close();
+      if (where === "child") await (loaded as SpawnedEmbedder).close();
       return { passes, texts: runs.length, runMs: summary(runs), lagMs: summary(lags) };
     },
   };

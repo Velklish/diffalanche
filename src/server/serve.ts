@@ -15,6 +15,7 @@ import { createEventStream, forwardActivity, forwardEvents } from "./events.ts";
 import type { ReviewService } from "./review.ts";
 import { createReviewService } from "./review.ts";
 import { startServer } from "./runtime.ts";
+import type { SuggestService } from "./suggest.ts";
 
 type ReviewServerOptions = {
   config: Config;
@@ -31,6 +32,8 @@ type ReviewServerOptions = {
    * whose notifications cannot be trusted ([05-watcher.md](../../docs/reference/05-watcher.md)).
    */
   recursive?: boolean | undefined;
+  /** Where `GET /api/suggest` embeds; a harness passes its own to read the model's process. */
+  suggest?: SuggestService | undefined;
 };
 
 export type ReviewServer = {
@@ -143,6 +146,7 @@ export async function startReviewServer(options: ReviewServerOptions): Promise<R
     review,
     ui: options.ui ?? NO_UI,
     verbose: options.verbose,
+    suggest: options.suggest,
   });
 
   let server: Awaited<ReturnType<typeof startServer>>;

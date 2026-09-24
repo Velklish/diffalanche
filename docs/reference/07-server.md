@@ -178,16 +178,18 @@ missing or blank is a 400. The composer asks it as the reviewer types
 ([08-ui.md](08-ui.md#commenting)), which writes the shape again on its side
 and holds the two together in `tests/ui-wire.test.ts`.
 
-The model runs on a worker thread of its own (`src/server/suggest.ts`,
-[09-ml.md](09-ml.md#in-the-server)), started by the first request and kept for
-every later one, so a server nobody asks for suggestions never loads it. The
-first request pays for the load and for indexing whatever the index is missing;
-after that a request is an update that finds nothing new, one run of the model
-and a search. Requests are answered one at a time, in the order they came: two
-keystrokes arriving together would otherwise both embed the same new comments.
-The server's `close()` ends the thread (`closeApp`), and a thread that ended on
-its own is started again by the next request. A thread that fails to load is the
-503 below, not a fault of the server ([09-ml.md](09-ml.md#in-the-server)). On the
+The model runs in a process of its own (`src/server/suggest.ts`,
+[09-ml.md](09-ml.md#in-a-process-of-its-own)), started by the first request and
+kept for every later one, so a server nobody asks for suggestions never loads it;
+the index and its search stay in the server. The first request pays for the load
+and for indexing whatever the index is missing; after that a request is an update
+that finds nothing new, one run of the model and a search. Requests are answered
+one at a time, in the order they came: two keystrokes arriving together would
+otherwise both embed the same new comments. The server's `close()` ends the
+process (`closeApp`), and one that ended on its own is started again by the next
+request. A process that fails to load the model, and one that ends under a
+request, is the 503 below, not a fault of the server
+([09-ml.md](09-ml.md#in-a-process-of-its-own)). On the
 npm package and the binary the first request also starts putting the model's files
 in the user cache, in the background, and no request waits for that: until they
 are there each is the 503, saying the model is being put in place, and the one
@@ -724,7 +726,7 @@ Every refusal is the domain's own code and message
 | `scope-has-comments` | 409, with `count` and `comments` beside the message |
 | every other `DomainError` | 400 |
 | a file of the data directory that cannot be read | 500, `error: "storage"` |
-| the embedding model is not in the user cache, is being put in place, or does not run on this platform | 503, `error: "model"` |
+| the embedding model is not in the user cache, is being put in place, or does not run on this platform; its process could not load it or ended | 503, `error: "model"` |
 
 The 409 is the one refusal that is neither "there is nothing here" nor "that
 request is wrong": the request is well formed and the state says no, and what it

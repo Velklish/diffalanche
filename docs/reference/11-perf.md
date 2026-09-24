@@ -354,7 +354,7 @@ bun perf/run.ts --runs 3
 | `--fixture <dir>` | Root of a synthetic review made by `bun run synth`. Default `.perf/fixture` |
 | `--variant <name>` | Measure only this variant; repeatable. Default: all of them. There is one, `default` |
 | `--runs <n>` | Repetitions per variant: a whole number of at least 1, anything else is an error. Default 1 for `perf/run.ts`, 3 for the gate |
-| `--embedding <main\|worker>` | `perf/run.ts` only: rebuild the embedding index in a loop inside the server's process while the page is measured — the model on the server's own thread or on a worker — and print on stderr how long each run took and how late a 5 ms timer fired ([09-ml.md](09-ml.md#in-the-server)) |
+| `--embedding <main\|child>` | `perf/run.ts` only: rebuild the embedding index in a loop inside the server's process while the page is measured — the model on the server's own thread or in the process the server runs it in — and print on stderr how long each run took and how late a 5 ms timer fired ([09-ml.md](09-ml.md#in-a-process-of-its-own)) |
 | `--lag` | `perf/run.ts` only: the timer of `--embedding` with no model, the baseline to hold it against |
 
 The numbers come out as JSON on stdout, one object per run, with progress on
@@ -403,10 +403,11 @@ line per measurement, so they can be taken again on another machine.
 ```sh
 bun perf/index-scale.ts search                     # read and search, 1 000 to 100 000 random vectors
 bun perf/index-scale.ts grow --data-dir <d> --from synth --copies 49   # 50 copies of a session
-bun perf/index-scale.ts catch-up --data-dir <d> [--worker]   # the update after 200, 1 and 0 new comments
+bun perf/index-scale.ts catch-up --data-dir <d> [--child]    # the update after 200, 1 and 0 new comments
 bun perf/index-scale.ts fake --data-dir <d> --size 20000               # an index of random vectors
-/usr/bin/time -l bun perf/index-scale.ts query --data-dir <d>          # peak memory of one query
-/usr/bin/time -l bun perf/index-scale.ts serve --root <copy of a fixture>  # the server's, first suggestion
+bun perf/index-scale.ts stand-in --data-dir <d>    # every comment of <d> indexed, random vectors for the model's
+/usr/bin/time -l bun perf/index-scale.ts query --data-dir <d>          # peak memory of one query, each process
+/usr/bin/time -l bun perf/index-scale.ts serve --root <copy of a fixture> [--keep-index]  # the server's, first suggestion
 ```
 
 `bun perf/suggest-vote.ts` is the same kind of script for `suggest`: forty
@@ -414,10 +415,27 @@ labelled comments asked for their neighbours with themselves left out, and the
 severities right by `k` and temperature that chose the vote
 ([09-ml.md](09-ml.md#suggestions)).
 
-`search` needs no model; `catch-up`, `query` and `serve` read it from the user
-cache; `serve` removes the fixture's `index/` first and writes a new one, and
+`search`, `fake` and `stand-in` need no model; `catch-up`, `query` and `serve`
+read it from the user cache; `serve` removes the fixture's `index/` first and
+writes a new one unless `--keep-index` asks it to start from the one there, and
 `catch-up` rewrites the index and adds one comment to the first session of the
-data directory it is given — a copy, never the fixture.
+data directory it is given — a copy, never the fixture. `stand-in` is how an
+index of 50 000 real comments is had in seconds: every comment of the data
+directory, as an update would index it, with a random unit vector for each —
+the same bytes on disk and in memory as the model's, and a current index for the
+server's first suggestion, which then embeds nothing but its own text.
+
+**Each process's peak.** The model runs in a process of its own
+([09-ml.md](09-ml.md#in-a-process-of-its-own)), so `query` and `serve` print two
+peaks: `peakMiB`, the process that holds the index — a command or the server —
+and `childPeakMiB`, the model's, each from `process.resourceUsage().maxRSS` of
+its own process — the child answers with its own when asked. Node reports that
+number in kilobytes and Bun passes getrusage's unit on, which is bytes on macOS;
+the script reads it by the runtime it runs on, which is the child's too, and
+nothing in `src/` has to know which. `/usr/bin/time
+-l` still has its use, and a limit: on macOS it reports the highest peak of the
+whole tree, the process and every child it waited for, so it is the higher of
+the two and not either one.
 
 ## The gate
 
@@ -892,11 +910,11 @@ The workflow does the rest, on the commit the tag names.
   excludes `dist/diffalanche-*`, which are release assets, 233–290 MiB each
   with the model inside. What the tarball does carry is twenty-seven files:
   `package.json`, the readme, the licence, the changelog, `dist/cli.js`,
-  `dist/embed-worker.js`, the built UI, the WASM of the symbol index in
+  `dist/embed-child.js`, the built UI, the WASM of the symbol index in
   `dist/grammars/` ([ADR-015](../adr/adr-015-symbol-index-binding.md)), and the
   agent skills. **`bun run check:package` is what keeps it that way** — it runs
   `npm pack --dry-run --json` and refuses anything under `dist/` that is not
-  `dist/cli.js`, `dist/embed-worker.js` or under `dist/ui/` or `dist/grammars/`, so a by-product of a build or a release
+  `dist/cli.js`, `dist/embed-child.js` or under `dist/ui/` or `dist/grammars/`, so a by-product of a build or a release
   step cannot ride along unnoticed. `scripts/check-package.ts` holds the rule,
   `tests/package.test.ts` holds it to what the release workflow actually does,
   and the `check` job of `ci.yml` runs it over a real tarball: a stray file

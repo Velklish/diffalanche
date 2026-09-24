@@ -1,20 +1,21 @@
-/** The sizes behind 09-ml.md, "The index": search, read, catch-up and a query's memory as the
- * index grows. Not a gate; its commands are in 11-perf.md, "The sizes of the embedding index". */
+/** The sizes behind 09-ml.md, "The index": search, read, catch-up and the memory of a query and of
+ * the server as the index grows. Not a gate; 11-perf.md, "The sizes of the embedding index". */
 import { cp, mkdtemp, readFile, rm, writeFile } from "node:fs/promises";
 import { tmpdir } from "node:os";
 import { join } from "node:path";
 import { loadConfig } from "../src/core/config/index.ts";
 import { addComment } from "../src/core/domain/index.ts";
 import { defaultCacheHome, modelDirectory } from "../src/core/ml/embed/cache.ts";
-import type { Embedder } from "../src/core/ml/embed/embedder.ts";
+import { type Embedder, embedder as embedderHere } from "../src/core/ml/embed/embedder.ts";
 import { EMBEDDING_MODEL, embeddingIdentity } from "../src/core/ml/embed/model.ts";
-import { openEmbedder } from "../src/core/ml/embed/open.ts";
-import { startThreadedEmbedder } from "../src/core/ml/embed/threaded.ts";
+import { openEmbedder, openServerEmbedder } from "../src/core/ml/embed/open.ts";
+import type { SpawnedEmbedder } from "../src/core/ml/embed/spawned.ts";
 import type { EmbeddingIndex, IndexEntry } from "../src/core/ml/index/index.ts";
 import { indexPath, nearest, readIndex, updateIndex } from "../src/core/ml/index/index.ts";
 import { writeIndex } from "../src/core/ml/index/store.ts";
 import { dataDirOf, sessionDir } from "../src/core/storage/index.ts";
 import { startReviewServer } from "../src/server/serve.ts";
+import { createSuggestService } from "../src/server/suggest.ts";
 
 const RUNTIME =
   process.versions.bun === undefined ? `node ${process.version}` : `bun ${process.versions.bun}`;
@@ -117,14 +118,25 @@ async function grow(dataDir: string, from: string, copies: number): Promise<void
   }
 }
 
-async function open(worker: boolean): Promise<Embedder & { close?: () => Promise<void> }> {
-  const location = modelDirectory(defaultCacheHome(), EMBEDDING_MODEL);
-  return worker ? startThreadedEmbedder(location) : openEmbedder(location);
+const LOCATION = modelDirectory(defaultCacheHome(), EMBEDDING_MODEL);
+
+const mib = (bytes: number) => Math.round(bytes / 2 ** 20);
+
+/** A `maxRSS` in bytes: Node reports kilobytes, and Bun passes getrusage's own unit on, which is
+ * bytes on macOS. A child runs on the runtime of this process, so one rule reads both. */
+function bytesOf(maxRSS: number): number {
+  return process.versions.bun !== undefined && process.platform === "darwin"
+    ? maxRSS
+    : maxRSS * 1024;
 }
 
+const peakResident = () => bytesOf(process.resourceUsage().maxRSS);
+
 /** The first update after N comments nobody indexed: N = 1 and N = every comment of the data dir. */
-async function catchUp(dataDir: string, worker: boolean): Promise<void> {
-  const embedder = await open(worker);
+async function catchUp(dataDir: string, child: boolean): Promise<void> {
+  const embedder: Embedder & { close?: () => Promise<void> } = child
+    ? await openEmbedder(LOCATION)
+    : await embedderHere(LOCATION);
   await embedder.embed(["warm-up"]);
   const lags: number[] = [];
   let last = performance.now();
@@ -139,7 +151,7 @@ async function catchUp(dataDir: string, worker: boolean): Promise<void> {
     const { update } = await updateIndex(dataDir, embedder, { rebuild });
     const ms = Math.round(performance.now() - started);
     process.stdout.write(
-      `${JSON.stringify({ runtime: RUNTIME, thread: worker ? "worker" : "main", label, embedded: update.embedded, kept: update.kept, ms, lagMs: stats(lags) })}\n`,
+      `${JSON.stringify({ runtime: RUNTIME, where: child ? "child" : "main", label, embedded: update.embedded, kept: update.kept, ms, lagMs: stats(lags) })}\n`,
     );
   };
   await measure("every comment", true);
@@ -157,9 +169,10 @@ async function catchUp(dataDir: string, worker: boolean): Promise<void> {
   await embedder.close?.();
 }
 
-/** A process that loads the model and the index and answers one query, for its peak memory. */
+/** One query the way a command asks it — the model in its process, the index read and searched in
+ * this one — for the peak of each; `/usr/bin/time -l` reports the higher of the two. */
 async function query(dataDir: string): Promise<void> {
-  const embedder = await open(false);
+  const embedder = await openEmbedder(LOCATION);
   let started = performance.now();
   const { index } = await readIndex(dataDir);
   if (index === null) throw new Error(`${dataDir}: no index; run \`index rebuild\` first`);
@@ -172,22 +185,41 @@ async function query(dataDir: string): Promise<void> {
   started = performance.now();
   const found = nearest(index, vector as Float32Array, { k: 10 });
   const searchMs = Math.round((performance.now() - started) * 10) / 10;
+  const childPeakMiB = mib(bytesOf(await embedder.peak()));
+  await embedder.close();
   process.stdout.write(
-    `${JSON.stringify({ runtime: RUNTIME, entries: index.entries.length, readMs, embedMs, searchMs, first: found[0]?.body, rssMiB: Math.round(process.memoryUsage().rss / 2 ** 20) })}\n`,
+    `${JSON.stringify({ runtime: RUNTIME, entries: index.entries.length, readMs, embedMs, searchMs, first: found[0]?.body, peakMiB: mib(peakResident()), childPeakMiB })}\n`,
   );
 }
 
-/** `serve` on a fixture, its index removed first: the review, the first suggestion — the thread,
- * the model, the catch-up — then three warm ones; the resident size sampled every 20 ms. */
-async function serveMemory(root: string): Promise<void> {
+/** The index of every comment of the data directory, random vectors in the model's place: what the
+ * server holds after an update of thousands of comments, written in seconds rather than an hour. */
+async function standIn(dataDir: string): Promise<void> {
+  const random: Embedder = {
+    model: EMBEDDING_MODEL,
+    identity: embeddingIdentity(),
+    embed: async (texts) => texts.map(() => unit(EMBEDDING_MODEL.dimensions)),
+  };
+  const { update } = await updateIndex(dataDir, random, { rebuild: true });
+  process.stdout.write(`${JSON.stringify({ embedded: update.embedded })}\n`);
+}
+
+/** `serve` on a fixture, its index removed first unless `keep`: the review, the first suggestion —
+ * the process, the model, the catch-up — then three warm ones; the server's peak and the model's. */
+async function serveMemory(root: string, keep: boolean): Promise<void> {
   let peak = 0;
   const sample = setInterval(() => {
     peak = Math.max(peak, process.memoryUsage().rss);
   }, 20);
   // The fixture's own data directory, whatever the environment or the user config names.
   const config = { ...(await loadConfig({ root, dataDir: dataDirOf(root) })), port: 0 };
-  await rm(join(config.dataDir, "index"), { recursive: true, force: true });
-  const server = await startReviewServer({ config });
+  if (!keep) await rm(join(config.dataDir, "index"), { recursive: true, force: true });
+  const model: { opened?: Promise<SpawnedEmbedder> } = {};
+  const suggest = createSuggestService(config.dataDir, () => {
+    model.opened = openServerEmbedder(LOCATION);
+    return model.opened;
+  });
+  const server = await startReviewServer({ config, suggest });
   const ask = async (path: string) => {
     const started = performance.now();
     const response = await fetch(`${server.url}${path}`);
@@ -201,8 +233,10 @@ async function serveMemory(root: string): Promise<void> {
     const warmMs = [];
     for (let i = 0; i < 3; i += 1) warmMs.push(await ask(`/api/suggest?body=warm%20${i}`));
     const { index } = await readIndex(config.dataDir);
+    if (model.opened === undefined) throw new Error("the first suggestion started no process");
+    const childPeakMiB = mib(bytesOf(await (await model.opened).peak()));
     process.stdout.write(
-      `${JSON.stringify({ runtime: RUNTIME, comments: index?.entries.length, firstMs, warmMs, peakMiB: Math.round(peak / 2 ** 20) })}\n`,
+      `${JSON.stringify({ runtime: RUNTIME, comments: index?.entries.length, firstMs, warmMs, peakMiB: mib(peakResident()), sampledPeakMiB: mib(peak), childPeakMiB })}\n`,
     );
   } finally {
     clearInterval(sample);
@@ -215,10 +249,12 @@ const dataDir = option("data-dir");
 if (mode === "search") await search();
 else if (mode === "grow" && dataDir)
   await grow(dataDir, option("from") ?? "synth", Number(option("copies") ?? "49"));
-else if (mode === "catch-up" && dataDir) await catchUp(dataDir, process.argv.includes("--worker"));
+else if (mode === "catch-up" && dataDir) await catchUp(dataDir, process.argv.includes("--child"));
 else if (mode === "query" && dataDir) await query(dataDir);
 else if (mode === "fake" && dataDir) await writeIndex(dataDir, fake(Number(option("size"))));
-else if (mode === "serve" && option("root")) await serveMemory(option("root") as string);
+else if (mode === "stand-in" && dataDir) await standIn(dataDir);
+else if (mode === "serve" && option("root"))
+  await serveMemory(option("root") as string, process.argv.includes("--keep-index"));
 else {
   process.stderr.write('usage: docs/reference/11-perf.md, "The sizes of the embedding index"\n');
   process.exit(1);

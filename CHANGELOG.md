@@ -53,8 +53,8 @@ and `bun run release` refuses a version that has no section. See
   platform) and write them into the same cache on first use, from a child of
   themselves so the process that loads the model stays under 768 MiB.
   A Bun plugin shared by the npm bundle and the binaries loads the runtime's
-  binding from the cache, and the embedding thread ships as
-  `dist/embed-worker.js`. The release stages nineteen assets beside the binaries
+  binding from the cache, and the model's process ships as
+  `dist/embed-child.js`. The release stages nineteen assets beside the binaries
   and sums them all into `SHA256SUMS.txt`. The README has a section on the model's
   files, sizes and cache, and the agent's CLI reference makes `model pull
   --embedding` a step of its own before `suggest`, since a download is not resumed
@@ -67,26 +67,34 @@ and `bun run release` refuses a version that has no section. See
   the weight, and nothing is proposed when the nearest is under 0.86. The three
   numbers were chosen on forty labelled comments in two languages
   (`perf/suggest-vote.ts`, [09-ml.md](docs/reference/09-ml.md#suggestions)).
-  `GET /api/suggest?body=` answers the same from the server, with the model on a
-  worker thread started by the first request: 5–7 ms warm over 200 comments,
-  21–36 ms over 10 000; a model that is not there, or a thread that cannot load,
-  is a 503, and the server's `close()` ends the thread. `serve` peaked at 742–764 MiB
-  on Bun and 657–659 MiB on Node after its first suggestion on the synthetic review
-  (`perf/index-scale.ts serve`).
+  `GET /api/suggest?body=` answers the same from the server, with the model in a
+  process of its own started by the first request: 3–7 ms warm over 240 comments,
+  10–36 ms over 10 000 to 50 000; a model that is not there, or a process that
+  cannot load it, is a 503, and the server's `close()` ends the process.
   A blank `--body`, and a root nobody reviewed, are refused in one line. Each
   severity of the synthetic review now has two texts of its own, so its comments
   cluster: the same eight texts, count and seed.
-- **The server's embedder runs on a thread of its own** (DA-34.1). With the
-  index rebuilt in a loop on the server's own thread, the update after an edit
-  took 422–435 ms against 272–297 ms without it — every step of a rescan waits
-  out the run in progress — while switching sessions stayed inside 100 ms.
-  `startThreadedEmbedder` moves the model into a `node:worker_threads` worker,
-  which gives the same bytes and brought the update back to 285–344 ms. The
-  thread ends itself on `close()`, because terminating one that loaded the
-  runtime aborts Bun; it is held only while it loads or works, so an idle one keeps
-  no process alive; and a thread that throws as it loads is a `ModelError` rather
-  than an uncaught error in the server. `perf/run.ts --embedding <main|worker>` and `--lag` take
-  the measurement again ([09-ml.md](docs/reference/09-ml.md#in-the-server)).
+- **The embedding model runs in a process of its own** (DA-34.1, DA-34.2).
+  `suggest`, `index rebuild` and the server's first suggestion start the model in
+  a child process — `node dist/embed-child.js` in the npm package, the binary
+  itself in a binary — which gives the bytes the calling thread gives, and keep
+  the index and its search where they are. Two measurements put it there. With
+  the index rebuilt in a loop on the server's own thread, the update after an
+  edit took 422–435 ms against 272–297 ms without it — every step of a rescan
+  waits out the run in progress; with the model in its process the update is
+  back at the baseline, 305 ms at the median of six against 292. And with the
+  model in the same process, a query over 50 000 comments peaked at 846–853 MiB
+  on Bun and the server after its first suggestion at 871–995 MiB on both
+  runtimes, over ADR-014's 768 MiB; apart, a query's own process peaks at
+  71–343 MiB to 100 000 comments, the server at 383–585 MiB to 50 040, and the
+  model's process at up to 751 MiB — 17 MiB under — whatever the index holds. The server keeps the process until it
+  closes and starts another when one ends; a command ends it once it has
+  answered, and one that never closes it still exits and takes it along. A
+  process that cannot start, cannot load the model, or ends under a request is a
+  `ModelError` and the route's 503. `perf/run.ts --embedding <main|child>` and
+  `--lag` take the event loop's measurement again, and `perf/index-scale.ts
+  query` and `serve` print each process's peak
+  ([09-ml.md](docs/reference/09-ml.md#in-a-process-of-its-own)).
 - **The embedding index, and `index rebuild` and `index status`** (DA-34).
   `src/core/ml/index` keeps a vector for every comment of every review session,
   with its session, id, severity, anchor and text, in `index/index.bin` of the
@@ -96,7 +104,8 @@ and `bun run release` refuses a version that has no section. See
   agent writes with no server running is found as surely as one written in the
   UI — and `diffalanche comment` never loads the model. A search is brute force
   by cosine with a session filter: 1.8–3.6 ms over 10 000 comments, under 50 ms
-  to 100 000; memory is what stops it first, at about 20 000 comments on Bun
+  to 100 000; memory is what stops it first, and with the model in its own
+  process each process stays under ADR-014's 768 MiB to 100 000 comments
   ([09-ml.md](docs/reference/09-ml.md#how-far-brute-force-goes)). An index built by
   another model, runtime or platform is embedded again, and a data directory with
   no session gets no `index/`. `index status [--json]` says what it holds and what

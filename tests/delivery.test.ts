@@ -27,7 +27,7 @@ import {
   EMBEDDING_MODEL,
   EMBEDDING_PLATFORMS,
 } from "../src/core/ml/embed/model.ts";
-import { openThreadedEmbedder, prepare } from "../src/core/ml/embed/open.ts";
+import { openServerEmbedder, prepare } from "../src/core/ml/embed/open.ts";
 import type { UiAssets } from "../src/server/assets.ts";
 
 function asset(name: string, content: Buffer, within = ""): Asset {
@@ -357,7 +357,7 @@ describe("the server's door to the model", () => {
   it.skipIf(!EMBEDDING_PLATFORMS.includes(currentPlatform()))(
     "refuses a request while the files arrive, then says how that ended",
     async () => {
-      const first = await openThreadedEmbedder(dir).catch((error: unknown) => error);
+      const first = await openServerEmbedder(dir).catch((error: unknown) => error);
       expect(first).toBeInstanceOf(ModelError);
       expect((first as Error).message).toBe(
         `the embedding model is being put in place in ${dir}: suggestions follow once it is there`,
@@ -367,13 +367,13 @@ describe("the server's door to the model", () => {
       held[0]?.writeHead(404).end();
       await prepare(dir).catch(() => {});
 
-      const second = await openThreadedEmbedder(dir).catch((error: unknown) => error);
+      const second = await openServerEmbedder(dir).catch((error: unknown) => error);
       expect(second).toBeInstanceOf(ModelError);
       expect((second as Error).message).toMatch(
         /^model_quantized\.onnx is not in .* and could not be downloaded from .*: HTTP 404\./,
       );
       // Told once; the next request starts it again.
-      const third = await openThreadedEmbedder(dir).catch((error: unknown) => error);
+      const third = await openServerEmbedder(dir).catch((error: unknown) => error);
       expect((third as Error).message).toMatch(/is being put in place/);
       await vi.waitFor(() => expect(held).toHaveLength(2));
       held[1]?.writeHead(404).end();

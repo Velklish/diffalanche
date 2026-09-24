@@ -11,7 +11,7 @@ type Load = (args: { path: string }) => Promise<{ contents: string; loader: stri
 /** The plugin's two loaders, by the filter they were registered with. */
 function loaders(): { filter: RegExp; load: Load }[] {
   const found: { filter: RegExp; load: Load }[] = [];
-  channel('new URL("./embed-worker.js", import.meta.url)').setup({
+  channel('new URL("./embed-child.js", import.meta.url)').setup({
     onLoad: (options, load) => found.push({ filter: options.filter, load }),
   });
   return found;
@@ -19,7 +19,7 @@ function loaders(): { filter: RegExp; load: Load }[] {
 
 describe("the channel's edits", () => {
   const binding = join("node_modules", "onnxruntime-node", "dist", "binding.js");
-  const threaded = join("src", "core", "ml", "embed", "threaded.ts");
+  const spawned = join("src", "core", "ml", "embed", "spawned.ts");
 
   it("loads the runtime's binding from the path the delivery sets", async () => {
     const loader = loaders().find((one) => one.filter.test(binding));
@@ -28,11 +28,11 @@ describe("the channel's edits", () => {
     expect(contents).not.toContain("../bin/napi-v6/");
   });
 
-  it("starts the thread from the channel's worker file", async () => {
-    const loader = loaders().find((one) => one.filter.test(threaded));
-    const { contents } = await (loader as { load: Load }).load({ path: threaded });
-    expect(contents).toContain('new URL("./embed-worker.js", import.meta.url)');
-    expect(contents).not.toContain('new URL("./worker.ts", import.meta.url)');
+  it("starts the child from the channel's child file", async () => {
+    const loader = loaders().find((one) => one.filter.test(spawned));
+    const { contents } = await (loader as { load: Load }).load({ path: spawned });
+    expect(contents).toContain('new URL("./embed-child.js", import.meta.url)');
+    expect(contents).not.toContain('new URL("./child-entry.ts", import.meta.url)');
   });
 
   it("refuses to build a file that no longer holds what it edits", async () => {

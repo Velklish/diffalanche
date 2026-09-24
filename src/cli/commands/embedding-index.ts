@@ -43,7 +43,10 @@ export const indexRebuild: Command = {
       modelDirectory(defaultCacheHome(), EMBEDDING_MODEL),
       (text) => context.io.err(text),
     );
-    const { update } = await updateIndex(dataDir, embedder, { rebuild: true });
+    // Ended here rather than with the process: a caller that runs commands keeps no model.
+    const { update } = await updateIndex(dataDir, embedder, { rebuild: true }).finally(
+      embedder.close,
+    );
     for (const warning of update.warnings) context.io.err(`diffalanche: ${warning}\n`);
     const seconds = ((performance.now() - started) / 1000).toFixed(1);
     context.io.out(

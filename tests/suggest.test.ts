@@ -1,16 +1,18 @@
 /** `src/core/ml/suggest`, `suggest` and `GET /api/suggest` without the model: the vote, the
  * route's shape and its refusals. The model's half is tests/embedding-model.test.ts. */
+import { spawn } from "node:child_process";
 import { existsSync, mkdtempSync, rmSync } from "node:fs";
 import { tmpdir } from "node:os";
 import { join } from "node:path";
+import { fileURLToPath } from "node:url";
 import type { Hono } from "hono";
 import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
 import { run } from "../src/cli/run.ts";
 import { loadConfig } from "../src/core/config/index.ts";
 import { ModelError } from "../src/core/ml/embed/errors.ts";
 import { EMBEDDING_MODEL, embeddingIdentity } from "../src/core/ml/embed/model.ts";
-import { openThreadedEmbedder } from "../src/core/ml/embed/open.ts";
-import { startThreadedEmbedder } from "../src/core/ml/embed/threaded.ts";
+import { openServerEmbedder } from "../src/core/ml/embed/open.ts";
+import { startSpawnedEmbedder } from "../src/core/ml/embed/spawned.ts";
 import type { Neighbour } from "../src/core/ml/index/index.ts";
 import { proposeSeverity } from "../src/core/ml/suggest/index.ts";
 import type { Severity } from "../src/core/storage/index.ts";
@@ -155,7 +157,7 @@ describe("GET /api/suggest", () => {
     let opened = 0;
     const absent = createSuggestService(dataDir, () => {
       opened += 1;
-      return openThreadedEmbedder(empty);
+      return openServerEmbedder(empty);
     });
     try {
       const without = await appWith(absent);
@@ -231,21 +233,28 @@ describe("suggest", () => {
   });
 });
 
-describe("a thread whose module cannot load", () => {
-  const broken = new URL("./helpers/throwing-worker.ts", import.meta.url);
+describe("a process whose module cannot load", () => {
+  const broken = new URL("./helpers/throwing-child.ts", import.meta.url);
 
-  it("is refused as a model that is not there, and the process lives on", async () => {
-    const start = startThreadedEmbedder(tmpdir(), { script: broken });
+  it("is refused as a model that is not there, and the process that started it lives on", async () => {
+    const start = startSpawnedEmbedder(tmpdir(), { script: broken });
     await expect(start).rejects.toThrow(ModelError);
     await expect(start).rejects.toThrow(
       /^the embedding runtime could not be loaded: .*the runtime is not here/,
     );
   });
 
+  it("names the error line its runtime printed, Node's coded form included", async () => {
+    const missing = new URL("./helpers/missing-import-child.ts", import.meta.url);
+    await expect(startSpawnedEmbedder(tmpdir(), { script: missing })).rejects.toThrow(
+      /^the embedding runtime could not be loaded: (?:Error \[ERR_MODULE_NOT_FOUND\]|error): Cannot find module .*not-there\.ts/,
+    );
+  });
+
   it("answers GET /api/suggest with 503 and the reason", async () => {
-    const dataDir = mkdtempSync(join(tmpdir(), "diffalanche-suggest-thread-"));
+    const dataDir = mkdtempSync(join(tmpdir(), "diffalanche-suggest-child-"));
     const service = createSuggestService(dataDir, () =>
-      startThreadedEmbedder(dataDir, { script: broken }),
+      startSpawnedEmbedder(dataDir, { script: broken }),
     );
     try {
       await makeSession(dataDir, "alpha", [comment("c_a1")]);
@@ -266,6 +275,77 @@ describe("a thread whose module cannot load", () => {
     } finally {
       await service.close();
       rmSync(dataDir, { recursive: true, force: true });
+    }
+  });
+});
+
+describe("a process that ends after it started", () => {
+  const ending = new URL("./helpers/ending-child.ts", import.meta.url);
+
+  it("answers 503 for the request it ended under, and the next request starts another", async () => {
+    const dataDir = mkdtempSync(join(tmpdir(), "diffalanche-suggest-ending-"));
+    let opened = 0;
+    const service = createSuggestService(dataDir, () => {
+      opened += 1;
+      return startSpawnedEmbedder(dataDir, { script: ending });
+    });
+    try {
+      await makeSession(dataDir, "alpha", [comment("c_a1")]);
+      const config = await loadConfig({ root: dataDir, dataDir });
+      const app = createApp({
+        activity: createActivityLog(),
+        config,
+        events: createEventStream(),
+        review: createReviewService(config),
+        ui: noUi,
+        suggest: service,
+      });
+      for (let i = 1; i <= 2; i += 1) {
+        const response = await app.request("/api/suggest?body=anything");
+        expect(response.status).toBe(503);
+        const body = (await response.json()) as { error: string; message: string };
+        expect(body).toEqual({
+          error: "model",
+          message: "the embedding process has ended (exit code 3): Error: ended by the test",
+        });
+        await vi.waitFor(() => expect(opened).toBe(i));
+      }
+    } finally {
+      await service.close();
+      rmSync(dataDir, { recursive: true, force: true });
+    }
+  });
+});
+
+describe("a process that writes what is not an answer", () => {
+  it("is refused with what it wrote, and the process that started it lives on", async () => {
+    const printing = new URL("./helpers/printing-child.ts", import.meta.url);
+    await expect(startSpawnedEmbedder(tmpdir(), { script: printing })).rejects.toThrow(
+      new ModelError("the embedding process wrote what is not an answer: 42"),
+    );
+  });
+});
+
+describe("DIFFALANCHE_EMBEDDER set by the user", () => {
+  it("leaves a command a command, which answers and exits", async () => {
+    const cli = fileURLToPath(new URL("../src/cli/index.ts", import.meta.url));
+    // Standard input stays open: a process that read it as the model's would never exit.
+    const child = spawn(process.execPath, [cli, "version"], {
+      env: { ...process.env, DIFFALANCHE_EMBEDDER: "1" },
+      stdio: ["pipe", "pipe", "pipe"],
+    });
+    let out = "";
+    child.stdout.on("data", (chunk: Buffer) => {
+      out += chunk.toString();
+    });
+    const hung = setTimeout(() => child.kill(), 20_000);
+    try {
+      const code = await new Promise<number | null>((done) => child.on("exit", done));
+      expect(code).toBe(0);
+      expect(out).toMatch(/^\d+\.\d+\.\d+\n$/);
+    } finally {
+      clearTimeout(hung);
+      child.kill();
     }
   });
 });

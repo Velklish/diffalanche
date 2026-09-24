@@ -39,7 +39,9 @@ export const suggest: Command = {
       modelDirectory(defaultCacheHome(), EMBEDDING_MODEL),
       (text) => context.io.err(text),
     );
-    const { suggestions, severity, update } = await suggestFor(dataDir, embedder, body);
+    const { suggestions, severity, update } = await suggestFor(dataDir, embedder, body).finally(
+      embedder.close,
+    );
     for (const warning of update.warnings) context.io.err(`diffalanche: ${warning}\n`);
     if (flag(args, "json")) {
       json(context.io, { severity, suggestions });

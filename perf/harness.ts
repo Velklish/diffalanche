@@ -375,9 +375,9 @@ type Options = {
   fixture: string;
   variants: string[];
   runs: number;
-  /** `--embedding <main|worker>` rebuilds the index in the server's process while it is
+  /** `--embedding <main|child>` rebuilds the index in the server's process while it is
    * measured, `--lag` only times its event loop; `perf/run.ts` alone (perf/embedding.ts). */
-  lag: { embedding: "main" | "worker" | null } | null;
+  lag: { embedding: "main" | "child" | null } | null;
 };
 
 export function parseArgs(argv: string[], defaultRuns = 1): Options {
@@ -394,9 +394,9 @@ export function parseArgs(argv: string[], defaultRuns = 1): Options {
   return options;
 }
 
-function parseWhere(value: string | undefined): "main" | "worker" {
-  if (value === "main" || value === "worker") return value;
-  throw new Error(`--embedding takes main or worker, got: ${value ?? "nothing"}`);
+function parseWhere(value: string | undefined): "main" | "child" {
+  if (value === "main" || value === "child") return value;
+  throw new Error(`--embedding takes main or child, got: ${value ?? "nothing"}`);
 }
 
 /** A run count that is not a whole number of at least one is a mistake, not a default. */

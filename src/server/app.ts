@@ -99,7 +99,7 @@ function named(c: Context): string | undefined {
 /** What `GET /api/config` gives the UI: the two settings it has to know. */
 type ClientConfig = { user: string; port: number };
 
-/** The suggestion service of each app, for the server's `close` to end its thread. */
+/** The suggestion service of each app, for the server's `close` to end its process. */
 const services = new WeakMap<Hono, SuggestService>();
 
 export async function closeApp(app: Hono): Promise<void> {

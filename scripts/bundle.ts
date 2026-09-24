@@ -1,4 +1,4 @@
-/** The npm bundle: `dist/cli.js` and the embedding thread `dist/embed-worker.js`, with the runtime
+/** The npm bundle: `dist/cli.js` and the model's process `dist/embed-child.js`, with the runtime
  * loading its binding from the user cache (09-ml.md, "Delivery"). Bun only, so `Bun.*` is allowed. */
 import { readFile } from "node:fs/promises";
 
@@ -18,12 +18,12 @@ const ORT_REQUIRE =
   // biome-ignore lint/suspicious/noTemplateCurlyInString: the source text, not a template of ours
   "require(`../bin/napi-v6/${process.platform}/${process.arch}/onnxruntime_binding.node`)";
 
-/** Where `threaded.ts` starts its thread from the sources. */
-const WORKER_URL = 'new URL("./worker.ts", import.meta.url)';
+/** Where `spawned.ts` finds the child's module from the sources. */
+const CHILD_URL = 'new URL("./child-entry.ts", import.meta.url)';
 
-/** The two edits a channel needs: the binding from the path `open.ts` sets, and the thread from
- * `worker`, the expression the channel's worker file is reached by. */
-export function channel(worker: string): Plugin {
+/** The two edits a channel needs: the binding from the path `child.ts` sets, and the child from
+ * `child`, the expression the channel's child file is reached by. */
+export function channel(child: string): Plugin {
   const replace = async (path: string, from: string, to: string) => {
     const source = await readFile(path, "utf8");
     if (!source.includes(from)) throw new Error(`${path} no longer holds ${from}; see 09-ml.md`);
@@ -40,8 +40,8 @@ export function channel(worker: string): Plugin {
         ),
         loader: "js",
       }));
-      build.onLoad({ filter: /src[\\/]core[\\/]ml[\\/]embed[\\/]threaded\.ts$/ }, async (args) => ({
-        contents: await replace(args.path, WORKER_URL, worker),
+      build.onLoad({ filter: /src[\\/]core[\\/]ml[\\/]embed[\\/]spawned\.ts$/ }, async (args) => ({
+        contents: await replace(args.path, CHILD_URL, child),
         loader: "ts",
       }));
     },
@@ -54,14 +54,14 @@ async function build(entry: string, naming: string): Promise<void> {
     target: "node",
     outdir: "dist",
     naming,
-    plugins: [channel('new URL("./embed-worker.js", import.meta.url)')],
+    plugins: [channel('new URL("./embed-child.js", import.meta.url)')],
   });
   if (!result.success) throw new AggregateError(result.logs, `bundle: ${entry} did not build`);
 }
 
 export async function bundleNpm(): Promise<void> {
   await build("src/cli/index.ts", "cli.js");
-  await build("src/core/ml/embed/worker.ts", "embed-worker.js");
+  await build("src/core/ml/embed/child-entry.ts", "embed-child.js");
 }
 
 if (import.meta.main) await bundleNpm();
