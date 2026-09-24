@@ -610,6 +610,14 @@ and `bun run release` refuses a version that has no section. See
 
 ### Fixed
 
+- **The embedding index verdicts on a changed platform hold on a linux-x64
+  runner** (DA-34). "embeds every comment again when the model, the runtime or
+  the platform changed" and "says what the index is missing without the model"
+  named `linux-x64` as the other platform, which is the platform of
+  `ubuntu-latest` itself: both failed in `check` and `unit suite on Bun` on the
+  first CI run after the push. The other platform is now this machine's with
+  `not-` in front of it.
+
 - **The watcher suite's late `settle` is explained and gone, and an overdue wait
   now says whether it was late or never came** (DA-60.2). "stops the comment
   events and leaves the rest of the chain running" ran out of its 20 s in 6 of 18

@@ -236,7 +236,7 @@ describe("the index with an embedder that is a function of the text", () => {
     for (const change of [
       { revision: "0000" },
       { runtime: "onnxruntime-node 9.9.9" },
-      { platform: "linux-x64" },
+      { platform: `not-${embeddingIdentity().platform}` },
     ]) {
       const fake = fakeEmbedder({ ...embeddingIdentity(), ...change });
       const { update } = await updateIndex(dataDir, fake);
@@ -518,7 +518,9 @@ describe("the index with an embedder that is a function of the text", () => {
       role: "agent",
     });
     expect(await indexStatus(dataDir, build)).toMatchObject({ missing: 1, gone: 1 });
-    expect(await indexStatus(dataDir, { ...build, platform: "linux-x64" })).toMatchObject({
+    expect(
+      await indexStatus(dataDir, { ...build, platform: `not-${build.platform}` }),
+    ).toMatchObject({
       missing: 3,
       gone: 0,
     });
