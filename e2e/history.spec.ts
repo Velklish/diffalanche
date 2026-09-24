@@ -427,6 +427,33 @@ test("deleting the task this window is on takes the window to the current one", 
   expect(existsSync(join(DATA, "reviews", name))).toBe(false);
 });
 
+/** Deleted from a shell rather than from this window: the window on it hears that its task
+ * changed, finds it gone, and goes where the deleting window would have (DA-40.1). */
+test("a task deleted elsewhere takes a window on it to the current one", async ({ page }) => {
+  const name = "ls-delete-elsewhere";
+  cli("review", "new", name, "--no-use");
+  await page.goto(`/?review=${name}`);
+  await page.waitForFunction(() => window.__perf?.ready === true);
+  await expect(page.locator(".pill-name").first()).toHaveText(name);
+  await expect(page.locator(".sidebar-foot")).toContainText("watching");
+  // Until DA-55.8 lands, a delete that is the watcher's first burst after the window came says
+  // nothing: a comment first, heard here, is that burst.
+  const body = "said before the task goes";
+  cli("comment", "--review", name, "--severity", "nit", "--body", body);
+  await page.getByRole("button", { name: /^Review / }).click();
+  await expect(page.locator(".rail-list")).toContainText(body, { timeout: 20_000 });
+
+  cli("review", "delete", name, "--role", "human", "--yes");
+
+  // The watcher's frame, a deadline for a hang and not a budget (11-perf.md, "Waits").
+  await expect(page.locator(".toast")).toContainText(`no review session "${name}"`, {
+    timeout: 20_000,
+  });
+  await expect(page.locator(".pill-name").first()).toHaveText(SESSION);
+  expect(new URL(page.url()).searchParams.get("review")).toBeNull();
+  await expect(page.locator(".failure")).toHaveCount(0);
+});
+
 test("deleting the current task from a window on current reads the next current once", async ({
   page,
 }) => {

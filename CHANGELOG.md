@@ -527,6 +527,14 @@ and `bun run release` refuses a version that has no section. See
 
 ### Fixed
 
+- **A window on a task deleted elsewhere goes to `current`** (DA-40.1). A task
+  deleted by the CLI or by another window left a window that was showing it by
+  `?review=` on the failure screen. It now goes where `current` points, as the
+  window that deleted it does, with the server's sentence in the toast, and
+  `Back` does not lead back to the task. An address whose name never opened
+  keeps its screen and its way back. A press on the task's row in a menu that
+  was open while it went lands on that screen, without the `?review=` toast, and
+  the row stays in an open menu until it is opened again (DA-40.2).
 - **A stream the browser has closed says `disconnected`, with a way back** (DA-96.1).
   When the browser stopped retrying the live stream, the sidebar footer kept the
   living dot and `watching` while no frame would arrive again. It now says

@@ -685,6 +685,17 @@ export const useStore = create<Store>()((set, get) => ({
           await get().loadScan();
           return;
         }
+        // The task this window was showing was deleted elsewhere: it goes where `current` points, as
+        // the deleting window does; a name that never opened keeps its failure screen (DA-40.1).
+        const shown = get().reviewName;
+        if (refused.code === "no-such-session" && shown !== null && get().session?.name === shown) {
+          set({ toast: raise(`${refused.message} — окно перешло на current`) });
+          writeTaskInUrl(null, "replace");
+          set({ reviewName: null });
+          void loadSessions(set);
+          await get().loadReview();
+          return;
+        }
         throw new Error(refused.message);
       }
       const document = (await response.json()) as ReviewDocument;
@@ -892,7 +903,9 @@ export const useStore = create<Store>()((set, get) => ({
     }
     set({ switching: true, sessionMenuOpen: false });
     await get().showTask(name);
-    set({ switching: false, toast: raise(`?review=${name}`) });
+    // A row a stale menu kept for a task deleted elsewhere lands on the screen that names it.
+    const landed = get().reviewName === name && get().status !== "failed";
+    set({ switching: false, ...(landed ? { toast: raise(`?review=${name}`) } : {}) });
     void loadSessions(set);
   },
   setTaskStatus: async (name, status) => {
@@ -2243,17 +2256,16 @@ function taskInUrl(): string | null {
   return name === null || name === "" ? null : name;
 }
 
-/**
- * The address bar, so a reload and a copied link land on the same task. It is
- * pushed rather than replaced: `Back` is how a reader returns to the task they
- * came from, and `App` listens for that.
- */
-function writeTaskInUrl(name: string | null): void {
+/** The address bar, pushed so `Back` returns to the task the reader came from, and replaced for a
+ * task that is gone, which `Back` should not lead to (08-ui.md, "Deleting a task"). */
+function writeTaskInUrl(name: string | null, how: "push" | "replace" = "push"): void {
   if (typeof location === "undefined" || typeof history?.pushState !== "function") return;
   const url = new URL(location.href);
   if (name === null) url.searchParams.delete("review");
   else url.searchParams.set("review", name);
-  if (url.href !== location.href) history.pushState(null, "", url);
+  if (url.href === location.href) return;
+  if (how === "push") history.pushState(null, "", url);
+  else history.replaceState(null, "", url);
 }
 
 /** How far the page is scrolled, and zero where there is no page — the unit suite. */
