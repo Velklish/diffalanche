@@ -31,12 +31,15 @@ export type {
   Scope,
   ScopeEntry,
   Severity,
+  SeveritySource,
   Side,
 } from "./types.ts";
 export {
+  confirmedBy,
   ROLES,
   SCHEMA_VERSION,
   SEVERITIES,
+  SEVERITY_SOURCES,
   SIDES,
 } from "./types.ts";
 

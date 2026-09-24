@@ -27,9 +27,9 @@ export type {
   Side,
 } from "../core/storage/types.ts";
 /** Worst first (`docs/SPEC.md` section 3, decision 7): the order of the composer's chips. */
-export { SEVERITIES } from "../core/storage/types.ts";
+export { confirmedBy, SEVERITIES } from "../core/storage/types.ts";
 
-import type { Base, ReviewStatus, Scope } from "../core/storage/types.ts";
+import type { Base, ReviewStatus, Scope, Severity } from "../core/storage/types.ts";
 import type { FileStatus, ScanWarning } from "../core/types.ts";
 
 export type {
@@ -139,4 +139,22 @@ export type CandidateSet = {
   root: string;
   repositories: CandidateRepository[];
   warnings: ScanWarning[];
+};
+
+/** `GET /api/suggest`'s answer, written again because the server's reaches the model; the two
+ * are held together by `tests/ui-wire.test.ts` ([08-ui.md](../../docs/reference/08-ui.md)). */
+export type Suggestion = {
+  session: string;
+  id: string;
+  severity: Severity;
+  repo: string | null;
+  path: string | null;
+  line: number | null;
+  body: string;
+  similarity: number;
+};
+
+export type SuggestAnswer = {
+  severity: { severity: Severity; confidence: number } | null;
+  suggestions: Suggestion[];
 };

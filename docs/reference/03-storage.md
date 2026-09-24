@@ -320,6 +320,12 @@ checked and nothing half-parsed reaches the caller.
 `endLine`, `title`, and `side` may be absent as well as `null` — both read as
 `null`, which is what the anchor levels of section 7 mean by an omitted field.
 
+`severitySource` (DA-36) is `auto`, `manual`, or `confirmed:<author>` with an
+author after the colon; anything else is refused with the field named. Absent
+or `null` reads as `manual`: a comment written before the field existed had its
+severity chosen by whoever wrote it. `confirmedBy(source)` in `types.ts` reads
+the author back out, for the CLI's `show` and the UI's thread marker alike.
+
 The `base` of `review.json` is the change-set reader's own `BaseSpec`
 ([02-git.md](02-git.md)): storage parses it, git resolves it, and one name means
 one thing on both sides.
@@ -428,6 +434,20 @@ the old shape until something scans that session — `diff`, a server start on i
 as the current session, a window on it as a named task. An earlier build
 reading a cache that has the field keeps working and leaves it as it found it,
 or drops it, which this build answers the same way.
+
+**`severitySource` did not raise it either** (DA-36), for the same reason: a
+raised version would have every build from before the field refuse every
+`comments.json` a newer build has written, and a server of one build with an
+`npx diffalanche` of another on one data directory is the ordinary case. Unlike
+the cache, `comments.json` pays for it. Its parse is strict (below, "Keeping
+unknown keys"), so when an earlier build **writes** a `comments.json` that
+carries the field — a `reply`, a `resolve`, a comment from its UI — the field is
+dropped from every comment of that session, and each reads as `manual`
+afterwards. What is lost is the label and nothing else: the severities stay, the
+threads stay, and an `auto` that nobody confirmed stops asking to be. A refusal
+would have lost the whole session to that build, which is worse. The case
+closes itself once every build that touches the data directory is this one or
+later.
 
 ## What it does not do yet
 

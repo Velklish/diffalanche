@@ -71,6 +71,14 @@ diff. Select lines and write a comment; the comment lands in
 `.diffalanche/reviews/cargo-flags/comments.json` and an agent reads it from
 there through the CLI a moment later, with no restart on either side.
 
+While you type, the form lists the five nearest comments from every past review
+— `↑` / `↓` choose one and `TAB` takes its text and severity — and the `AUTO`
+chip, chosen by default, leaves the severity to the vote of those comments when
+you send. The thread says `auto` until an agent agrees with the label in its
+reply (`reply --confirm-severity`) and then `labelled by <agent>`. While the
+embedding model is away (`diffalanche model status`) the form says so, keeps
+`AUTO` out of reach, and asks again after a pause.
+
 The review keeps itself current: when an agent edits a file, replies, or
 resolves a thread, the page hears it from the server and patches only what
 changed — a hunk that moved takes an accent border and says how long ago, the
@@ -89,6 +97,7 @@ The keyboard follows the design handoff:
 | `C` | a comment on the first added line of the file being read |
 | `R` | resolves the focused thread |
 | `B` | browses the file being read whole, and goes back to the review |
+| `↑` / `↓`, `TAB` in the comment form | choose a suggestion from history, and take it |
 | `⌘⏎` | sends the comment being written |
 | `esc` | closes the topmost thing that is open |
 
@@ -242,7 +251,7 @@ flags, and `tests/readme-cli.test.ts` fails if the two ever disagree.
 | `diff [--repo <path>] [--json] [--patch]` | the change set of the review session; rewrites `diff.json` |
 | `list [--status <open\|resolved\|all>] [--repo <path>] [--severity <critical\|warning\|nit\|question>] [--unanswered] [--json]` | the comments of the review session |
 | `show <id> [--json]` | one comment with its thread and its anchor |
-| `reply <id> --body <text\|-> [--author <name>] [--role <human\|agent>]` | reply in a thread |
+| `reply <id> --body <text\|-> [--author <name>] [--role <human\|agent>] [--confirm-severity]` | reply in a thread; `--confirm-severity` agrees with a severity the model chose, and the thread then reads `labelled by <author>` |
 | `comment [--repo <path>] [--path <path>] [--line <n>] [--end-line <n>] [--side <new\|old>] --severity <critical\|warning\|nit\|question> --body <text\|-> [--author <name>] [--role <human\|agent>]` | open a comment on a line, a file, a repository, or the review |
 | `resolve <id> --role human [--note <text>] [--author <name>]` | close a thread; `--role human` is required |
 | `reopen <id> --role human [--note <text>] [--author <name>]` | open a thread again; `--role human` is required |

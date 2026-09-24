@@ -13,6 +13,11 @@ import { expect, test } from "@playwright/test";
 const root = fileURLToPath(new URL("..", import.meta.url));
 const FIXTURE = ".perf/e2e";
 
+/** A send in `AUTO` waits for the model's vote, and the first request loads the model: a deadline
+ * only a hang reaches, not a budget ("Waits in the suites", 11-perf.md). */
+const SEND_DEADLINE_MS = 60_000;
+test.describe.configure({ timeout: 120_000 });
+
 type Comment = {
   id: string;
   repo: string | null;
@@ -290,7 +295,9 @@ test("a thread on a line the collapsed context hides is reached by showing it ag
   await card.locator(`td.diff-gutter[data-change-key="${key}"]`).nth(1).click();
   await card.locator(".composer-field").fill("this context line is the wrong one");
   await page.keyboard.press("ControlOrMeta+Enter");
-  await expect(page.locator(".toast")).toContainText("Комментарий сохранён в reviews/");
+  await expect(page.locator(".toast")).toContainText("Комментарий сохранён в reviews/", {
+    timeout: SEND_DEADLINE_MS,
+  });
 
   const written = listComments().find((comment) => !before.has(comment.id));
   const anchor = page.locator(`[data-thread-anchor="${written?.id}"]`);

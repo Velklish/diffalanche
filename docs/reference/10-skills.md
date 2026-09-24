@@ -48,6 +48,12 @@ its two-sentence form so the cap has something to imitate. Several agents on one
 narrow with `--repo` and sign with their own `--author`; the session's lock lets
 their writes interleave without losing a message.
 
+`diffalanche-apply` also says when a reply confirms a severity: on a comment
+whose `severitySource` is `auto` — the tool chose the severity — and only when the
+agent agrees with it, `reply --confirm-severity` turns the thread's `auto` into
+`labelled by <author>` (DA-36, [04-domain.md](04-domain.md)). The CLI refuses the
+flag anywhere else, so the rule the skill states is also the one the domain holds.
+
 ## How they are shipped
 
 `package.json` lists `skills` in `files` beside `dist`, so the markdown is

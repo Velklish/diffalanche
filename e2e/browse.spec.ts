@@ -11,6 +11,11 @@ import { expect, test } from "@playwright/test";
 const root = fileURLToPath(new URL("..", import.meta.url));
 const FIXTURE = ".perf/e2e";
 
+/** A send in `AUTO` waits for the model's vote, and the first request loads the model: a deadline
+ * only a hang reaches, not a budget ("Waits in the suites", 11-perf.md). */
+const SEND_DEADLINE_MS = 60_000;
+test.describe.configure({ timeout: 120_000 });
+
 type Comment = {
   id: string;
   repo: string | null;
@@ -80,7 +85,9 @@ test("a comment left on an unchanged file lands in the session with its path", a
   const body = `browsed ${Date.now()}`;
   await card.locator(".composer-field").fill(body);
   await page.keyboard.press("ControlOrMeta+Enter");
-  await expect(page.locator(".toast")).toContainText("Комментарий сохранён в reviews/");
+  await expect(page.locator(".toast")).toContainText("Комментарий сохранён в reviews/", {
+    timeout: SEND_DEADLINE_MS,
+  });
 
   const written = listComments().find((one) => one.body === body);
   expect(written).toMatchObject({ repo, path, line: 2, side: "new" });

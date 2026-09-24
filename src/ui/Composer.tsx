@@ -1,24 +1,22 @@
+import type { KeyboardEvent } from "react";
 import { useEffect, useRef } from "react";
 import { composerLabel } from "./anchor.ts";
+import type { SuggestPanel } from "./store.ts";
 import { useStore } from "./store.ts";
+import { autoSeverity, SUGGESTION_SLOTS } from "./suggest.ts";
+import type { Suggestion } from "./types.ts";
 import { SEVERITIES } from "./types.ts";
 
-/**
- * The comment form of handoff section 2: a strip across the whole width of the
- * diff that stays put while the card is scrolled sideways, the anchor it is
- * being written for, the four severity chips, the field, and the two buttons.
- * `⌘⏎` sends and `esc` closes.
- *
- * The `AUTO` chip and the suggestions from history belong to the same strip and
- * arrive with the model (DA-36); until then the severity is the reviewer's own
- * and `warning` is what the form proposes (`docs/SPEC.md` section 5).
- */
+/** The comment form of handoff section 2, with its suggestions from history; what each part does
+ * and why is [08-ui.md](../../docs/reference/08-ui.md), "Commenting". */
 export function Composer() {
   const target = useStore((store) => store.composer);
   const endLine = useStore((store) => store.composerEnd);
   const sev = useStore((store) => store.sev);
   const body = useStore((store) => store.body);
   const sending = useStore((store) => store.sending);
+  const modelAway = useStore((store) => store.modelAway);
+  const suggest = useStore((store) => store.suggest);
   const setSeverity = useStore((store) => store.setSeverity);
   const setBody = useStore((store) => store.setBody);
   const submit = useStore((store) => store.submitComment);
@@ -51,6 +49,18 @@ export function Composer() {
         </div>
 
         <div className="composer-severity">
+          {/* Out of reach, not gone, while the model is away: it comes back without a jump. */}
+          <button
+            type="button"
+            className={sev === "auto" ? "sev-chip auto on" : "sev-chip auto"}
+            aria-pressed={sev === "auto"}
+            disabled={modelAway !== null}
+            title={modelAway ?? undefined}
+            onMouseDown={(event) => event.preventDefault()}
+            onClick={() => setSeverity("auto")}
+          >
+            AUTO · {autoSeverity(suggest.answer).toUpperCase()}
+          </button>
           {SEVERITIES.map((one) => (
             <button
               key={one}
@@ -65,8 +75,11 @@ export function Composer() {
               {one.toUpperCase()}
             </button>
           ))}
-          <span className="spacer" />
-          <span className="composer-note">severity задан вручную</span>
+          <span className="composer-note">
+            {sev === "auto"
+              ? "модель разметит при отправке, агент подтвердит"
+              : "severity задан вручную"}
+          </span>
         </div>
 
         <textarea
@@ -75,7 +88,9 @@ export function Composer() {
           value={body}
           placeholder="Что не так с этими строками?"
           aria-label="comment"
+          readOnly={sending}
           onChange={(event) => setBody(event.target.value)}
+          onKeyDown={onSuggestionKey}
         />
 
         <div className="composer-actions">
@@ -88,7 +103,131 @@ export function Composer() {
           <span className="spacer" />
           <span className="composer-note">потяните по строкам — диапазон · ⌘⏎ отправить</span>
         </div>
+
+        <Suggestions suggest={suggest} away={modelAway} />
       </div>
     </form>
+  );
+}
+
+/** `↑` from the draft's first line and `↓` from its last choose a row; `TAB` takes only a row they
+ * chose. Every other press stays the field's, and one mid-composition the input method's. */
+function onSuggestionKey(event: KeyboardEvent<HTMLTextAreaElement>): void {
+  if (event.altKey || event.metaKey || event.ctrlKey || event.shiftKey) return;
+  if (event.nativeEvent.isComposing) return;
+  const store = useStore.getState();
+  const { value, selectionStart, selectionEnd } = event.currentTarget;
+  if (event.key === "ArrowUp" && value.lastIndexOf("\n", selectionStart - 1) === -1) {
+    if (store.moveSuggestion(-1)) event.preventDefault();
+    return;
+  }
+  if (event.key === "ArrowDown" && value.indexOf("\n", selectionEnd) === -1) {
+    if (store.moveSuggestion(1)) event.preventDefault();
+    return;
+  }
+  if (event.key === "Tab" && store.sugIdx >= 0 && store.suggest.answer !== null) {
+    event.preventDefault();
+    store.acceptSuggestion(store.sugIdx);
+  }
+}
+
+/** `FROM YOUR HISTORY`: five rows of fixed height from the start, blank or silhouettes until an
+ * answer fills them, so typing never moves the diff under the form (The No-Jump Rule). */
+function Suggestions({ suggest, away }: { suggest: SuggestPanel; away: string | null }) {
+  const sugIdx = useStore((store) => store.sugIdx);
+  const accept = useStore((store) => store.acceptSuggestion);
+  const rows = suggest.answer?.suggestions ?? [];
+  const note =
+    suggest.failure ??
+    (suggest.answer !== null && rows.length === 0
+      ? "в истории пока нет комментариев"
+      : suggest.answer === null && !suggest.asking
+        ? (away ?? "похожие прошлые комментарии появятся, пока вы пишете")
+        : null);
+  const silhouettes = suggest.answer === null && suggest.failure === null && suggest.asking;
+  // What a test waits out before it watches the card: the panel's own answer changes its DOM.
+  const state = suggest.failure !== null ? "failed" : suggest.answer !== null ? "ready" : "idle";
+
+  return (
+    <section
+      className="composer-suggest"
+      aria-label="suggestions from your history"
+      data-state={suggest.asking ? "asking" : state}
+    >
+      <div className="suggest-head">
+        <span className="suggest-title">FROM YOUR HISTORY</span>
+        <span className="suggest-count">
+          {rows.length === 0 ? "" : `${sugIdx < 0 ? "–" : sugIdx + 1} / ${rows.length}`}
+        </span>
+        <span className="spacer" />
+        <span className="suggest-hint">↑↓ выбрать · TAB принять</span>
+      </div>
+      <div className="suggest-rows">
+        {Array.from({ length: SUGGESTION_SLOTS }, (_, index) => (
+          <Slot
+            // biome-ignore lint/suspicious/noArrayIndexKey: a slot is a place, not a row.
+            key={index}
+            row={rows[index]}
+            on={index === sugIdx}
+            note={index === 0 ? note : null}
+            silhouette={silhouettes}
+            onAccept={() => accept(index)}
+          />
+        ))}
+      </div>
+    </section>
+  );
+}
+
+/** One of the five places: a row, the sentence that says why there are none, or an empty slot. */
+function Slot({
+  row,
+  on,
+  note,
+  silhouette,
+  onAccept,
+}: {
+  row: Suggestion | undefined;
+  on: boolean;
+  note: string | null;
+  silhouette: boolean;
+  onAccept: () => void;
+}) {
+  if (row !== undefined) return <SuggestionRow row={row} on={on} onAccept={onAccept} />;
+  if (note !== null) return <p className="suggestion note">{note}</p>;
+  return (
+    <span
+      className={silhouette ? "suggestion silhouette" : "suggestion blank"}
+      aria-hidden="true"
+    />
+  );
+}
+
+function SuggestionRow({
+  row,
+  on,
+  onAccept,
+}: {
+  row: Suggestion;
+  on: boolean;
+  onAccept: () => void;
+}) {
+  return (
+    <button
+      type="button"
+      className={on ? "suggestion on" : "suggestion"}
+      aria-current={on ? "true" : undefined}
+      tabIndex={-1}
+      // Taking a row leaves the caret in the field, the way a severity chip does.
+      onMouseDown={(event) => event.preventDefault()}
+      onClick={onAccept}
+    >
+      <span className={`suggestion-sev ${row.severity}`}>{row.severity.toUpperCase()}</span>
+      <span className="suggestion-body">{row.body.split("\n")[0]}</span>
+      <span className="suggestion-meta">
+        {row.session} · {row.similarity.toFixed(2)}
+      </span>
+      <span className={on ? "key on" : "key off"}>TAB</span>
+    </button>
   );
 }

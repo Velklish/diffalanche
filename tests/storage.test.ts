@@ -168,6 +168,25 @@ describe("reading", () => {
     expect((error as StorageError).message).toContain("critical, warning, nit, question");
   });
 
+  it("reads a comment without severitySource as manual, and refuses one it cannot read", async () => {
+    const { severitySource: _absent, ...older } = comment("c_aaaaaa");
+    const sources = [older, { ...comment("c_bbbbbb"), severitySource: "confirmed:claude" }];
+    await makeSession(dataDir, "one");
+    writeFileSync(commentsPath(dataDir, "one"), JSON.stringify({ version: 2, comments: sources }));
+    expect((await readComments(dataDir, "one")).map((one) => one.severitySource)).toEqual([
+      "manual",
+      "confirmed:claude",
+    ]);
+
+    for (const wrong of ["model", "confirmed:", 1]) {
+      const file = { version: 2, comments: [{ ...older, severitySource: wrong }] };
+      writeFileSync(commentsPath(dataDir, "one"), JSON.stringify(file));
+      const error = await readComments(dataDir, "one").catch((caught: unknown) => caught);
+      expect((error as StorageError).field).toBe("comments[0].severitySource");
+      expect((error as StorageError).message).toContain("auto, manual, or confirmed:<author>");
+    }
+  });
+
   it("refuses a file of an unknown schema version", async () => {
     await makeSession(dataDir, "one");
     writeFileSync(reviewPath(dataDir, "one"), JSON.stringify({ ...review("one"), version: 3 }));

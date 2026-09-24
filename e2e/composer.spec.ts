@@ -14,6 +14,11 @@ import { expect, test } from "@playwright/test";
 const root = fileURLToPath(new URL("..", import.meta.url));
 const FIXTURE = ".perf/e2e";
 
+/** A send in `AUTO` waits for the model's vote, and the first request loads the model: a deadline
+ * only a hang reaches, not a budget ("Waits in the suites", 11-perf.md). */
+const SEND_DEADLINE_MS = 60_000;
+test.describe.configure({ timeout: 120_000 });
+
 type Comment = {
   id: string;
   repo: string | null;
@@ -21,6 +26,7 @@ type Comment = {
   line: number | null;
   endLine: number | null;
   severity: string;
+  severitySource: string;
   body: string;
 };
 
@@ -98,6 +104,8 @@ test("the chosen severity chip shows the ring when the keyboard is on it", async
   const card = page.locator(".file-card").first();
   await gutter(card, await firstAddedLine(card)).click();
   await expect(card.locator(".composer-field")).toBeFocused();
+  // `AUTO` is chosen when the form opens; a severity's own fill is what this ring is drawn on.
+  await card.getByRole("button", { name: "WARNING", exact: true }).click();
 
   const chosen = card.locator(".sev-chip.on");
   for (
@@ -151,7 +159,9 @@ test("⌘⏎ sends the range, and the CLI reads back both its lines", async ({ p
   await card.locator(".composer-field").fill("the range is wrong here");
   await card.locator(".sev-chip", { hasText: "CRITICAL" }).click();
   await page.keyboard.press("ControlOrMeta+Enter");
-  await expect(page.locator(".toast")).toContainText("Комментарий сохранён в reviews/");
+  await expect(page.locator(".toast")).toContainText("Комментарий сохранён в reviews/", {
+    timeout: SEND_DEADLINE_MS,
+  });
 
   const written = listComments().filter((comment) => !before.has(comment.id));
   expect(written).toHaveLength(1);
@@ -176,7 +186,9 @@ test("a comment on a repository has no path", async ({ page }) => {
   await expect(composer.locator(".composer-anchor")).toContainText("· repository");
   await composer.locator(".composer-field").fill("this repository needs a changelog");
   await composer.getByRole("button", { name: "Comment" }).click();
-  await expect(page.locator(".toast")).toContainText("Комментарий сохранён в reviews/");
+  await expect(page.locator(".toast")).toContainText("Комментарий сохранён в reviews/", {
+    timeout: SEND_DEADLINE_MS,
+  });
 
   const written = listComments().filter((comment) => !before.has(comment.id));
   expect(written).toHaveLength(1);
@@ -194,7 +206,9 @@ test("a comment on the review has no repository", async ({ page }) => {
   await expect(composer.locator(".composer-anchor")).toHaveText("→ review");
   await composer.locator(".composer-field").fill("the whole review is missing a title");
   await composer.getByRole("button", { name: "Comment" }).click();
-  await expect(page.locator(".toast")).toContainText("Комментарий сохранён в reviews/");
+  await expect(page.locator(".toast")).toContainText("Комментарий сохранён в reviews/", {
+    timeout: SEND_DEADLINE_MS,
+  });
 
   const written = listComments().filter((comment) => !before.has(comment.id));
   expect(written).toHaveLength(1);
@@ -225,7 +239,9 @@ test("a comment on a file has no line, and its form opens under the card header"
   await expect(composer.locator(".composer-anchor")).toHaveText(`→ ${path} · file`);
   await composer.locator(".composer-field").fill("this file needs a test");
   await composer.getByRole("button", { name: "Comment" }).click();
-  await expect(page.locator(".toast")).toContainText("Комментарий сохранён в reviews/");
+  await expect(page.locator(".toast")).toContainText("Комментарий сохранён в reviews/", {
+    timeout: SEND_DEADLINE_MS,
+  });
 
   const written = listComments().filter((comment) => !before.has(comment.id));
   expect(written).toHaveLength(1);
@@ -241,4 +257,167 @@ test("C opens the form on a collapsed card, which stops being collapsed", async 
   await page.keyboard.press("c");
 
   await expect(card.locator('[data-testid="composer"]')).toBeVisible();
+});
+
+/** What `GET /api/suggest` answers in the tests below: the fixture's own first comments, voting for
+ * `vote`. Stubbed, so the suite needs no model — the model's half is tests/embedding-model.test.ts. */
+function history(vote: string): { answer: unknown; rows: Comment[] } {
+  const rows = listComments().slice(0, 5);
+  const suggestions = rows.map((one, index) => ({
+    session: "synth",
+    id: one.id,
+    severity: one.severity,
+    repo: one.repo,
+    path: one.path,
+    line: one.line,
+    body: one.body,
+    similarity: 0.95 - index * 0.01,
+  }));
+  return { answer: { severity: { severity: vote, confidence: 0.8 }, suggestions }, rows };
+}
+
+/** Serves `answer` for every suggestion, and keeps the texts it was asked about. */
+async function suggestFrom(page: Page, answer: unknown, status = 200): Promise<string[]> {
+  const asked: string[] = [];
+  await page.route("**/api/suggest?*", (route) => {
+    asked.push(new URL(route.request().url()).searchParams.get("body") ?? "");
+    return route.fulfill({ status, contentType: "application/json", body: JSON.stringify(answer) });
+  });
+  return asked;
+}
+
+test("typing three words lists suggestions from the history, and TAB takes one", async ({
+  page,
+}) => {
+  const { answer, rows } = history("critical");
+  const asked = await suggestFrom(page, answer);
+  await open(page);
+  const card = page.locator(".file-card").first();
+  await gutter(card, await firstAddedLine(card)).click();
+  const composer = card.locator('[data-testid="composer"]');
+  const field = composer.locator(".composer-field");
+  await expect(composer.locator(".sev-chip.auto")).toHaveAttribute("aria-pressed", "true");
+  // The five places are there before a word is typed: an answer fills them and moves nothing.
+  await expect(composer.locator(".suggest-rows > *")).toHaveCount(5);
+
+  await field.fill("cache key region");
+  const shown = composer.locator("button.suggestion");
+  await expect(shown).toHaveCount(5);
+  expect(asked).toEqual(["cache key region"]);
+  await expect(shown.locator(".suggestion-body")).toHaveText(
+    rows.map((one) => one.body.split("\n")[0] ?? ""),
+  );
+  await expect(shown.first().locator(".suggestion-meta")).toHaveText("synth · 0.95");
+  await expect(composer.locator(".sev-chip.auto")).toHaveText("AUTO · CRITICAL");
+
+  // No row is chosen until a key chooses one: the first `↓` takes the first, the second the next.
+  await expect(composer.locator(".suggest-count")).toHaveText("– / 5");
+  await field.press("ArrowDown");
+  await field.press("ArrowDown");
+  await expect(shown.nth(1)).toHaveClass(/\bon\b/);
+  await expect(composer.locator(".suggest-count")).toHaveText("2 / 5");
+  await field.press("Tab");
+
+  const taken = rows[1] as Comment;
+  await expect(field).toBeFocused();
+  await expect(field).toHaveValue(taken.body);
+  await expect(composer.locator(".sev-chip.on")).toHaveText(taken.severity.toUpperCase());
+  await expect(composer.locator(".composer-severity .composer-note")).toHaveText(
+    "severity задан вручную",
+  );
+  await page.keyboard.press("Escape");
+});
+
+test("a comment sent with AUTO is stored as auto, and an agent's confirmation relabels it", async ({
+  page,
+}) => {
+  // `question` is no chip's default, so what is stored can only have come from the vote.
+  await suggestFrom(page, history("question").answer);
+  await open(page);
+  const before = new Set(listComments().map((comment) => comment.id));
+  const card = page.locator(".file-card").first();
+  await gutter(card, await firstAddedLine(card)).click();
+  const composer = card.locator('[data-testid="composer"]');
+  await composer.locator(".composer-field").fill("the cache key misses the region");
+  await expect(composer.locator(".sev-chip.auto")).toHaveText("AUTO · QUESTION");
+  await page.keyboard.press("ControlOrMeta+Enter");
+  await expect(page.locator(".toast")).toContainText("Комментарий сохранён в reviews/");
+
+  const written = listComments().filter((comment) => !before.has(comment.id));
+  expect(written).toMatchObject([{ severity: "question", severitySource: "auto" }]);
+  const id = written[0]?.id as string;
+  const marker = page.locator(`.rail-list [data-thread="${id}"] .thread-marker`);
+  await expect(marker).toHaveText("auto");
+
+  execFileSync(
+    "bun",
+    [
+      "run",
+      "src/cli/index.ts",
+      "reply",
+      id,
+      "--body",
+      "Fixed.",
+      "--author",
+      "claude",
+      "--confirm-severity",
+      "--root",
+      FIXTURE,
+    ],
+    { cwd: root },
+  );
+  // The live stream carries the agent's write: a frame's deadline, not a budget (11-perf.md).
+  await expect(marker).toHaveText("labelled by claude", { timeout: 20_000 });
+  expect(listComments().find((comment) => comment.id === id)?.severitySource).toBe(
+    "confirmed:claude",
+  );
+  // An open thread with an agent's reply is what live.spec.ts picks and expects to answer first.
+  execFileSync(
+    "bun",
+    ["run", "src/cli/index.ts", "resolve", id, "--role", "human", "--root", FIXTURE],
+    {
+      cwd: root,
+    },
+  );
+});
+
+test("TAB with no row chosen leaves the draft as it is and moves on", async ({ page }) => {
+  await suggestFrom(page, history("critical").answer);
+  await open(page);
+  const card = page.locator(".file-card").first();
+  await gutter(card, await firstAddedLine(card)).click();
+  const composer = card.locator('[data-testid="composer"]');
+  const field = composer.locator(".composer-field");
+  await field.fill("cache key region");
+  await expect(composer.locator("button.suggestion")).toHaveCount(5);
+
+  await field.press("Tab");
+  await expect(field).not.toBeFocused();
+  await expect(field).toHaveValue("cache key region");
+  await expect(composer.locator(".sev-chip.auto")).toHaveAttribute("aria-pressed", "true");
+  await page.keyboard.press("Escape");
+});
+
+test("while the model is away the form says so and keeps AUTO out of reach", async ({ page }) => {
+  const message = "the embedding model is being put in place; suggestions follow once it is there";
+  await suggestFrom(page, { error: "model", message }, 503);
+  await open(page);
+  const card = page.locator(".file-card").first();
+  const [first, second] = await threeAddedLines(card);
+  await gutter(card, first).click();
+  const composer = card.locator('[data-testid="composer"]');
+  await composer.locator(".composer-field").fill("the cache key misses the region");
+
+  await expect(composer.locator(".suggestion.note")).toHaveText(message);
+  await expect(composer.locator(".sev-chip.auto")).toBeDisabled();
+  await expect(composer.locator(".sev-chip.on")).toHaveText("WARNING");
+  await page.keyboard.press("Escape");
+
+  // The next form opens on `WARNING`, with the sentence where the rows will be.
+  await gutter(card, second).click();
+  await expect(composer.locator(".composer-field")).toBeFocused();
+  await expect(composer.locator(".sev-chip.auto")).toBeDisabled();
+  await expect(composer.locator(".sev-chip.on")).toHaveText("WARNING");
+  await expect(composer.locator(".suggestion.note")).toHaveText(message);
+  await page.keyboard.press("Escape");
 });

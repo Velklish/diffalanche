@@ -308,6 +308,7 @@ describe("a task with a scope", () => {
         endLine: null,
         anchor: null,
         severity: "warning",
+        severitySource: "manual",
         status: "open",
         author: "kim.p",
         role: "human",

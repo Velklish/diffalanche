@@ -6,6 +6,7 @@ import type { RailScope, ReplyPlace } from "../store.ts";
 import { useStore } from "../store.ts";
 import { relativeTime } from "../time.ts";
 import type { Comment, Reply } from "../types.ts";
+import { confirmedBy } from "../types.ts";
 
 /** One thread of handoff section 3, drawn the same in the rail and under its
  * line; `place` is which copy, and `scope` is not ([08-ui.md], DA-94). */
@@ -51,6 +52,7 @@ export const ThreadCard = memo(function ThreadCard({
         {repo === null ? null : <RepoJump repo={repo} />}
         <button type="button" className="thread-focus" onClick={() => onFocus(thread.id)}>
           <span className={`sev-tag ${thread.severity}`}>{thread.severity.toUpperCase()}</span>
+          <SeverityMarker thread={thread} />
           <span className="thread-anchor">{threadAnchor(thread)}</span>
           <span className="spacer" />
           {state === null ? null : (
@@ -103,6 +105,19 @@ function RepoJump({ repo }: { repo: string }) {
     >
       {repo.split("/").at(-1)}
     </button>
+  );
+}
+
+/** Handoff section 3: `auto` while the model's severity waits for an agent, then who confirmed it;
+ * nothing for a severity its writer chose. */
+function SeverityMarker({ thread }: { thread: Comment }) {
+  const by = confirmedBy(thread.severitySource);
+  if (thread.severitySource !== "auto" && by === null) return null;
+  const text = by === null ? "auto" : `labelled by ${by}`;
+  return (
+    <span className="thread-marker" title={text}>
+      {text}
+    </span>
   );
 }
 

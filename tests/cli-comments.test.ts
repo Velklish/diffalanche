@@ -415,6 +415,65 @@ describe("list and show", () => {
   });
 });
 
+describe("reply --confirm-severity", () => {
+  it("confirms a severity the model chose, and refuses one it did not", async () => {
+    const manual = await openFinding();
+    const auto = await openFinding("--body", "left to the model");
+    // The composer is what writes `auto`; the CLI's own comments are chosen by their writer.
+    await updateComments(join(root, ".diffalanche"), "alpha", (all) => {
+      const found = all.find((one) => one.id === auto);
+      if (found !== undefined) found.severitySource = "auto";
+    });
+    expect((await invoke(["show", auto])).out.split("\n")[0]).toBe(`${auto}  warning (auto)  open`);
+
+    const confirmed = await invoke([
+      "reply",
+      auto,
+      "--body",
+      "fixed",
+      "--author",
+      "claude",
+      "--confirm-severity",
+    ]);
+    expect(confirmed).toEqual({
+      code: 0,
+      out: `r_1 added to ${auto}, severity warning confirmed\n`,
+      err: "",
+    });
+    expect(comments().find((one) => one.id === auto)?.severitySource).toBe("confirmed:claude");
+    expect((await invoke(["show", auto])).out.split("\n")[0]).toBe(
+      `${auto}  warning (labelled by claude)  open`,
+    );
+
+    // An empty `--author` would write `confirmed:`, which no build can read back.
+    const unnamed = await openFinding("--body", "left to the model too");
+    await updateComments(join(root, ".diffalanche"), "alpha", (all) => {
+      const found = all.find((one) => one.id === unnamed);
+      if (found !== undefined) found.severitySource = "auto";
+    });
+    const nobody = await invoke([
+      "reply",
+      unnamed,
+      "--body",
+      "x",
+      "--author",
+      "",
+      "--confirm-severity",
+    ]);
+    expect(nobody.code).toBe(1);
+    expect(nobody.err).toContain("needs an author to name");
+    expect((await invoke(["list", "--json", "--status", "all"])).code).toBe(0);
+
+    const before = comments();
+    for (const id of [manual, auto]) {
+      const refused = await invoke(["reply", id, "--body", "again", "--confirm-severity"]);
+      expect(refused.code).toBe(1);
+      expect(refused.err).toContain(`the severity of ${id}`);
+    }
+    expect(comments()).toEqual(before);
+  });
+});
+
 describe("resolve and reopen", () => {
   it("refuses anything but --role human and changes nothing", async () => {
     const id = await openFinding();

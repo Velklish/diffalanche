@@ -39,7 +39,9 @@ const PAIRS: { text: string; grounds: string[] }[] = [
   { text: "tx3", grounds: ["bg", "panel", "panel2", "panel3", "accBg"] },
   { text: "code", grounds: ["panel", "accBg"] },
   { text: "ln", grounds: ["panel"] },
-  { text: "accTx", grounds: ["accBg", "panel", "panel3"] },
+  { text: "accTx", grounds: ["accBg", "panel", "panel2", "panel3"] },
+  // The severity of a suggestion row (DA-36): the row is `panel`, the chosen one `accBg`.
+  ...["crit", "warn", "nit", "q"].map((text) => ({ text, grounds: ["panel", "accBg"] })),
 ];
 
 /**

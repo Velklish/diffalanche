@@ -39,6 +39,7 @@ import {
   readBody,
   scope,
   severity,
+  severitySource,
   side,
   text,
 } from "./request.ts";
@@ -277,6 +278,7 @@ export function createApp({
         endLine: nullableLine(body, "endLine"),
         side: side(body),
         severity: severity(body),
+        severitySource: severitySource(body),
         body: text(body, "body"),
         ...author,
       },

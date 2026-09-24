@@ -32,6 +32,13 @@ import {
   togglePath as togglePathInDraft,
   toggleRepo as toggleRepoInDraft,
 } from "./scope.ts";
+import {
+  AUTO_WAIT_MS,
+  autoSeverity,
+  SUGGEST_DEBOUNCE_MS,
+  suggestQuery,
+  wantsSuggestions,
+} from "./suggest.ts";
 import type {
   ActivityEvent,
   BaseMode,
@@ -56,6 +63,7 @@ import type {
   SessionSummary,
   Severity,
   Side,
+  SuggestAnswer,
 } from "./types.ts";
 
 type Theme = "dark" | "light";
@@ -122,6 +130,22 @@ export type ComposerTarget = {
  * without its file cannot be drawn on one of them.
  */
 type Selection = { repo: string; path: string; side: Side; a: number; b: number };
+
+/** The composer's severity: one of the four, or `auto`, which the model resolves at send time. */
+type ComposerSeverity = Severity | "auto";
+
+/** The panel under the composer: the rows of the last answer, and the text they answer. */
+export type SuggestPanel = {
+  /** What the rows were asked for; `null` before the first answer of this composer. */
+  text: string | null;
+  answer: SuggestAnswer | null;
+  /** A request is out, or waiting out the debounce, for a text the rows do not answer yet. */
+  asking: boolean;
+  /** Why there are no rows: the server's refusal, the model's absence included. */
+  failure: string | null;
+};
+
+const NO_SUGGESTIONS: SuggestPanel = { text: null, answer: null, asking: false, failure: null };
 
 /** Where a thread is drawn: under the line it is anchored to, and in the rail. */
 export type ReplyPlace = "widget" | "rail";
@@ -418,9 +442,17 @@ type CommentingSlice = {
   dragging: boolean;
   composer: ComposerTarget | null;
   composerEnd: number | null;
-  sev: Severity;
+  sev: ComposerSeverity;
   body: string;
+  /** The suggestions from history under the composer (DA-36). */
+  suggest: SuggestPanel;
+  /** The row `↑` / `↓` chose, which `TAB` takes; -1 while none is chosen. */
   sugIdx: number;
+  /** The sentence of the last 503 of `GET /api/suggest`, `null` once the model answers: until
+   * then `AUTO` is out of reach, and the page asks again after a growing pause (08-ui.md). */
+  modelAway: string | null;
+  /** When the model may be asked again after a 503, and the pause that set it. */
+  modelRetry: { at: number; pause: number };
   /** True from the moment `Comment` is pressed until the server has answered. */
   sending: boolean;
   /** `mousedown` on a line of the new side: the range starts and ends there. */
@@ -435,8 +467,13 @@ type CommentingSlice = {
   /** `C`: the composer on the first added line of the file being read. */
   commentOnCurrentFile: () => void;
   closeComposer: () => void;
-  setSeverity: (sev: Severity) => void;
+  setSeverity: (sev: ComposerSeverity) => void;
+  /** Typing: the text, and a request for its suggestions once typing pauses. */
   setBody: (body: string) => void;
+  /** `↑` / `↓`; `false` when there is no row to move over, and the key stays the field's. */
+  moveSuggestion: (delta: 1 | -1) => boolean;
+  /** `TAB` or a click: the row's text and severity into the form. */
+  acceptSuggestion: (index: number) => void;
   submitComment: () => Promise<void>;
 };
 
@@ -1130,9 +1167,12 @@ export const useStore = create<Store>()((set, get) => ({
   dragging: false,
   composer: null,
   composerEnd: null,
-  sev: "warning",
+  sev: "auto",
   body: "",
-  sugIdx: 0,
+  suggest: NO_SUGGESTIONS,
+  sugIdx: -1,
+  modelAway: null,
+  modelRetry: { at: 0, pause: 0 },
   sending: false,
   startSelect: (repo, path, side, line) =>
     set({
@@ -1159,7 +1199,7 @@ export const useStore = create<Store>()((set, get) => ({
       set({ dragging: false });
       return;
     }
-    set({ dragging: false, ...composerOver(sel), sev: "warning", body: "", sending: false });
+    set({ dragging: false, ...composerOver(sel), ...freshDraft(get) });
   },
   openComposer: (composer, endLine) => {
     const file =
@@ -1168,9 +1208,7 @@ export const useStore = create<Store>()((set, get) => ({
       composer,
       composerEnd: endLine ?? null,
       dragging: false,
-      sev: "warning",
-      body: "",
-      sending: false,
+      ...freshDraft(get),
       sel:
         composer.repo !== null && composer.path !== null && composer.line !== null
           ? {
@@ -1204,10 +1242,39 @@ export const useStore = create<Store>()((set, get) => ({
     const line = firstAddedLine(entry.file.patch);
     get().openComposer({ repo, path, side: "new", line });
   },
-  closeComposer: () =>
-    set({ composer: null, composerEnd: null, sel: null, dragging: false, body: "" }),
+  closeComposer: () => {
+    forgetSuggestions();
+    set({
+      composer: null,
+      composerEnd: null,
+      sel: null,
+      dragging: false,
+      body: "",
+      sending: false,
+    });
+  },
   setSeverity: (sev) => set({ sev }),
-  setBody: (body) => set({ body }),
+  setBody: (body) => {
+    // The field is read-only while its send waits: what is sent is what is on the screen.
+    if (get().sending) return;
+    set({ body });
+    scheduleSuggestions(set, get, body.trim());
+  },
+  moveSuggestion: (delta) => {
+    const count = get().suggest.answer?.suggestions.length ?? 0;
+    if (count === 0) return false;
+    const at = get().sugIdx;
+    // Nothing chosen yet: `↓` starts at the first row and `↑` at the last.
+    set({ sugIdx: at < 0 ? (delta === 1 ? 0 : count - 1) : (at + delta + count) % count });
+    return true;
+  },
+  acceptSuggestion: (index) => {
+    const row = get().suggest.answer?.suggestions[index];
+    if (row === undefined) return;
+    // The row's severity is one the reader has just read and taken: theirs, not the model's.
+    set({ sev: row.severity, sugIdx: index });
+    get().setBody(row.body);
+  },
   submitComment: async () => {
     const { composer, composerEnd, sev, body, session, sending } = get();
     if (composer === null || sending) return;
@@ -1215,6 +1282,9 @@ export const useStore = create<Store>()((set, get) => ({
     if (text === "") return;
     set({ sending: true });
     try {
+      const severity = sev === "auto" ? await resolveAuto(set, get, text) : sev;
+      // Closed, or another form opened, while the vote was awaited: nothing is sent.
+      if (get().composer !== composer) return;
       const response = await fetch(onTask("/api/comments"), {
         method: "POST",
         headers: { "content-type": "application/json" },
@@ -1229,24 +1299,27 @@ export const useStore = create<Store>()((set, get) => ({
             composer.line !== null && composerEnd !== null && composerEnd > composer.line
               ? composerEnd
               : null,
-          severity: sev,
+          severity,
+          severitySource: sev === "auto" ? "auto" : "manual",
           body: text,
         }),
       });
       if (!response.ok) throw new Error((await refusal(response)).message);
       const comment = (await response.json()) as Comment;
+      // The form that was sent is cleared; one opened while the write was out is left as it is.
+      const same = get().composer === composer;
+      if (same) forgetSuggestions();
       set({
         ...withComments([...get().comments, comment], get().threadsByFile),
-        composer: null,
-        composerEnd: null,
-        sel: null,
-        body: "",
-        sending: false,
-        focusId: comment.id,
+        ...(same ? { composer: null, composerEnd: null, sel: null, body: "", sending: false } : {}),
+        ...(same ? { focusId: comment.id } : {}),
         toast: raise(`Комментарий сохранён в reviews/${session?.name ?? "?"}/comments.json`),
       });
     } catch (error) {
-      set({ sending: false, toast: raise(reason(error)) });
+      set({
+        ...(get().composer === composer ? { sending: false } : {}),
+        toast: raise(reason(error)),
+      });
     }
   },
 
@@ -1740,6 +1813,138 @@ function replace(get: () => Store, id: string, comment: Comment) {
 function without(busy: Record<string, boolean>, id: string): Record<string, boolean> {
   const { [id]: _gone, ...rest } = busy;
   return rest;
+}
+
+/** A composer just opened: `AUTO` unless the last answer was that the model is away. */
+function freshDraft(get: () => Store): Partial<Store> {
+  forgetSuggestions();
+  return {
+    sev: get().modelAway === null ? "auto" : "warning",
+    body: "",
+    suggest: NO_SUGGESTIONS,
+    sugIdx: -1,
+    sending: false,
+  };
+}
+
+/** After a 503 the next question waits: 10 s, doubled on every 503 after it, to a minute. */
+const RETRY_FIRST_MS = 10_000;
+const RETRY_MAX_MS = 60_000;
+
+/** The model's state from an answer: back on a vote, away — for a while — on a 503. */
+function noteModel(set: (partial: Partial<Store>) => void, get: () => Store, result: Asked): void {
+  if ("answer" in result) {
+    if (get().modelAway !== null) set({ modelAway: null, modelRetry: { at: 0, pause: 0 } });
+    return;
+  }
+  if (!("absent" in result)) return;
+  const was = get().modelRetry.pause;
+  const pause = was === 0 ? RETRY_FIRST_MS : Math.min(was * 2, RETRY_MAX_MS);
+  set({
+    modelAway: result.absent,
+    modelRetry: { at: Date.now() + pause, pause },
+    ...(get().sev === "auto" ? { sev: "warning" as const } : {}),
+  });
+}
+
+/** Typing that has not paused yet, and the one request out for the composer: a send in `AUTO`
+ * reuses it rather than asking for the same text twice. */
+let suggestTimer: ReturnType<typeof setTimeout> | null = null;
+let asked: { text: string; answer: Promise<Asked> } | null = null;
+
+type Asked = { answer: SuggestAnswer } | { absent: string } | { failed: string };
+
+function forgetSuggestions(): void {
+  if (suggestTimer !== null) clearTimeout(suggestTimer);
+  suggestTimer = null;
+  asked = null;
+}
+
+function scheduleSuggestions(
+  set: (partial: Partial<Store>) => void,
+  get: () => Store,
+  text: string,
+): void {
+  if (suggestTimer !== null) clearTimeout(suggestTimer);
+  suggestTimer = null;
+  // Asked again only once the pause after a 503 is over, and only while the reader types.
+  if (paused(set, get)) return;
+  if (!wantsSuggestions(text)) {
+    set({ suggest: NO_SUGGESTIONS, sugIdx: -1 });
+    return;
+  }
+  if (!get().suggest.asking) set({ suggest: { ...get().suggest, asking: true } });
+  suggestTimer = setTimeout(() => {
+    suggestTimer = null;
+    // A 503 may have landed since the timer was set: the pause holds for it too.
+    if (paused(set, get)) return;
+    void suggestionsFor(text).then((result) => showSuggestions(set, get, text, result));
+  }, SUGGEST_DEBOUNCE_MS);
+}
+
+/** Inside the pause after a 503; the panel stops asking and shows the server's sentence instead. */
+function paused(set: (partial: Partial<Store>) => void, get: () => Store): boolean {
+  if (Date.now() >= get().modelRetry.at) return false;
+  if (get().suggest.asking) set({ suggest: { ...get().suggest, asking: false } });
+  return true;
+}
+
+function suggestionsFor(text: string): Promise<Asked> {
+  if (asked?.text === text) return asked.answer;
+  const answer = requestSuggestions(text);
+  asked = { text, answer };
+  return answer;
+}
+
+async function requestSuggestions(text: string): Promise<Asked> {
+  try {
+    const response = await fetch(`/api/suggest?body=${suggestQuery(text)}`);
+    if (response.status === 503) return { absent: (await refusal(response)).message };
+    if (!response.ok) return { failed: (await refusal(response)).message };
+    return { answer: (await response.json()) as SuggestAnswer };
+  } catch (error) {
+    return { failed: reason(error) };
+  }
+}
+
+function showSuggestions(
+  set: (partial: Partial<Store>) => void,
+  get: () => Store,
+  text: string,
+  result: Asked,
+): void {
+  noteModel(set, get, result);
+  // The composer closed, or the text moved on, while the request was out.
+  if (get().composer === null || get().body.trim() !== text) return;
+  if ("answer" in result) {
+    set({ suggest: { text, answer: result.answer, asking: false, failure: null }, sugIdx: -1 });
+    return;
+  }
+  const failure = "absent" in result ? result.absent : result.failed;
+  set({ suggest: { text, answer: null, asking: false, failure }, sugIdx: -1 });
+}
+
+/** `AUTO` at send time: the vote on the very text being sent, asked for once more if the rows
+ * answer an older one; nothing to rank, no answer, or none within `AUTO_WAIT_MS`: `warning`. */
+async function resolveAuto(
+  set: (partial: Partial<Store>) => void,
+  get: () => Store,
+  text: string,
+): Promise<Severity> {
+  if (suggestTimer !== null) clearTimeout(suggestTimer);
+  suggestTimer = null;
+  const { suggest } = get();
+  if (suggest.text === text && suggest.answer !== null) return autoSeverity(suggest.answer);
+  if (!wantsSuggestions(text) || Date.now() < get().modelRetry.at) return autoSeverity(null);
+  let timer: ReturnType<typeof setTimeout> | undefined;
+  const late = new Promise<null>((done) => {
+    timer = setTimeout(() => done(null), AUTO_WAIT_MS);
+  });
+  const result = await Promise.race([suggestionsFor(text), late]);
+  clearTimeout(timer);
+  if (result === null) return autoSeverity(null);
+  noteModel(set, get, result);
+  return autoSeverity("answer" in result ? result.answer : null);
 }
 
 /** The composer under the last line of a range, whichever way the drag ran. */

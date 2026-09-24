@@ -107,6 +107,11 @@ EOF
 - `--author` is your own name, and `--role agent` is what you are. Both are the
   defaults (`agent`, `agent`), but naming yourself is what lets a human tell two
   agents apart in the thread and in the activity feed.
+- `--confirm-severity` when the comment's `severitySource` is `auto` — the tool
+  chose the severity, not the human — and, having read the finding, you agree
+  with it. The thread then reads `labelled by <you>`. Leave it off when you do
+  not agree, and say so in the reply; on a comment that is not `auto` it is
+  refused and nothing is written.
 
 **Reply rules.** A reply is at most three sentences, and every sentence carries
 something the human does not already have. A fixed finding is one sentence — what

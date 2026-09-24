@@ -60,6 +60,19 @@ export const REVIEW_STATUSES: readonly ReviewStatus[] = ["open", "closed"];
 export const ROLES: readonly Role[] = ["human", "agent"];
 export const SIDES: readonly Side[] = ["new", "old"];
 
+/** Who chose a comment's severity: its writer, the model at send time, or the model and then the
+ * agent named after `confirmed:` (`docs/SPEC.md` section 7). */
+export type SeveritySource = "auto" | "manual" | `confirmed:${string}`;
+/** The two a writer sends; `confirmed:<author>` is only ever made from `auto` by a reply. */
+export const SEVERITY_SOURCES: readonly ("auto" | "manual")[] = ["auto", "manual"];
+
+const CONFIRMED = "confirmed:";
+
+/** The author who confirmed an automatic severity, or `null` while nobody has. */
+export function confirmedBy(source: SeveritySource): string | null {
+  return source.startsWith(CONFIRMED) ? source.slice(CONFIRMED.length) : null;
+}
+
 /** Where a line comment sits in the change set; the input for Phase 3 re-anchoring. */
 export type Anchor = {
   lineContent: string;
@@ -89,6 +102,7 @@ export type Comment = {
   endLine: number | null;
   anchor: Anchor | null;
   severity: Severity;
+  severitySource: SeveritySource;
   status: CommentStatus;
   author: string;
   role: Role;

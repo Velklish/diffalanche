@@ -24,7 +24,7 @@ written yet. Of the `model` group, `model status` and `model pull --embedding` e
 | `diffalanche diff [--repo <path>] [--json\|--patch]` | the change set of the session; rewrites `diff.json` |
 | `diffalanche list [--status <open\|resolved\|all>] [--repo <path>] [--severity <s>] [--unanswered] [--json]` | the comments of the session; default status `open` |
 | `diffalanche show <id> [--json]` | one comment with its thread and its anchor |
-| `diffalanche reply <id> --body <text\|-> [--author] [--role]` | a message in a thread; `-` reads standard input |
+| `diffalanche reply <id> --body <text\|-> [--author] [--role] [--confirm-severity]` | a message in a thread; `-` reads standard input; `--confirm-severity` agrees with a severity the model chose |
 | `diffalanche comment [--repo <path>] [--path <p>] [--line <n>] [--end-line <n>] [--side <new\|old>] --severity <s> --body <text\|-> [--author] [--role]` | a new comment, anchor filled from the change set |
 | `diffalanche resolve <id> --role human [--note <text>] [--author]` | close a thread |
 | `diffalanche reopen <id> --role human [--note <text>] [--author]` | open it again |
@@ -367,6 +367,17 @@ could still close a thread ([ADR-004](../adr/adr-004-agent-contract.md)).
 table: it gives `--note` to `resolve` alone. The note is written into the thread
 as a reply before the status changes; the domain's verdict carries one for both
 operations, and a thread reopened without a word in it says nothing about why.
+
+**`reply --confirm-severity`** agrees with a severity the model chose when the
+comment was sent (DA-36): the comment's `severitySource` goes from `auto` to
+`confirmed:<author>` in the same write as the reply, and the line after the id
+says so — `r_1 added to c_7f3k2q, severity warning confirmed`. On a comment
+whose `severitySource` is anything but `auto` it is exit code 1 naming why, and
+nothing is written, the reply included ([04-domain.md](04-domain.md)); so is an
+empty `--author`, which would confirm in nobody's name. An agent
+reads `severitySource` in `list --json` before it passes the flag. `show` prints
+the label after the severity the way the UI marks the thread: `warning (auto)`,
+`warning (labelled by claude)`, and nothing for a severity its writer chose.
 
 `list --unanswered` is the open threads whose last message is from a human: what
 an agent has not answered yet. A reply from an agent takes a thread out of it.

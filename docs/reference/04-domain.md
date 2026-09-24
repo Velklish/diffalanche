@@ -22,6 +22,8 @@ a caller reads; the message is what a person reads.
 | `invalid-scope` | a scope that does not add up: a repository the root has not, a repository named twice, a path that is not one inside its repository, an edit a scope cannot express |
 | `out-of-scope` | a comment on something the review task is not about |
 | `scope-has-comments` | narrowing the scope would delete comments and nothing consented to that; the error carries their ids |
+| `severity-not-auto` | `reply` confirming a severity the model did not choose, or one an agent has already confirmed |
+| `invalid-author` | `reply` confirming a severity with an author that is empty: the label would name nobody |
 
 ## Review sessions
 
@@ -359,6 +361,29 @@ close a thread. `resolve` sets `resolvedAt` and `resolvedBy` from the caller;
 `reopen` clears both. A `note` on either is written into the thread as a reply
 first — the on-disk format has no other place for it, and a status change with
 an unexplained reason is worse than one with a message.
+
+### Who chose the severity
+
+A comment carries `severitySource` beside its `severity` (DA-36, `docs/SPEC.md`
+section 7). `addComment` takes it as `auto` or `manual`, and without it stores
+`manual`: the CLI's `comment` never passes it — an agent that names a severity
+chose it — and the composer passes `auto` when the reviewer left the choice to
+the model. `confirmed:<author>` is never written by `addComment`; the server's
+`POST /api/comments` refuses it before the domain sees it.
+
+`reply` with `confirmSeverity: true` is the one way to it. In the same locked
+write that appends the reply, an `auto` becomes `confirmed:<author>` with the
+reply's author. On anything else — a severity its writer chose, or one already
+confirmed — it refuses with `severity-not-auto`, naming which of the two, and
+writes nothing, the reply included. So does a confirmation with an empty author
+(`invalid-author`): `confirmed:` with nobody after it is a value the parser of
+`comments.json` refuses, and writing it would have made the whole session
+unreadable to every later command. One command is one write, and a reply that
+landed while its confirmation was refused would leave the agent reading a
+success in the thread and a failure on its exit code. The check is in the
+domain, not the skill, for the reason the role check is. It does not look at
+the role: the marker names the author, and whoever it is, the label is theirs
+to agree with.
 
 ### Derived state
 

@@ -229,6 +229,7 @@ $ diffalanche list --severity critical --json
       "after": ["", "    public ShipmentSet491 Resolve(ShipmentSet491Request request)", "    {"]
     },
     "severity": "critical",
+    "severitySource": "manual",
     "status": "open",
     "author": "claude",
     "role": "agent",

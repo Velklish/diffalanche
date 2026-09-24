@@ -401,6 +401,79 @@ describe("thread state", () => {
   });
 });
 
+describe("who chose the severity", () => {
+  it("stores manual unless the writer says the model chose it", async () => {
+    const chosen = await write({ severity: "nit", body: "picked by hand", ...HUMAN });
+    const proposed = await write({
+      severity: "critical",
+      severitySource: "auto",
+      body: "left to the model",
+      ...HUMAN,
+    });
+    const stored = await readComments(dataDir, SESSION);
+    expect(stored.find((one) => one.id === chosen.id)?.severitySource).toBe("manual");
+    expect(stored.find((one) => one.id === proposed.id)?.severitySource).toBe("auto");
+  });
+
+  it("turns auto into confirmed:<author> on a reply that confirms it", async () => {
+    const comment = await write({
+      severity: "warning",
+      severitySource: "auto",
+      body: "left to the model",
+      ...HUMAN,
+    });
+    const answered = await reply(dataDir, SESSION, comment.id, {
+      ...AGENT,
+      body: "fixed",
+      confirmSeverity: true,
+    });
+    expect(answered).toMatchObject({ severity: "warning", severitySource: "confirmed:claude" });
+    expect((await get(dataDir, SESSION, comment.id)).severitySource).toBe("confirmed:claude");
+
+    // A reply that does not confirm leaves the label as it is.
+    const other = await write({ severity: "nit", severitySource: "auto", body: "b", ...HUMAN });
+    await reply(dataDir, SESSION, other.id, { ...AGENT, body: "looked" });
+    expect((await get(dataDir, SESSION, other.id)).severitySource).toBe("auto");
+  });
+
+  it("refuses to confirm a severity the model did not choose, and writes no reply", async () => {
+    const manual = await write({ severity: "nit", body: "picked by hand", ...HUMAN });
+    const confirmed = await write({ severity: "nit", severitySource: "auto", body: "c", ...HUMAN });
+    await reply(dataDir, SESSION, confirmed.id, { ...AGENT, body: "ok", confirmSeverity: true });
+    const before = await readComments(dataDir, SESSION);
+
+    for (const [id, message] of [
+      [manual.id, "chosen by its writer"],
+      [confirmed.id, "already confirmed by claude"],
+    ] as const) {
+      const error = await reply(dataDir, SESSION, id, {
+        ...AGENT,
+        body: "again",
+        confirmSeverity: true,
+      }).catch((caught: unknown) => caught);
+      expect(error).toBeInstanceOf(DomainError);
+      expect((error as DomainError).code).toBe("severity-not-auto");
+      expect((error as DomainError).message).toContain(message);
+    }
+    expect(await readComments(dataDir, SESSION)).toEqual(before);
+  });
+
+  it("refuses a confirmation that names nobody, and the file stays readable", async () => {
+    const comment = await write({ severity: "nit", severitySource: "auto", body: "d", ...HUMAN });
+    const before = await readComments(dataDir, SESSION);
+    for (const author of ["", "  "]) {
+      const error = await reply(dataDir, SESSION, comment.id, {
+        author,
+        role: "agent",
+        body: "fixed",
+        confirmSeverity: true,
+      }).catch((caught: unknown) => caught);
+      expect((error as DomainError).code).toBe("invalid-author");
+    }
+    expect(await readComments(dataDir, SESSION)).toEqual(before);
+  });
+});
+
 describe("filters and counters", () => {
   it("filters by status, repository, severity, and unanswered", async () => {
     const all = await list(dataDir, SESSION);
@@ -528,6 +601,7 @@ function base(id: string, fields: Partial<Comment>): Comment {
     endLine: null,
     anchor: null,
     severity: "warning",
+    severitySource: "manual",
     status: "open",
     author: "kim.p",
     role: "human",

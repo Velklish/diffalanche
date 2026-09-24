@@ -8,6 +8,7 @@ import type {
   ScanSummary,
 } from "../src/server/review.ts";
 import type { BranchCandidate, BranchList } from "../src/server/routes/branches.ts";
+import type { SuggestAnswer } from "../src/server/suggest.ts";
 import type {
   ScannedRepository as UiScannedRepository,
   ScanSummary as UiScanSummary,
@@ -20,20 +21,11 @@ import type {
   CandidateSet as UiCandidateSet,
   SessionList as UiSessionList,
   SessionSummary as UiSessionSummary,
+  SuggestAnswer as UiSuggestAnswer,
 } from "../src/ui/types.ts";
 
-/**
- * Four shapes the UI writes out again instead of importing: the branch list,
- * the session list, the scan summary the first-run screen counts its metrics
- * from, and the candidate set the scope editor picks a task out of. Every
- * producer reaches the Node API — git for three of them, the storage barrel for
- * the other — and `src/ui/tsconfig.json` compiles with `"types": []`, so the UI
- * cannot import those modules even for their types.
- *
- * This is the guard the comment in `src/ui/types.ts` points at. It is a
- * type-level check: a field added, removed, or retyped on one side and not the
- * other stops the build rather than reaching the browser as `undefined`.
- */
+/** The shapes the UI writes out again, held to the server's and the domain's own at the type level:
+ * a field that drifts on one side stops the build ([08-ui.md](../docs/reference/08-ui.md)). */
 
 type Same<A, B> = [A] extends [B] ? ([B] extends [A] ? true : false) : false;
 
@@ -46,6 +38,7 @@ const scanSummary: Same<ScanSummary, UiScanSummary> = true;
 const candidateFile: Same<CandidateFile, UiCandidateFile> = true;
 const candidateRepository: Same<CandidateRepository, UiCandidateRepository> = true;
 const candidateSet: Same<CandidateSet, UiCandidateSet> = true;
+const suggestAnswer: Same<SuggestAnswer, UiSuggestAnswer> = true;
 
 describe("the wire shapes the UI writes out again", () => {
   it("are the same types the server and the domain answer with", () => {
@@ -59,6 +52,7 @@ describe("the wire shapes the UI writes out again", () => {
       candidateFile,
       candidateRepository,
       candidateSet,
-    ]).toEqual([true, true, true, true, true, true, true, true, true]);
+      suggestAnswer,
+    ]).toEqual([true, true, true, true, true, true, true, true, true, true]);
   });
 });

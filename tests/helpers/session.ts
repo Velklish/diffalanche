@@ -28,6 +28,7 @@ export function comment(id: string, overrides: Partial<Comment> = {}): Comment {
     endLine: null,
     anchor: { lineContent: "const a = 1;", hunk: "@@ -1,3 +1,3 @@", before: [], after: [] },
     severity: "warning",
+    severitySource: "manual",
     status: "open",
     author: "kim.p",
     role: "human",

@@ -26,9 +26,11 @@ import type {
   Review,
   Scope,
   ScopeEntry,
+  SeveritySource,
 } from "./types.ts";
 import {
   COMMENT_STATUSES,
+  confirmedBy,
   READABLE_VERSIONS,
   REVIEW_STATUSES,
   ROLES,
@@ -135,6 +137,20 @@ function parseReply(file: string, field: string, value: unknown): Reply {
   };
 }
 
+/** Absent in a comment written before DA-36, whose severity its writer chose: that reads `manual`. */
+function parseSeveritySource(file: string, field: string, value: unknown): SeveritySource {
+  if (value === undefined || value === null) return "manual";
+  if (value === "auto" || value === "manual") return value;
+  if (typeof value === "string" && confirmedBy(value as SeveritySource)) {
+    return value as SeveritySource;
+  }
+  return fail(
+    file,
+    field,
+    `expected auto, manual, or confirmed:<author>, got ${JSON.stringify(value)}`,
+  );
+}
+
 function parseComment(file: string, field: string, value: unknown): Comment {
   const raw = asObject(file, field, value);
   return {
@@ -146,6 +162,7 @@ function parseComment(file: string, field: string, value: unknown): Comment {
     endLine: asNullableNumber(file, `${field}.endLine`, raw.endLine),
     anchor: parseAnchor(file, `${field}.anchor`, raw.anchor),
     severity: asOneOf(file, `${field}.severity`, raw.severity, SEVERITIES),
+    severitySource: parseSeveritySource(file, `${field}.severitySource`, raw.severitySource),
     status: asOneOf(file, `${field}.status`, raw.status, COMMENT_STATUSES),
     author: asString(file, `${field}.author`, raw.author),
     role: asOneOf(file, `${field}.role`, raw.role, ROLES),

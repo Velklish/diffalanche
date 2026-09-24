@@ -5,7 +5,7 @@
  */
 import type { Context } from "hono";
 import type { Scope, Severity, Side } from "../core/storage/index.ts";
-import { SEVERITIES, SIDES } from "../core/storage/index.ts";
+import { SEVERITIES, SEVERITY_SOURCES, SIDES } from "../core/storage/index.ts";
 import { RequestError } from "./errors.ts";
 
 type Body = Record<string, unknown>;
@@ -118,6 +118,16 @@ export function severity(body: Body): Severity {
     throw new RequestError(`severity has to be one of ${SEVERITIES.join(", ")}`);
   }
   return value as Severity;
+}
+
+/** Who chose the severity: absent is the writer; `confirmed:` is a reply's to make, not a write's. */
+export function severitySource(body: Body): "auto" | "manual" {
+  const value = body.severitySource;
+  if (value === undefined || value === null) return "manual";
+  if (value !== "auto" && value !== "manual") {
+    throw new RequestError(`severitySource has to be one of ${SEVERITY_SOURCES.join(", ")}`);
+  }
+  return value;
 }
 
 export function side(body: Body): Side | null {

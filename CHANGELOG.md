@@ -15,6 +15,27 @@ and `bun run release` refuses a version that has no section. See
 
 ### Added
 
+- **Suggestions from history and `AUTO` in the comment form** (DA-36). While a
+  comment is typed, `FROM YOUR HISTORY` lists the five nearest past comments of
+  every session from `GET /api/suggest`, asked once typing pauses for 200 ms and
+  only for a text with a word of four characters or more, in a query cut to
+  12 000 bytes between characters; `↑` / `↓` choose a row and `TAB` takes the chosen one's text and
+  severity — only a row the arrows chose, unlike the handoff, so a `Tab` on to
+  `Comment` never replaces a draft — and the panel's five slots are drawn from
+  the start so an answer moves nothing. The `AUTO · <prediction>` chip, chosen
+  by default, resolves the severity when the comment is sent — the vote on the
+  text being sent, `warning` without one or after 10 s — and the comment is
+  stored with `severitySource: "auto"`; a chip pressed or a row taken is
+  `manual`; a form closed while it waited sends nothing, and the field is
+  read-only while its send waits. While the model is
+  away (503) the form says so, keeps `AUTO` out of reach and asks again after a
+  pause of 10 s growing to a minute. Threads show `auto` and, once an agent
+  agrees in `reply --confirm-severity`, `labelled by <agent>`; `show` prints the
+  same, and a confirmation with an empty `--author` is refused.
+  `severitySource` is new in `comments.json` (`auto`, `manual`,
+  `confirmed:<author>`, absent read as `manual`) without a new schema version: a
+  build from before it drops the field when it writes the file, which loses the
+  labels and nothing else ([03-storage.md](docs/reference/03-storage.md#schema-versions)).
 - **The embedding model reaches both channels** (DA-41). The npm package
   downloads the model and this platform's ONNX Runtime files once, on the first
   `suggest` or `index rebuild` or the first suggestion `serve` is asked for, from

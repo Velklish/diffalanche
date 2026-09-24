@@ -28,7 +28,11 @@ export type DomainErrorCode =
   /** A comment on something the review task is not about ([ADR-010](../../../docs/adr/adr-010-review-task-scope.md)). */
   | "out-of-scope"
   /** Narrowing the scope would take comments with it, and nothing consented to that. */
-  | "scope-has-comments";
+  | "scope-has-comments"
+  /** `reply --confirm-severity` on a comment whose severity the model did not choose, or one already confirmed. */
+  | "severity-not-auto"
+  /** `reply --confirm-severity` with an empty `--author`: the label would name nobody. */
+  | "invalid-author";
 
 export class DomainError extends Error {
   readonly code: DomainErrorCode;

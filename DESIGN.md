@@ -578,6 +578,13 @@ adjustment.
   600 at `0.04em`.
 - **Count badge:** 9 px radius, `1px 7px`, filled with the worst severity among
   the comments it counts (`tx3` when there is none), mono 600 10 px.
+- **`AUTO` chip:** the severity chip the model fills — `acc` when chosen, with
+  an `accTx` ring on focus as the primary button has — wide enough for
+  `AUTO · QUESTION`, so a new prediction moves no chip beside it. While the
+  model is away it keeps its place with a dashed edge and takes no press.
+- **Marker** (`auto`, `labelled by <agent>`): after a thread's severity chip, mono
+  9.5 px in `accTx` inside a 1 px `accBd` edge, 4 px radius; it truncates rather
+  than wraps.
 
 ### Cards and containers
 
@@ -593,6 +600,10 @@ adjustment.
 - **Overlay:** 12 px radius, 1 px `bd` border, `panel` background, the modal
   shadow, entering with `dcin` 160 ms. The scrim closes it on a click and on
   `esc`; the panel itself does not.
+- **Suggestion row:** the composer's history, five one-line slots of 32 px drawn
+  before anything answers — a 7 px-radius plate on `panel`, the chosen one on
+  `accBg` inside `accBd`. `panel` and not `panel3`, because light `crit` and
+  `warn` text fall under 4.5:1 on `panel3`.
 - **Toast:** 8 px radius on `panel3` with the small shadow, `9px 14px`, bottom
   centre, 2.2 seconds.
 

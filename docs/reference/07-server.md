@@ -168,13 +168,15 @@ in the route's own `app.get(path, guard, handler)`.
 
 ### Suggestions
 
-`GET /api/suggest?body=<text>` answers
+`GET /api/suggest?body=<text>` answers `SuggestAnswer`
 `{ severity: { severity, confidence } | null, suggestions: [...] }`: the five
 comments nearest the text across every review session, each with its session,
 id, severity, repository, file, line, text and similarity, and the severity they
 vote for ([09-ml.md](09-ml.md#suggestions)). It is not scoped by `?review=`: a
 suggestion is history, and the history is every session. A `body` that is
-missing or blank is a 400.
+missing or blank is a 400. The composer asks it as the reviewer types
+([08-ui.md](08-ui.md#commenting)), which writes the shape again on its side
+and holds the two together in `tests/ui-wire.test.ts`.
 
 The model runs on a worker thread of its own (`src/server/suggest.ts`,
 [09-ml.md](09-ml.md#in-the-server)), started by the first request and kept for
@@ -818,7 +820,7 @@ either, which is why only a human ever resolves a thread through this server.
 
 | Route | Body | Answers |
 |---|---|---|
-| `POST /api/comments` | `repo`, `path`, `line`, `endLine`, `side`, `severity`, `body` | 201 and the comment |
+| `POST /api/comments` | `repo`, `path`, `line`, `endLine`, `side`, `severity`, `severitySource`, `body` | 201 and the comment |
 | `POST /api/comments/:id/replies` | `body` | 201 and the thread |
 | `POST /api/comments/:id/resolve` | `note` | the thread, `resolvedBy` the configured user |
 | `POST /api/comments/:id/reopen` | `note` | the thread, open again |
@@ -827,6 +829,13 @@ either, which is why only a human ever resolves a thread through this server.
 | `PUT /api/sessions/:name/base` | `base` | `review.json` with the new base |
 | `PUT /api/sessions/:name/scope` | `scope`, `dropComments` | `review.json` with the new scope, or 409 |
 | `POST /api/sessions/:name/close`, `/reopen` | — | `review.json` with the new status |
+
+`severitySource` is `auto` when the composer's `AUTO` chose `severity` from the
+suggestions' vote, and `manual` — also what its absence means — when the
+reviewer pressed a chip (DA-36, [08-ui.md](08-ui.md#commenting)). The server
+takes the pair as sent and does not ask the model again: the vote was taken on
+the text being sent, in the page, a moment before. `confirmed:<author>` is a
+400 here — only a reply makes it, and the replies route takes none.
 
 An anchor level is read from what is absent: no `repo` is the whole review, no
 `path` a repository, no `line` a file (`docs/SPEC.md` section 7). A `repo` that

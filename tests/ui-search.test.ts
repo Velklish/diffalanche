@@ -57,6 +57,7 @@ function comment(over: Partial<Comment> = {}): Comment {
     endLine: null,
     anchor: null,
     severity: "warning",
+    severitySource: "manual",
     status: "open",
     author: "kim.p",
     role: "human",

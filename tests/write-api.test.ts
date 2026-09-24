@@ -133,6 +133,21 @@ describe("comments over the API", () => {
     expect(await review.json()).toMatchObject({ repo: null, path: null, anchor: null });
   });
 
+  it("stores who chose the severity: manual without a word, auto when the composer says so", async () => {
+    const plain = await post("/api/comments", { severity: "nit", body: "picked by hand" });
+    const auto = await post("/api/comments", {
+      severity: "critical",
+      severitySource: "auto",
+      body: "left to the model",
+    });
+    const written = [(await plain.json()) as Comment, (await auto.json()) as Comment];
+    const onDisk = await list(config.dataDir, SESSION);
+    expect(written.map((one) => onDisk.find((it) => it.id === one.id)?.severitySource)).toEqual([
+      "manual",
+      "auto",
+    ]);
+  });
+
   it("replies, resolves with a note, and reopens", async () => {
     const created = (await (
       await post("/api/comments", { severity: "warning", body: "a thread" })
@@ -247,6 +262,18 @@ describe("comments over the API", () => {
 
     const empty = await post("/api/comments", { severity: "nit", body: "  " });
     expect(await empty.json()).toMatchObject({ error: "invalid-request" });
+
+    // `confirmed:` is what a reply makes of `auto`; a new comment cannot arrive already confirmed.
+    const confirmed = await post("/api/comments", {
+      severity: "nit",
+      severitySource: "confirmed:claude",
+      body: "wrong",
+    });
+    expect(confirmed.status).toBe(400);
+    expect(await confirmed.json()).toMatchObject({
+      error: "invalid-request",
+      message: expect.stringContaining("severitySource"),
+    });
 
     const broken = await app.request("/api/comments", {
       method: "POST",

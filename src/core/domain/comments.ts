@@ -3,8 +3,18 @@
  * `docs/SPEC.md` section 5 "Comments" and "Agent", section 7 for the shape, and
  * [ADR-004](../../../docs/adr/adr-004-agent-contract.md) for who may do what.
  */
-import type { Anchor, Comment, Reply, Role, Scope, Severity, Side } from "../storage/index.ts";
+import type {
+  Anchor,
+  Comment,
+  Reply,
+  Role,
+  Scope,
+  Severity,
+  SeveritySource,
+  Side,
+} from "../storage/index.ts";
 import {
+  confirmedBy,
   readComments,
   readDiffCache,
   readReview,
@@ -43,6 +53,8 @@ type NewComment = {
   /** Which side of the diff the line is on; `new` unless said otherwise. */
   side?: Side | null;
   severity: Severity;
+  /** `auto` when the model chose `severity` at send time; `manual`, the default, when the writer did. */
+  severitySource?: Extract<SeveritySource, "auto" | "manual">;
   body: string;
   author: string;
   role: Role;
@@ -52,6 +64,8 @@ type Message = {
   body: string;
   author: string;
   role: Role;
+  /** The author agrees with the severity the model chose: `auto` becomes `confirmed:<author>`. */
+  confirmSeverity?: boolean;
 };
 
 /** Who closes or reopens a thread. Only a human may ([ADR-004](../../../docs/adr/adr-004-agent-contract.md)). */
@@ -214,6 +228,7 @@ export async function addComment(
       endLine: input.endLine ?? null,
       anchor,
       severity: input.severity,
+      severitySource: input.severitySource ?? "manual",
       status: "open",
       author: input.author,
       role: input.role,
@@ -282,6 +297,10 @@ export async function reply(
   await assertSession(dataDir, session);
   return updateSession(dataDir, session, ({ review, comments }) => {
     const comment = find(comments, id, review.scope);
+    if (message.confirmSeverity === true) {
+      assertConfirmable(comment, message.author);
+      comment.severitySource = `confirmed:${message.author}`;
+    }
     comment.replies.push({
       id: nextReplyId(comment.replies),
       author: message.author,
@@ -291,6 +310,26 @@ export async function reply(
     });
     return comment;
   });
+}
+
+/** Only a severity the model chose is waiting for a confirmation, and only a named author can
+ * give it: `confirmed:` alone is a value the parser refuses. Either refusal writes nothing. */
+function assertConfirmable(comment: Comment, author: string): void {
+  if (author.trim() === "") {
+    throw new DomainError(
+      "invalid-author",
+      `confirming the severity of ${comment.id} needs an author to name; nothing was written`,
+    );
+  }
+  if (comment.severitySource === "auto") return;
+  const by = confirmedBy(comment.severitySource);
+  throw new DomainError(
+    "severity-not-auto",
+    by === null
+      ? `the severity of ${comment.id} was chosen by its writer, so there is no automatic label ` +
+          "to confirm; nothing was written"
+      : `the severity of ${comment.id} is already confirmed by ${by}; nothing was written`,
+  );
 }
 
 export async function resolve(

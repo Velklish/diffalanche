@@ -55,6 +55,7 @@ $ diffalanche list --unanswered --json
       ]
     },
     "severity": "nit",
+    "severitySource": "auto",
     "status": "open",
     "author": "kim.p",
     "role": "human",
@@ -81,6 +82,7 @@ Fields you act on:
 | `anchor.lineContent` | the line as it was when the comment was written — compare it with the file before you edit |
 | `anchor.before`, `anchor.after` | three lines of context each way, from the side the comment is on |
 | `severity` | `critical`, `warning`, `nit`, `question` — the order you work in |
+| `severitySource` | who chose `severity`: `manual` the writer; `auto` the tool, from similar past comments, waiting for an agent to agree; `confirmed:<author>` an agent already did |
 | `role` | `human` or `agent`; `--unanswered` means the last message is `human` |
 | `replies` | the rest of the thread, oldest first |
 
@@ -126,6 +128,20 @@ would change this.
 BODY
 r_1 added to c_j6v2hl
 ```
+
+When `severitySource` is `auto` the human left the severity to the tool, and
+your reply can agree with it — only when you do, after reading the finding:
+
+```
+$ diffalanche reply c_eft2jg --author claude --role agent --confirm-severity \
+    --body 'Fixed: the log message now reads "collected {Count} vehicles".'
+r_1 added to c_eft2jg, severity nit confirmed
+```
+
+`severitySource` is then `confirmed:claude`, and the thread reads `labelled by
+claude`. On a comment whose `severitySource` is not `auto` the flag is refused
+with exit code 1 and nothing is written — the reply neither — so drop the flag
+and send the reply again.
 
 The reply's id is the first word of the line. The thread afterwards:
 

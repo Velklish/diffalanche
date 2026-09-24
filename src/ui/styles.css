@@ -1602,9 +1602,40 @@ button:disabled {
   background: var(--q);
 }
 
+/* Wide enough for its longest prediction, so a new vote does not shift the chips beside it. */
+.sev-chip.auto {
+  min-width: calc(15ch + 0.6em + 16px);
+}
+
+.sev-chip.on.auto {
+  background: var(--acc);
+}
+
+/* Out of reach while the model is away: the edge says so, and the chip keeps its place. */
+.sev-chip.auto:disabled {
+  border-style: dashed;
+  cursor: default;
+}
+
+/* The ring of a control filled with the accent is `accTx`, as the primary button's is. */
+.sev-chip.on.auto:focus-visible {
+  border-color: var(--accTx);
+}
+
 .composer-note {
   color: var(--tx3);
   font: 10.5px / 1.4 var(--mono);
+}
+
+/* Two lines of room for the longer note: pressing a chip or `AUTO` moves nothing below. */
+.composer-severity .composer-note {
+  display: flex;
+  min-width: 0;
+  min-height: 2.8em;
+  flex: 1;
+  align-items: center;
+  justify-content: flex-end;
+  text-align: right;
 }
 
 .composer-field {
@@ -1630,6 +1661,124 @@ button:disabled {
   align-items: center;
   gap: 9px;
   margin-top: 9px;
+}
+
+/* `FROM YOUR HISTORY` (handoff section 2): five one-line rows from the moment the form opens. */
+.composer-suggest {
+  margin-top: 12px;
+  padding-top: 11px;
+  border-top: 1px solid var(--bd);
+}
+
+.suggest-head {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  margin-bottom: 8px;
+}
+
+.suggest-title {
+  color: var(--tx2);
+  font: 500 10px / 1.4 var(--mono);
+  letter-spacing: 0.07em;
+}
+
+.suggest-count,
+.suggest-hint {
+  color: var(--tx3);
+  font: 9.5px / 1.4 var(--mono);
+}
+
+.suggest-rows {
+  display: flex;
+  flex-direction: column;
+  gap: 6px;
+}
+
+/* On `panel`, not the prototype's `panel3`: light `crit` and `warn` text fall under 4.5:1 there. */
+.suggestion {
+  display: flex;
+  width: 100%;
+  height: 32px;
+  align-items: center;
+  gap: 10px;
+  margin: 0;
+  padding: 0 10px;
+  border: 1px solid transparent;
+  border-radius: 7px;
+  background: var(--panel);
+  text-align: left;
+}
+
+.suggestion:hover {
+  border-color: var(--bd);
+}
+
+.suggestion.on {
+  border-color: var(--accBd);
+  background: var(--accBg);
+}
+
+.suggestion.blank {
+  background: none;
+}
+
+/* A sentence longer than its slot runs on into the blank ones under it, never up into the head. */
+.suggestion.note {
+  align-items: flex-start;
+  padding-top: 7px;
+  background: none;
+  color: var(--tx3);
+  font: 12px / 1.45 var(--sans);
+}
+
+.suggestion-sev {
+  flex: 0 0 62px;
+  font: 9.5px / 1.4 var(--mono);
+  letter-spacing: 0.04em;
+}
+
+.suggestion-sev.critical {
+  color: var(--crit);
+}
+
+.suggestion-sev.warning {
+  color: var(--warn);
+}
+
+.suggestion-sev.nit {
+  color: var(--nit);
+}
+
+.suggestion-sev.question {
+  color: var(--q);
+}
+
+.suggestion-body {
+  overflow: hidden;
+  min-width: 0;
+  flex: 1;
+  color: var(--tx2);
+  font: 12px / 1.45 var(--sans);
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+.suggestion-meta {
+  flex: none;
+  color: var(--tx3);
+  font: 9.5px / 1.4 var(--mono);
+}
+
+.suggestion .key.on {
+  border-color: transparent;
+  background: var(--acc);
+  color: var(--onAcc);
+}
+
+/* Only the chosen row names its key; the rest keep the room, so the meta column stays put. */
+.suggestion .key.off {
+  visibility: hidden;
 }
 
 .primary {
@@ -1862,6 +2011,20 @@ button.chip {
 
 .sev-tag.question {
   background: var(--q);
+}
+
+/* `auto` and `labelled by <agent>` (handoff section 3): the accent's edge, the label is in play. */
+.thread-marker {
+  overflow: hidden;
+  min-width: 0;
+  flex: 0 1 auto;
+  padding: 0 5px;
+  border: 1px solid var(--accBd);
+  border-radius: 4px;
+  color: var(--accTx);
+  font: 9.5px / 1.6 var(--mono);
+  text-overflow: ellipsis;
+  white-space: nowrap;
 }
 
 .thread-anchor {

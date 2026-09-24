@@ -6,7 +6,7 @@ import type { Config } from "../core/config/index.ts";
 import { anchorLabel } from "../core/domain/index.ts";
 import { findRepositories } from "../core/index.ts";
 import type { Comment, Reply, Role } from "../core/storage/index.ts";
-import { ROLES, SEVERITIES, SIDES } from "../core/storage/index.ts";
+import { confirmedBy, ROLES, SEVERITIES, SIDES } from "../core/storage/index.ts";
 import type { Arguments } from "./args.ts";
 import { required } from "./args.ts";
 import { repositoryNotFound, UsageError } from "./errors.ts";
@@ -69,7 +69,7 @@ function message(author: string, role: Role, at: string): string {
  */
 export function thread(comment: Comment): string {
   const lines = [
-    `${comment.id}  ${comment.severity}  ${comment.status}`,
+    `${comment.id}  ${comment.severity}${labelled(comment)}  ${comment.status}`,
     `${where(comment)}${comment.side === null ? "" : ` (${comment.side})`}`,
     message(comment.author, comment.role, comment.createdAt),
     "",
@@ -88,6 +88,13 @@ export function thread(comment: Comment): string {
   }
   for (const reply of comment.replies) lines.push(...replyLines(reply));
   return `${lines.join("\n").trimEnd()}\n`;
+}
+
+/** The thread markers of the UI: nothing for a severity its writer chose. */
+function labelled(comment: Comment): string {
+  if (comment.severitySource === "auto") return " (auto)";
+  const by = confirmedBy(comment.severitySource);
+  return by === null ? "" : ` (labelled by ${by})`;
 }
 
 function replyLines(reply: Reply): string[] {

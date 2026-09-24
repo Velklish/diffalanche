@@ -10,8 +10,11 @@ import { indexPath } from "../core/ml/index/index.ts";
 import type { Suggestions } from "../core/ml/suggest/index.ts";
 import { suggest } from "../core/ml/suggest/index.ts";
 
+/** The route's answer: the neighbours and their vote, without the index they were found in. */
+export type SuggestAnswer = Pick<Suggestions, "severity" | "suggestions">;
+
 export type SuggestService = {
-  suggest: (body: string) => Promise<Pick<Suggestions, "severity" | "suggestions">>;
+  suggest: (body: string) => Promise<SuggestAnswer>;
   /** Ends the thread, if one was started. */
   close: () => Promise<void>;
 };

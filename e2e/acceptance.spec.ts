@@ -27,6 +27,10 @@ import {
  * `docs/reference/08-ui.md` names both for every criterion.
  */
 
+/** A send in `AUTO` waits for the vote, and the first request loads the model: a deadline only a
+ * hang reaches ("Waits in the suites", 11-perf.md), inside a test given twice that. */
+const SEND_DEADLINE_MS = 60_000;
+
 /** The binary, over the acceptance fixture, as an agent would call it. */
 function cli(...args: string[]): string {
   return execFileSync(BINARY, [...args, "--root", FIXTURE], { cwd: ROOT, encoding: "utf-8" });
@@ -239,6 +243,7 @@ test("branch mode shows what a feature branch committed ahead of the remote defa
 // ---------------------------------------------------------------------------
 
 test("a comment written in the UI is in list --json without a restart", async ({ page }) => {
+  test.setTimeout(SEND_DEADLINE_MS * 2);
   await open(page);
   const before = new Set(comments().map((comment) => comment.id));
   const card = page.locator(".file-card").first();
@@ -248,7 +253,8 @@ test("a comment written in the UI is in list --json without a restart", async ({
   const composer = card.locator('[data-testid="file-composer"]');
   await composer.locator(".composer-field").fill("the acceptance list wrote this");
   await composer.getByRole("button", { name: "Comment" }).click();
-  await expect(page.locator(".toast")).toBeVisible();
+  // A send in `AUTO` waits for the vote, and the first request loads the model (composer.spec.ts).
+  await expect(page.locator(".toast")).toBeVisible({ timeout: SEND_DEADLINE_MS });
 
   // The same server process is still running: nothing was restarted between
   // the write in the browser and this read.

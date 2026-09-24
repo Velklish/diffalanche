@@ -106,6 +106,7 @@ test("a reply written from a shell reaches the rail, the counter, and the feed",
 test("an edit patches its own card, holds the reading position, and leaves the composer open", async ({
   page,
 }) => {
+  test.setTimeout(120_000);
   await open(page);
   const bundle = await review(page);
   const repository = bundle.repositories.find((one) => one.files.length >= 2);
@@ -137,6 +138,15 @@ test("an edit patches its own card, holds the reading position, and leaves the c
     .getByRole("button", { name: "Comment on file" })
     .click();
   await page.locator(".composer-field").fill("half a sentence");
+  // The form's suggestions answer the text in the card's own DOM (DA-36): that answer is waited
+  // out before the card is watched. The model may load for it — a deadline, not a budget.
+  await expect(page.locator(".composer-suggest")).toHaveAttribute(
+    "data-state",
+    /^(ready|failed)$/,
+    {
+      timeout: 60_000,
+    },
+  );
 
   const marks = await page.evaluate(
     ({ one, two }) => {
