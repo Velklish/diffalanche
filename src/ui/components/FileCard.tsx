@@ -1,9 +1,9 @@
-import type { CSSProperties, ReactNode } from "react";
+import type { CSSProperties } from "react";
 import { memo, useCallback, useEffect, useMemo, useRef, useState } from "react";
 import { worstSeverity } from "../../core/domain/counters.ts";
 import type { FileChange, FileOmission, FileStatus } from "../../core/types.ts";
 import { Composer } from "../Composer.tsx";
-import { linesAbove, newSideLines } from "../context.ts";
+import { linesAbove, newSideLines, oldSideRows } from "../context.ts";
 import {
   codeColumnChars,
   hiddenLines,
@@ -11,8 +11,14 @@ import {
   measurePatch,
   measureThreads,
 } from "../measure.ts";
-import type { DiffSlots, HunkLines, LineEvents, LineMarkers } from "../renderers/ReactDiffFile.tsx";
-import { ReactDiffFile } from "../renderers/ReactDiffFile.tsx";
+import type {
+  DiffRow,
+  DiffSlots,
+  HunkLines,
+  LineEvents,
+  LineMarkers,
+} from "../renderers/ReactDiffFile.tsx";
+import { ReactDiffFile, rowKey } from "../renderers/ReactDiffFile.tsx";
 import type { DiffView } from "../store.ts";
 import { useStore } from "../store.ts";
 import type { Comment, Severity } from "../types.ts";
@@ -43,6 +49,7 @@ const NO_ABOVE: Record<number, number> = {};
 
 /** The lines of a patch that nothing asked to place anything on. */
 const NO_LINES = { lines: new Set<number>(), starts: [] as number[] };
+const NO_OLD = { rows: new Map<number, number | null>(), offsets: [] as number[] };
 
 const CHIPS: Record<FileStatus, string | null> = {
   added: "new file",
@@ -141,17 +148,33 @@ export const FileCard = memo(function FileCard({ id, repo, file, index }: FileCa
     () => (placing ? newSideLines(file.patch) : NO_LINES),
     [placing, file.patch],
   );
+  const onOld = useMemo(() => (placing ? oldSideRows(file.patch) : NO_OLD), [placing, file.patch]);
   const above = context?.above ?? NO_ABOVE;
   // The lines `↑ N lines` put in, less those of a hunk whose context is collapsed away.
-  const brought = useMemo(() => {
-    const byHunk = linesAbove(onPatch.starts, above);
-    return [...byHunk].flatMap(([hunk, lines]) => (hunks[hunk] === true ? [] : lines));
-  }, [onPatch, above, hunks]);
-  const shown = useMemo(() => {
+  const broughtByHunk = useMemo(
+    () => [...linesAbove(onPatch.starts, above)].filter(([hunk]) => hunks[hunk] !== true),
+    [onPatch, above, hunks],
+  );
+  const brought = useMemo(() => broughtByHunk.flatMap(([, lines]) => lines), [broughtByHunk]);
+  const place = useMemo(() => {
     const extra = new Set(brought);
-    return (line: number) => (onPatch.lines.has(line) || extra.has(line)) && !hidden.has(line);
-  }, [onPatch, brought, hidden]);
-  const anchored = useMemo(() => groupByLine(threads, shown), [threads, shown]);
+    const shown = (line: number) =>
+      (onPatch.lines.has(line) || extra.has(line)) && !hidden.has(line);
+    // An old line brought in above a hunk is the new line beside it, less the hunk's offset.
+    const oldRows = new Map(onOld.rows);
+    for (const [hunk, lines] of broughtByHunk) {
+      for (const line of lines) oldRows.set(line - (onOld.offsets[hunk] ?? 0), line);
+    }
+    return (thread: Comment): DiffRow | null => {
+      if (thread.line === null) return null;
+      const end = thread.endLine ?? thread.line;
+      // A deleted line is a change, so no collapsed context hides it (DA-37.2).
+      const line = thread.side === "old" ? oldRows.get(end) : end;
+      if (line === null) return { side: "old", line: end };
+      return line !== undefined && shown(line) ? { side: "new", line } : null;
+    };
+  }, [onPatch, onOld, brought, broughtByHunk, hidden]);
+  const anchored = useMemo(() => groupByRow(threads, place), [threads, place]);
   const extra = useMemo(
     () =>
       measureLines(
@@ -173,7 +196,7 @@ export const FileCard = memo(function FileCard({ id, repo, file, index }: FileCa
   // The widgets are part of the card, so they are part of the height it claims
   // before it has ever been mounted; without them the scrollbar drifts.
   const widgets = useMemo(
-    () => [...anchored.values()].reduce((sum, group) => sum + measureThreads(group), 0),
+    () => [...anchored.values()].reduce((sum, group) => sum + measureThreads(group.threads), 0),
     [anchored],
   );
 
@@ -186,7 +209,7 @@ export const FileCard = memo(function FileCard({ id, repo, file, index }: FileCa
   );
 
   const markers = useMemo<LineMarkers>(
-    () => ({ severityByLine: severityByLine(anchored), changed }),
+    () => ({ severityByRow: severityByRow(anchored), changed }),
     [anchored, changed],
   );
 
@@ -309,30 +332,29 @@ function rangeOf(
   return pick(sel.a, sel.b);
 }
 
-/**
- * A thread's widget sits under the last line of its anchor, where the composer
- * that opened it sat; a thread on the whole file has no line and is shown in
- * the rail only.
- */
-function groupByLine(threads: Comment[], shown: (line: number) => boolean): Map<number, Comment[]> {
-  const byLine = new Map<number, Comment[]>();
+/** The threads that end on one row of the diff. */
+type Anchored = Map<string, { row: DiffRow; threads: Comment[] }>;
+
+/** A thread's widget sits under the last line of its anchor, on its side, where the composer that
+ * opened it sat; a thread on the whole file has no line and is in the rail only. */
+function groupByRow(threads: Comment[], place: (thread: Comment) => DiffRow | null): Anchored {
+  const byRow: Anchored = new Map();
   for (const thread of threads) {
-    if (thread.line === null) continue;
-    const line = thread.endLine ?? thread.line;
-    if (!shown(line)) continue;
-    const bucket = byLine.get(line);
-    if (bucket === undefined) byLine.set(line, [thread]);
-    else bucket.push(thread);
+    const row = place(thread);
+    if (row === null) continue;
+    const bucket = byRow.get(rowKey(row));
+    if (bucket === undefined) byRow.set(rowKey(row), { row, threads: [thread] });
+    else bucket.threads.push(thread);
   }
-  return byLine;
+  return byRow;
 }
 
-/** The colour of a line's bar: the worst severity of the threads that end on it. */
-function severityByLine(anchored: Map<number, Comment[]>): Map<number, Severity> {
-  const severities = new Map<number, Severity>();
-  for (const [line, threads] of anchored) {
+/** The colour of a row's bar: the worst severity of the threads that end on it. */
+function severityByRow(anchored: Anchored): Map<string, Severity> {
+  const severities = new Map<string, Severity>();
+  for (const [key, { threads }] of anchored) {
     const worst = worstSeverity(threads.filter((thread) => thread.status === "open"));
-    severities.set(line, worst ?? (threads[0] as Comment).severity);
+    severities.set(key, worst ?? (threads[0] as Comment).severity);
   }
   return severities;
 }
@@ -342,12 +364,10 @@ function severityByLine(anchored: Map<number, Comment[]>): Map<number, Severity>
  * already written on it and the composer for the next one, and the library
  * indexes one row per line, so the two are one node.
  */
-function widgetRows(
-  anchored: Map<number, Comment[]>,
-  composerLine: number | null,
-): { line: number; node: ReactNode }[] {
-  const rows = [...anchored].map(([line, threads]) => ({
-    line,
+function widgetRows(anchored: Anchored, composerLine: number | null): DiffSlots["rows"] {
+  const composer = composerLine === null ? null : rowKey({ side: "new", line: composerLine });
+  const rows: DiffSlots["rows"] = [...anchored].map(([key, { row, threads }]) => ({
+    ...row,
     node: (
       <div className="widget-row">
         <div className="thread-widgets">
@@ -355,12 +375,13 @@ function widgetRows(
             <InlineThread key={thread.id} thread={thread} />
           ))}
         </div>
-        {line === composerLine ? <Composer /> : null}
+        {key === composer ? <Composer /> : null}
       </div>
     ),
   }));
-  if (composerLine !== null && !anchored.has(composerLine)) {
+  if (composerLine !== null && composer !== null && !anchored.has(composer)) {
     rows.push({
+      side: "new",
       line: composerLine,
       node: (
         <div className="widget-row">

@@ -527,6 +527,13 @@ and `bun run release` refuses a version that has no section. See
 
 ### Fixed
 
+- **A thread on the old side sits under the deleted line it names** (DA-37.2).
+  The file card grouped threads by line number alone, so a comment written with
+  `comment --side old` on a deleted line sat under the new-side line of the same
+  number, or nowhere. A deleted line is now a row of its own: its widget is in
+  the old side's half, across the diff as a new side's strip is, and its bar is
+  on the old side's gutter. A thread on the old side of a context line sits
+  where one on its new side would.
 - **The keyboard stops draw the system's focus ring** (DA-56.8). The file
   card's collapse caret and the base picker's `ref` field drew the browser's own
   ring, the two hunk controls and global search's `ещё совпадения` still drew

@@ -2209,11 +2209,13 @@ button.chip {
   width: 200%;
 }
 
-/*
- * The bar on a line that carries a thread, in the colour of the worst open one
- * (`docs/design/HANDOFF.md`, "Границы"). It is drawn on the new side's gutter:
- * the third cell of a split row, the second of a unified one.
- */
+/* A deleted line's widget lands in the old side's half, and is put across the same way (DA-37.2). */
+.dc-split .diff-widget td:first-child:not(:only-child) > .widget-row {
+  width: 200%;
+}
+
+/* The bar of a line with threads, in the worst open one's colour (HANDOFF.md, "Границы"), on the
+   gutter of the side they name: which cell that is, per view, is in 08-ui.md (DA-37.2). */
 .diff-line.marked.critical {
   --marker: var(--crit);
 }
@@ -2230,8 +2232,10 @@ button.chip {
   --marker: var(--q);
 }
 
-.dc-split .diff-line.marked > td:nth-child(3),
-.dc-unified .diff-line.marked > td:nth-child(2) {
+.dc-split .diff-line.on-new > td:nth-child(3),
+.dc-split .diff-line.on-new > td:first-child:nth-last-child(2),
+.dc-unified .diff-line.on-new > td:nth-child(2),
+.diff-line.on-old > td:first-child {
   box-shadow: inset 3px 0 0 var(--marker);
 }
 

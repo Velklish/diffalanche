@@ -313,3 +313,312 @@ test("a thread on a line the collapsed context hides is reached by showing it ag
   await expect(anchor).toHaveCount(1);
   await expect(anchor).toBeInViewport();
 });
+
+type Bundle = {
+  repositories: { path: string; files: { path: string; status: string; patch: string }[] }[];
+  comments: (Comment & { body: string })[];
+};
+
+/** A deleted line whose number the new side shows too, in the first modified file that has one:
+ * where a card reading every thread as new-side put an old one (DA-37.2). */
+function collision(bundle: Bundle): { repo: string; path: string; line: number } {
+  for (const repo of bundle.repositories) {
+    for (const file of repo.files) {
+      if (file.status !== "modified") continue;
+      const deleted: number[] = [];
+      const shown = new Set<number>();
+      let old = 0;
+      let now = 0;
+      for (const row of file.patch.split("\n")) {
+        const head = /^@@ -(\d+)(?:,\d+)? \+(\d+)/.exec(row);
+        if (head) {
+          old = Number(head[1]);
+          now = Number(head[2]);
+        } else if (row.startsWith("-") && !row.startsWith("---")) {
+          deleted.push(old++);
+        } else if (row.startsWith("+") && !row.startsWith("+++")) {
+          shown.add(now++);
+        } else if (row.startsWith(" ")) {
+          old += 1;
+          shown.add(now++);
+        }
+      }
+      const line = deleted.find((one) => shown.has(one));
+      if (line !== undefined) return { repo: repo.path, path: file.path, line };
+    }
+  }
+  throw new Error("the fixture has no deleted line whose number the new side shows");
+}
+
+/** An agent's comment written from a shell, once the server has it; `done` resolves it, since an
+ * open thread nobody answered is what other specs count and pick. */
+async function written(page: Page, args: string[]): Promise<{ id: string; done: () => void }> {
+  const body = `written from a shell at ${Date.now()}, ${Math.random().toString(36).slice(2)}`;
+  execFileSync(
+    "bun",
+    ["run", "src/cli/index.ts", "comment", ...args, "--body", body, "--root", FIXTURE],
+    { cwd: root, encoding: "utf-8" },
+  );
+  let id: string | undefined;
+  await expect
+    .poll(async () => {
+      const bundle = await page.evaluate(
+        async () => (await (await fetch("/api/review")).json()) as Bundle,
+      );
+      id = bundle.comments.find((comment) => comment.body === body)?.id;
+      return id !== undefined;
+    })
+    .toBe(true);
+  const found = id as string;
+  const done = () => {
+    execFileSync(
+      "bun",
+      ["run", "src/cli/index.ts", "resolve", found, "--role", "human", "--root", FIXTURE],
+      { cwd: root },
+    );
+  };
+  return { id: found, done };
+}
+
+/** The first mounted row of a card that `pick` accepts, with its card and its gutters' numbers. */
+async function firstRow(
+  page: Page,
+  pick: "pair" | "context",
+): Promise<{ repo: string; path: string; old: number; now: number }> {
+  const found = await page.evaluate((kind) => {
+    for (const card of document.querySelectorAll(".file-card")) {
+      for (const row of card.querySelectorAll("tr.diff-line")) {
+        const cells = [...row.querySelectorAll("td.diff-gutter")];
+        const [left, right] = [cells[0], cells[1]];
+        if (left === undefined || right === undefined) continue;
+        const pair =
+          left.classList.contains("diff-gutter-delete") &&
+          right.classList.contains("diff-gutter-insert");
+        const context =
+          left.classList.contains("diff-gutter-normal") && left.textContent !== right.textContent;
+        if (kind === "pair" ? !pair : !context) continue;
+        return {
+          repo: card.getAttribute("data-repo") ?? "",
+          path: card.getAttribute("data-path") ?? "",
+          old: Number(left.textContent),
+          now: Number(right.textContent),
+        };
+      }
+    }
+    return null;
+  }, pick);
+  if (found === null) throw new Error(`no mounted card has a ${pick} row`);
+  return found;
+}
+
+/** The row above a thread's widget, the widget's cell, and every thread in that cell. */
+function placement(page: Page, id: string) {
+  return page.locator(`[data-thread-anchor="${id}"]`).evaluate((element) => {
+    const cell = element.closest("td");
+    const above = cell?.closest("tr")?.previousElementSibling;
+    return {
+      gutters: [...(above?.querySelectorAll("td.diff-gutter") ?? [])].map((one) =>
+        (one.textContent ?? "").trim(),
+      ),
+      key: above?.querySelector("td.diff-gutter")?.getAttribute("data-change-key") ?? null,
+      row: above?.className ?? "",
+      colSpan: cell?.colSpan ?? 0,
+      threads: [...(cell?.querySelectorAll("[data-thread-anchor]") ?? [])].map((one) =>
+        one.getAttribute("data-thread-anchor"),
+      ),
+    };
+  });
+}
+
+test("a thread on the old side sits under the deleted line it names", async ({ page }) => {
+  await open(page);
+  const at = collision(
+    await page.evaluate(async () => (await (await fetch("/api/review")).json()) as Bundle),
+  );
+  const { id, done } = await written(page, [
+    ...["--repo", at.repo, "--path", at.path, "--line", String(at.line)],
+    ...["--side", "old", "--severity", "question"],
+  ]);
+  try {
+    await open(page);
+    await page.locator(".rail-tabs .tab").nth(1).click();
+    await page.locator(`.rail-list [data-thread="${id}"] .thread-focus`).click();
+    const widget = page.locator(`[data-thread-anchor="${id}"]`);
+    await expect(widget).toBeInViewport();
+
+    // Under the deletion: the row above the widget's is the one the old gutter numbers, and the
+    // widget starts in the row's first cell and runs across the whole diff.
+    const placed = await widget.evaluate((element) => {
+      const cell = element.closest("td");
+      const row = cell?.closest("tr");
+      const strip = element.closest(".widget-row")?.getBoundingClientRect().width ?? 0;
+      const table = element.closest("table")?.getBoundingClientRect().width ?? 1;
+      return {
+        above: row?.previousElementSibling
+          ?.querySelector("td.diff-gutter")
+          ?.getAttribute("data-change-key"),
+        oldCell: cell?.cellIndex === 0,
+        across: strip / table > 0.95,
+      };
+    });
+    expect(placed).toEqual({ above: `D${at.line}`, oldCell: true, across: true });
+    // And the bar in the thread's colour is on the old side's gutter, the row's first cell.
+    const card = page.locator(`.file-card[data-file="${at.repo}/${at.path}"]`);
+    const marked = card.locator(
+      `tr.diff-line.marked.question:has(td[data-change-key="D${at.line}"])`,
+    );
+    await expect(marked).toHaveClass(/\bon-old\b/);
+    expect(
+      await marked
+        .locator("td")
+        .first()
+        .evaluate((cell) => getComputedStyle(cell).boxShadow),
+    ).toContain("inset");
+
+    // The unified view has one column: the widget follows the deleted row, and so does the bar.
+    await card.getByRole("button", { name: "unified" }).click();
+    await expect(widget).toBeVisible();
+    expect(
+      await widget.evaluate((element) =>
+        element
+          .closest("tr")
+          ?.previousElementSibling?.querySelector("td.diff-gutter")
+          ?.getAttribute("data-change-key"),
+      ),
+    ).toBe(`D${at.line}`);
+    expect(
+      await marked
+        .locator("td")
+        .first()
+        .evaluate((cell) => getComputedStyle(cell).boxShadow),
+    ).toContain("inset");
+  } finally {
+    done();
+  }
+});
+
+test("a split pair with threads on both sides is one strip, the old side's first", async ({
+  page,
+}) => {
+  await open(page);
+  const at = await firstRow(page, "pair");
+  const where = ["--repo", at.repo, "--path", at.path];
+  const old = await written(page, [
+    ...where,
+    ...["--line", String(at.old), "--side", "old", "--severity", "question"],
+  ]);
+  const now = await written(page, [
+    ...where,
+    ...["--line", String(at.now), "--side", "new", "--severity", "critical"],
+  ]);
+  try {
+    await open(page);
+    await page.locator(`.file-card[data-file="${at.repo}/${at.path}"]`).scrollIntoViewIfNeeded();
+    await expect(page.locator(`[data-thread-anchor="${now.id}"]`)).toBeVisible();
+
+    const placed = await placement(page, old.id);
+    // One cell across the row, the deleted line's thread first (an earlier test's may sit there too,
+    // resolved), and a bar on both gutters in the worse colour.
+    expect(placed.colSpan).toBe(4);
+    expect(placed.threads.filter((one) => one === old.id || one === now.id)).toEqual([
+      old.id,
+      now.id,
+    ]);
+    expect(placed.row).toMatch(/\bmarked critical\b/);
+    expect(placed.row).toMatch(/\bon-old\b/);
+    expect(placed.row).toMatch(/\bon-new\b/);
+  } finally {
+    old.done();
+    now.done();
+  }
+});
+
+test("a thread on the old side of a context line sits under that row", async ({ page }) => {
+  await open(page);
+  // A context row whose two numbers differ, so the old one cannot pass for the new.
+  const at = await firstRow(page, "context");
+  const { id, done } = await written(page, [
+    ...["--repo", at.repo, "--path", at.path, "--line", String(at.old)],
+    ...["--side", "old", "--severity", "nit"],
+  ]);
+  try {
+    await open(page);
+    await page.locator(`.file-card[data-file="${at.repo}/${at.path}"]`).scrollIntoViewIfNeeded();
+    await expect(page.locator(`[data-thread-anchor="${id}"]`)).toBeVisible();
+    expect(await placement(page, id)).toMatchObject({
+      gutters: [String(at.old), String(at.now)],
+      colSpan: 4,
+    });
+  } finally {
+    done();
+  }
+});
+
+test("a thread on the old side of a line `↑ N lines` brought in sits under it", async ({
+  page,
+}) => {
+  await open(page);
+  const card = page
+    .locator(".file-card")
+    .filter({ has: page.locator(".hunk-expand") })
+    .first();
+  const repo = (await card.getAttribute("data-repo")) ?? "";
+  const path = (await card.getAttribute("data-path")) ?? "";
+  const header = card.locator(".diff-decoration", { has: page.locator(".hunk-expand") }).first();
+  const at = /@@ -(\d+)(?:,\d+)? \+(\d+)/.exec(
+    (await header.locator(".hunk-at").textContent()) ?? "",
+  );
+  if (at === null) throw new Error("the hunk header names no lines");
+  // The line right above the hunk, which only `↑ N lines` puts on the screen.
+  const [old, now] = [Number(at[1]) - 1, Number(at[2]) - 1];
+  const { id, done } = await written(page, [
+    ...["--repo", repo, "--path", path, "--line", String(old)],
+    ...["--side", "old", "--severity", "nit"],
+  ]);
+  try {
+    await open(page);
+    const again = page.locator(`.file-card[data-file="${repo}/${path}"]`);
+    await again.scrollIntoViewIfNeeded();
+    await expect(page.locator(`[data-thread-anchor="${id}"]`)).toHaveCount(0);
+    await again.locator(".diff-decoration", { hasText: at[0] }).locator(".hunk-expand").click();
+    await expect(page.locator(`[data-thread-anchor="${id}"]`)).toBeVisible();
+    expect(await placement(page, id)).toMatchObject({
+      gutters: [String(old), String(now)],
+      colSpan: 4,
+    });
+  } finally {
+    done();
+  }
+});
+
+test("the bar of a thread on an added file is on its only gutter", async ({ page }) => {
+  await open(page);
+  const bundle = await page.evaluate(
+    async () => (await (await fetch("/api/review")).json()) as Bundle,
+  );
+  const repo = bundle.repositories.find((one) => one.files.some((f) => f.status === "added"));
+  const file = repo?.files.find((one) => one.status === "added");
+  if (repo === undefined || file === undefined) throw new Error("the fixture has no added file");
+  const { id, done } = await written(page, [
+    ...["--repo", repo.path, "--path", file.path, "--line", "1", "--severity", "warning"],
+  ]);
+  try {
+    await open(page);
+    await page.locator(".rail-tabs .tab").nth(1).click();
+    await page.locator(`.rail-list [data-thread="${id}"] .thread-focus`).click();
+    await expect(page.locator(`[data-thread-anchor="${id}"]`)).toBeInViewport();
+    // An added file's split table has one side: two cells a row, and the bar on the first.
+    const row = page
+      .locator(`.file-card[data-file="${repo.path}/${file.path}"] tr.diff-line.marked.warning`)
+      .first();
+    await expect(row.locator("td")).toHaveCount(2);
+    expect(
+      await row
+        .locator("td")
+        .first()
+        .evaluate((cell) => getComputedStyle(cell).boxShadow),
+    ).toContain("inset");
+  } finally {
+    done();
+  }
+});

@@ -3,6 +3,7 @@ import { useMemo } from "react";
 import type { ChangeData, EventMap, HunkData } from "react-diff-view";
 import {
   computeNewLineNumber,
+  computeOldLineNumber,
   Decoration,
   Diff,
   getChangeKey,
@@ -28,6 +29,7 @@ import type { DiffView } from "../store.ts";
 import { useStore } from "../store.ts";
 import { elapsed } from "../time.ts";
 import type { Severity } from "../types.ts";
+import { SEVERITIES } from "../types.ts";
 
 /**
  * The core of refractor plus the nine grammars below: the root export of the
@@ -61,16 +63,19 @@ const highlighter = {
   highlight: (value: string, language: string) => refractor.highlight(value, language).children,
 } as unknown as { highlight: typeof refractor.highlight };
 
-/**
- * Where the project puts its own rows into the library's table: the range the
- * composer is being drawn over, and the rows that follow a line — the composer
- * itself (DA-22) and the inline thread cards (DA-23). Both speak in line
- * numbers of the new side, as the store does; the change keys the library wants
- * are worked out here, where the hunks are.
- */
+/** A diff row by the line it shows: a deleted line is `old`, every other row `new`, whichever side
+ * a thread on a context line names (DA-37.2). */
+export type DiffRow = { side: "old" | "new"; line: number };
+
+export function rowKey(row: DiffRow): string {
+  return `${row.side}:${row.line}`;
+}
+
+/** The composer's range, in new-side lines, and the rows put under a line — the composer and the
+ * thread cards; the change keys are worked out here, where the hunks are (08-ui.md). */
 export type DiffSlots = {
   selected: { from: number; to: number } | null;
-  rows: { line: number; node: ReactNode }[];
+  rows: (DiffRow & { node: ReactNode })[];
 };
 
 /**
@@ -98,7 +103,8 @@ export type LineEvents = {
  * eight the scrolled frame has (DA-23).
  */
 export type LineMarkers = {
-  severityByLine: Map<number, Severity>;
+  /** By `rowKey`. */
+  severityByRow: Map<string, Severity>;
   /**
    * The hunks of this file that changed while the review has been open, by
    * their `@@` header, and when they did. The header of such a hunk takes the
@@ -166,7 +172,7 @@ export function ReactDiffFile({
     );
   }, [shown, file.path]);
 
-  const widgets = useMemo(() => keyed(shown, slots), [shown, slots]);
+  const widgets = useMemo(() => keyed(shown, slots, view), [shown, slots, view]);
 
   /**
    * A selection runs over the new column, so the old one starts nothing and
@@ -193,15 +199,27 @@ export function ReactDiffFile({
     [lines],
   );
 
-  /** Only where there is something to mark; most files carry no comment at all. */
+  /** Only where there is something to mark; a split pair takes the worst of its two sides, and a
+   * bar on each side that has threads. */
   const generateLineClassName = useMemo(
     () =>
-      ({ changes, defaultGenerate }: { changes: ChangeData[]; defaultGenerate: () => string }) => {
-        const change = changes.at(-1);
-        const line = change === undefined ? null : newLine(undefined, change);
-        const severity = line === null ? undefined : markers.severityByLine.get(line);
+      ({
+        changes,
+        defaultGenerate,
+      }: {
+        changes: (ChangeData | null)[];
+        defaultGenerate: () => string;
+      }) => {
         const own = defaultGenerate();
-        return severity === undefined ? own : `${own} marked ${severity}`;
+        const found = changes.flatMap((change) => {
+          const row = change === null ? null : rowOf(change);
+          const severity = row === null ? undefined : markers.severityByRow.get(rowKey(row));
+          return row === null || severity === undefined ? [] : [{ side: row.side, severity }];
+        });
+        if (found.length === 0) return own;
+        const severity = SEVERITIES.find((one) => found.some((mark) => mark.severity === one));
+        const sides = [...new Set(found.map((mark) => ` on-${mark.side}`))].join("");
+        return `${own} marked ${severity}${sides}`;
       },
     [markers],
   );
@@ -218,7 +236,7 @@ export function ReactDiffFile({
       className={view === "split" ? "dc-split" : "dc-unified"}
       gutterEvents={events}
       codeEvents={events}
-      {...(markers.severityByLine.size > 0 ? { generateLineClassName } : {})}
+      {...(markers.severityByRow.size > 0 ? { generateLineClassName } : {})}
       {...(tokens ? { tokens } : {})}
     >
       {(hunks) =>
@@ -316,30 +334,58 @@ function newLine(side: "old" | "new" | undefined, change: ChangeData | null): nu
   return line > 0 ? line : null;
 }
 
-/** Turns the slots' line numbers into the change keys the library indexes by. */
+/** The row a change is on: a deletion by its old line, anything else by its new one. */
+function rowOf(change: ChangeData): DiffRow {
+  return change.type === "delete"
+    ? { side: "old", line: computeOldLineNumber(change) }
+    : { side: "new", line: computeNewLineNumber(change) };
+}
+
+/** Turns the slots' rows into the change keys the library indexes by. */
 function keyed(
   shown: { hunk: HunkData }[],
   slots: DiffSlots,
+  view: DiffView,
 ): { rows: Record<string, ReactNode>; selected: string[] } {
   const rows: Record<string, ReactNode> = {};
   const selected: string[] = [];
   if (slots.rows.length === 0 && slots.selected === null) return { rows, selected };
 
-  const byLine = new Map<number, ChangeData>();
+  const byRow = new Map<string, ChangeData>();
   for (const { hunk } of shown) {
     for (const change of hunk.changes) {
-      const line = computeNewLineNumber(change);
-      if (line > 0) byLine.set(line, change);
+      const row = rowOf(change);
+      if (row.line > 0) byRow.set(rowKey(row), change);
     }
   }
 
   for (const row of slots.rows) {
-    const change = byLine.get(row.line);
+    const change = byRow.get(rowKey(row));
     if (change) rows[getChangeKey(change)] = row.node;
+  }
+  // A split pair gets one cell across the row only for a node both sides carry: always one, with
+  // a slot per side, so a second side arriving mounts beside the first and remounts nothing.
+  if (view === "split") {
+    for (const { hunk } of shown) {
+      hunk.changes.forEach((change, at) => {
+        const next = hunk.changes[at + 1];
+        if (change.type !== "delete" || next?.type !== "insert") return;
+        const [old, now] = [getChangeKey(change), getChangeKey(next)];
+        if (rows[old] === undefined && rows[now] === undefined) return;
+        const both = (
+          <>
+            {rows[old] ?? null}
+            {rows[now] ?? null}
+          </>
+        );
+        rows[old] = both;
+        rows[now] = both;
+      });
+    }
   }
   if (slots.selected) {
     for (let line = slots.selected.from; line <= slots.selected.to; line += 1) {
-      const change = byLine.get(line);
+      const change = byRow.get(rowKey({ side: "new", line }));
       if (change) selected.push(getChangeKey(change));
     }
   }

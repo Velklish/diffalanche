@@ -10,7 +10,7 @@
 Finding discovered while working on DA-37, by reading; not reproduced in a browser. The card
 groups its threads by line number without looking at `side`:
 
-<!-- quote:../../../src/ui/components/FileCard.tsx -->
+<!-- quote:before:../../../src/ui/components/FileCard.tsx -->
     const line = thread.endLine ?? thread.line;
 <!-- /quote -->
 

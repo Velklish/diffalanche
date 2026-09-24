@@ -63,6 +63,38 @@ export function linesAbove(starts: number[], above: Record<number, number>): Map
   return byHunk;
 }
 
+/** The old-side lines a patch shows, each with the new-side line of its row — `null` for a deleted
+ * one, which has none — and per hunk what an old line above it adds to become its new number. */
+export function oldSideRows(patch: string): {
+  rows: Map<number, number | null>;
+  offsets: number[];
+} {
+  const rows = new Map<number, number | null>();
+  const offsets: number[] = [];
+  let old = 0;
+  let line = 0;
+  let inHunk = false;
+  for (const row of patch.split("\n")) {
+    if (row.startsWith("diff --git ")) {
+      inHunk = false;
+      continue;
+    }
+    const head = /^@@ -(\d+)(?:,\d+)? \+(\d+)/.exec(row);
+    if (head) {
+      old = Number(head[1]);
+      line = Number(head[2]);
+      offsets.push(line - old);
+      inHunk = true;
+      continue;
+    }
+    if (!inHunk) continue;
+    if (row[0] === "-") rows.set(old++, null);
+    else if (row[0] === "+") line += 1;
+    else if (row[0] === " ") rows.set(old++, line++);
+  }
+  return { rows, offsets };
+}
+
 /** The new-side lines a patch shows, and the new-side line each of its hunks starts at. */
 export function newSideLines(patch: string): { lines: Set<number>; starts: number[] } {
   const lines = new Set<number>();

@@ -6,6 +6,7 @@ import {
   gapsAbove,
   linesAbove,
   newSideLines,
+  oldSideRows,
   splitLines,
   withLinesAbove,
 } from "../src/ui/context.ts";
@@ -89,6 +90,23 @@ describe("the context above a hunk", () => {
     expect(lines.has(37)).toBe(false);
     expect([...lines]).toHaveLength(14);
     expect(linesAbove(starts, { 1: 3 })).toEqual(new Map([[1, [47, 48, 49]]]));
+  });
+
+  it("names the old-side lines a patch shows, each with the new line of its row (DA-37.2)", () => {
+    const { rows, offsets } = oldSideRows(PATCH);
+    expect(rows.get(33)).toBeNull();
+    expect(rows.get(34)).toBe(34);
+    // Past the insertion of the second hunk, the old line is one short of the new.
+    expect(rows.get(52)).toBe(53);
+    expect(rows.has(37)).toBe(false);
+    expect(offsets).toEqual([0, 0]);
+    expect(oldSideRows(["@@ -10,2 +12,3 @@", " a", "+b", " c"].join("\n"))).toEqual({
+      rows: new Map([
+        [10, 12],
+        [11, 14],
+      ]),
+      offsets: [2],
+    });
   });
 
   it("measures the rows the lines take, wrapped or not", () => {
