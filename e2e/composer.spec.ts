@@ -316,9 +316,13 @@ test("typing three words lists suggestions from the history, and TAB takes one",
   await field.press("ArrowDown");
   await expect(shown.nth(1)).toHaveClass(/\bon\b/);
   await expect(composer.locator(".suggest-count")).toHaveText("2 / 5");
+  // The caret stays in the field, so the choice is said, not focused (DA-36.1).
+  const taken = rows[1] as Comment;
+  await expect(composer.getByRole("status")).toHaveText(
+    `подсказка 2 из 5 · ${taken.severity.toUpperCase()} · ${taken.body.split("\n")[0]}`,
+  );
   await field.press("Tab");
 
-  const taken = rows[1] as Comment;
   await expect(field).toBeFocused();
   await expect(field).toHaveValue(taken.body);
   await expect(composer.locator(".sev-chip.on")).toHaveText(taken.severity.toUpperCase());
@@ -411,6 +415,10 @@ test("while the model is away the form says so and keeps AUTO out of reach", asy
   await expect(composer.locator(".suggestion.note")).toHaveText(message);
   await expect(composer.locator(".sev-chip.auto")).toBeDisabled();
   await expect(composer.locator(".sev-chip.on")).toHaveText("WARNING");
+  // Said as well as shown: WARNING is what `⌘⏎` now sends (DA-36.1).
+  await expect(composer.getByRole("status")).toHaveText(
+    `${message} — AUTO недоступен, отправится WARNING`,
+  );
   await page.keyboard.press("Escape");
 
   // The next form opens on `WARNING`, with the sentence where the rows will be.

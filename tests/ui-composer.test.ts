@@ -151,6 +151,28 @@ describe("suggestions while typing", () => {
     store.acceptSuggestion(useStore.getState().sugIdx);
     expect(useStore.getState()).toMatchObject({ body: "typo", sev: "nit" });
   });
+
+  it("says the row a key chose, and nothing when an answer arrives (DA-36.1)", async () => {
+    serve(() => json(vote("critical")));
+    const store = useStore.getState();
+    store.setBody("region cache");
+    await vi.advanceTimersByTimeAsync(SUGGEST_DEBOUNCE_MS);
+    expect(useStore.getState().said).toBeNull();
+
+    store.moveSuggestion(1);
+    const first = useStore.getState().said;
+    expect(first?.text).toBe("подсказка 1 из 2 · CRITICAL · the cache key misses the region");
+    // Round the two rows and back: the same words, said again as a new saying.
+    store.moveSuggestion(1);
+    store.moveSuggestion(1);
+    expect(useStore.getState().said?.text).toBe(first?.text);
+    expect(useStore.getState().said?.seq).not.toBe(first?.seq);
+
+    // A new answer changes the rows and says nothing over the typing; the row it said is gone.
+    store.setBody("region cache key");
+    await vi.advanceTimersByTimeAsync(SUGGEST_DEBOUNCE_MS);
+    expect(useStore.getState()).toMatchObject({ sugIdx: -1, said: null });
+  });
 });
 
 describe("AUTO at send time", () => {
@@ -269,6 +291,22 @@ describe("a model that is away", () => {
     expect(useStore.getState().suggest.asking).toBe(false);
   });
 
+  it("says the model went away once, and WARNING only when it moved the severity (DA-36.1)", async () => {
+    serve(() => away("the model is being put in place"));
+    useStore.getState().setSeverity("critical");
+    useStore.getState().setBody("region cache key");
+    await vi.advanceTimersByTimeAsync(SUGGEST_DEBOUNCE_MS);
+    const said = useStore.getState().said;
+    expect(said?.text).toBe("the model is being put in place — AUTO недоступен");
+
+    // The next 503, after the pause, finds the model already away: nothing is said again, and the
+    // region empties with the rows it spoke of.
+    await vi.advanceTimersByTimeAsync(10_000);
+    useStore.getState().setBody("region cache key again");
+    await vi.advanceTimersByTimeAsync(SUGGEST_DEBOUNCE_MS);
+    expect(useStore.getState().said).toBeNull();
+  });
+
   it("takes AUTO out of reach, asks again after a pause that grows, and gives it back", async () => {
     let answer = away("the model is being put in place");
     const calls = serve(() => answer.clone());
@@ -281,6 +319,7 @@ describe("a model that is away", () => {
       modelAway: "the model is being put in place",
       sev: "warning",
       suggest: { answer: null, failure: "the model is being put in place" },
+      said: { text: "the model is being put in place — AUTO недоступен, отправится WARNING" },
     });
     useStore.getState().openComposer(REVIEW);
     expect(useStore.getState().sev).toBe("warning");

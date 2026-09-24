@@ -527,6 +527,12 @@ and `bun run release` refuses a version that has no section. See
 
 ### Fixed
 
+- **The comment form says the row the arrows chose, and the model going away**
+  (DA-36.1). The chosen suggestion was marked only by `aria-current` on a row
+  that never takes the focus, so a screen reader heard nothing as `↑` / `↓`
+  moved; the 503 sentence and `AUTO` going out of reach, with `WARNING` then
+  what `⌘⏎` sends, were shown and not said. A live region in the form now says
+  each of them once, and not every answer that arrives while the reader types.
 - **A long toast stays long enough to be read** (DA-102.1). A refusal the
   server or the store puts in the toast is a sentence written for the CLI —
   DA-102's storage refusal is 116 characters — and it had the same 2.2 seconds

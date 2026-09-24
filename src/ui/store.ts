@@ -451,6 +451,9 @@ type CommentingSlice = {
   suggest: SuggestPanel;
   /** The row `↑` / `↓` chose, which `TAB` takes; -1 while none is chosen. */
   sugIdx: number;
+  /** What the form's live region says: the row a key chose, and the model going away — not every
+   * answer, which would talk over the typing (DA-36.1, 08-ui.md "Commenting"). */
+  said: Raised | null;
   /** The sentence of the last 503 of `GET /api/suggest`, `null` once the model answers: until
    * then `AUTO` is out of reach, and the page asks again after a growing pause (08-ui.md). */
   modelAway: string | null;
@@ -1198,6 +1201,7 @@ export const useStore = create<Store>()((set, get) => ({
   body: "",
   suggest: NO_SUGGESTIONS,
   sugIdx: -1,
+  said: null,
   modelAway: null,
   modelRetry: { at: 0, pause: 0 },
   sending: false,
@@ -1288,11 +1292,16 @@ export const useStore = create<Store>()((set, get) => ({
     scheduleSuggestions(set, get, body.trim());
   },
   moveSuggestion: (delta) => {
-    const count = get().suggest.answer?.suggestions.length ?? 0;
-    if (count === 0) return false;
+    const rows = get().suggest.answer?.suggestions ?? [];
+    const count = rows.length;
     const at = get().sugIdx;
     // Nothing chosen yet: `↓` starts at the first row and `↑` at the last.
-    set({ sugIdx: at < 0 ? (delta === 1 ? 0 : count - 1) : (at + delta + count) % count });
+    const next = at < 0 ? (delta === 1 ? 0 : count - 1) : (at + delta + count) % count;
+    const row = rows[next];
+    if (row === undefined) return false;
+    const line = row.body.split("\n")[0];
+    const said = `подсказка ${next + 1} из ${count} · ${row.severity.toUpperCase()} · ${line}`;
+    set({ sugIdx: next, said: raise(said) });
     return true;
   },
   acceptSuggestion: (index) => {
@@ -1850,6 +1859,7 @@ function freshDraft(get: () => Store): Partial<Store> {
     body: "",
     suggest: NO_SUGGESTIONS,
     sugIdx: -1,
+    said: null,
     sending: false,
   };
 }
@@ -1867,10 +1877,14 @@ function noteModel(set: (partial: Partial<Store>) => void, get: () => Store, res
   if (!("absent" in result)) return;
   const was = get().modelRetry.pause;
   const pause = was === 0 ? RETRY_FIRST_MS : Math.min(was * 2, RETRY_MAX_MS);
+  const moved = get().sev === "auto";
+  // Said once, as the model goes: the 503s of the pauses after it change nothing on the form.
+  const said = `${result.absent} — AUTO недоступен${moved ? ", отправится WARNING" : ""}`;
   set({
     modelAway: result.absent,
     modelRetry: { at: Date.now() + pause, pause },
-    ...(get().sev === "auto" ? { sev: "warning" as const } : {}),
+    ...(moved ? { sev: "warning" as const } : {}),
+    ...(get().modelAway === null ? { said: raise(said) } : {}),
   });
 }
 
@@ -1897,7 +1911,7 @@ function scheduleSuggestions(
   // Asked again only once the pause after a 503 is over, and only while the reader types.
   if (paused(set, get)) return;
   if (!wantsSuggestions(text)) {
-    set({ suggest: NO_SUGGESTIONS, sugIdx: -1 });
+    set({ suggest: NO_SUGGESTIONS, sugIdx: -1, said: null });
     return;
   }
   if (!get().suggest.asking) set({ suggest: { ...get().suggest, asking: true } });
@@ -1940,15 +1954,22 @@ function showSuggestions(
   text: string,
   result: Asked,
 ): void {
+  const before = get().said;
   noteModel(set, get, result);
   // The composer closed, or the text moved on, while the request was out.
   if (get().composer === null || get().body.trim() !== text) return;
+  // The choice is gone with its rows, and so is what was said of it; not what the model just said.
+  const said = get().said === before ? null : get().said;
   if ("answer" in result) {
-    set({ suggest: { text, answer: result.answer, asking: false, failure: null }, sugIdx: -1 });
+    set({
+      suggest: { text, answer: result.answer, asking: false, failure: null },
+      sugIdx: -1,
+      said,
+    });
     return;
   }
   const failure = "absent" in result ? result.absent : result.failed;
-  set({ suggest: { text, answer: null, asking: false, failure }, sugIdx: -1 });
+  set({ suggest: { text, answer: null, asking: false, failure }, sugIdx: -1, said });
 }
 
 /** `AUTO` at send time: the vote on the very text being sent, asked for once more if the rows

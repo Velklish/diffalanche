@@ -17,6 +17,7 @@ export function Composer() {
   const sending = useStore((store) => store.sending);
   const modelAway = useStore((store) => store.modelAway);
   const suggest = useStore((store) => store.suggest);
+  const said = useStore((store) => store.said);
   const setSeverity = useStore((store) => store.setSeverity);
   const setBody = useStore((store) => store.setBody);
   const submit = useStore((store) => store.submitComment);
@@ -105,6 +106,10 @@ export function Composer() {
         </div>
 
         <Suggestions suggest={suggest} away={modelAway} />
+        {/* A new node per saying, so the same words said again are spoken again (DA-36.1). */}
+        <p className="visually-hidden" role="status">
+          {said === null ? null : <span key={said.seq}>{said.text}</span>}
+        </p>
       </div>
     </form>
   );
