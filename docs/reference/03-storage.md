@@ -326,7 +326,9 @@ root and so follows the root.
 A missing `config.json` is not an error — the defaults are the configuration.
 A present one is validated like every other file of the data directory: `port`
 has to be a port, `depth` a whole number of levels, `lsp.<language>` a non-empty
-command, and a refusal names the file and the field.
+command, and a refusal names the file and the field. One that cannot be read is
+refused in the words storage uses for its own files — permission denied, or a
+file in the way — and anything else is rethrown ([Validation and errors](#validation-and-errors)).
 
 The `user` fallback runs `git config user.name` in the root through the `git`
 binary ([ADR-002](../adr/adr-002-stack-and-delivery.md)). Reading a
@@ -395,11 +397,28 @@ reaches exit code 2 with its stack: it is the case the "exit code 2" verdict of
 `tests/cli.test.ts` is written against, and that verdict needs one fault no
 layer claims (DA-99.1).
 
-Two reads of the data directory are not covered and rethrow anything but "not
-there" untouched: `config.json`, which the configuration reads with its own
-`ENOENT`-only rule, and the listing of `reviews/` behind `listSessionNames`. A
-file where either directory should be still reaches the person as a raw errno;
-that is DA-99.2.
+The two other reads storage and the configuration make word the same codes (DA-99.2). The
+configuration reads `config.json` — and the user's own
+`~/.config/diffalanche/config.json` — through the same `readError` and the same
+table rather than a second one: the file sits in the data directory, a person
+who meets both refusals should read one vocabulary, and a code worded twice
+would drift. So a file where the data directory should be is:
+
+```
+/root/.diffalanche/config.json: could not be read: a file is in the way of one of its parents
+```
+
+The listing of `reviews/` behind `listSessionNames` takes the table with one
+reason of its own. A listing's `ENOTDIR` is also the directory itself being a
+file, which is what a file written over `reviews/` gives, so it says so rather
+than blaming a parent:
+
+```
+/root/.diffalanche/reviews: could not be read: a file is where a directory should be
+```
+
+`EISDIR` stays out of both, for the reason above: `config.json` made a
+directory reaches exit code 2 with its stack, and a listing never meets it.
 
 The `scope` of `review.json` is checked for being a scope at all and no further:
 a list of entries with a `repo` and, when it has them, a list of `paths`; absent

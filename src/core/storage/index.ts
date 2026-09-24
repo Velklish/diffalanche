@@ -153,10 +153,17 @@ const CANNOT_READ: Readonly<Record<string, string>> = {
   ENOTDIR: "a file is in the way of one of its parents",
 };
 
-/** A refused read as the `StorageError` it can name, or the error itself when it cannot. */
-function readError(error: unknown, path: string): unknown {
+/** The same for a directory listed, whose `ENOTDIR` may be the directory itself being a file. */
+const CANNOT_LIST: Readonly<Record<string, string>> = {
+  ...CANNOT_READ,
+  ENOTDIR: "a file is where a directory should be",
+};
+
+/** A refused read as the `StorageError` it can name, or the error itself when it cannot; the
+ * configuration reads `config.json` through it too ([03-storage.md](../../../docs/reference/03-storage.md)). */
+export function readError(error: unknown, path: string, reasons = CANNOT_READ): unknown {
   const errno = error as NodeJS.ErrnoException;
-  const reason = errno.code === undefined ? undefined : CANNOT_READ[errno.code];
+  const reason = errno.code === undefined ? undefined : reasons[errno.code];
   if (reason === undefined) return error;
   return new StorageError(errno.path ?? path, null, `could not be read: ${reason}`);
 }
@@ -393,7 +400,7 @@ export async function listSessionNames(dataDir: string): Promise<SessionListing>
     entries = await readdir(dir, { withFileTypes: true });
   } catch (error) {
     if (isMissing(error)) return { names: [], warnings: [] };
-    throw error;
+    throw readError(error, dir, CANNOT_LIST);
   }
 
   const names: string[] = [];

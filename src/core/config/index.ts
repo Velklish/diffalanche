@@ -9,7 +9,7 @@ import { homedir, tmpdir, userInfo } from "node:os";
 import { join, resolve } from "node:path";
 import { promisify } from "node:util";
 import { asObject, asString, asStrings, fail, parseJson } from "../storage/fields.ts";
-import { dataDirOf } from "../storage/index.ts";
+import { dataDirOf, readError } from "../storage/index.ts";
 
 const run = promisify(execFile);
 
@@ -157,14 +157,15 @@ async function resolveDataDir(
   return dataDirOf(root);
 }
 
-/** A missing `config.json` is not an error: the defaults are the configuration. */
+/** A missing `config.json` is not an error: the defaults are the configuration. A refused one
+ * is worded as storage words its own files, from the same table. */
 async function readConfigFile(file: string): Promise<Record<string, unknown>> {
   let text: string;
   try {
     text = await readFile(file, "utf8");
   } catch (error) {
     if ((error as NodeJS.ErrnoException).code === "ENOENT") return {};
-    throw error;
+    throw readError(error, file);
   }
   return asObject(file, null, parseJson(file, text));
 }

@@ -534,6 +534,16 @@ and `bun run release` refuses a version that has no section. See
   re-read by an earlier one that lands last
   ([07-server.md](docs/reference/07-server.md#keeping-a-held-document-honest)).
 
+- **`config.json` and the listing of `reviews/` word a refused read as the session
+  files do** (DA-99.2). A file where the data directory should be, or where
+  `reviews/` should be, reached `review list` as a raw `ENOTDIR` stack at exit
+  code 2. The configuration now reads `config.json`, and the user config, through
+  storage's `readError` and its table — `…/config.json: could not be read: a file
+  is in the way of one of its parents` — and the listing takes the same table
+  with its own `ENOTDIR`, `…/reviews: could not be read: a file is where a
+  directory should be`; both are one line at exit code 1, and `EISDIR` is still
+  left to exit code 2 ([03-storage.md](docs/reference/03-storage.md)).
+
 - **The suites stopped holding numbers the machine decides** (DA-60). A wait is
   now a condition with a generous deadline, an order the platform guarantees, a
   duration the test makes itself, or — for a party it cannot see — a wait derived

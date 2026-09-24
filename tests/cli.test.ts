@@ -858,4 +858,26 @@ describe("exit code 2", () => {
         "a file is in the way of one of its parents",
     ]);
   });
+
+  it("is not what a file where reviews/ should be gets when the tasks are listed", async () => {
+    await inRoot("review", "new", "alpha");
+    rmSync(dataFile("reviews"), { recursive: true, force: true });
+    writeFileSync(dataFile("reviews"), "not a directory\n");
+    const result = await inRoot("review", "list");
+    expect(result.code).toBe(1);
+    expect(result.err.trim().split("\n")).toEqual([
+      `diffalanche: ${dataFile("reviews")}: could not be read: a file is where a directory should be`,
+    ]);
+  });
+
+  it("is not what a file where the data directory should be gets when config.json is read", async () => {
+    rmSync(dataFile(), { recursive: true, force: true });
+    writeFileSync(dataFile(), "not a directory\n");
+    const result = await inRoot("review", "list");
+    expect(result.code).toBe(1);
+    expect(result.err.trim().split("\n")).toEqual([
+      `diffalanche: ${dataFile("config.json")}: could not be read: ` +
+        "a file is in the way of one of its parents",
+    ]);
+  });
 });
