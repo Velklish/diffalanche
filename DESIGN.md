@@ -624,7 +624,11 @@ adjustment.
   at 1.6–2.0:1 on the panels; `accBd` then took a lighter value, which still left
   2.8:1 on `bd` and 2.6:1 on `sel` and could not show focus on a control whose
   resting border is already `accBd`, so the ring became the accent itself and
-  `accBd` stayed with the edges (DA-56.7).
+  `accBd` stayed with the edges (DA-56.7). A control with no `:focus-visible`
+  rule of its own draws the browser's ring, which is visible and not `acc`; two
+  containers carry the ring for what they hold — an overlay's panel, which takes
+  the focus as it opens from a key, turns its border `acc`, and the search
+  field, which has no border, turns the rule under its row (DA-56.8).
 
 ### Navigation
 

@@ -133,5 +133,6 @@ the system already had one.
   closes rather than a state to design for (DA-55.1).
 - The focus treatment is currently two shapes — a border change on bordered
   controls, a 1 px outline on rows that have none. That is deliberate and
-  recorded in `DESIGN.md`, but no keyboard pass has walked the whole surface yet;
-  DA-26 owns that walk.
+  recorded in `DESIGN.md`. `e2e/focus.spec.ts` walks the page, its overlays,
+  forms, menu and modes (DA-56.8); what its fixture cannot reach — the scope
+  editor's confirmation — is listed in `08-ui.md`.

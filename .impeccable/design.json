@@ -391,6 +391,11 @@
         "name": "row-focus",
         "value": "outline: 1px solid var(--acc)",
         "purpose": "A row that has no border of its own (tree rows, list items) takes a 1px accent outline on :focus-visible. Focus is never removed and never a glow."
+      },
+      {
+        "name": "container-focus",
+        "value": "border-color: var(--acc)",
+        "purpose": "A container that holds the ring for what it holds turns its own edge to the accent (DA-56.8): an overlay's panel as it takes the focus from a key (.overlay:focus-visible), and the search field's row, whose field has no border (.palette-field:focus-within, its bottom rule)."
       }
     ],
     "breakpoints": [
@@ -413,7 +418,7 @@
       "refersTo": "button-ghost",
       "description": "The default control on every screen: header actions, Browse repo, dismiss.",
       "html": "<button class=\"ds-btn-ghost\">Export .md</button>",
-      "css": ".ds-btn-ghost { display: flex; align-items: center; gap: 7px; height: 28px; padding: 0 10px; border: 1px solid var(--bd); border-radius: 8px; background: none; color: var(--tx2); font: 12px/1.5 var(--sans); cursor: pointer; transition: color 140ms ease-out, border-color 140ms ease-out; } .ds-btn-ghost:hover { color: var(--tx); } .ds-btn-ghost:focus-visible { border-color: var(--accBd); outline: none; }"
+      "css": ".ds-btn-ghost { display: flex; align-items: center; gap: 7px; height: 28px; padding: 0 10px; border: 1px solid var(--bd); border-radius: 8px; background: none; color: var(--tx2); font: 12px/1.5 var(--sans); cursor: pointer; transition: color 140ms ease-out, border-color 140ms ease-out; } .ds-btn-ghost:hover { color: var(--tx); } .ds-btn-ghost:focus-visible { border-color: var(--acc); outline: none; }"
     },
     {
       "name": "Primary Button",
@@ -421,7 +426,7 @@
       "refersTo": "button-primary",
       "description": "One per context at most: Comment in the composer, Apply in the base picker, Create for a session. Specified in handoff section 2; not implemented yet (DA-22).",
       "html": "<button class=\"ds-btn-primary\">Comment</button>",
-      "css": ".ds-btn-primary { display: flex; align-items: center; height: 28px; padding: 0 12px; border: 1px solid var(--acc); border-radius: 8px; background: var(--acc); color: var(--onAcc); font: 600 12px/1 var(--sans); cursor: pointer; transition: background 140ms ease-out; } .ds-btn-primary:hover { background: var(--accTx); } .ds-btn-primary:focus-visible { outline: 1px solid var(--accBd); outline-offset: 1px; }"
+      "css": ".ds-btn-primary { display: flex; align-items: center; height: 28px; padding: 0 12px; border: 1px solid var(--acc); border-radius: 8px; background: var(--acc); color: var(--onAcc); font: 600 12px/1 var(--sans); cursor: pointer; transition: background 140ms ease-out; } .ds-btn-primary:hover { background: var(--accTx); } .ds-btn-primary:focus-visible { border-color: var(--accTx); outline: none; }"
     },
     {
       "name": "Severity Badge",
@@ -437,7 +442,7 @@
       "refersTo": "segment",
       "description": "A two- or three-way switch sharing one border: split/unified, the theme toggle, working tree/base.",
       "html": "<div class=\"ds-segments\"><button class=\"ds-segment ds-segment-on\">☾</button><button class=\"ds-segment\">☀</button></div>",
-      "css": ".ds-segments { display: inline-flex; border: 1px solid var(--bd); border-radius: 6px; overflow: hidden; } .ds-segment { width: 26px; height: 26px; border: 0; background: none; color: var(--tx2); font: 12px/1 var(--sans); cursor: pointer; } .ds-segment:hover { color: var(--tx); } .ds-segment-on { background: var(--bd); color: var(--tx); } .ds-segment:focus-visible { outline: 1px solid var(--accBd); outline-offset: -1px; }"
+      "css": ".ds-segments { display: inline-flex; border: 1px solid var(--bd); border-radius: 6px; overflow: hidden; } .ds-segment { width: 26px; height: 26px; border: 0; background: none; color: var(--tx2); font: 12px/1 var(--sans); cursor: pointer; } .ds-segment:hover { color: var(--tx); } .ds-segment-on { background: var(--bd); color: var(--tx); } .ds-segment:focus-visible { outline: 1px solid var(--acc); outline-offset: -1px; }"
     },
     {
       "name": "Filter Field",
@@ -445,7 +450,7 @@
       "refersTo": "input-filter",
       "description": "The sidebar's file filter, with the number of matches inside the field on the right.",
       "html": "<div class=\"ds-field\"><input class=\"ds-field-input\" placeholder=\"filter files\" /><span class=\"ds-field-count\">12</span></div>",
-      "css": ".ds-field { position: relative; } .ds-field-input { width: 100%; height: 28px; padding: 0 38px 0 9px; border: 1px solid var(--bd); border-radius: 8px; background: var(--panel2); color: var(--tx); font: 11.5px/1 var(--sans); } .ds-field-input::placeholder { color: var(--tx3); } .ds-field-input:focus-visible { border-color: var(--accBd); outline: none; } .ds-field-count { position: absolute; top: 50%; right: 10px; transform: translateY(-50%); color: var(--tx3); font: 10.5px/1 var(--mono); }"
+      "css": ".ds-field { position: relative; } .ds-field-input { width: 100%; height: 28px; padding: 0 38px 0 9px; border: 1px solid var(--bd); border-radius: 8px; background: var(--panel2); color: var(--tx); font: 11.5px/1 var(--sans); } .ds-field-input::placeholder { color: var(--tx3); } .ds-field-input:focus-visible { border-color: var(--acc); outline: none; } .ds-field-count { position: absolute; top: 50%; right: 10px; transform: translateY(-50%); color: var(--tx3); font: 10.5px/1 var(--mono); }"
     },
     {
       "name": "Session Pill",
@@ -453,7 +458,7 @@
       "refersTo": "pill",
       "description": "The header's session trigger: name, title, caret. The signature control of the header row.",
       "html": "<button class=\"ds-pill\"><span class=\"ds-pill-name\">ls-240372</span><span class=\"ds-pill-title\">Cargo flags across services</span><span class=\"ds-pill-caret\">▾</span></button>",
-      "css": ".ds-pill { display: flex; align-items: center; gap: 7px; height: 28px; max-width: 340px; padding: 0 9px; border: 1px solid var(--bd); border-radius: 8px; background: var(--panel3); color: var(--tx); cursor: pointer; } .ds-pill-name { font: 500 12px/1 var(--mono); } .ds-pill-title { max-width: 220px; overflow: hidden; color: var(--tx3); font: 13.5px/1 var(--sans); text-overflow: ellipsis; white-space: nowrap; } .ds-pill-caret { color: var(--acc); } .ds-pill:focus-visible { border-color: var(--accBd); outline: none; }"
+      "css": ".ds-pill { display: flex; align-items: center; gap: 7px; height: 28px; max-width: 340px; padding: 0 9px; border: 1px solid var(--bd); border-radius: 8px; background: var(--panel3); color: var(--tx); cursor: pointer; } .ds-pill-name { font: 500 12px/1 var(--mono); } .ds-pill-title { max-width: 220px; overflow: hidden; color: var(--tx3); font: 13.5px/1 var(--sans); text-overflow: ellipsis; white-space: nowrap; } .ds-pill-caret { color: var(--acc); } .ds-pill:focus-visible { border-color: var(--acc); outline: none; }"
     },
     {
       "name": "Thread Card",
@@ -535,7 +540,7 @@
       "Do set anything countable in JetBrains Mono and anything a human wrote in Instrument Sans (The Countable-Is-Mono Rule).",
       "Do give a new surface a tone from the bg/panel/panel2/panel3 ladder and a 1 px bd border (The Flat Workspace Rule).",
       "Do keep both themes in step. A token added for one theme is added for the other in the same edit, and light is designed as warm paper, not as inverted dark.",
-      "Do show focus with accBd — a border change on a bordered control, a 1 px outline on a row that has none.",
+      "Do show focus with acc — a border change on a bordered control, a 1 px outline on a row that has none.",
       "Do use dcin for anything that appears and dcpulse for anything alive.",
       "Do keep panel widths fixed and let the window scroll below 1560 px.",
       "Do use text symbols (▾ ▸ ⌕ ☾ ☀ ✓ ↑ ↓ ↵ ⏎ ⌘ ⇧ ◆) for iconography."

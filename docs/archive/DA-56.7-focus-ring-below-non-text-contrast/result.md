@@ -10,4 +10,4 @@
 
 **Documentation in the same pass.** `DESIGN.md` (the focus rule, its Do's and Don'ts, the frontmatter), `.impeccable/design.json`, `docs/reference/08-ui.md` (the ring is `acc`, the frames are `accBd`, the contrast groups); `CHANGELOG.md`, `### Changed`.
 
-**Filed, not closed.** [DA-56.8](../../backlog/minor/DA-56.8-card-caret-draws-the-browser-ring.md), `minor`: the file card's caret draws Chromium's own ring rather than `acc`, found by the keyboard walk and left as found.
+**Filed, not closed.** [DA-56.8](../DA-56.8-card-caret-draws-the-browser-ring/task.md), `minor`: the file card's caret draws Chromium's own ring rather than `acc`, found by the keyboard walk and left as found.

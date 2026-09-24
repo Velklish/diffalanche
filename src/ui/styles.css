@@ -860,6 +860,12 @@ button:disabled {
   animation: dcin 160ms ease-out;
 }
 
+/* The panel holds the ring as it opens from a key; it outranks `.palette`'s `accBd` edge. */
+.overlay:focus-visible {
+  border-color: var(--acc);
+  outline: none;
+}
+
 /* empty states */
 
 .first-run {
@@ -1057,6 +1063,11 @@ button:disabled {
   outline: none;
 }
 
+/* The field has no border of its own; the rule under it is its edge, and takes the ring. */
+.palette-field:focus-within {
+  border-bottom-color: var(--acc);
+}
+
 .palette-body {
   display: flex;
   flex: 1;
@@ -1156,7 +1167,7 @@ button:disabled {
 }
 
 .palette-more:focus-visible {
-  outline: 1px solid var(--accBd);
+  outline: 1px solid var(--acc);
   outline-offset: -1px;
 }
 
@@ -1433,7 +1444,7 @@ button:disabled {
 /* A bordered control shows the focus on its border (DESIGN.md, Inputs and fields). */
 .hunk-context:focus-visible,
 .hunk-expand:focus-visible {
-  border-color: var(--accBd);
+  border-color: var(--acc);
   outline: none;
 }
 
@@ -1444,6 +1455,11 @@ button:disabled {
   border: 0;
   background: none;
   color: var(--tx2);
+}
+
+/* No border to turn, so the row rule: without it the browser draws its own ring (DA-56.8). */
+.file-head .caret:focus-visible {
+  outline: 1px solid var(--acc);
 }
 
 .file-head .segments .segment {
@@ -2499,6 +2515,11 @@ button.chip {
   background: var(--panel);
   color: var(--tx);
   font: 11.5px / 1 var(--mono);
+}
+
+.picker-ref:focus-visible {
+  border-color: var(--acc);
+  outline: none;
 }
 
 .picker-foot {

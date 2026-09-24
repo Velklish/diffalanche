@@ -527,6 +527,15 @@ and `bun run release` refuses a version that has no section. See
 
 ### Fixed
 
+- **The keyboard stops draw the system's focus ring** (DA-56.8). The file
+  card's collapse caret and the base picker's `ref` field drew the browser's own
+  ring, the two hunk controls and global search's `ещё совпадения` still drew
+  `accBd`, an overlay opened from a key drew the browser's ring on its panel,
+  and the search field drew none. All of them are `acc` now, and
+  `e2e/focus.spec.ts` walks the page, the overlays in each of their states, the
+  forms, the menu, select mode, browse mode and the empty screens in both
+  themes; what it cannot reach in its fixture is listed in `08-ui.md`.
+
 - **A `comments.json` the embedding index may not `stat` is a warning, not a raw
   errno** (DA-99.3). The index fingerprints every session's `comments.json` with
   a `stat` of its own, which rethrew anything but `ENOENT`; the listing reads
