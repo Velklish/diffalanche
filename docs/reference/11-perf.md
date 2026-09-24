@@ -800,6 +800,31 @@ listed `armed-0.ts` in the other repository, which the task's read then reported
 as moved (DA-55.9). They now write their tasks' cache from a scan of the tree
 itself, and wait on nothing.
 
+**A wait that runs out says afterwards whether its event was late or never
+came.** A deadline "only a hang reaches" cannot tell the two apart by itself, and
+only the first is a question for the deadline. So `settle` in
+`tests/watcher.test.ts`, and `next` and `waitFor` of `tests/events.test.ts` at
+their 20 s, keep what they waited for when they give up, and the file reports
+each at its end: the first `diff-changed` naming the settle's own file, or the
+first frame of that name, and how long after the wait began it came — or that
+none did (DA-60.2). The verdict fails at the same moment it always did; the
+report is the diagnosis the red lacked.
+
+That is how the red of "a comments.json that cannot be read › stops the comment
+events and leaves the rest of the chain running" was read. In 6 of 18 full
+`test:bun` runs, at load averages from 12 to 220 when the run began, its `settle`
+came 24.2–27.0 s after the write and in the other twelve in 0.2–0.6 s — late, not
+lost, and not a tail of the load. In the four reds whose watcher was traced, the
+rescan behind it had waited 25.3–26.5 s for the session's lock; in the one whose
+lock was traced as well, the lock had been left by the rescan before it, whose
+release was refused with `EACCES`. A test earlier in the file made the fixture's
+`reviews/` unreadable to check a failed listing, while the fixture's watcher was
+still inside the lock with a rescan the test before had started — its event goes
+out before its write — so the lock stayed until its 30 s lease ran out
+([03-storage.md](03-storage.md)). **A test that takes permissions away from a
+data directory takes them from one of its own**, never from one a running
+watcher writes; that test now lists a copy.
+
 **A test's timeout is a deadline on a hang.** Vitest's defaults of 5 s per test
 and 10 s per hook failed work that claims no time at all — the byte comparison
 of two synthetic trees, the generation of a fixture in a hook — once the machine

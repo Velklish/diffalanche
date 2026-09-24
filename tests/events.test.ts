@@ -41,8 +41,14 @@ let root: string;
 let config: Config;
 let server: ReviewServer;
 
-/** One frame as it arrived: `event`, `id`, and the data still unparsed. */
-type Frame = { event: string; id: string; data: string };
+/** One frame as it arrived: `event`, `id`, the data still unparsed, and when it came. */
+type Frame = { event: string; id: string; data: string; at: number };
+
+/** The waits that ran out of their deadline, told apart once the file is done (11-perf.md). */
+const overdue: { event: string; from: number }[] = [];
+
+/** Every frame of the file, for telling an overdue wait's frame late from never. */
+let observer: Reader | null = null;
 
 type Reader = {
   frames: Frame[];
@@ -81,7 +87,7 @@ async function read(
           buffer = buffer.slice(end + 2);
           if (chunk.startsWith(":")) comments.push(chunk);
           else {
-            const frame: Frame = { event: "message", id: "", data: "" };
+            const frame: Frame = { event: "message", id: "", data: "", at: Date.now() };
             for (const line of chunk.split("\n")) {
               const [field, ...rest] = line.split(": ");
               const value = rest.join(": ");
@@ -104,20 +110,22 @@ async function read(
     comments,
     next: async (event, timeoutMs = DEADLINE_MS) => {
       const from = frames.length;
-      const deadline = Date.now() + timeoutMs;
+      const started = Date.now();
+      const deadline = started + timeoutMs;
       for (;;) {
         const hit = frames.slice(from).find((frame) => frame.event === event);
         if (hit) return hit;
-        if (Date.now() > deadline) throw new Error(`no ${event} within ${timeoutMs} ms`);
+        if (Date.now() > deadline) throw overran(event, started, timeoutMs);
         await new Promise((done) => setTimeout(done, 5));
       }
     },
     waitFor: async (event, timeoutMs = DEADLINE_MS) => {
-      const deadline = Date.now() + timeoutMs;
+      const started = Date.now();
+      const deadline = started + timeoutMs;
       for (;;) {
         const hit = frames.find((frame) => frame.event === event);
         if (hit) return hit;
-        if (Date.now() > deadline) throw new Error(`no ${event} within ${timeoutMs} ms`);
+        if (Date.now() > deadline) throw overran(event, started, timeoutMs);
         await new Promise((done) => setTimeout(done, 5));
       }
     },
@@ -126,6 +134,27 @@ async function read(
       await reader.cancel().catch(() => undefined);
     },
   };
+}
+
+/** A wait at the deadline is kept for the report; one with a shorter limit of its own, like
+ * `arm`'s, expects to run out. */
+function overran(event: string, from: number, timeoutMs: number): Error {
+  if (timeoutMs === DEADLINE_MS) overdue.push({ event, from });
+  return new Error(`no ${event} within ${timeoutMs} ms`);
+}
+
+/** Whether a frame of an overdue wait's name ever came: late, or never at all. By name only, so a
+ * later test's frame of that name may stand in for it; the report says which it found. */
+function reportOverdue(): void {
+  for (const { event, from } of overdue) {
+    const came = observer?.frames.find((frame) => frame.event === event && frame.at >= from);
+    const at = (came?.at ?? Date.now()) - from;
+    process.stderr.write(
+      came === undefined
+        ? `no ${event} in the ${at} ms from the wait to the end of the file — never came\n`
+        : `the first ${event} after the wait came ${at} ms after it began (id ${came.id}) — late\n`,
+    );
+  }
 }
 
 beforeAll(async () => {
@@ -137,6 +166,7 @@ beforeAll(async () => {
     ...(NATIVE_WATCH ? {} : { recursive: false }),
   });
   await arm();
+  observer = await read(`${server.url}/api/events`);
 }, 120_000);
 
 /** Proves the watch of `REPO` delivers before a test writes into it: on the native path a write
@@ -169,6 +199,8 @@ async function arm(): Promise<void> {
 }
 
 afterAll(async () => {
+  await observer?.close();
+  reportOverdue();
   await server?.close();
   rmSync(root, { recursive: true, force: true });
 });

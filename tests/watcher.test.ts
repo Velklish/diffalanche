@@ -159,6 +159,9 @@ async function arm(repo: string): Promise<void> {
   }
 }
 
+/** The settles that ran out of their deadline, told apart once the file is done (11-perf.md). */
+const overdue: { settle: number; written: number }[] = [];
+
 /**
  * A change in another repository, waited for. Rescans run in one queue, so the
  * event of a change made after another one proves the earlier one has been
@@ -173,8 +176,28 @@ async function settle(): Promise<void> {
   const deadline = performance.now() + 20_000;
   for (;;) {
     if (changesOf(mark, OTHER_REPO).length > 0) return;
-    if (performance.now() > deadline) throw new Error("the watcher never caught up");
+    if (performance.now() > deadline) {
+      overdue.push({ settle: settled, written: mark });
+      throw new Error("the watcher never caught up");
+    }
     await new Promise((done) => setTimeout(done, 5));
+  }
+}
+
+/** Whether an overdue settle's own file ever reached a `diff-changed`: late, or never at all. */
+function reportOverdue(): void {
+  for (const { settle: n, written } of overdue) {
+    const file = `settle-${n}.ts`;
+    const came = seen.find(
+      (one) =>
+        one.at >= written && one.event.type === "diff-changed" && one.event.files.includes(file),
+    );
+    const at = Math.round((came?.at ?? performance.now()) - written);
+    process.stderr.write(
+      came === undefined
+        ? `settle ${n}: no diff-changed named ${file} in the ${at} ms to the end of the file — never came\n`
+        : `settle ${n}: the diff-changed naming ${file} came ${at} ms after the write — late\n`,
+    );
   }
 }
 
@@ -315,6 +338,7 @@ afterAll(async () => {
   // Awaited: a rescan still in flight would re-create the session directory
   // under a root this line is about to remove.
   await watcher?.close();
+  reportOverdue();
   rmSync(root, { recursive: true, force: true });
 });
 
@@ -742,8 +766,16 @@ describe("a rescan that fails", () => {
 
 describe("the snapshot the session events are read from", () => {
   it("keeps what it knew when `reviews/` cannot be listed, and does not empty it", async () => {
-    const reviews = join(config.dataDir, "reviews");
-    const first = await snapshotSessions(config, null);
+    // Not the fixture's: its watcher may still be inside the session's lock from the test before,
+    // and a `reviews/` it cannot enter keeps it from letting go for the lock's 30 s (DA-60.2).
+    const own = { ...config, dataDir: mkdtempSync(join(tmpdir(), "diffalanche-listing-")) };
+    const reviews = join(own.dataDir, "reviews");
+    mkdirSync(join(reviews, SESSION), { recursive: true });
+    copyFileSync(
+      join(config.dataDir, "reviews", SESSION, "review.json"),
+      join(reviews, SESSION, "review.json"),
+    );
+    const first = await snapshotSessions(own, null);
     expect(first?.get(SESSION)).toBe("open");
 
     chmodSync(reviews, 0o000);
@@ -751,21 +783,19 @@ describe("the snapshot the session events are read from", () => {
       // A failed listing is not an empty data directory. Answering with one
       // would make every session news again on the next readable pass, and a
       // few hundred of those would push the replay out of the stream's ring.
-      expect(await snapshotSessions(config, first)).toBeNull();
+      expect(await snapshotSessions(own, first)).toBeNull();
     } finally {
       chmodSync(reviews, 0o755);
     }
 
     // A session whose own file cannot be read keeps the status it had: a file
     // caught mid-write is not a task that changed.
-    const broken = join(reviews, SESSION, "review.json");
-    const kept = readFileSync(broken, "utf8");
-    writeFileSync(broken, "{ not json");
+    writeFileSync(join(reviews, SESSION, "review.json"), "{ not json");
     try {
-      expect((await snapshotSessions(config, first))?.get(SESSION)).toBe("open");
-      expect((await snapshotSessions(config, null))?.has(SESSION)).toBe(false);
+      expect((await snapshotSessions(own, first))?.get(SESSION)).toBe("open");
+      expect((await snapshotSessions(own, null))?.has(SESSION)).toBe(false);
     } finally {
-      writeFileSync(broken, kept);
+      rmSync(own.dataDir, { recursive: true, force: true });
     }
   }, 30_000);
 });

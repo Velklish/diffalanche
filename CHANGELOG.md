@@ -527,6 +527,18 @@ and `bun run release` refuses a version that has no section. See
 
 ### Fixed
 
+- **The watcher suite's late `settle` is explained and gone, and an overdue wait
+  now says whether it was late or never came** (DA-60.2). "stops the comment
+  events and leaves the rest of the chain running" ran out of its 20 s in 6 of 18
+  loaded `test:bun` runs: its event came 24–27 s after the write, because the
+  rescan waited for a session lock the rescan before it could not release — a
+  test earlier in the file had made the fixture's `reviews/` unreadable while the
+  fixture's watcher was inside the lock. That test now lists a data directory of
+  its own. `settle` of `tests/watcher.test.ts` and the frame waits of
+  `tests/events.test.ts` keep what they waited for when they give up, and each
+  file reports at its end when it came, or that it never did
+  ([11-perf.md](docs/reference/11-perf.md#waits-in-the-suites)).
+
 - **The watcher verdict on repositories that moved while unfollowed no longer
   leans on the tests before it** (DA-55.9). "says which repositories moved while
   nobody followed the task, after it follows it" copied the fixture's `diff.json`,
