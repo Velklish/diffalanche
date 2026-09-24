@@ -1646,15 +1646,19 @@ describe("the sessions a watcher follows", () => {
 
 describe("a move of current", () => {
   /** A data directory of its own with `current` on `SESSION` and the named tasks beside it, copied
-   * from the fixture's: `diff.json` too, unless the task is to have none. */
-  function dataDirWith(tasks: { name: string; cache: boolean }[]): string {
+   * from the fixture's, and a `diff.json` of the tree as it is now unless the task is to have none. */
+  async function dataDirWith(tasks: { name: string; cache: boolean }[]): Promise<string> {
     const dataDir = mkdtempSync(join(tmpdir(), "diffalanche-move-"));
+    // Not the fixture's file: its watcher writes it after the event a test waits for, so a copy
+    // can still hold the file an earlier write took away (DA-55.9).
+    const { cache: now } = await scanReview(config, { mode: "head" });
     for (const { name, cache } of [{ name: SESSION, cache: true }, ...tasks]) {
       mkdirSync(join(dataDir, "reviews", name), { recursive: true });
-      for (const file of ["review.json", "comments.json", ...(cache ? ["diff.json"] : [])]) {
+      for (const file of ["review.json", "comments.json"]) {
         const from = join(config.dataDir, "reviews", SESSION, file);
         if (existsSync(from)) copyFileSync(from, join(dataDir, "reviews", name, file));
       }
+      if (cache) await writeDiffCache(dataDir, name, now);
     }
     writeFileSync(join(dataDir, "current"), `${SESSION}\n`);
     return dataDir;
@@ -1677,7 +1681,7 @@ describe("a move of current", () => {
   }
 
   it("announces what the task's review.json became while it was being read", async () => {
-    const dataDir = dataDirWith([{ name: "moved", cache: true }]);
+    const dataDir = await dataDirWith([{ name: "moved", cache: true }]);
     const heard: WatcherEvent[] = [];
     const own = createEventBus();
     own.subscribe((event) => heard.push(event));
@@ -1716,7 +1720,7 @@ describe("a move of current", () => {
   });
 
   it("says which repositories moved while nobody followed the task, after it follows it", async () => {
-    const dataDir = dataDirWith([{ name: "moved", cache: true }]);
+    const dataDir = await dataDirWith([{ name: "moved", cache: true }]);
     // What a task that was not followed keeps: the cache of its last read, one repository of it stale.
     const cache = JSON.parse(
       readFileSync(join(dataDir, "reviews", "moved", "diff.json"), "utf8"),
@@ -1760,7 +1764,7 @@ describe("a move of current", () => {
   });
 
   it("does not read a task that has no diff.json before it follows it", async () => {
-    const dataDir = dataDirWith([{ name: "fresh", cache: false }]);
+    const dataDir = await dataDirWith([{ name: "fresh", cache: false }]);
     const heard: WatcherEvent[] = [];
     const own = createEventBus();
     own.subscribe((event) => heard.push(event));

@@ -790,6 +790,16 @@ without the task, under the 20 s deadline: `held` in `tests/server.test.ts`, and
 "stops counting a window among the followed tasks once its reader is closed" in
 `tests/events.test.ts`.
 
+**A file a watcher writes is not waited for by its event.** The watcher sends
+`diff-changed` before it writes `diff.json`, which follows a moment later
+([05-watcher.md](05-watcher.md)), so a test that waited for the event and then
+copied the file could copy the one before. The move tests of
+`tests/watcher.test.ts` copied the fixture's `diff.json` right after `arm()` had
+waited for the removal of its probe file, and when they ran alone the copy still
+listed `armed-0.ts` in the other repository, which the task's read then reported
+as moved (DA-55.9). They now write their tasks' cache from a scan of the tree
+itself, and wait on nothing.
+
 **A test's timeout is a deadline on a hang.** Vitest's defaults of 5 s per test
 and 10 s per hook failed work that claims no time at all — the byte comparison
 of two synthetic trees, the generation of a fixture in a hook — once the machine

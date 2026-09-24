@@ -527,6 +527,15 @@ and `bun run release` refuses a version that has no section. See
 
 ### Fixed
 
+- **The watcher verdict on repositories that moved while unfollowed no longer
+  leans on the tests before it** (DA-55.9). "says which repositories moved while
+  nobody followed the task, after it follows it" copied the fixture's `diff.json`,
+  which the fixture's watcher writes after the event the file's `arm()` waits
+  for; run alone, the copy still listed the probe file `armed-0.ts` of the other
+  repository and the verdict received two repositories instead of one. The move
+  tests now write their tasks' cache from a scan of the tree
+  ([11-perf.md](docs/reference/11-perf.md#waits-in-the-suites)).
+
 - **The suites' live-stream helpers close the connection, not only the body**
   (DA-60.3). Under Bun, cancelling a response body left the connection open and
   the server counting the window among the followed tasks, which a test that
