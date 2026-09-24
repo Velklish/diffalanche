@@ -1,5 +1,6 @@
 # DA-47 · Note to comment in the reviewer's own style
 
+- **Order:** 850
 - **Scope:** 08-ui, 09-ml (see [reference](../../reference/README.md))
 - **Created:** 2026-09-05
 - **Dependencies:** DA-36, DA-46

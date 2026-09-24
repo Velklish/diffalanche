@@ -1,5 +1,6 @@
 # DA-42 · Re-anchoring after code edits and orphaned status
 
+- **Order:** 800
 - **Scope:** 04-domain, 05-watcher (see [reference](../../reference/README.md))
 - **Created:** 2026-09-05
 - **Dependencies:** DA-12

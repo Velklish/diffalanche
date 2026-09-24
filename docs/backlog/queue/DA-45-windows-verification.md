@@ -1,5 +1,6 @@
 # DA-45 · Windows verification
 
+- **Order:** 830
 - **Scope:** 06-cli, 03-storage, 05-watcher (see [reference](../../reference/README.md))
 - **Created:** 2026-09-05
 - **Dependencies:** DA-31

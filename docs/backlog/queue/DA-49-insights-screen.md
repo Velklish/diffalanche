@@ -1,5 +1,6 @@
 # DA-49 · Insights screen
 
+- **Order:** 870
 - **Scope:** 08-ui (see [reference](../../reference/README.md))
 - **Created:** 2026-09-05
 - **Dependencies:** DA-48

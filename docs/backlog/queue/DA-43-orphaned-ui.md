@@ -1,5 +1,6 @@
 # DA-43 · Orphaned comments in the UI with model proposal
 
+- **Order:** 810
 - **Scope:** 08-ui, 09-ml (see [reference](../../reference/README.md))
 - **Created:** 2026-09-05
 - **Dependencies:** DA-36, DA-42

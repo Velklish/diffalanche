@@ -1,5 +1,6 @@
 # DA-48 · insights command: recurring findings
 
+- **Order:** 860
 - **Scope:** 09-ml, 06-cli (see [reference](../../reference/README.md))
 - **Created:** 2026-09-05
 - **Dependencies:** DA-34, DA-46

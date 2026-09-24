@@ -1,5 +1,6 @@
 # DA-44 · LSP tier: go to definition and find references
 
+- **Order:** 820
 - **Scope:** 09-ml, 07-server, 08-ui (see [reference](../../reference/README.md))
 - **Created:** 2026-09-05
 - **Dependencies:** DA-39

@@ -1,5 +1,6 @@
 # DA-46 · Generative model runtime: model pull and status
 
+- **Order:** 840
 - **Scope:** 09-ml, 06-cli (see [reference](../../reference/README.md))
 - **Created:** 2026-09-05
 - **Dependencies:** DA-33

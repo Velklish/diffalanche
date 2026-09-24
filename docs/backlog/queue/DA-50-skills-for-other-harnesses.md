@@ -1,5 +1,6 @@
 # DA-50 · Ship agent skills for Cursor and Codex as well
 
+- **Order:** 880
 - **Scope:** 10-skills (see [reference](../../reference/README.md))
 - **Created:** 2026-09-05
 - **Dependencies:** DA-29
