@@ -66,9 +66,14 @@ export async function startReviewServer(options: ReviewServerOptions): Promise<R
   // The watcher is what keeps a session's `diff.json` fresh, so the service asks
   // it which session that is ([07-server.md](../../docs/reference/07-server.md)).
   let watcher: Watcher | null = null;
-  const review = createReviewService(config, { watched: () => watcher?.session() ?? null });
+  const review = createReviewService(config, {
+    watched: () => watcher?.session() ?? null,
+    // What a window holds of a task is what the watcher's first read of it compares with (05-watcher.md).
+    served: (name, document) => watcher?.served(name, document.session, document.comments),
+  });
   const bus = createEventBus();
-  const events = createEventStream();
+  // The last window on a task gone, what it was served goes too, burst or none (05-watcher.md).
+  const events = createEventStream(undefined, (name) => watcher?.left(name));
   const activity = createActivityLog({ onRecord: forwardActivity(events) });
   forwardEvents(bus, events);
 

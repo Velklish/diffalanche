@@ -773,6 +773,23 @@ behind it simply never ran, and it prints green. So every wait in `tests/`,
   floor (`tests/lock-writers.test.ts`). The residual is honest: the multiple is
   a heuristic, not a bound.
 
+**A window the server has to see go away is closed with an abort.** Under Bun,
+cancelling a response body does not close the connection: the server keeps the
+stream subscribed and counts the window among the tasks the watcher follows.
+When DA-60.3 was filed the window was still counted 40 s later, past two
+heartbeats, where an abort of the request was gone in 52 ms on Bun and 54 ms on
+Node — which is what a closed tab does to its connection. So the stream helpers of the suites, `listen` in
+`tests/server.test.ts` and `read` in `tests/events.test.ts`, make the request
+themselves and abort it in `close()`, and a test cannot pick the cancel by
+accident. They hand the reader back once the response head is in, which is when
+the server has subscribed the stream; under Bun a replay written as the stream
+opens can already be read by then, so a replay is waited for with `waitFor`,
+which counts frames that came before it was asked, and not with `next`. The close reaches the server after the client, so a test that needs
+the server to have seen it waits for it as a condition — `server.windows()`
+without the task, under the 20 s deadline: `held` in `tests/server.test.ts`, and
+"stops counting a window among the followed tasks once its reader is closed" in
+`tests/events.test.ts`.
+
 **A test's timeout is a deadline on a hang.** Vitest's defaults of 5 s per test
 and 10 s per hook failed work that claims no time at all — the byte comparison
 of two synthetic trees, the generation of a fixture in a hook — once the machine

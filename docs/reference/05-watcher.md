@@ -86,6 +86,11 @@ A rescan that fails is handed to `onError` and dropped: the queue stays usable,
 and an `onError` that throws is caught too, because reporting a failure must not
 become one.
 
+`watcher.served(name, review, comments)` is what a window was served of a task:
+the baseline the burst that starts following that task compares with, and
+`watcher.left(name)` says the last window on that task has gone, which takes it
+away again ([Events](#events), where the sessions it follows are).
+
 `watcher.refresh()` reads the followed session's whole change set from the
 working tree — every repository of its scope, the way a rescan with no cache to
 patch does — hands it to `onRescan` and writes `diff.json`. It runs in the same
@@ -395,12 +400,89 @@ window is still open and keep one whose window has closed. A connection's
 appearance *is* a window opening and its disappearance *is* that window going
 away — the property the set needs, by definition rather than by proxy.
 
-**A session entering the set is snapshotted without announcing anything**, and
-its entry is dropped when it leaves. Otherwise a window opening on a task with
-history would be told its whole history is new; a reconnect therefore costs one
-silent snapshot rather than a burst. The three comment events carry the name of
-the session their thread belongs to, so a window can drop what is not its own
-([07-server.md](07-server.md)).
+**A session entering the set is compared with what its window was served**, and
+its entry is dropped when it leaves. A page asks for its task's document and
+opens its stream together on a first load, and a switch of task opens the stream
+first (`src/ui/live.ts`); either way the watcher follows the task only from the
+first burst of the data directory after the stream is open, and when that burst
+is the write itself
+— an agent's `review comment` into the task it has just printed a link to, a
+`review base` or `review scope` from a terminal — a baseline read from the files
+then would already hold the write, and no frame would go out. DA-55.8 reproduced
+both, the comment and the scope: `tests/server.test.ts`, "a window that has just
+opened on it". So the server hands the watcher every document it serves, before
+serialising it: `watcher.served(name, review, comments)` keeps the session's
+metadata and a snapshot of the comments in it, and the burst that starts
+following the task compares its files with that — a write that landed after the
+document is a frame like any other, and what the document already had is not
+news: no comment frame for it, and no `session-changed` for the `review.json` a
+comment write rewrites.
+
+Without a document to compare with — a stream that reconnected, a window whose
+page never asked for one — the files as that burst reads them are the baseline,
+and nothing is announced. Otherwise a window opening on a task with history would
+be told its whole history is new; a reconnect therefore costs one silent
+snapshot rather than a burst.
+
+Four things keep what was served close to what the window holds: never lost
+for a window that is still opening, and gone with the windows that held it:
+
+- **It survives the bursts that drop what nobody follows.** It is kept apart
+  from the snapshots, so the burst between the document and the stream — the
+  document's own lock is one — leaves it. Every burst that follows the task drops
+  it, having a baseline of its own: the snapshot the task's previous burst took,
+  or the one this burst compared with what was served. The burst that sees the
+  task leave the set drops it too, since a document served while a window was on
+  the task — a reload, the re-read a `session-changed` asks for — is not what the
+  next window on it will hold; and so does a burst whose listing no longer has
+  the task.
+- **It goes with the last window on the task.** A window can open and close
+  while no burst runs — a reload of a task nobody writes to — and then no burst
+  ever followed the task, so none can see it leave. The live stream knows: when
+  the last connection on a task ends, the server calls `watcher.left(name)` and
+  what was served of the task goes. A later window whose stream opens before its
+  document, as a switch of task does, is then compared with the files rather
+  than with an hour-old document, and the hour is not announced as news.
+- **It is looked up after the burst has read the files.** A document served
+  while the burst read them is still the baseline, so a write between that
+  document and the burst's read is a frame for its window rather than a silent
+  loss. That baseline can be newer than what the burst read, and then a frame is
+  wrong for a moment: a comment added in that moment is in the window's document
+  and still comes as a frame from the next burst, which the write itself causes;
+  one deleted in that moment is announced once, and the window, reading its
+  thread, finds it gone. Both are seen and cost a re-read; a loss would last until
+  a reload (PRODUCT.md, principle 5).
+- **Comments outside the document's scope are not news.** A document shows the
+  comments inside its task's scope, so one outside it — which only a hand edit of
+  `comments.json` makes — was never in it to be missed, and is taken as known.
+
+What is kept per task is the **oldest** document served since: two windows opened
+on one task at once are compared with the earlier one's, so what landed between
+their documents reaches both — the later one hears it twice, which re-reads a
+thread it already has, where comparing with the later document would lose it for
+the earlier window without a word.
+
+Three corners stay open, and closing them needs a stream that knows which
+document its window holds (DA-55.11):
+
+- **A document whose window closed before its stream opened** has no stream to
+  end, so it stays until a burst follows the task, the task is gone, or another
+  window on it closes. A later window whose stream opens before its own document
+  is compared with it, and a write made in between, while no window was on the
+  task, reaches it as a frame and a feed line although it is history.
+- **A stream whose end reaches the server after the next document** — a reload
+  whose old connection is torn down late — takes the new window's document with
+  it, and that window is compared with the files the burst reads: a write between
+  its document and that burst reaches it on reload only.
+- **A task already followed when a window is served it** — the current one, or
+  one another window is on — is compared with its own last read, so a frame sent
+  between that window's document and its stream reaches the windows open then
+  and not this one (DA-55.10).
+
+An entry costs a few hundred comment ids at most, one per task served.
+
+The three comment events carry the name of the session their thread belongs to,
+so a window can drop what is not its own ([07-server.md](07-server.md)).
 
 A task no window is on is not followed, and a write into its files is no event
 at all. What the server holds of such a task is kept honest by `onDataChanged`

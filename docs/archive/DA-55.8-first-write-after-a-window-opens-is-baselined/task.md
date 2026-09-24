@@ -14,7 +14,7 @@ the task through its stream, and the watcher follows it from the next burst of
 the data directory on. That burst takes the task's comments as a baseline without
 announcing anything:
 
-<!-- quote:../../../src/core/watcher/index.ts -->
+<!-- quote:before:../../../src/core/watcher/index.ts -->
 ```ts
     // Nothing was read the last time — a file being written as it was read, one
     // broken by hand and since repaired, or a task a window has just opened.
@@ -47,7 +47,7 @@ from the code, **not reproduced**. The watcher drops the metadata of every task
 it does not follow on each burst, and a task it has just started following has
 none, so its first read is taken as the baseline and announces nothing:
 
-<!-- quote:../../../src/core/watcher/index.ts -->
+<!-- quote:before:../../../src/core/watcher/index.ts -->
 ```ts
       const known = metadata.has(name);
       metadata.set(name, next);

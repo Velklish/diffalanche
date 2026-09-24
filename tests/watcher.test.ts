@@ -1559,6 +1559,89 @@ describe("the sessions a watcher follows", () => {
       rmSync(dataDir, { recursive: true, force: true });
     }
   }, 60_000);
+
+  it("hears a comment written between a window's document and the burst that reads the task", async () => {
+    const own = createEventBus();
+    const heard: WatcherEvent[] = [];
+    own.subscribe((event) => heard.push(event));
+    const dataDir = mkdtempSync(join(tmpdir(), "diffalanche-served-"));
+    for (const name of [SESSION, "followed"]) {
+      mkdirSync(join(dataDir, "reviews", name), { recursive: true });
+      for (const file of ["review.json", "comments.json"]) {
+        copyFileSync(
+          join(config.dataDir, "reviews", SESSION, file),
+          join(dataDir, "reviews", name, file),
+        );
+      }
+    }
+    writeFileSync(join(dataDir, "current"), `${SESSION}\n`);
+    // The document a window was served, and a comment written after it: the document reaches the
+    // watcher only while the burst reads the task's comments, after the write.
+    const review = await readReview(dataDir, "followed");
+    const document = await readComments(dataDir, "followed");
+    let watched: string[] = [];
+    let arm = false;
+    let served = false;
+    let watching: Watcher | null = null;
+    const proxied = new Proxy(
+      { ...config, dataDir },
+      {
+        get: (target, key, receiver) => {
+          if (key === "dataDir" && arm) {
+            arm = false;
+            served = true;
+            watching?.served("followed", review, document);
+          }
+          return Reflect.get(target, key, receiver);
+        },
+      },
+    );
+    watching = await startWatcher({
+      config: proxied,
+      scan: found,
+      ...(NATIVE_WATCH ? {} : { recursive: false, pollIntervalMs: 40 }),
+      bus: own,
+      activity: createActivityLog(),
+      // Asked once a burst has read `current` and before it reads the comments of the tasks.
+      sessions: () => {
+        if (watched.length > 0 && !served) arm = true;
+        return watched;
+      },
+      onError: () => undefined,
+    });
+    const between = (): boolean =>
+      heard.some((event) => event.type === "comment-added" && event.id === "c_between");
+    try {
+      const file = join(dataDir, "reviews", "followed", "comments.json");
+      const list = JSON.parse(readFileSync(file, "utf8")) as { comments: unknown[] };
+      list.comments.push(comment("c_between", "written after the window's document"));
+      watched = ["followed"];
+      writeFileSync(file, JSON.stringify(list));
+      const deadline = performance.now() + 30_000;
+      for (let attempt = 0; !served; attempt += 1) {
+        if (performance.now() > deadline) throw new Error("no burst read the task");
+        await createSession(dataDir, `burst-${attempt}`, { mode: "head" }, undefined, {
+          use: false,
+        });
+        const patience = performance.now() + 2_000;
+        while (!served && performance.now() < patience) {
+          await new Promise((done) => setTimeout(done, 5));
+        }
+      }
+      await createSession(dataDir, "barrier", { mode: "head" }, undefined, { use: false });
+      const until = performance.now() + 20_000;
+      const barrier = (): boolean =>
+        heard.some((event) => event.type === "sessions-changed" && event.name === "barrier");
+      while (!barrier() && performance.now() < until) {
+        await new Promise((done) => setTimeout(done, 5));
+      }
+      expect(barrier()).toBe(true);
+      expect(between()).toBe(true);
+    } finally {
+      await watching.close();
+      rmSync(dataDir, { recursive: true, force: true });
+    }
+  }, 60_000);
 });
 
 describe("a move of current", () => {

@@ -19,7 +19,13 @@ import {
   useSession,
 } from "../src/core/domain/index.ts";
 import type { DiffCache } from "../src/core/storage/index.ts";
-import { NoSuchSessionError, readDiffCache, writeDiffCache } from "../src/core/storage/index.ts";
+import {
+  NoSuchSessionError,
+  readComments,
+  readDiffCache,
+  writeComments,
+  writeDiffCache,
+} from "../src/core/storage/index.ts";
 import type { ReviewDocument } from "../src/core/types.ts";
 import { createActivityLog } from "../src/core/watcher/index.ts";
 import { createApp } from "../src/server/app.ts";
@@ -53,12 +59,15 @@ const noUi: UiAssets = { read: async () => null };
  * that waits for the watcher runs on there (05-watcher.md). */
 const NATIVE_WATCH = process.env.DIFFALANCHE_TEST_RUNTIME !== "bun";
 
-/** An SSE response read as text as it arrives: enough to ask whether a frame has come. */
-function listen(response: Response): {
+/** A live stream read as text as it arrives: enough to ask whether a frame has come. It makes the
+ * request, so `close` aborts it: under Bun a cancelled body leaves the window counted (11-perf.md). */
+async function listen(url: string): Promise<{
   heard: (event: string) => boolean;
   said: (text: string) => boolean;
   close: () => Promise<void>;
-} {
+}> {
+  const gone = new AbortController();
+  const response = await fetch(url, { signal: gone.signal });
   const reader = (response.body as ReadableStream<Uint8Array>).getReader();
   const decoder = new TextDecoder();
   let text = "";
@@ -77,6 +86,7 @@ function listen(response: Response): {
     heard: (event) => text.includes(`event: ${event}\n`),
     said: (needle) => text.includes(needle),
     close: async () => {
+      gone.abort();
       await reader.cancel().catch(() => undefined);
     },
   };
@@ -775,7 +785,7 @@ describe("the change set a document is built from", () => {
       ui,
       ...(NATIVE_WATCH ? {} : { recursive: false }),
     });
-    const stream = listen(await fetch(`${server.url}/api/events`));
+    const stream = await listen(`${server.url}/api/events`);
     try {
       // `review use` from a terminal, repeated: a write made while the recursive watch arms is lost
       // rather than late, and no longer wait brings it back (05-watcher.md).
@@ -964,7 +974,7 @@ describe("the change set a document is built from", () => {
 });
 
 describe("a held document of a task nobody follows", () => {
-  type Listener = ReturnType<typeof listen>;
+  type Listener = Awaited<ReturnType<typeof listen>>;
 
   /** `SESSION` current and `NAMED` beside it, in a data directory of its own: the tasks that
    * prove a burst was read are created here and must not reach the shared fixture. */
@@ -1010,16 +1020,10 @@ describe("a held document of a task nobody follows", () => {
       ui,
       ...(NATIVE_WATCH ? {} : { recursive: false }),
     });
-    const current = listen(await fetch(`${server.url}/api/events`));
+    const current = await listen(`${server.url}/api/events`);
     await barrier(dataDir, current, "armed");
     const document = await reviewOf(server.url, NAMED);
-    // A window that goes away takes its connection with it: an abort, since under Bun cancelling
-    // the body alone leaves the connection open and the window counted.
-    const gone = new AbortController();
-    const window = listen(
-      await fetch(`${server.url}/api/events?review=${NAMED}`, { signal: gone.signal }),
-    );
-    gone.abort();
+    const window = await listen(`${server.url}/api/events?review=${NAMED}`);
     await window.close();
     // The client's end reaches the server later, and until then the watcher still follows the
     // task: the write below would be a followed task's, which is not the case under test.
@@ -1105,7 +1109,7 @@ describe("a held document of a task nobody follows", () => {
       ui,
       ...(NATIVE_WATCH ? {} : { recursive: false }),
     });
-    const current = listen(await fetch(`${server.url}/api/events`));
+    const current = await listen(`${server.url}/api/events`);
     try {
       await barrier(dataDir, current, "armed");
       expect(shown(await reviewOf(server.url, SESSION))).toContain(EDIT);
@@ -1157,4 +1161,235 @@ describe("a held document of a task nobody follows", () => {
       await run.close();
     }
   }, 120_000);
+
+  describe("a window that has just opened on it", () => {
+    type Server = Awaited<ReturnType<typeof startReviewServer>>;
+
+    /** A server on its own data directory and a window on `current` that hears every frame. */
+    async function started(prepare?: (dataDir: string) => Promise<void>): Promise<{
+      dataDir: string;
+      server: Server;
+      current: Listener;
+      close: () => Promise<void>;
+    }> {
+      const dataDir = await ownDataDir();
+      await prepare?.(dataDir);
+      const server = await startReviewServer({
+        config: { ...config, dataDir, port: 0 },
+        ui,
+        ...(NATIVE_WATCH ? {} : { recursive: false }),
+      });
+      const current = await listen(`${server.url}/api/events`);
+      await barrier(dataDir, current, "armed");
+      return {
+        dataDir,
+        server,
+        current,
+        close: async () => {
+          await current.close();
+          await server.close();
+          rmSync(dataDir, { recursive: true, force: true });
+        },
+      };
+    }
+
+    /** Until the server counts a window on `NAMED`, or no longer does. */
+    async function counted(server: Server, open: boolean): Promise<void> {
+      const deadline = performance.now() + 20_000;
+      while (server.windows().includes(NAMED) !== open) {
+        if (performance.now() > deadline)
+          throw new Error(`the window never ${open ? "opened" : "closed"}`);
+        await new Promise((done) => setTimeout(done, 5));
+      }
+    }
+
+    /** `started`, and a window served `NAMED` whose stream is open: nothing written into the task
+     * since `prepare`. */
+    async function opened(prepare?: (dataDir: string) => Promise<void>): Promise<{
+      dataDir: string;
+      current: Listener;
+      window: Listener;
+      close: () => Promise<void>;
+    }> {
+      const run = await started(prepare);
+      // The order a page keeps, the document before the stream, with a burst between the two: the
+      // document's own lock is one, and it must not stand in for the write under test.
+      await reviewOf(run.server.url, NAMED);
+      await barrier(run.dataDir, run.current, "served");
+      const window = await listen(`${run.server.url}/api/events?review=${NAMED}`);
+      await counted(run.server, true);
+      return {
+        dataDir: run.dataDir,
+        current: run.current,
+        window,
+        close: async () => {
+          await window.close();
+          await run.close();
+        },
+      };
+    }
+
+    it("hears a comment written before any other burst of the data directory", async () => {
+      const run = await opened();
+      try {
+        const written = await addComment(run.dataDir, NAMED, {
+          severity: "nit",
+          body: "written by an agent into the task it just printed a link to",
+          author: "kim.p",
+          role: "human",
+        });
+        await barrier(run.dataDir, run.current, "read");
+        expect(run.window.said(written.id)).toBe(true);
+      } finally {
+        await run.close();
+      }
+    }, 120_000);
+
+    it("hears a scope set from a terminal before any other burst of the data directory", async () => {
+      const run = await opened();
+      try {
+        const found = await findRepositories(config);
+        await setScope(run.dataDir, NAMED, [{ repo: inScope, paths: null }], found);
+        await barrier(run.dataDir, run.current, "read");
+        expect(run.window.said(`{"type":"session-changed","name":"${NAMED}"}`)).toBe(true);
+      } finally {
+        await run.close();
+      }
+    }, 120_000);
+
+    const note = { severity: "nit", author: "kim.p", role: "human" } as const;
+
+    it("is not told the comments its document already had", async () => {
+      let history = "";
+      const run = await opened(async (dataDir) => {
+        history = (await addComment(dataDir, NAMED, { ...note, body: "there before" })).id;
+      });
+      try {
+        const written = await addComment(run.dataDir, NAMED, { ...note, body: "written since" });
+        await barrier(run.dataDir, run.current, "read");
+        expect(run.window.said(written.id)).toBe(true);
+        expect(run.window.said(history)).toBe(false);
+        // A comment write rewrites `review.json` too, and what the review is did not change.
+        expect(run.window.heard("session-changed")).toBe(false);
+      } finally {
+        await run.close();
+      }
+    }, 120_000);
+
+    it("is not told a comment outside its scope, which its document could not show", async () => {
+      let outside = "";
+      const run = await opened(async (dataDir) => {
+        await setScope(dataDir, NAMED, [{ repo: inScope, paths: null }], [inScope, outOfScope]);
+        outside = (await addComment(dataDir, NAMED, { ...note, body: "moved out by hand" })).id;
+        // Nothing writes such a comment: a `comments.json` edited by hand is where it comes from.
+        const moved = (await readComments(dataDir, NAMED)).map((one) =>
+          one.id === outside ? { ...one, repo: outOfScope } : one,
+        );
+        await writeComments(dataDir, NAMED, moved);
+      });
+      try {
+        const written = await addComment(run.dataDir, NAMED, { ...note, body: "written since" });
+        await barrier(run.dataDir, run.current, "read");
+        expect(run.window.said(written.id)).toBe(true);
+        expect(run.window.said(outside)).toBe(false);
+        expect(run.window.heard("session-changed")).toBe(false);
+      } finally {
+        await run.close();
+      }
+    }, 120_000);
+
+    it("hears what landed between two windows' documents, compared with the earlier one", async () => {
+      const run = await started();
+      let window: Listener | null = null;
+      try {
+        await reviewOf(run.server.url, NAMED);
+        await barrier(run.dataDir, run.current, "served");
+        const between = await addComment(run.dataDir, NAMED, { ...note, body: "between the two" });
+        await barrier(run.dataDir, run.current, "written");
+        // The second window's document has the comment; the first one's does not.
+        const later = await reviewOf(run.server.url, NAMED);
+        expect(later.comments.map((one) => one.id)).toContain(between.id);
+        window = await listen(`${run.server.url}/api/events?review=${NAMED}`);
+        await counted(run.server, true);
+        await barrier(run.dataDir, run.current, "read");
+        expect(window.said(between.id)).toBe(true);
+      } finally {
+        await window?.close();
+        await run.close();
+      }
+    }, 120_000);
+
+    it("is not told what was written while no window was on it, after it left the followed set", async () => {
+      const run = await started();
+      let window: Listener | null = null;
+      try {
+        // A window on the task, followed, and served its document again after its own lock's
+        // burst: a reload, or the re-read `session-changed` asks for.
+        const first = await listen(`${run.server.url}/api/events?review=${NAMED}`);
+        await counted(run.server, true);
+        await reviewOf(run.server.url, NAMED);
+        await barrier(run.dataDir, run.current, "followed");
+        await reviewOf(run.server.url, NAMED);
+        await first.close();
+        await counted(run.server, false);
+        await barrier(run.dataDir, run.current, "left");
+        const written = await addComment(run.dataDir, NAMED, { ...note, body: "while nobody" });
+        await barrier(run.dataDir, run.current, "written");
+        // A window whose stream opens before its document, as a switch of task does.
+        window = await listen(`${run.server.url}/api/events?review=${NAMED}`);
+        await counted(run.server, true);
+        await barrier(run.dataDir, run.current, "read");
+        expect(window.said(written.id)).toBe(false);
+      } finally {
+        await window?.close();
+        await run.close();
+      }
+    }, 120_000);
+
+    it("is not told what was written after its window closed with no burst while it was open", async () => {
+      const run = await started();
+      let window: Listener | null = null;
+      try {
+        await reviewOf(run.server.url, NAMED);
+        await barrier(run.dataDir, run.current, "served");
+        // A window served the task, its stream opened and closed in a quiet moment: no burst ever
+        // followed the task, so only the stream's end can say the window is gone.
+        const first = await listen(`${run.server.url}/api/events?review=${NAMED}`);
+        await counted(run.server, true);
+        await first.close();
+        await counted(run.server, false);
+        const written = await addComment(run.dataDir, NAMED, { ...note, body: "while nobody" });
+        await barrier(run.dataDir, run.current, "written");
+        // A window whose stream opens before its document, as a switch of task does.
+        window = await listen(`${run.server.url}/api/events?review=${NAMED}`);
+        await counted(run.server, true);
+        await barrier(run.dataDir, run.current, "read");
+        expect(window.said(written.id)).toBe(false);
+      } finally {
+        await window?.close();
+        await run.close();
+      }
+    }, 120_000);
+
+    it("is not told the history of a task deleted and made again since its document", async () => {
+      const run = await started();
+      let window: Listener | null = null;
+      try {
+        await reviewOf(run.server.url, NAMED);
+        await barrier(run.dataDir, run.current, "served");
+        await deleteSession(run.dataDir, NAMED, { role: "human" });
+        await barrier(run.dataDir, run.current, "deleted");
+        await createSession(run.dataDir, NAMED, { mode: "head" }, undefined, { use: false });
+        const own = await addComment(run.dataDir, NAMED, { ...note, body: "the new task's own" });
+        await barrier(run.dataDir, run.current, "made-again");
+        window = await listen(`${run.server.url}/api/events?review=${NAMED}`);
+        await counted(run.server, true);
+        await barrier(run.dataDir, run.current, "read");
+        expect(window.said(own.id)).toBe(false);
+      } finally {
+        await window?.close();
+        await run.close();
+      }
+    }, 120_000);
+  });
 });

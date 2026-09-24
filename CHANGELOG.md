@@ -527,6 +527,30 @@ and `bun run release` refuses a version that has no section. See
 
 ### Fixed
 
+- **The suites' live-stream helpers close the connection, not only the body**
+  (DA-60.3). Under Bun, cancelling a response body left the connection open and
+  the server counting the window among the followed tasks, which a test that
+  needs the server to see a window go away could pick by accident. `listen` of
+  `tests/server.test.ts` and `read` of `tests/events.test.ts` now make the
+  request themselves and abort it in `close()`, and a verdict of
+  `tests/events.test.ts` holds the server to seeing that close
+  ([11-perf.md](docs/reference/11-perf.md#waits-in-the-suites)).
+
+- **A window just opened on a task hears the first write into it** (DA-55.8). The
+  watcher follows a task from the first burst of the data directory after its
+  window's stream opens, and took that burst's read as the task's baseline, so
+  when the burst was the write itself — an agent's `review comment` into the
+  task it had just printed a link to, a `review base` or `review scope` from a
+  terminal — no `comment-added` or `session-changed` went out and the window
+  showed the write only after a reload. The server now hands the watcher each
+  review document it serves, and the burst that starts following a task compares
+  with the oldest document served of it since: a write since is a frame, what the
+  document already had is not, nor a comment outside its scope. What was served
+  goes once a burst follows the task, when the task leaves the followed set, when
+  the last window on it closes — a burst or none — and when it is gone. A stream that reconnects with no document served
+  since is baselined in silence, as before
+  ([05-watcher.md](docs/reference/05-watcher.md#events)).
+
 - **Browse mode follows the working tree, a drag re-renders less, and a thread
   outside the hunks is reached** (DA-37.1). The browsed file is read again, in
   place, when an edit changes its patch; the rows are memoised in blocks of 200,

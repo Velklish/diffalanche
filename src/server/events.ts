@@ -74,7 +74,11 @@ export type EventStream = {
   close: () => void;
 };
 
-export function createEventStream(capacity: number = REPLAY_CAPACITY): EventStream {
+/** `left` is told when the last window on a task goes: the stream is what knows (05-watcher.md). */
+export function createEventStream(
+  capacity: number = REPLAY_CAPACITY,
+  left?: (session: string) => void,
+): EventStream {
   const ring: EventFrame[] = [];
   const clients = new Set<Client>();
   let nextId = 1;
@@ -115,7 +119,9 @@ export function createEventStream(capacity: number = REPLAY_CAPACITY): EventStre
     subscribe(client) {
       clients.add(client);
       return () => {
-        clients.delete(client);
+        // Asked twice, by the abort and by the loop's end; only the first is the window going.
+        if (!clients.delete(client) || client.session === null) return;
+        if (![...clients].some((one) => one.session === client.session)) left?.(client.session);
       };
     },
     open: () => clients.size,

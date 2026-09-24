@@ -150,6 +150,9 @@ type ReviewServiceOptions = {
   /** The session the watcher keeps fresh. Any other one's `diff.json` is read
    * from git instead ([07-server.md](../../docs/reference/07-server.md)). */
   watched?: () => string | null;
+  /** A window is served this document, before it is serialised: the watcher's baseline of a
+   * task it starts following for that window ([07-server.md](../../docs/reference/07-server.md)). */
+  served?: (session: string, document: ReviewDocument) => void;
 };
 
 export function createReviewService(
@@ -274,6 +277,7 @@ export function createReviewService(
       const asked = writes;
       const name = await resolveSessionName(config.dataDir, session);
       const document = await documentOf(name, asked);
+      options.served?.(name, document);
       const entry = sessions.get(name);
       // A document an invalidation kept out of the cache is serialised for the
       // request that asked and not kept.

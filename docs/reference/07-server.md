@@ -441,9 +441,9 @@ it is when the files have been read, so a rescan that patched it meanwhile is no
 undone ("keeps a rescan that landed while a held document's files were read
 again"); and a re-read that lands after one asked for later leaves that one's
 document in place, because its own files are the older ("keeps the later one
-when the earlier one lands last", `tests/review-reread.test.ts`). The followed tasks are marked too: the watcher takes the first snapshot
-of a task it starts following in silence, so a write that lands just then is in
-nobody's news. The mark is set on the change itself, before the burst's 100 ms
+when the earlier one lands last", `tests/review-reread.test.ts`). The followed tasks are marked too: a task the watcher starts following
+with no document served to compare with — a stream that reconnected — is
+snapshotted in silence, so a write that lands just then is in nobody's news. The mark is set on the change itself, before the burst's 100 ms
 of quiet, so a window opened in that time is not served the old document; the
 moment between a write and its notification is what is left.
 
@@ -604,6 +604,23 @@ ring.
 A change to a task's own `review.json` now reaches its window too: the metadata
 of every followed session is compared each burst, and `session-changed` names the
 session it is about.
+
+**What a window was served is what the watcher's first read of its task compares
+with.** The page asks for `GET /api/review?review=<name>` and opens its stream
+together on a first load, and opens the stream first on a switch of task; the
+watcher follows the task only from the first burst once the stream is open, and a
+comment or a scope written right then used to be that burst's baseline and
+reached no frame (DA-55.8, `tests/server.test.ts`, "a window that has just
+opened on it"). So `ReviewService` takes a `served` option, called with the
+session name and the document each time `payload` answers, before serialising
+it, and `serve.ts` hands it to `watcher.served` — the session and the comments in
+the document. Only `payload` calls it: `document()` is what the server reads for
+itself — the symbol index's warm-up right after the payload, `GET /api/warnings`
+— and a re-read there can be newer than what the window got. The other end is the
+live stream's: `createEventStream` takes a `left` callback, called when the last
+connection on a task ends, and `serve.ts` hands it to `watcher.left`, so what a
+window was served goes with the window even when no burst ever followed its task.
+The rules the watcher keeps it by are in [05-watcher.md](05-watcher.md).
 
 ### The candidates
 

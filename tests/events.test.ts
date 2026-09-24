@@ -55,8 +55,15 @@ type Reader = {
   close: () => Promise<void>;
 };
 
-/** Reads an SSE response as frames, the way `EventSource` would. */
-function read(response: Response): Reader {
+/** Reads a live stream as frames, the way `EventSource` would. It makes the request, so `close`
+ * aborts it: under Bun a cancelled body leaves the stream subscribed (11-perf.md). */
+async function read(
+  url: string,
+  init: RequestInit = {},
+  request: (url: string, init: RequestInit) => Response | Promise<Response> = fetch,
+): Promise<Reader> {
+  const gone = new AbortController();
+  const response = await request(url, { ...init, signal: gone.signal });
   const frames: Frame[] = [];
   const comments: string[] = [];
   const reader = (response.body as ReadableStream<Uint8Array>).getReader();
@@ -115,6 +122,7 @@ function read(response: Response): Reader {
       }
     },
     close: async () => {
+      gone.abort();
       await reader.cancel().catch(() => undefined);
     },
   };
@@ -134,7 +142,7 @@ beforeAll(async () => {
 /** Proves the watch of `REPO` delivers before a test writes into it: on the native path a write
  * made before the OS delivers is lost, not late, so it is repeated (`tests/watcher.test.ts`). */
 async function arm(): Promise<void> {
-  const stream = read(await fetch(`${server.url}/api/events`));
+  const stream = await read(`${server.url}/api/events`);
   const file = join(root, REPO, "armed.ts");
   try {
     for (let attempt = 0; ; attempt += 1) {
@@ -191,7 +199,7 @@ describe("the live stream", () => {
   });
 
   it("names the repository an edit changed, inside the budget", async () => {
-    const stream = read(await fetch(`${server.url}/api/events`));
+    const stream = await read(`${server.url}/api/events`);
     try {
       const started = Date.now();
       await writeFile(join(root, REPO, "streamed.ts"), "export const streamed = 1;\n");
@@ -223,7 +231,7 @@ describe("the live stream", () => {
     const comments = await list(config.dataDir, SESSION);
     const target =
       comments.find((one) => one.repo === REPO) ?? (comments[0] as (typeof comments)[0]);
-    const stream = read(await fetch(`${server.url}/api/events`));
+    const stream = await read(`${server.url}/api/events`);
     try {
       await run(process.execPath, [
         cli,
@@ -269,7 +277,7 @@ describe("the live stream", () => {
   }, 120_000);
 
   it("replays what a client missed while it was away", async () => {
-    const first = read(await fetch(`${server.url}/api/events`));
+    const first = await read(`${server.url}/api/events`);
     await writeFile(join(root, REPO, "before.ts"), "export const before = 1;\n");
     const seen = await first.next("diff-changed");
     await first.close();
@@ -288,17 +296,34 @@ describe("the live stream", () => {
       await new Promise((done) => setTimeout(done, 10));
     }
 
-    const second = read(
-      await fetch(`${server.url}/api/events`, { headers: { "Last-Event-ID": seen.id } }),
-    );
+    const second = await read(`${server.url}/api/events`, {
+      headers: { "Last-Event-ID": seen.id },
+    });
     try {
-      const replayed = await second.next("diff-changed");
+      // Any frame of it, the first one included: the replay is written as the stream opens, and
+      // under Bun it can be in before the request's promise has handed the reader back.
+      const replayed = await second.waitFor("diff-changed");
       expect(Number(replayed.id)).toBeGreaterThan(Number(seen.id));
       expect(JSON.parse(replayed.data)).toMatchObject({ files: ["after.ts"] });
     } finally {
       await second.close();
     }
   }, 120_000);
+
+  it("stops counting a window among the followed tasks once its reader is closed", async () => {
+    const counted = async (open: boolean): Promise<void> => {
+      const deadline = Date.now() + DEADLINE_MS;
+      while (server.windows().includes(SESSION) !== open) {
+        if (Date.now() > deadline) throw new Error(`the server never saw the window ${open}`);
+        await new Promise((done) => setTimeout(done, 5));
+      }
+    };
+    const window = await read(`${server.url}/api/events?review=${SESSION}`);
+    await counted(true);
+    // What a closed tab does to its connection, and what a cancelled body alone does not under Bun.
+    await window.close();
+    await counted(false);
+  });
 
   it("hands a client that has just connected the feed it missed", async (context) => {
     // It reads the reply the CLI wrote above, so it skips where that one does.
@@ -335,7 +360,7 @@ describe("the stream itself", () => {
     const events = createEventStream();
     const app = new Hono();
     app.get("/api/events", streamEvents(events, 20));
-    const stream = read(await app.request("/api/events"));
+    const stream = await read("/api/events", {}, (url, init) => app.request(url, init));
     try {
       const deadline = Date.now() + 2_000;
       while (stream.comments.length < 3 && Date.now() < deadline) {

@@ -9,7 +9,7 @@
 import { relative } from "node:path";
 import { filterChange, patchable, replaceRepository, scanReview } from "../change-set.ts";
 import type { Config } from "../config/index.ts";
-import { repositoryInScope } from "../domain/scope.ts";
+import { commentInScope, repositoryInScope } from "../domain/scope.ts";
 import { checkIgnore, readRepositoryChange } from "../git/index.ts";
 import { byCodePoint } from "../order.ts";
 import { globToRegExp } from "../scanner/index.ts";
@@ -113,6 +113,12 @@ export type Watcher = {
   /** Reads that session's whole change set from the working tree, in the queue of rescans: what
    * a server does before its first document ([07-server.md](../../../docs/reference/07-server.md)). */
   refresh: () => Promise<void>;
+  /** A window was served that task: its comments and `review.json` are what the burst that
+   * starts following it compares with ([05-watcher.md](../../../docs/reference/05-watcher.md)). */
+  served: (name: string, review: Review, comments: readonly Comment[]) => void;
+  /** The last window on that task went away: what it was served goes with it, whether or not a
+   * burst ever followed the task meanwhile (05-watcher.md). */
+  left: (name: string) => void;
   /** Stops watching and waits for the rescan in flight; nothing is written after it resolves. */
   close: () => Promise<void>;
 };
@@ -138,6 +144,9 @@ export async function startWatcher(options: WatcherOptions): Promise<Watcher> {
   // comments and not only about the current one's (DA-55.1).
   const comments = new Map<string, Map<string, CommentState> | null>();
   const metadata = new Map<string, string | null>();
+  // The oldest document served of each task not yet followed: kept through the bursts that drop what
+  // nobody follows, until one follows the task, it leaves the followed set, or it is gone (05-watcher.md).
+  const served = new Map<string, Served>();
   if (session !== null) {
     comments.set(session, await snapshotComments(config, session));
     metadata.set(session, await readMetadata(config, session));
@@ -290,7 +299,9 @@ export async function startWatcher(options: WatcherOptions): Promise<Watcher> {
     // readable burst would find no difference and say nothing.
     const reviews = listed ?? (await readFollowed(config, followed));
     reloadMetadata(followed, reviews);
+    for (const name of followed) served.delete(name);
     if (listed === null) return;
+    for (const name of [...served.keys()]) if (!listed.has(name)) served.delete(name);
     reloadSessions(listed);
     options.onSessions?.(listed);
   }
@@ -383,7 +394,10 @@ export async function startWatcher(options: WatcherOptions): Promise<Watcher> {
     // opening it again reads the file as the new baseline rather than replaying
     // what is already in it.
     for (const name of [...comments.keys()]) {
-      if (!followed.includes(name)) comments.delete(name);
+      if (followed.includes(name)) continue;
+      comments.delete(name);
+      // A document it was served while followed is not what the next window on it will hold.
+      served.delete(name);
     }
     for (const name of followed) await reloadCommentsOf(name);
   }
@@ -400,17 +414,21 @@ export async function startWatcher(options: WatcherOptions): Promise<Watcher> {
       comments.set(name, null);
       return;
     }
-    // Nothing was read the last time — a file being written as it was read, one
-    // broken by hand and since repaired, or a task a window has just opened.
-    // What is in it now is the baseline, not two hundred comments that were all
-    // just added.
-    if (before === undefined || before === null) {
+    // Asked after the read, so a write after a document served meanwhile is not lost; that document
+    // can be newer than the read, which costs a frame seen twice or one found gone (05-watcher.md).
+    const taken = before === undefined ? served.get(name) : undefined;
+    const baseline = before ?? taken?.comments;
+    // Nothing read last time — a file caught mid-write, one repaired by hand, a task opened unserved:
+    // what is in it now is the baseline, not two hundred comments that were all just added.
+    if (baseline === undefined || baseline === null) {
       comments.set(name, snapshotOf(list));
       return;
     }
     for (const comment of list) {
-      const was = before.get(comment.id);
+      const was = baseline.get(comment.id);
       if (was === undefined) {
+        // Outside the scope the document had, a comment was never in it to be missed.
+        if (taken !== undefined && !commentInScope(taken.scope, comment)) continue;
         bus.emit({ type: "comment-added", session: name, id: comment.id });
         recordWrite(activity, "commented", comment.role, comment.author, comment);
         continue;
@@ -433,15 +451,19 @@ export async function startWatcher(options: WatcherOptions): Promise<Watcher> {
    */
   function reloadMetadata(followed: string[], reviews: Map<string, Review | null>): void {
     for (const name of [...metadata.keys()]) {
-      if (!followed.includes(name)) metadata.delete(name);
+      if (followed.includes(name)) continue;
+      metadata.delete(name);
+      served.delete(name);
     }
     for (const name of followed) {
       const review = reviews.get(name) ?? null;
       const next = review === null ? null : metadataOf(review);
+      const taken = metadata.has(name) ? undefined : served.get(name);
+      if (taken !== undefined) metadata.set(name, taken.metadata);
       if (metadata.has(name) && metadata.get(name) === next) continue;
       const known = metadata.has(name);
       metadata.set(name, next);
-      // A task a window has just opened is not a task that changed: its
+      // A task a window opened unserved is not a task that changed: its
       // metadata is read as the baseline, the way its comments are.
       if (!known) continue;
       if (name === session) scope = review?.scope ?? null;
@@ -517,6 +539,18 @@ export async function startWatcher(options: WatcherOptions): Promise<Watcher> {
 
   return {
     session: () => session,
+    left: (name) => {
+      served.delete(name);
+    },
+    served: (name, review, list) => {
+      // The oldest one: a later window's is newer, and what landed between the two would be lost.
+      if (served.has(name)) return;
+      served.set(name, {
+        comments: snapshotOf(list),
+        metadata: metadataOf(review),
+        scope: review.scope,
+      });
+    },
     refresh: () => {
       // Nothing is announced: no window can be listening before the first document.
       enqueue(async () => {
@@ -669,7 +703,11 @@ function sameWarnings(before: ScanWarning[], after: ScanWarning[]): boolean {
 /** What a comment looked like at the last read: enough to tell what changed. */
 type CommentState = { status: CommentStatus; replies: number };
 
-function snapshotOf(comments: Comment[]): Map<string, CommentState> {
+/** What a window was served of a task, as the watcher compares it; `scope` is what the document
+ * showed, the comments outside it having never been in it. */
+type Served = { comments: Map<string, CommentState>; metadata: string; scope: Scope };
+
+function snapshotOf(comments: readonly Comment[]): Map<string, CommentState> {
   return new Map(
     comments.map((comment) => [
       comment.id,
