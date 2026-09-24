@@ -401,7 +401,10 @@ bun perf/run.ts      # one run, raw numbers
 ```
 
 `bun run perf` is a gate: it fails when the median of any budget line of the
-specification is over budget. It takes about half a minute.
+specification is over budget. It takes about half a minute. On a busy machine it
+first waits up to five minutes for the load averages to settle, and says
+`unable to measure` rather than a verdict when they do not
+([11-perf.md](docs/reference/11-perf.md#the-gate)).
 
 `bun run test:ui` builds the UI, generates the small synthetic review
 (`synth -- --out .perf/e2e --small`) and serves it: the diff and navigation

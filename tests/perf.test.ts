@@ -10,7 +10,9 @@ import { BUDGETS, evaluate, fails, formatTable, RUNNER_ALLOWANCE } from "../perf
 import { assertErasable, fixtureDrift } from "../perf/fixture.ts";
 import type { Measurement } from "../perf/harness.ts";
 import { parseArgs, SCRATCH_SESSION, twoSessions } from "../perf/harness.ts";
+import type { Load } from "../perf/load.ts";
 import {
+  beforeRun,
   busier,
   describeLoad,
   IGNORE_LOAD,
@@ -18,6 +20,7 @@ import {
   LOAD_CEILING,
   readLoad,
   tooBusy,
+  waitForQuiet,
 } from "../perf/load.ts";
 import { generate, PROFILES, STAMP_FILE } from "../scripts/synth.ts";
 import { loadConfig } from "../src/core/config/index.ts";
@@ -460,15 +463,27 @@ describe("the harness's scratch session", () => {
 });
 
 describe("the load the gate refuses to measure under", () => {
+  /** A reading of an 8-core machine, per core over one and five minutes. */
+  const at = (one: number, five = one): Load => ({
+    averages: [one * 8, five * 8],
+    cores: 8,
+    perCore: [one, five],
+  });
+
   it("reads the one-minute average per core", () => {
     const load = readLoad();
     expect(load.cores).toBeGreaterThan(0);
-    expect(Number.isFinite(load.average)).toBe(true);
-    expect(load.perCore).toBeCloseTo(load.average / load.cores, 1);
+    expect(Number.isFinite(load.averages[0])).toBe(true);
+    expect(load.perCore[0]).toBeCloseTo(load.averages[0] / load.cores, 1);
+  });
+
+  it("reads the five-minute average beside it", () => {
+    const load = readLoad();
+    expect(Number.isFinite(load.averages[1])).toBe(true);
+    expect(load.perCore[1]).toBeCloseTo(load.averages[1] / load.cores, 1);
   });
 
   it("declines above the ceiling and answers below it", () => {
-    const at = (perCore: number) => ({ average: perCore * 8, cores: 8, perCore });
     expect(tooBusy(at(LOAD_CEILING + 0.1))).toBe(true);
     expect(tooBusy(at(LOAD_CEILING))).toBe(false);
     expect(tooBusy(at(LOAD_CEILING / 10))).toBe(false);
@@ -476,14 +491,25 @@ describe("the load the gate refuses to measure under", () => {
     expect(tooBusy(at(2), 1)).toBe(true);
     expect(tooBusy(at(2), 3)).toBe(false);
     // A reading that is not a number is not a quiet machine.
-    expect(tooBusy({ average: Number.NaN, cores: 8, perCore: Number.NaN })).toBe(true);
+    expect(tooBusy(at(Number.NaN))).toBe(true);
+  });
+
+  it("declines while the last five minutes were over the ceiling, though the last one is not", () => {
+    // The shape of a gates chain's tail: the minute has forgotten the suites.
+    expect(tooBusy(at(0.77, LOAD_CEILING + 0.5))).toBe(true);
+    expect(tooBusy(at(LOAD_CEILING + 0.5, 0.77))).toBe(true);
+    expect(tooBusy(at(0.77, Number.NaN))).toBe(true);
+    // The run that opened DA-54.5 passes: 2.5 on five minutes is the minute's ceiling carried over.
+    expect(tooBusy(at(0.77, 1.56))).toBe(false);
   });
 
   it("takes the busier end: a machine that got busy halfway through decided the numbers", () => {
-    const quiet = { average: 2, cores: 8, perCore: 0.25 };
-    const loud = { average: 40, cores: 8, perCore: 5 };
+    const quiet = at(0.25);
+    const loud = at(5);
     expect(busier(quiet, loud)).toBe(loud);
     expect(busier(loud, quiet)).toBe(loud);
+    const settling = at(0.5, 3);
+    expect(busier(at(2), settling)).toBe(settling);
   });
 
   it("takes the bypass only from the exact value, so a stray export cannot arm it", () => {
@@ -494,8 +520,74 @@ describe("the load the gate refuses to measure under", () => {
   });
 
   it("says the load in words the table can carry", () => {
-    expect(describeLoad({ average: 40, cores: 8, perCore: 5 })).toBe(
-      `load average 40 over 8 cores is 5 per core, ceiling ${LOAD_CEILING}`,
+    expect(describeLoad({ averages: [6.1875, 12.5], cores: 8, perCore: [0.77, 1.56] })).toBe(
+      `load averages 6.19 and 12.5 over one and five minutes on 8 cores are 0.77 and 1.56 per core, ceiling ${LOAD_CEILING}`,
     );
+  });
+});
+
+describe("the wait for a quiet machine", () => {
+  const at = (perCore: number): Load => ({
+    averages: [perCore * 8, perCore * 8],
+    cores: 8,
+    perCore: [perCore, perCore],
+  });
+
+  /** A machine that reads `readings` in turn, and a clock that only counts. */
+  function machine(...readings: Load[]) {
+    const slept: number[] = [];
+    const said: string[] = [];
+    let next = 0;
+    return {
+      slept,
+      said,
+      read: () => readings[Math.min(next++, readings.length - 1)] as Load,
+      sleep: async (ms: number) => {
+        slept.push(ms);
+      },
+      say: (line: string) => {
+        said.push(line);
+      },
+    };
+  }
+
+  it("measures at once on a quiet machine, and says nothing", async () => {
+    const quiet = at(0.5);
+    const clock = machine(quiet);
+    expect(await waitForQuiet(clock)).toBe(quiet);
+    expect(clock.slept).toEqual([]);
+    expect(clock.said).toEqual([]);
+  });
+
+  it("waits for a busy machine to settle and hands back the first quiet reading", async () => {
+    const quiet = at(1);
+    const clock = machine(at(4), at(3), quiet, at(5));
+    expect(await waitForQuiet({ ...clock, waitMs: 60_000 })).toBe(quiet);
+    expect(clock.slept).toEqual([5_000, 5_000]);
+    expect(clock.said[0]).toMatch(/^waiting up to 60 s for a quiet machine: load averages 32 /);
+    expect(clock.said[1]).toMatch(/^quiet after 10 s: load averages 8 /);
+  });
+
+  it("gives up when the wait runs out and hands back the busy reading", async () => {
+    const busy = at(4);
+    const clock = machine(busy);
+    expect(await waitForQuiet({ ...clock, waitMs: 20_000 })).toBe(busy);
+    expect(clock.slept).toEqual([5_000, 5_000, 5_000, 5_000]);
+    expect(clock.said).toHaveLength(1);
+  });
+
+  it("declines to measure when the wait runs out, and not before it", async () => {
+    const clock = machine(at(4), at(4), at(1));
+    expect((await beforeRun({}, { ...clock, waitMs: 5_000 })).measure).toBe(false);
+    expect((await beforeRun({}, { ...machine(at(4), at(1)), waitMs: 5_000 })).measure).toBe(true);
+  });
+
+  it("does not wait on a hosted runner or under the bypass, and hands the reading on", async () => {
+    for (const env of [{ GITHUB_ACTIONS: "true" }, { [IGNORE_LOAD]: "1" }]) {
+      const busy = at(4);
+      const clock = machine(busy);
+      expect(await beforeRun(env, clock)).toEqual({ load: busy, measure: true });
+      expect(clock.slept).toEqual([]);
+    }
   });
 });

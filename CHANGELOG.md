@@ -325,6 +325,22 @@ and `bun run release` refuses a version that has no section. See
 
 ### Changed
 
+- **The load precondition reads the five-minute average too, and waits for a
+  quiet machine before it declines** (DA-54.5). The one-minute average forgets a
+  burst of work within a minute of its stopping, so `bun run perf` was refused
+  by one such tail at one moment and let through by it at the next. The gate
+  now holds the one- and five-minute averages to the same 2.5 per core, and
+  before the run it reads them every five seconds for up to 300 s instead of
+  refusing at once — `waiting up to 300 s for a quiet machine: …`, `quiet after
+  <n> s: …` — and declines only when the wait runs out, saying `after waiting
+  300 s`. After the run the busier end of both averages decides whether the
+  table is evidence, as before. The run that opened the task still passes — 0.77
+  per core over the minute, 1.56 over five — because 2.5 on the five-minute
+  figure is the one-minute measurement carried over, not one of its own, and at
+  about one per core the count does not tell such a machine from a quiet one
+  (DA-110.1). The ceiling, the bypass and the place of `perf` in `gates` are
+  unchanged; why the other candidates lost is in
+  [11-perf.md](docs/reference/11-perf.md).
 - **A severity the model chose no longer votes in later suggestions** (DA-36.2).
   A comment sent with `AUTO` stored its neighbours' vote as its severity, and the
   embedding index kept the severity without who chose it, so the next similar

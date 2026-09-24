@@ -72,9 +72,11 @@ quiet.
 The fourth: **a load precondition, with `DIFFALANCHE_PERF_IGNORE_LOAD=1` as the
 named bypass.**
 
-The gate reads the one-minute load average per core before the run and again
-after it, and takes the busier of the two — a machine that got busy halfway
-through decided the numbers as much as one that started busy. Above the ceiling
+The gate reads the load average per core before the run and again after it —
+the one- and five-minute figures, and before the run it waits for them first
+(DA-54.5, [11-perf.md](../reference/11-perf.md)) — and takes the busier of the
+two: a machine that got busy halfway through decided the numbers as much as one
+that started busy. Above the ceiling
 it prints `unable to measure`, names the load, and exits non-zero. Before the
 run it does that without measuring at all, because a minute of browser time
 that cannot produce a verdict is a minute spent on nothing. Declining *after*

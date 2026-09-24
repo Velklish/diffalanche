@@ -11,8 +11,16 @@ import { evaluate, fails, formatTable, GATE_VARIANT, RUNNER_ALLOWANCE } from "./
 import { assertErasable, fixtureDrift } from "./fixture.ts";
 import type { Measurement } from "./harness.ts";
 import { parseArgs } from "./harness.ts";
-import type { Load } from "./load.ts";
-import { busier, describeLoad, IGNORE_LOAD, ignoringLoad, readLoad, tooBusy } from "./load.ts";
+import {
+  beforeRun,
+  busier,
+  declineOnLoad,
+  describeLoad,
+  ignoringLoad,
+  QUIET_WAIT_MS,
+  readLoad,
+  tooBusy,
+} from "./load.ts";
 
 /** What every child is given: the fixture's own environment, passed and not
  * assigned — Bun hands a child the env the process started with (11-perf.md). */
@@ -56,17 +64,6 @@ function measureOnce(fixture: string): Measurement {
   return measurement;
 }
 
-/** The third of the gate's three reds: the machine was too busy for any number
- * off it to be about the code (ADR-013). */
-function declineOnLoad(load: Load, when: string): never {
-  process.stderr.write(
-    `\nunable to measure: ${describeLoad(load)} ${when}. ` +
-      `Run it on a quiet machine, or set ${IGNORE_LOAD}=1 to measure anyway ` +
-      "and take the verdict as an indication rather than as evidence.\n",
-  );
-  process.exit(1);
-}
-
 async function main(): Promise<void> {
   const options = parseArgs(process.argv.slice(2), 3);
   const runs = options.runs;
@@ -80,9 +77,9 @@ async function main(): Promise<void> {
   assertErasable(options.fixture);
 
   // Before the fixture and the browser: a minute that cannot produce a verdict
-  // is a minute spent on nothing.
-  const started = readLoad();
-  if (!onRunner && tooBusy(started) && !ignoring) declineOnLoad(started, "before the run");
+  // is a minute spent on nothing, and a machine still settling is waited for.
+  const { load: started, measure } = await beforeRun();
+  if (!measure) declineOnLoad(started, `before the run, after waiting ${QUIET_WAIT_MS / 1000} s`);
 
   prepare(options.fixture);
 

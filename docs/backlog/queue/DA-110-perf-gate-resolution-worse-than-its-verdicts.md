@@ -80,7 +80,7 @@ budget, and it is then also used for A/B comparisons it cannot resolve.
   [DA-56.6](DA-56.6-update-step-lives-in-da-55.md) and
   [DA-69.1](DA-69.1-long-task-count-follows-the-machine.md).
 - The load precondition and what it reads, which is
-  [DA-54.5](DA-54.5-load-precondition-reads-one-minute-only.md). Both runs above
+  [DA-54.5](../../archive/DA-54.5-load-precondition-reads-one-minute-only/task.md). Both runs above
   passed it; this task is about what happens after it passes.
 - Making the suites faster.
 

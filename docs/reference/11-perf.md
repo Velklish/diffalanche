@@ -516,13 +516,15 @@ allowance above is what stands in for it — a gate that declined on CI would be
 red job with nothing in it to fix. On a development machine the ceilings are the
 specification's own numbers, and that only means something on a machine quiet
 enough to measure. It often is not, so
-the gate reads the one-minute load average per core — before the run, and again
-after it, taking the busier of the two, because a machine that got busy halfway
-through decided the numbers as much as one that started busy. Above
+the gate reads the one- and five-minute load averages per core — before the
+run, and again after it, taking the busier of the two, because a machine that got
+busy halfway through decided the numbers as much as one that started busy. Above
 `LOAD_CEILING` in `perf/load.ts` it prints `unable to measure`, names the load,
-and exits 1 without a budget verdict; before the run it does that without
-measuring at all. The decision and the two options it beat are
-[ADR-013](../adr/adr-013-perf-gate-off-ci.md).
+and exits 1 without a budget verdict; before the run it first waits for the
+machine to come under the ceiling, and declines without measuring at all only
+when the wait runs out. The decision and the two options it beat are
+[ADR-013](../adr/adr-013-perf-gate-off-ci.md); what it reads and the wait are
+DA-54.5, below.
 
 So a red `bun run perf` is now one of three things, and the output says which
 without the reader having to compare numbers:
@@ -531,7 +533,7 @@ without the reader having to compare numbers:
 |---|---|
 | `over budget: <lines>` | the median of a line is over its ceiling |
 | `not measured: <lines>` | a line's samples could not be trusted (DA-69) |
-| `unable to measure: load average …` | the machine was too busy for any number off it to be about the code |
+| `unable to measure: load averages …` | the machine was too busy for any number off it to be about the code |
 
 **`DIFFALANCHE_PERF_IGNORE_LOAD=1`** measures anyway. It is for a run that wants
 the numbers knowing what they are worth — comparing two trees back to back, say,
@@ -540,6 +542,103 @@ where the machine is the same on both sides. Under it the gate prints
 takes that exact value and nothing else: a bypass armed by a stray `export
 DIFFALANCHE_PERF_IGNORE_LOAD=maybe` would be the development allowance ADR-013
 rejected, wearing another name.
+
+**What the precondition reads, and why it waits** (DA-54.5). A load average is a
+damped mean of the runnable work, and the one-minute figure is the one that
+forgets fastest: when a burst of work stops — the suites of a `gates` chain,
+another session's — the minute falls under the ceiling well inside a minute,
+while the five-minute figure still carries the burst. On 2026-09-21 such a tail
+did both things a one-minute reading allows — it refused `perf` at 3.08 per
+core, and twenty minutes later let a run through at 0.77 per core while the
+five- and fifteen-minute figures stood at 1.56 and 2.39.
+So the precondition reads the one- and five-minute averages and holds both to the
+one `LOAD_CEILING`, and before the run it waits for them instead of refusing: it
+reads the machine every five seconds, the interval the kernel refreshes the
+averages on, for up to `QUIET_WAIT_MS` in `perf/load.ts`, 300 s, and says so at
+both ends of the wait:
+
+```
+waiting up to 300 s for a quiet machine: load averages <1 min> and <5 min> over one and five minutes on <n> cores are <each over n> per core, ceiling 2.5
+quiet after <seconds> s: load averages …
+```
+
+It declines only when the wait runs out, and names the wait: `unable to measure:
+load averages … before the run, after waiting 300 s`. After the run only the
+reading changes: the busier end, now of two averages, decides whether the table
+is evidence.
+
+**A chain on its own never makes it wait, and the wait is for what is not the
+chain.** The base of DA-54.5, `f9cda1b`, run as `gates` runs it on 2026-09-24
+with nothing else started on the machine — its own background at a one-minute
+average of about 3.5 on 8 cores — and the load read every five seconds:
+
+| step | wall | one-minute average at its end | five-minute | result |
+|---|---|---|---|---|
+| `bun run test` | 45 s | 16.22 | 9.60 | 882 passed |
+| `bun run test:bun` | 34 s | 29.82 | 14.14 | 882 passed |
+| `bun run test:ui` | 96 s | 9.27 | 11.42 | 151 passed |
+| `bun run perf` | 41 s | 8.33 | 10.96 | every line ok, update 284 ms |
+
+The minute peaked at 32.2 — 4.0 per core — inside `test:bun`, and the five
+minutes at 14.3, 1.79 per core, under the ceiling throughout; the UI suite's
+ninety-six seconds let the minute fall back to 1.16 per core before `perf`
+started, and `perf` then measured what eight runs of the gate on the same
+commit had measured in the same quiet twenty minutes earlier — CPU per frame
+8.0 ms against 7.9–8.1, update 284 ms against 281–303. So a chain alone does not
+leave the tail DA-54.5 measured, whose fifteen-minute figure stood at 2.39 per
+core; that takes load the chain does not bring, and it is what the wait is for.
+It is 300 s because that is one time constant of the
+five-minute figure: long enough for the figure to come down once the load that
+raised it has stopped, and short enough that a machine another session keeps
+busy is refused within five minutes rather than held.
+
+Why the same ceiling and a wait, and not the other three candidates DA-54.5
+weighed:
+
+- **A tighter ceiling on the five-minute figure** would have refused the 0.77
+  run, whose five minutes stood at 1.56 per core. It would be a number nobody
+  measured — and so is 2.5 on that figure: ADR-013's fifteen runs read the
+  one-minute average, and the five-minute ceiling is that number carried over,
+  not a measurement of its own. So the 0.77 run still passes. What would
+  separate it from a quiet machine is not a second ceiling on the same count,
+  which at about one per core does not tell the two apart at all (**What it
+  still does not see**, below; DA-110.1). The same ceiling on both figures
+  closes the shape the task's verification names — a minute under the ceiling
+  with five minutes over it — and no more.
+- **Sampled CPU idle over the seconds before the run.** `os.cpus()` gives it on
+  both runtimes, so it is less unportable than it looks; what it cannot give is
+  the scale the ceiling is on — utilisation stops at 100 %, where 1.2 runnable
+  per core and 5 read the same.
+- **`perf` first in `gates`.** `backslop gates` stops at the first red, and
+  `perf` is the gate most often red on the base — the update line at its budget,
+  DA-56.6 — so ahead of the suites it would keep them from running; and it does
+  nothing for a machine busy for other reasons, which on an orchestrated run is
+  most of the load. And at the end of a chain on its own `perf` measured as it
+  does cold (above), so its place is not what spoils it.
+
+**What it still does not see.** A machine under the ceiling on both figures can
+still be decisively slower. The tree DA-110 quotes, `5e0ee24`, measured CPU per
+frame 9.3 and 10.3 ms and the update 330 and 391 ms on 2026-09-22 at one-minute
+averages of 7.52 and 8.82 — about one per core; on 2026-09-24, alternated with
+`f9cda1b` under one hold of the lock at one-minute averages of 4.8–7.6 and
+five-minute ones of 6.8–7.7, the same tree measured 7.8–7.9 ms and 275–287 ms in
+three runs of the gate. A count of runnable work at about one per core does not
+tell those two mornings apart. That the count treats all eight cores alike while
+two of this machine's are efficiency cores, so that what the harness gets
+depends on what else holds the performance ones, is a hypothesis the numbers fit
+and nothing here has tested. What follows from it is not a tighter ceiling — the
+two readings overlap — but that a red near a budget, on a machine the
+precondition passed, is still attributed by alternating runs of the branch and
+the base under one hold of the lock, not by the gate's own run.
+
+**It belongs to two gates, not to the chain.** The precondition is asked by the
+gates whose verdict is the machine's by design — `bun run perf`, and `bun run
+test:ui` since DA-54.4 ([08-ui.md](08-ui.md#ui-tests)) — from one module,
+`perf/load.ts`, in the same words. The Vitest suites are not given one. Their
+wall-clock verdicts are the other end of the same problem, and DA-60 took that
+end: a wait in them is a condition with a deadline only a hang reaches (**Waits
+in the suites** below), not a duration a busy machine can miss. A chain that
+declined in four places would be a chain nobody gets green.
 
 **Where the threshold comes from.** `LOAD_CEILING` is 2.5 runnable tasks per
 core, and it is a measurement rather than a choice — but a small one, stated

@@ -117,7 +117,7 @@ That also means the load precondition, wherever it ends up, is not only a
   run after the three heavy ones. Giving every gate its own precondition is the
   expensive form and probably the wrong one — a chain that declines in four
   places is a chain nobody can get green.
-- **Read this beside [DA-60](../../archive/DA-60-flaky-test-hardening/task.md), which is the same
+- **Read this beside [DA-60](../DA-60-flaky-test-hardening/task.md), which is the same
   problem from the other end.** This entry says the chain drives the machine
   into the zone where a timed assertion is a coin toss and the precondition
   cannot see it coming; DA-60 says those assertions measure wall-clock time
@@ -134,8 +134,8 @@ That also means the load precondition, wherever it ends up, is not only a
   entry is the missing second half, not a reversal.
 - The two lines that came out red in case 2. Both are already attributed and
   neither belongs to the branch that measured them:
-  [DA-56.4](../../archive/DA-56.4-cpu-per-frame-misses-its-budget-at-rest/task.md) and
-  [DA-56.6](DA-56.6-update-step-lives-in-da-55.md).
+  [DA-56.4](../DA-56.4-cpu-per-frame-misses-its-budget-at-rest/task.md) and
+  [DA-56.6](../../backlog/queue/DA-56.6-update-step-lives-in-da-55.md).
 
 ## Verification
 
