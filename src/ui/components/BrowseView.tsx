@@ -1,5 +1,5 @@
 import type { MouseEvent, ReactNode } from "react";
-import { Fragment, useEffect, useMemo } from "react";
+import { Fragment, memo, useEffect, useMemo } from "react";
 import { worstSeverity } from "../../core/domain/counters.ts";
 import { Composer } from "../Composer.tsx";
 import { splitLines } from "../context.ts";
@@ -9,6 +9,9 @@ import { InlineThread } from "./FileCard.tsx";
 
 /** Shared, for a file nobody has commented on. */
 const NO_THREADS: Comment[] = [];
+
+/** Lines per block: a drag re-renders the blocks its range enters or leaves, not the file (DA-37.1). */
+const BLOCK_LINES = 200;
 
 /** A browsed line is written on the side the view reads: the disk is `new`, the base is `old`. */
 const SIDE: Record<FileRevision, Side> = { worktree: "new", base: "old" };
@@ -200,12 +203,63 @@ function PlainLines({
     else store.endSelect();
   };
 
+  const starts = useMemo(
+    () =>
+      Array.from({ length: Math.ceil(lines.length / BLOCK_LINES) }, (_, at) => at * BLOCK_LINES),
+    [lines],
+  );
+
   return (
     // biome-ignore lint/a11y/noStaticElementInteractions: the drag is the pointer's; `C` is the keyboard's way in.
     <div className="plain-lines" onMouseDown={onMouseDown} onMouseMove={onMouseMove}>
-      {lines.map((line, index) => {
-        const number = index + 1;
-        const selected = selFrom !== null && selTo !== null && number >= selFrom && number <= selTo;
+      {starts.map((start) => {
+        const end = Math.min(start + BLOCK_LINES, lines.length);
+        // What of the range and the form falls in this block; a block they miss gets `null`.
+        const inside = selFrom !== null && selTo !== null && selTo > start && selFrom <= end;
+        return (
+          <PlainBlock
+            key={start}
+            lines={lines}
+            start={start}
+            end={end}
+            byLine={byLine}
+            from={inside ? Math.max(selFrom, start + 1) : null}
+            to={inside ? Math.min(selTo, end) : null}
+            composerLine={
+              composerLine !== null && composerLine > start && composerLine <= end
+                ? composerLine
+                : null
+            }
+          />
+        );
+      })}
+    </div>
+  );
+}
+
+/** Lines `start + 1` to `end`, and under a row the threads that end on it and the open form. */
+const PlainBlock = memo(function PlainBlock({
+  lines,
+  start,
+  end,
+  byLine,
+  from,
+  to,
+  composerLine,
+}: {
+  lines: string[];
+  start: number;
+  end: number;
+  byLine: Map<number, Comment[]>;
+  from: number | null;
+  to: number | null;
+  composerLine: number | null;
+}) {
+  return (
+    <>
+      {lines.slice(start, end).map((line, offset) => {
+        const number = start + offset + 1;
+        const selected = from !== null && to !== null && number >= from && number <= to;
         const here = byLine.get(number);
         const worst =
           here === undefined
@@ -236,6 +290,6 @@ function PlainLines({
           </Fragment>
         );
       })}
-    </div>
+    </>
   );
-}
+});

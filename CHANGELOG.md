@@ -527,6 +527,13 @@ and `bun run release` refuses a version that has no section. See
 
 ### Fixed
 
+- **Browse mode follows the working tree, a drag re-renders less, and a thread
+  outside the hunks is reached** (DA-37.1). The browsed file is read again, in
+  place, when an edit changes its patch; the rows are memoised in blocks of 200,
+  so a drag step on a 15 000-line file spends 1.3 ms in script instead of 14.4;
+  and a thread on a line of a changed file that no
+  hunk shows opens that file in browse mode at its line instead of staying in
+  the rail alone.
 - **A window on a task deleted elsewhere goes to `current`** (DA-40.1). A task
   deleted by the CLI or by another window left a window that was showing it by
   `?review=` on the failure screen. It now goes where `current` points, as the

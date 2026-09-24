@@ -735,3 +735,79 @@ describe("a live read the server refuses", () => {
     expect(useStore.getState().toast).toBeNull();
   });
 });
+
+describe("the file browse mode shows, while an edit changes it (DA-37.1)", () => {
+  const OLD = "const a = 1;\nconst b = 2;\n";
+  const NEW = "const a = 1;\nconst b = 2;\nconst b2 = 22;\n";
+
+  afterEach(() => {
+    useStore.getState().closeBrowse();
+  });
+
+  /** Browse mode on `src/a.ts` of the loaded review, its text on screen; the server's is `NEW`. */
+  function browsing(rev: "worktree" | "base" = "worktree"): string[] {
+    loaded();
+    const content = (text: string) => ({
+      repo: "repos/a",
+      path: "src/a.ts",
+      rev,
+      sha: null,
+      text,
+      omitted: null,
+    });
+    useStore.setState({
+      browse: true,
+      plainRepo: "repos/a",
+      plainPath: "src/a.ts",
+      plainRev: rev,
+      plain: {
+        key: `repos/a\nsrc/a.ts\n${rev}`,
+        status: "ready",
+        content: content(OLD),
+        failure: null,
+      },
+    });
+    const asked: string[] = [];
+    vi.stubGlobal("fetch", (url: string) => {
+      asked.push(url);
+      return Promise.resolve(new Response(JSON.stringify(content(NEW))));
+    });
+    return asked;
+  }
+
+  it("reads the file again when its patch changed, and keeps the old text until the new is there", async () => {
+    const asked = browsing();
+    const store = useStore.getState();
+    store.applyRepositoryDiff(
+      "repos/a",
+      repository([file({ path: "src/keep.ts", patch: TWO_HUNKS }), file({ patch: ONE_EDITED })]),
+      SHOWN,
+    );
+    // No `loading` between the two: the reader's place is not taken from them for an edit.
+    expect(useStore.getState().plain).toMatchObject({ status: "ready", content: { text: OLD } });
+    await vi.waitFor(() => expect(useStore.getState().plain.content?.text).toBe(NEW));
+    expect(asked).toEqual(["/api/repos/repos/a/file?path=src%2Fa.ts&rev=worktree"]);
+  });
+
+  it("reads nothing when another file of the repository changed, or when it shows the base", () => {
+    const asked = browsing();
+    useStore
+      .getState()
+      .applyRepositoryDiff(
+        "repos/a",
+        repository([file({ path: "src/keep.ts", patch: TWO_HUNKS_SECOND_EDITED }), file()]),
+        SHOWN,
+      );
+    expect(asked).toEqual([]);
+
+    const base = browsing("base");
+    useStore
+      .getState()
+      .applyRepositoryDiff(
+        "repos/a",
+        repository([file({ path: "src/keep.ts", patch: TWO_HUNKS }), file({ patch: ONE_EDITED })]),
+        SHOWN,
+      );
+    expect(base).toEqual([]);
+  });
+});

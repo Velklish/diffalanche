@@ -945,8 +945,9 @@ change set does not carry — a line of a file browse mode opened, or one that
 `↑ N lines` brought in — is anchored from the file itself: the route hands the
 domain a source that reads it through the same `readFileAt` the file route
 uses. It is read at the moment the comment is written, not when the view was
-drawn: browse mode does not follow a live edit of the file it shows
-([DA-37.1](../backlog/minor/DA-37.1-browse-follow-ups.md)), so an edit made in
+drawn: browse mode reads the file it shows again only once the live stream has
+changed its patch, and never a file the change set cannot see
+([DA-37.1](../archive/DA-37.1-browse-follow-ups/task.md)), so an edit made in
 between anchors the comment to the line as it now is on disk. `base` is the
 string the CLI takes — `head`, `branch`, `branch:<name>`, or a ref — read by the
 domain's own parser, so the two interfaces have one grammar for it. A `note` on

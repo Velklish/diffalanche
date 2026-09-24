@@ -1,5 +1,5 @@
 import { execFileSync } from "node:child_process";
-import { readFileSync } from "node:fs";
+import { appendFileSync, readFileSync, writeFileSync } from "node:fs";
 import { join } from "node:path";
 import { fileURLToPath } from "node:url";
 import type { Page } from "@playwright/test";
@@ -173,4 +173,184 @@ test("Browse repo on a card opens that file, and back to review leaves it", asyn
     "aria-pressed",
     "true",
   );
+});
+
+type Bundle = {
+  repositories: { path: string; files: { path: string; status: string; patch: string }[] }[];
+  comments: Comment[];
+};
+
+/** A thread on a line of a changed file that no hunk shows has no row in the card: the rail takes
+ * the reader to the file read whole, where the line is (DA-37.1). */
+test("a thread outside every hunk of a changed file is reached in browse mode", async ({
+  page,
+}) => {
+  await open(page);
+  const bundle = await page.evaluate(
+    async () => (await (await fetch("/api/review")).json()) as Bundle,
+  );
+  // Line 1 of a modified file whose first hunk starts further down.
+  let at: { repo: string; path: string } | null = null;
+  for (const repo of bundle.repositories) {
+    const file = repo.files.find(
+      (one) =>
+        one.status === "modified" && Number(/@@ -\d+(?:,\d+)? \+(\d+)/.exec(one.patch)?.[1]) > 1,
+    );
+    if (file !== undefined) {
+      at = { repo: repo.path, path: file.path };
+      break;
+    }
+  }
+  if (at === null)
+    throw new Error("the fixture has no modified file whose first hunk starts past 1");
+  const body = `the first line of ${at.path}, far from its hunks`;
+  execFileSync(
+    "bun",
+    [
+      "run",
+      "src/cli/index.ts",
+      "comment",
+      "--repo",
+      at.repo,
+      "--path",
+      at.path,
+      "--line",
+      "1",
+      "--severity",
+      "nit",
+      "--body",
+      body,
+      "--root",
+      FIXTURE,
+    ],
+    { cwd: root },
+  );
+  const id = listComments().find((comment) => comment.body === body)?.id as string;
+  try {
+    // The server hears the CLI's write through its watcher; the page is opened once it has.
+    await expect
+      .poll(async () =>
+        (
+          await page.evaluate(async () => (await (await fetch("/api/review")).json()) as Bundle)
+        ).comments.some((comment) => comment.id === id),
+      )
+      .toBe(true);
+    await open(page);
+
+    await page.locator(".rail-tabs .tab").nth(1).click();
+    await page.locator(`.rail-list [data-thread="${id}"] .thread-focus`).click();
+
+    const card = page.locator(".plain-card");
+    await expect(card.locator(".file-path")).toHaveText(at.path);
+    const widget = card.locator(`[data-thread-anchor="${id}"]`);
+    await expect(widget).toBeInViewport();
+    // Under the line it names: the row above the widgets is line 1.
+    expect(
+      await widget.evaluate((element) =>
+        element.closest(".plain-widgets")?.previousElementSibling?.getAttribute("data-plain-line"),
+      ),
+    ).toBe("1");
+  } finally {
+    // An open thread an agent wrote and nobody answered is what other specs count and pick.
+    execFileSync(
+      "bun",
+      ["run", "src/cli/index.ts", "resolve", id, "--role", "human", "--root", FIXTURE],
+      { cwd: root },
+    );
+  }
+});
+
+/** An agent's edit to the file being browsed reaches the view, in place (DA-37.1). */
+test("the browsed file follows an edit to the working tree", async ({ page }) => {
+  await open(page);
+  const card = page.locator(".file-card").first();
+  const repo = (await card.getAttribute("data-repo")) ?? "";
+  const path = (await card.getAttribute("data-path")) ?? "";
+  await card.getByRole("button", { name: "Browse repo" }).click();
+  const plain = page.locator(".plain-card");
+  const lines = onDisk(repo, path).length;
+  await expect(plain.locator(".plain-line")).toHaveCount(lines);
+
+  const target = join(root, FIXTURE, repo, path);
+  const original = readFileSync(target, "utf-8");
+  const added = "// an agent added this while the file was being browsed";
+  try {
+    appendFileSync(target, `${original.endsWith("\n") ? "" : "\n"}${added}\n`);
+    // The watcher's frame, a deadline for a hang and not a budget (11-perf.md, "Waits").
+    await expect(plain.locator(`[data-plain-line="${lines + 1}"]`)).toHaveText(
+      `${lines + 1}${added}`,
+      { timeout: 20_000 },
+    );
+    // In place: the text changed under the reader without a `reading…` in between.
+    await expect(plain.locator(".file-note")).toHaveCount(0);
+  } finally {
+    writeFileSync(target, original);
+    // The restore is an edit too: wait for the view to take it, or its frame lands in the next spec.
+    await expect(plain.locator(`[data-plain-line="${lines + 1}"]`)).toHaveCount(0, {
+      timeout: 20_000,
+    });
+  }
+});
+
+/** The old side of a line outside every hunk is the base's: the rail opens the base whole (DA-37.1). */
+test("an old-side thread outside every hunk is reached in browse mode on the base", async ({
+  page,
+}) => {
+  await open(page);
+  const bundle = await page.evaluate(
+    async () => (await (await fetch("/api/review")).json()) as Bundle,
+  );
+  // Line 1 of the base of a modified file whose first hunk starts further down on the old side.
+  let at: { repo: string; path: string } | null = null;
+  for (const repo of bundle.repositories) {
+    const file = repo.files.find(
+      (one) => one.status === "modified" && Number(/@@ -(\d+)/.exec(one.patch)?.[1]) > 1,
+    );
+    if (file !== undefined) {
+      at = { repo: repo.path, path: file.path };
+      break;
+    }
+  }
+  if (at === null)
+    throw new Error("the fixture has no modified file whose first hunk starts past 1");
+  const body = `the base's first line of ${at.path}, far from its hunks`;
+  execFileSync(
+    "bun",
+    [
+      ...["run", "src/cli/index.ts", "comment", "--repo", at.repo, "--path", at.path],
+      ...["--line", "1", "--side", "old", "--severity", "nit", "--body", body, "--root", FIXTURE],
+    ],
+    { cwd: root },
+  );
+  const id = listComments().find((comment) => comment.body === body)?.id as string;
+  try {
+    await expect
+      .poll(async () =>
+        (
+          await page.evaluate(async () => (await (await fetch("/api/review")).json()) as Bundle)
+        ).comments.some((comment) => comment.id === id),
+      )
+      .toBe(true);
+    await open(page);
+
+    await page.locator(".rail-tabs .tab").nth(1).click();
+    await page.locator(`.rail-list [data-thread="${id}"] .thread-focus`).click();
+
+    const card = page.locator(".plain-card");
+    await expect(card.locator(".file-path")).toHaveText(at.path);
+    await expect(card.locator(".segment.on")).toContainText("base");
+    const widget = card.locator(`[data-thread-anchor="${id}"]`);
+    await expect(widget).toBeInViewport();
+    expect(
+      await widget.evaluate((element) =>
+        element.closest(".plain-widgets")?.previousElementSibling?.getAttribute("data-plain-line"),
+      ),
+    ).toBe("1");
+  } finally {
+    execFileSync(
+      "bun",
+      ["run", "src/cli/index.ts", "resolve", id, "--role", "human", "--root", FIXTURE],
+      { cwd: root },
+    );
+  }
 });

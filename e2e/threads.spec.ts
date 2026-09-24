@@ -622,3 +622,23 @@ test("the bar of a thread on an added file is on its only gutter", async ({ page
     done();
   }
 });
+
+/** A card the reader collapsed hides the thread's line, not the line's place in the patch: the rail
+ * opens the card again rather than taking the reader to browse mode (DA-37.1). */
+test("a thread on a collapsed card opens the card, not browse mode", async ({ page }) => {
+  await open(page);
+  const thread = (await review(page)).comments.find(
+    (comment) => comment.repo !== null && comment.path !== null && comment.line !== null,
+  );
+  if (thread === undefined) throw new Error("the fixture has no line comment");
+  const card = page.locator(`.file-card[data-file="${thread.repo}/${thread.path}"]`);
+  await card.scrollIntoViewIfNeeded();
+  await card.locator(".file-head .caret").click();
+  await expect(card.locator(".diff")).toHaveCount(0);
+
+  await page.locator(".rail-tabs .tab").nth(1).click();
+  await page.locator(`.rail-list [data-thread="${thread.id}"] .thread-focus`).click();
+  await expect(page.locator(`[data-thread-anchor="${thread.id}"]`)).toBeInViewport();
+  await expect(card.locator(".file-head .caret")).toHaveAttribute("aria-label", "collapse");
+  await expect(page.locator(".plain-card")).toHaveCount(0);
+});

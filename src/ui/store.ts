@@ -1538,6 +1538,7 @@ export const useStore = create<Store>()((set, get) => ({
       if (at < 0) return;
       const left = fromRepositories([...repositories.slice(0, at), ...repositories.slice(at + 1)]);
       set(left);
+      followPlain(set, get, path, repositories[at] as RepositoryChange, null);
       // The cards of that repository are gone, and so is everything that
       // pointed at one. A form left open on a file that is no longer on the
       // screen is a form the reader cannot see, cannot send and cannot reopen;
@@ -1568,6 +1569,7 @@ export const useStore = create<Store>()((set, get) => ({
         : [...repositories.slice(0, at), merged, ...repositories.slice(at + 1)];
     set({ ...fromRepositories(list), changed: marked(get().changed, before, merged) });
     revalidate(set, get, merged);
+    followPlain(set, get, path, before, merged);
   },
   // first run
   scan: null,
@@ -2289,14 +2291,40 @@ async function readFile(
   }
 }
 
-/** The file browse mode is on, read again; an answer for a file the mode has left is dropped. */
-async function loadPlain(set: (partial: Partial<Store>) => void, get: () => Store): Promise<void> {
+/** The browsed working tree, read again in place when an edit changed its patch: the stream names
+ * repositories, and the change set is how the page knows a file changed (08-ui.md, DA-37.1). */
+function followPlain(
+  set: (partial: Partial<Store>) => void,
+  get: () => Store,
+  repo: string,
+  before: RepositoryChange | null,
+  after: RepositoryChange | null,
+): void {
+  const { browse, plainRepo, plainPath, plainRev } = get();
+  if (!browse || plainRepo !== repo || plainRev !== "worktree") return;
+  const patch = (of: RepositoryChange | null) =>
+    of?.files.find((file) => file.path === plainPath)?.patch ?? null;
+  if (patch(before) !== patch(after)) void loadPlain(set, get, true);
+}
+
+/** Reads of the browsed file started, so an older answer never lands over a newer one. */
+let plainReads = 0;
+
+/** The file browse mode is on, read again; an answer for a file the mode has left is dropped.
+ * `inPlace` keeps what is on the screen until the new text is there: an edit, not a new file. */
+async function loadPlain(
+  set: (partial: Partial<Store>) => void,
+  get: () => Store,
+  inPlace = false,
+): Promise<void> {
   const { plainRepo: repo, plainPath, plainRev } = get();
   if (repo === null || plainPath === null) return;
   const key = `${repo}\n${plainPath}\n${plainRev}`;
-  set({ plain: { key, status: "loading", content: null, failure: null } });
+  plainReads += 1;
+  const mine = plainReads;
+  if (!inPlace) set({ plain: { key, status: "loading", content: null, failure: null } });
   const read = await readFile(repo, plainPath, plainRev);
-  if (get().plain.key !== key) return;
+  if (get().plain.key !== key || mine !== plainReads) return;
   set({
     plain:
       typeof read === "string"

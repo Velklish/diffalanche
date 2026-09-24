@@ -6,6 +6,7 @@
  * already happened. Scrolling again once they have settles it
  * ([ADR-008](../../docs/adr/adr-008-diff-rendering-verdict.md)).
  */
+import { newSideLines, oldSideRows } from "./context.ts";
 import { afterPaint } from "./perf.ts";
 import { useStore } from "./store.ts";
 
@@ -57,13 +58,30 @@ export async function revealThread(id: string): Promise<void> {
   const thread = store.comments.find((comment) => comment.id === id);
   if (thread === undefined || thread.repo === null) return;
 
-  const file = thread.path === null ? null : `${thread.repo}/${thread.path}`;
-  // A file the review has no card for is read whole, and the thread is under its line there.
-  if (thread.path !== null && !store.files.some((entry) => entry.id === file)) {
-    const rev = thread.side === "old" ? "base" : "worktree";
-    store.openBrowse(thread.repo, thread.path, { rev, line: thread.endLine ?? thread.line });
+  const repo = thread.repo;
+  const file = thread.path === null ? null : `${repo}/${thread.path}`;
+  // Read whole, the file has every line, and the thread is under its own on the side it names.
+  const browse = (path: string) =>
+    store.openBrowse(repo, path, {
+      rev: thread.side === "old" ? "base" : "worktree",
+      line: thread.endLine ?? thread.line,
+    });
+  // A file the review has no card for.
+  const entry = store.files.find((one) => one.id === file);
+  if (thread.path !== null && entry === undefined) {
+    browse(thread.path);
     return;
   }
+  // The card's line or not is the patch's to say, not a widget that has not mounted yet (DA-37.1).
+  const line = thread.endLine ?? thread.line;
+  const inHunks =
+    entry === undefined ||
+    line === null ||
+    (thread.side === "old"
+      ? oldSideRows(entry.file.patch).rows.has(line)
+      : newSideLines(entry.file.patch).lines.has(line));
+  // A card the reader collapsed has no diff to show the thread in: it opens again.
+  if (file !== null && store.collapsedFiles[file] === true) store.toggleFile(file);
   if (store.browse) {
     // Leaving puts back the file the review was on; the thread's own is the one to show.
     store.closeBrowse();
@@ -77,10 +95,15 @@ export async function revealThread(id: string): Promise<void> {
   if (thread.line === null) return;
 
   if (await scrollToWidget(id)) return;
+  if (file === null || thread.path === null) return;
+  // A line outside every hunk has no row in the card at all, unless `↑ N lines` brought it in.
+  if (!inHunks) {
+    browse(thread.path);
+    return;
+  }
   // The anchor is on a line a collapsed hunk hides: the reader put it away, and
   // the thread they just asked for is behind it. Show the context again and
   // look once more, rather than leaving the click with no answer.
-  if (file === null) return;
   store.expandHunks(file);
   await scrollToWidget(id);
 }
