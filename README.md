@@ -471,8 +471,9 @@ place in `src/` that knows which runtime it is on.
 ### Design artifacts and the design hook
 
 UI work runs against the Impeccable design skill, installed at the Claude Code
-user level (`~/.claude/skills/impeccable`). It reads four files in this
-repository:
+user level (`~/.claude/skills/impeccable`), release `skill-v4.3.1` or later —
+its `scripts/impeccable` is a launcher of one binary, and every command below is
+one of its verbs. It reads four files in this repository:
 
 | File | What it is |
 |---|---|
@@ -484,7 +485,7 @@ repository:
 Before editing anything under `src/ui`, load them together:
 
 ```sh
-node ~/.claude/skills/impeccable/scripts/context.mjs --target src/ui/App.tsx
+~/.claude/skills/impeccable/scripts/impeccable context --target src/ui/App.tsx
 ```
 
 The **design detector hook** runs the same checks automatically after an editing
@@ -498,8 +499,8 @@ Impeccable is installed and that path differs per machine. Each developer wires
 it once:
 
 ```sh
-node ~/.claude/skills/impeccable/scripts/hook-admin.mjs on      # installs manifests
-node ~/.claude/skills/impeccable/scripts/hook-admin.mjs status  # what is wired now
+~/.claude/skills/impeccable/scripts/impeccable hooks on      # installs manifests
+~/.claude/skills/impeccable/scripts/impeccable hooks status  # what is wired now
 ```
 
 `on` writes the manifests only when the skill sits inside the project
@@ -516,10 +517,10 @@ Claude Code, `.claude/settings.local.json` (gitignored):
   "hooks": {
     "PostToolUse": [
       { "matcher": "Edit|Write|MultiEdit",
-        "hooks": [{ "type": "command", "command": "node \"$HOME/.claude/skills/impeccable/scripts/hook.mjs\"", "timeout": 5, "statusMessage": "Checking UI changes" }] }
+        "hooks": [{ "type": "command", "command": "\"$HOME/.claude/skills/impeccable/scripts/impeccable\" hook", "timeout": 5, "statusMessage": "Checking UI changes" }] }
     ],
     "Stop": [
-      { "hooks": [{ "type": "command", "command": "node \"$HOME/.claude/skills/impeccable/scripts/hook.mjs\"", "timeout": 30, "statusMessage": "Design deep pass" }] }
+      { "hooks": [{ "type": "command", "command": "\"$HOME/.claude/skills/impeccable/scripts/impeccable\" hook", "timeout": 30, "statusMessage": "Design deep pass" }] }
     ]
   }
 }
@@ -533,10 +534,10 @@ approval through `/hooks` the first time:
   "hooks": {
     "PostToolUse": [
       { "matcher": "Edit|Write|apply_patch",
-        "hooks": [{ "type": "command", "command": "node \"$HOME/.claude/skills/impeccable/scripts/hook.mjs\"", "timeout": 5, "statusMessage": "Checking UI changes" }] }
+        "hooks": [{ "type": "command", "command": "\"$HOME/.claude/skills/impeccable/scripts/impeccable\" hook", "timeout": 5, "statusMessage": "Checking UI changes" }] }
     ],
     "Stop": [
-      { "hooks": [{ "type": "command", "command": "node \"$HOME/.claude/skills/impeccable/scripts/hook.mjs\"", "timeout": 30, "statusMessage": "Design deep pass" }] }
+      { "hooks": [{ "type": "command", "command": "\"$HOME/.claude/skills/impeccable/scripts/impeccable\" hook", "timeout": 30, "statusMessage": "Design deep pass" }] }
     ]
   }
 }
@@ -550,7 +551,7 @@ write the detector objects to; enable hooks under Settings → Hooks:
   "version": 1,
   "hooks": {
     "preToolUse": [
-      { "command": "node \"$HOME/.claude/skills/impeccable/scripts/hook-before-edit.mjs\"", "timeout": 5 }
+      { "command": "\"$HOME/.claude/skills/impeccable/scripts/impeccable\" hook-before-edit", "timeout": 5 }
     ]
   }
 }
@@ -559,8 +560,55 @@ write the detector objects to; enable hooks under Settings → Hooks:
 Without a hook the check is manual, once, on the files a change touched:
 
 ```sh
-node ~/.claude/skills/impeccable/scripts/detect.mjs --json src/ui/App.tsx src/ui/styles.css
+~/.claude/skills/impeccable/scripts/impeccable detect --json src/ui/App.tsx src/ui/styles.css
 ```
+
+### Cloud sessions
+
+A session of Claude Code on the web starts in a fresh container, and
+`.claude/hooks/session-start.sh`, registered in `.claude/settings.json`, gives it
+what the gates need. It does nothing outside such a session (`CLAUDE_CODE_REMOTE`
+is not `true`), and every step warns and goes on rather than stop the session:
+
+- the Bun every pinned CI job runs, read out of `.github/workflows/ci.yml`, from
+  its GitHub release, when the container's Bun is another;
+- `bun install --frozen-lockfile`;
+- the headless shell of the Playwright the lockfile pins, into
+  `PLAYWRIGHT_BROWSERS_PATH` — a browser built for another Playwright fails every
+  launch with "Executable doesn't exist";
+- `bun run model:fetch`, which the embedding tests read and fail without;
+- `backslop init`, which writes the gitignored adapter files `backslop lint`
+  checks for.
+
+The environment's network access must let the two downloads through: add
+`huggingface.co`, `cdn-lfs.huggingface.co` and `cas-bridge.xethub.hf.co` for the
+model, and `cdn.playwright.dev` and `playwright.download.prss.microsoft.com` for
+the browser, to the allowed domains; GitHub and the npm registry are allowed by
+the default list.
+
+Two things belong to the environment, not to this repository, and go in its
+setup script: the Impeccable skill, cloned to `~/.claude/skills/impeccable`, and
+the permission to run its launcher, which downloads its binary on the first run
+and is refused without one — a rule merged into the container's own
+`~/.claude/settings.json`, never into this repository's:
+
+```sh
+git clone --depth 1 --branch skill-v4.3.1 https://github.com/pbakaus/impeccable /tmp/impeccable
+mkdir -p ~/.claude/skills && cp -r /tmp/impeccable/.claude/skills/impeccable ~/.claude/skills/
+node -e '
+  const fs = require("fs"), file = require("os").homedir() + "/.claude/settings.json";
+  const rule = "Bash(~/.claude/skills/impeccable/scripts/impeccable:*)";
+  const settings = fs.existsSync(file) ? JSON.parse(fs.readFileSync(file, "utf8")) : {};
+  const allow = ((settings.permissions ??= {}).allow ??= []);
+  if (!allow.includes(rule)) allow.push(rule);
+  fs.writeFileSync(file, JSON.stringify(settings, null, 2));'
+```
+
+What a container cannot change: it runs as root, so
+`tests/watcher.test.ts` › "keeps what it knew when `reviews/` cannot be listed",
+which takes the right to list away with `chmod`, is red there; and a container of
+a few cores is over the perf budgets on the untouched base, which is the case
+[11-perf.md](docs/reference/11-perf.md#a-red-the-machine-caused) settles.
 
 ## Releases
 

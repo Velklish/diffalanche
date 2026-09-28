@@ -15,6 +15,17 @@ and `bun run release` refuses a version that has no section. See
 
 ### Added
 
+- **A cloud session sets itself up** (DA-117). `.claude/hooks/session-start.sh`,
+  registered in `.claude/settings.json`, runs only in Claude Code on the web: the
+  Bun the pinned CI jobs run, `bun install --frozen-lockfile`, the Playwright
+  browser the lockfile pins, the embedding model and `backslop init`, each
+  warning and going on when the network refuses it. README's "Cloud sessions"
+  names the domains the environment has to allow and the setup-script lines that
+  belong to the environment rather than the repository — the Impeccable skill
+  and the permission to run it. On a machine the untouched base is over the perf
+  budgets on, the local evidence is `bun perf/compare.ts` and the verdict is the
+  CI `perf` job ([11-perf.md](docs/reference/11-perf.md#a-red-the-machine-caused)).
+
 - **`review delete` and deleting a task from the sessions menu** (DA-40).
   `diffalanche review delete <name> --role human [--yes]` removes the session's
   directory with its comments: any other role is refused with exit code 1, as
@@ -324,6 +335,12 @@ and `bun run release` refuses a version that has no section. See
   that file (DA-52).
 
 ### Changed
+
+- **The Impeccable commands are its launcher's** (DA-117). In `skill-v4.3.1`
+  the skill's `scripts/impeccable` runs one binary and the `node scripts/*.mjs`
+  entry points are gone: `AGENTS.md` and README call `impeccable context`,
+  `impeccable hooks on|status` and `impeccable detect`, and the hook manifests run
+  `"…/scripts/impeccable" hook` and `hook-before-edit`.
 
 - **The perf gate's jump line times the jump a reader makes** (DA-82).
   `perf.jumpToFile` calls `revealFile` — the one function a row of the tree and

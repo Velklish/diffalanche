@@ -1261,6 +1261,16 @@ branch at a load average of 23.16, and passed on that branch at 9.15 and on its
 base `ed81928` at 9.87 — one run of the whole suite each, which is less than
 the rule asks, so it is where the rule came from and not a proof by it.
 
+**A machine the untouched base is over budget on** cannot give `bun run perf`
+a verdict at all, and the rule above has nothing to prove on it. A cloud session
+of Claude Code on the web is such a machine: on the 4-core container of
+2026-09-28 the base read 19 ms of CPU per frame and was over budget on five
+lines (DA-82). There, by the owner's decision of that day, the local evidence
+for a branch is `bun perf/compare.ts` against the base — "is this branch worse" —
+and the verdict against the budgets is the `perf` job of the pull request's CI,
+with its runner allowance. The gate's red on such a machine is reported with the
+base's run beside it, not counted as the branch's.
+
 ## Waits in the suites
 
 A test that waits for something asserts about what it finds when the wait ends,
