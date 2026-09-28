@@ -30,11 +30,20 @@ const ROUNDS = 3;
  */
 export const PROBE_Y = 100;
 
+/** A changed file chosen from the tree or from global search: current, out of browse mode, in view.
+ * The perf harness times this very call, so the budget covers the path a reader takes (DA-82). */
+export function revealFile(repo: string, path: string): Promise<void> {
+  const store = useStore.getState();
+  if (store.browse) store.closeBrowse();
+  store.select(repo, path);
+  return revealCard(`[data-file="${CSS.escape(`${repo}/${path}`)}"]`);
+}
+
 export async function revealCard(selector: string): Promise<void> {
   const first = document.querySelector(selector);
   if (!first) return;
-  // The first scroll is synchronous, so the jump is one frame and inside the
-  // 50 ms budget of `docs/SPEC.md` section 6; the rest only correct it.
+  // The first scroll is synchronous, so the card is in view on the next frame; the rest only
+  // correct it, and the 50 ms of `docs/SPEC.md` section 6 covers all of it (DA-82).
   first.scrollIntoView();
   for (let round = 1; round < ROUNDS; round += 1) {
     await afterPaint();

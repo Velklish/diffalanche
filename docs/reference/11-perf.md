@@ -365,7 +365,7 @@ stderr.
 | `firstRenderMs` | From the review response being parsed to the frame that showed the review |
 | `scrollLongTasks`, `scrollLongTaskMs` | Long tasks while scrolling the whole review, and their total |
 | `cpuPerFrameMs` | Chromium's own `TaskDuration` over the scroll, divided by the frames of that scroll |
-| `composerOpenMs`, `fileJumpMs` | Opening the composer placeholder, and the median of three jumps to a file |
+| `composerOpenMs`, `fileJumpMs` | Opening the composer placeholder, and the median of three jumps to a file — each the tree's own `revealFile`, to the frame after its last round that shows the file's diff |
 | `updateMs` | From an edit of one file to the frame that showed it in that file's card |
 | `frames`, `scrollDistancePx` | How many frames the scroll took and how far it went |
 
@@ -789,7 +789,7 @@ different and the gate says which — `over budget: …` and `not measured: …`
 | Scrolling the diff: long tasks | 0 tasks | 0 tasks | ok |
 | Scrolling the diff: CPU per frame | 9.5 ms | 8.7 ms | ok |
 | Opening the comment form | 50 ms | 13.9 ms | ok |
-| Jumping to a file from the navigation | 50 ms | 7.7 ms | ok |
+| Jumping to a file from the navigation | 50 ms | — | not re-measured since DA-82 |
 | Switching review sessions | 100 ms | 70.9 ms | ok |
 | Update after an edit in one repository | 300 ms | 221 ms | ok |
 ```
@@ -797,7 +797,45 @@ different and the gate says which — `over budget: …` and `not measured: …`
 The switch row is from the run that made that line warm (DA-24.1); the rest of
 the sample is the older capture it was written with, and the two are not one
 run. The CPU-per-frame reading, 8.7 ms, was taken at 60 Hz, before DA-115, and
-is not comparable with one taken now.
+is not comparable with one taken now. The jump row read 7.7 ms in that capture,
+and it measured a different window; it waits for a reading on the development
+machine (DA-82.1).
+
+**Jumping to a file** is the tree's own path, since DA-82. `perf.jumpToFile`
+calls `revealFile` — the function a row of the tree and a file hit of global
+search call — and the window runs from before it to the frame after
+`revealCard`'s last round, once that frame shows the file's diff mounted. Before
+DA-82 the hook called `scrollIntoView` on a selector of its own and stopped at
+the next frame: no store write, none of `revealCard`'s rounds, and, measured on
+the synthetic review, the target's diff not yet on the screen — in two of the
+three jumps the harness makes (to the last file and to the middle one, after the
+scroll has left the page at the bottom) the stamped frame showed the card's
+spacer of estimated height, and the diff mounted a frame or two later. The old
+number was the cost of one scroll and one paint of an empty box.
+
+The window ends after the last round rather than at the mount, because that
+frame is when the page stops moving the reader and the jump's work on the main
+thread is done: each round is a `scrollIntoView` that lays the page out. Which
+end the gate sees was probed on the 4-core container of 2026-09-28, where the
+whole gate reads slower than on the development machine (five lines over budget
+on the untouched base), five `perf/run.ts` processes a variant, medians:
+
+| Variant | `fileJumpMs` |
+|---|---|
+| Before DA-82 | 25.6 ms |
+| Before DA-82, `ROUNDS` 3 → 6 | 31.6 ms, inside that line's spread of 14.6–49.8 |
+| DA-82, to the frame after the last round | 69.8 ms |
+| DA-82, `ROUNDS` 3 → 6 | 100.7 ms |
+| DA-82, a frame added before the first scroll | 76.2 ms, inside the spread |
+| DA-82 ending at the frame that first shows the diff | 53.8 ms |
+
+So a regression inside `revealCard` that costs work — another round — moves the
+line now and did not before. An idle frame added before the first scroll moves
+neither window: with the frame-rate limit off, a frame with nothing to draw
+costs about a millisecond. The hook also fails the run when the diff has not
+mounted within ten frames, or when the store's current file after the jump is
+not the file jumped to. The resolution tables below, of DA-110 and DA-115,
+measured the window before DA-82 on their jump rows.
 
 **Switching review sessions** covers the whole wait — the press, the request,
 the read, the render — and fails the build like any other line. **It is the

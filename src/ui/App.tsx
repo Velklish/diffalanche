@@ -15,7 +15,11 @@ import { WarningsBar } from "./components/WarningsBar.tsx";
 import { useKeys } from "./keys.ts";
 import { startLive } from "./live.ts";
 import { afterPaint, perf } from "./perf.ts";
+import { revealFile } from "./reveal.ts";
 import { useStore } from "./store.ts";
+
+/** Frames a jump waits for the target's diff to mount before the hook calls it a failure. */
+const MOUNT_FRAMES = 10;
 
 export function App() {
   const theme = useStore((store) => store.theme);
@@ -112,12 +116,23 @@ export function App() {
     return painted - start;
   }, []);
 
+  /** What a row of the tree does, timed from the press to the frame that shows the file's diff
+   * where the jump left it: the reader's wait, not the first scroll alone (DA-82, 11-perf.md). */
   const jumpToFile = useCallback(async (index: number) => {
-    const target = document.querySelector(`[data-file-index="${index}"]`);
-    if (!target) throw new Error(`no file card ${index}`);
+    const entry = useStore.getState().files.find((one) => one.index === index);
+    if (!entry) throw new Error(`no file ${index}`);
+    const diff = `[data-file="${CSS.escape(entry.id)}"] .file-body.mounted`;
     const start = performance.now();
-    target.scrollIntoView();
-    const painted = await afterPaint();
+    await revealFile(entry.repo, entry.file.path);
+    let painted = await afterPaint();
+    for (let frame = 1; document.querySelector(diff) === null; frame += 1) {
+      if (frame >= MOUNT_FRAMES) throw new Error(`the diff of ${entry.id} did not mount`);
+      painted = await afterPaint();
+    }
+    const { repo, path } = useStore.getState();
+    if (repo !== entry.repo || path !== entry.file.path) {
+      throw new Error(`the jump to ${entry.id} left ${repo}/${path} current`);
+    }
     return painted - start;
   }, []);
 

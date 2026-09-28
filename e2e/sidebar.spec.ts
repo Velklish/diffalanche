@@ -143,7 +143,11 @@ test("the current file follows the reading position", async ({ page }) => {
   await open(page);
   const first = await page.locator(".file-row.on .file-name").textContent();
 
-  await page.evaluate(() => window.__perf.jumpToFile(6));
+  // A plain scroll, not the jump hook: the hook makes its file current itself (DA-82).
+  await page
+    .locator(".file-card")
+    .nth(6)
+    .evaluate((card) => card.scrollIntoView());
   await expect(page.locator(".file-row.on .file-name")).not.toHaveText(first ?? "");
 
   const now = await page.locator(".file-row.on .file-name").textContent();

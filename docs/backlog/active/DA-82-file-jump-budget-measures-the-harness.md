@@ -1,9 +1,9 @@
 # DA-82 · The file-jump budget measures a scroll the harness hook performs, not the one the product performs
 
-- **Order:** 210
 - **Scope:** 11-perf, 08-ui (see [reference](../../reference/README.md))
 - **Created:** 2026-09-11
 - **Dependencies:** none
+- **Taken:** 2026-09-28
 
 ## Context
 
