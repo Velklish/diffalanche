@@ -1398,6 +1398,33 @@ A number printed and not held — `edit to diff-changed`, `reply written to
 reply-added`, `check-ignore over 50 paths`, `file jump, one frame` — is there to
 be read, and a latency with no owner in that table is printed rather than held.
 
+## The comment gate
+
+`bun run check:comments` (`scripts/check-comments.ts`) is the rule of
+[ADR-011](../adr/adr-011-comment-length.md) as a check: it prints every comment
+block over two lines as `file:line: N lines`, then the count, and exits 1 while
+the count is not 0. It reads `src/`, `tests/`, `e2e/`, `perf/`, `scripts/` and
+`.github/`, or the paths it is given — `bun scripts/check-comments.ts src/ui`
+answers for one area. It is one of the `gates` in `backslop.json` and a step of
+CI's `check` job, after the typecheck.
+
+A block is counted by its physical lines, from the first to the last:
+
+- a run of `//` lines, which ends at the first line that is not one — a blank
+  line included;
+- a `/* … */` or a JSDoc, so a `/**` on a line of its own, one line of text and
+  a closing ` */` are three lines, and a one-line doc is written `/** … */`;
+- a JSX `{/* … */}`;
+- in `.yml`, `.yaml` and `.sh`, a run of `#` lines, a shebang excepted.
+
+A trailing comment after code on the same line is not a block: the rule is about
+prose above the code. The ADR's own `awk` counted 720 blocks on 2026-09-11 and
+missed the JSX and the `#` forms; the check counted 706 on 2026-09-28 with them,
+and DA-58 took that to 0 — the knowledge moved into the reference sections of
+the subsystems, and what is left above the code is a line of why and a pointer.
+`tests/check-comments.test.ts` holds the counting; a three-line comment added
+anywhere under those roots is red in the gate.
+
 ## The CI jobs
 
 `.github/workflows/ci.yml` holds six jobs, and each of them is described in
@@ -1465,9 +1492,10 @@ it is not a gate yet ([the job](#the-job)). The `pull_request` trigger stays
 unfiltered — a pull request between two work branches is worth the same run, and
 what makes a check required is the rule, not the trigger.
 
-The same list is also the header comment of `ci.yml`, which is the copy
-`tests/ci-names.test.ts` holds against the names the workflow reports; pointing
-the test at this table, and shrinking the comment, is DA-58.4.
+This table is the one copy of the list: `tests/ci-names.test.ts` reads its first
+column and holds it against the names `ci.yml` reports, and the paragraph above
+for the Windows cell, so a check renamed in the workflow and not here, or a row
+here the workflow does not report, is red in the unit suite (DA-58).
 
 ### Concurrency
 

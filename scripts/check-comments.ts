@@ -5,12 +5,12 @@ import { extname, join, relative, resolve } from "node:path";
 import { argv, exit, stdout } from "node:process";
 import { fileURLToPath } from "node:url";
 
-export const ROOTS = ["src", "tests", "e2e", "perf", "scripts", ".github"];
+const ROOTS = ["src", "tests", "e2e", "perf", "scripts", ".github"];
 const SLASH = new Set([".ts", ".tsx", ".css"]);
 const HASH = new Set([".yml", ".yaml", ".sh"]);
-export const LIMIT = 2;
+const LIMIT = 2;
 
-export type Block = { file: string; line: number; lines: number };
+type Block = { file: string; line: number; lines: number };
 
 /** The blocks of one file's text, longer than the limit or not. */
 export function blocks(text: string, kind: "slash" | "hash"): { line: number; lines: number }[] {

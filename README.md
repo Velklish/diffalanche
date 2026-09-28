@@ -379,6 +379,7 @@ bun install        # dependencies and the lockfile
 bun run model:fetch # the pinned embedding model into ~/.cache, for the tests (135 MB once)
 bun run lint       # Biome: lint and format check
 bun run typecheck  # tsc over the three TypeScript projects
+bun run check:comments # every comment over two lines (ADR-011)
 bun run test       # Vitest on Node
 bun run test:bun   # the same suite on Bun's runtime
 bun run test:ui    # Playwright: the UI against its screenshot baselines

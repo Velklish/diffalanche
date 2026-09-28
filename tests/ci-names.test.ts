@@ -5,20 +5,20 @@ import { describe, expect, it } from "vitest";
 
 const ROOT = resolve(dirname(fileURLToPath(import.meta.url)), "..");
 const ci = readFileSync(join(ROOT, ".github/workflows/ci.yml"), "utf8");
+const perf = readFileSync(join(ROOT, "docs/reference/11-perf.md"), "utf8");
+const SECTION = "### The checks a pull request requires";
 
-// The names branch protection matches are written once, in the header comment, indented by
-// five spaces. A trailing `<- the job id is x` note is prose about the name, not part of it.
-function documentedNames(text: string): string[] {
-  return text
-    .split("\n")
-    .filter((line) => /^#\s{5}\S/.test(line))
-    .map((line) =>
-      line
-        .replace(/^#\s+/, "")
-        .replace(/\s+<-.*$/, "")
-        .trim(),
-    )
-    .filter(Boolean);
+// The section the names are written once in, up to the next heading.
+function requiredSection(text: string): string {
+  const start = text.indexOf(SECTION);
+  if (start === -1) return "";
+  const end = text.indexOf("\n#", start + SECTION.length);
+  return text.slice(start, end === -1 ? undefined : end);
+}
+
+// The first column of its table, backticks stripped; the header and the rule are not names.
+function documentedNames(section: string): string[] {
+  return [...section.matchAll(/^\| `([^`]+)` \|/gm)].map((match) => match[1] ?? "");
 }
 
 type Cell = Record<string, string>;
@@ -92,10 +92,11 @@ function reportedNames(text: string): string[] {
 }
 
 describe("the check-run names branch protection lists", () => {
-  const documented = documentedNames(ci);
+  const section = requiredSection(perf);
+  const documented = documentedNames(section);
   const reported = reportedNames(ci);
 
-  it("reads a list out of the header comment at all", () => {
+  it("reads a list out of 11-perf.md at all", () => {
     // Guards the guard: a reworded comment that stops matching would make every
     // assertion below vacuously true.
     expect(documented.length).toBeGreaterThanOrEqual(10);
@@ -109,7 +110,7 @@ describe("the check-run names branch protection lists", () => {
   it("leaves out exactly the windows cells the comment declares not required", () => {
     const undocumented = reported.filter((name) => !documented.includes(name));
     expect(undocumented.every((name) => name.includes("windows-latest"))).toBe(true);
-    // The comment wraps, so the assertion holds the half that carries the decision.
-    expect(ci).toContain("is deliberately not in the list until DA-45");
+    // The paragraph wraps, so the assertion holds the half that carries the decision.
+    expect(section.replace(/\s+/g, " ")).toContain("is deliberately not in the list until DA-45");
   });
 });

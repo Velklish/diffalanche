@@ -325,6 +325,19 @@ and `bun run release` refuses a version that has no section. See
 
 ### Changed
 
+- **Every comment in the code is two lines or fewer, and a gate holds it**
+  (DA-58). 706 blocks over two lines — `src/`, `tests/`, `e2e/`, `perf/`,
+  `scripts/` and `.github/`, JSX and `#` comments counted — are down to 0: the
+  knowledge they carried moved into the reference sections of the subsystems
+  (01–11), the section banners went, the rest became one line of why and a
+  pointer, and the comments that disagreed with their code were corrected. No
+  code line changed but `tests/ci-names.test.ts`, which now reads the required
+  check names from [11-perf.md](docs/reference/11-perf.md#the-checks-a-pull-request-requires)
+  instead of `ci.yml`'s header comment. `bun run check:comments` is one of the
+  gates and a step of CI's `check` job
+  ([11-perf.md](docs/reference/11-perf.md#the-comment-gate)); the duplicated
+  `ForbiddenError` doc of `src/server/errors.ts` went with the sweep (DA-62.1).
+
 - **The perf gate's jump line times the jump a reader makes** (DA-82).
   `perf.jumpToFile` calls `revealFile` — the one function a row of the tree and
   a file hit of global search now share: out of browse mode, the file made

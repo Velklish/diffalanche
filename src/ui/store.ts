@@ -251,8 +251,8 @@ type SessionsSlice = {
   setSessionMenu: (open: boolean) => void;
   setNewName: (name: string) => void;
   setNewBase: (base: string) => void;
-  /** A session, or with a scope a review task, written with `use: false` and this window moved
-   * onto it: the UI never moves `current` (ADR-010, decision 7). */
+  /** A session, or with a scope a review task, and this window moved onto it; `current` moves only
+   * for a root's first session (ADR-010, decision 7; 08-ui.md, "The task this window…"). */
   createSession: (scope?: Scope) => Promise<void>;
   /** The task this window shows, by name or `null` for `current`: the URL is written and the whole
    * review read again. Not `use…`, which React reads as a hook (08-ui.md, "The task this…"). */
