@@ -332,7 +332,7 @@ describe("sessions over the API", () => {
 
 describe("a window on a named task", () => {
   /** `?review=<name>` (DA-55): a window on a task shows *and writes* it; `current` moves only by
-   * `review use` (ADR-010, decision 7), so without it a window read one task and wrote another. */
+   * `review use` (ADR-010, decision 7), so without it a window would read one task and write another. */
   it("writes into that task and leaves the current session's comments untouched", async () => {
     const where = await anchorable();
     const created = await post("/api/sessions", {

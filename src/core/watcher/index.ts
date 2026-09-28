@@ -462,7 +462,7 @@ export async function startWatcher(options: WatcherOptions): Promise<Watcher> {
       ignore: dataIgnore,
       recursive,
       // One signal for the whole directory, not a name to match: a runtime may report the target,
-      // the temporary file or only the directory (05-watcher.md, "What it watches").
+      // the temporary file or only the directory (05-watcher.md, "What it watches…").
       onChange: () => {
         options.onDataChanged?.();
         schedule("data", () => enqueue(reloadData));
@@ -790,7 +790,7 @@ function nestedGitIgnore(rest: string[], kind: PathKind): boolean {
   return !(position && rest.length === 1) && !(branch && rest.length > 2);
 }
 
-/** What a repository's watch leaves out, and why each (05-watcher.md, "What it watches"); what
+/** What a repository's watch leaves out, and why each (05-watcher.md, "What it watches…"); what
  * git itself ignores is left to git, once per burst, rather than guessed here. */
 export function repositoryIgnore(config: Config, repository: Repository): Ignore {
   const exclude = config.exclude.map(globToRegExp);
@@ -809,7 +809,7 @@ export function repositoryIgnore(config: Config, repository: Repository): Ignore
       return path !== ".git/HEAD" && path !== ".git/index" && path !== IGNORE_RULES_EXCLUDE;
     }
     // A nested repository is never scanned as its own, so its git directory is seen only through
-    // this watch (05-watcher.md, "What it watches").
+    // this watch (05-watcher.md, "What it watches…").
     if (git > 0) return nestedGitIgnore(segments.slice(git + 1), kind);
     if (dataDir !== null && (path === dataDir || path.startsWith(`${dataDir}/`))) return true;
     const name = segments.at(-1) as string;

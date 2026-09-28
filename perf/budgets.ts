@@ -1,8 +1,6 @@
 import type { Measurement, VariantSpec } from "./harness.ts";
 import { median } from "./harness.ts";
 
-/** The budget table of `docs/SPEC.md` section 6 in code; a line the harness cannot measure yet is
- * `pending`, printed and never failed until the task in `pendingUntil` turns it on. */
 /** The fields of a measurement a budget line can read: the numeric ones. */
 type MetricField = {
   [K in keyof Measurement]: Measurement[K] extends number ? K : never;
@@ -20,6 +18,8 @@ export type Budget = {
   pendingUntil?: string;
 };
 
+/** The budget table of `docs/SPEC.md` section 6 in code; a line the harness cannot measure yet is
+ * `pending`, printed and never failed until the task in `pendingUntil` turns it on. */
 export const BUDGETS: Budget[] = [
   {
     label: "First render of the review after the server responds",

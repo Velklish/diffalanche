@@ -1,5 +1,5 @@
 /** One directory tree: the recursive `fs.watch` where the runtime has it, a walk on a timer where
- * not (05-watcher.md, "What it watches"). Paths are relative, with forward slashes. */
+ * not (05-watcher.md, "What it watches…"). Paths are relative, with forward slashes. */
 import type { Dirent } from "node:fs";
 import { watch } from "node:fs";
 import { mkdir, mkdtemp, readdir, rm, stat, writeFile } from "node:fs/promises";
@@ -186,7 +186,7 @@ async function snapshot(dir: string, ignore: Ignore): Promise<Map<string, string
 }
 
 /** Whether this runtime's `fs.watch` really recurses, answered by a probe that writes inside the
- * data directory only (05-watcher.md, "What it watches"). */
+ * data directory only (05-watcher.md, "What it watches…"). */
 export async function supportsRecursiveWatch(dir: string): Promise<boolean> {
   // The answer is the runtime's, not the directory's, so it is asked once and
   // every watcher after the first gets it without writing anything.
