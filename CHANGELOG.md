@@ -672,6 +672,13 @@ and `bun run release` refuses a version that has no section. See
 
 ### Fixed
 
+- **The keyboard spec's `R` waits for the disk** (DA-118).
+  `e2e/keyboard.spec.ts` › "C opens the composer and R resolves the focused
+  thread" read `comments.json` as soon as the rail card turned `resolved`, which
+  the store does before its write lands, and failed a CI run of Velklish/diffalanche#3
+  that touched no UI code; it now polls the CLI's answer until it says
+  `resolved`.
+
 - **The unreadable-`reviews/` test holds as root too** (DA-117.1).
   `tests/watcher.test.ts` › "keeps what it knew when `reviews/` cannot be listed,
   and does not empty it" took the right to list away with `chmod`, which a root
