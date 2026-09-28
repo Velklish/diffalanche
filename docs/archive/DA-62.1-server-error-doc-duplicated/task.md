@@ -51,7 +51,7 @@ about the class under it.
 ## Out of scope
 
 - The rest of the repository's comment audit, which is
-  [DA-58](../../backlog/active/DA-58-comment-sweep-to-two-lines.md): this entry is one file and one
+  [DA-58](../DA-58-comment-sweep-to-two-lines/task.md): this entry is one file and one
   duplicate, not the sweep.
 - The behaviour of either class. Both are read by `errorResponse` and neither
   changes.

@@ -2,7 +2,7 @@
 
 - **Scope:** all subsystems (see [reference](../../reference/README.md))
 - **Created:** 2026-09-11
-- **Dependencies:** [DA-57](../../archive/DA-57-code-comments-are-two-lines/task.md)
+- **Dependencies:** [DA-57](../DA-57-code-comments-are-two-lines/task.md)
 - **Taken:** 2026-09-28
 
 ## Context
@@ -150,7 +150,7 @@ about the class under it.
 ### Out of scope
 
 - The rest of the repository's comment audit, which is
-  [DA-58](DA-58-comment-sweep-to-two-lines.md): this entry is one file and one
+  [DA-58](task.md): this entry is one file and one
   duplicate, not the sweep.
 - The behaviour of either class. Both are read by `errorResponse` and neither
   changes.
