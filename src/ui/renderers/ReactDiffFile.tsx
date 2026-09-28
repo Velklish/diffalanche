@@ -146,8 +146,8 @@ export function ReactDiffFile({
 
   const widgets = useMemo(() => keyed(shown, slots, view), [shown, slots, view]);
 
-  /** A selection runs over the new column only; `preventDefault` keeps the browser from selecting
-   * the code as text under the drag (08-ui.md, "Commenting"). */
+  /** A selection runs over the new column only; `preventDefault` keeps the press from starting a
+   * text selection, `user-select: none` the rest of the drag (08-ui.md, "Commenting"). */
   const events = useMemo<EventMap>(
     () => ({
       onMouseDown: ({ side, change }, event) => {

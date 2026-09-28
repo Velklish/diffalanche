@@ -1495,10 +1495,11 @@ it is not a gate yet ([the job](#the-job)). The `pull_request` trigger stays
 unfiltered — a pull request between two work branches is worth the same run, and
 what makes a check required is the rule, not the trigger.
 
-This table is the one copy of the list: `tests/ci-names.test.ts` reads its first
-column and holds it against the names `ci.yml` reports, and the paragraph above
-for the Windows cell, so a check renamed in the workflow and not here, or a row
-here the workflow does not report, is red in the unit suite (DA-58).
+This table is the one copy of the list: `tests/ci-names.test.ts` reads both its
+columns and holds them against the names and the job ids `ci.yml` reports, and
+the paragraph above for the Windows cell, so a check renamed in the workflow and
+not here, or a row here the workflow does not report, is red in the unit suite
+(DA-58).
 
 ### Concurrency
 
