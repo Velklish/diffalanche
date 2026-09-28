@@ -806,12 +806,15 @@ calls `revealFile` — the function a row of the tree and a file hit of global
 search call — and the window runs from before it to the frame after
 `revealCard`'s last round, once that frame shows the file's diff mounted. Before
 DA-82 the hook called `scrollIntoView` on a selector of its own and stopped at
-the next frame: no store write, none of `revealCard`'s rounds, and, measured on
-the synthetic review, the target's diff not yet on the screen — in two of the
-three jumps the harness makes (to the last file and to the middle one, after the
-scroll has left the page at the bottom) the stamped frame showed the card's
-spacer of estimated height, and the diff mounted a frame or two later. The old
-number was the cost of one scroll and one paint of an empty box.
+the next frame: no store write and none of `revealCard`'s rounds. What that
+frame shows was read on `revealFile`'s first painted frame — the store write and
+the same first scroll — on the synthetic review: in two of the three jumps the
+harness makes, to the last file and to the middle one, the target's diff was not
+mounted and the card showed its spacer, at the height measured when the scroll
+passed it, and the diff mounted a frame or two later. The page is near the top
+when the jumps start, not at the bottom where the scroll left it: the composer
+opened before them focuses its field, and the focus scrolls to the first card.
+The old number was the cost of one scroll and one paint of an empty box.
 
 The window ends after the last round rather than at the mount, because that
 frame is when the page stops moving the reader and the jump's work on the main
@@ -822,20 +825,26 @@ on the untouched base), five `perf/run.ts` processes a variant, medians:
 
 | Variant | `fileJumpMs` |
 |---|---|
-| Before DA-82 | 25.6 ms |
-| Before DA-82, `ROUNDS` 3 → 6 | 31.6 ms, inside that line's spread of 14.6–49.8 |
-| DA-82, to the frame after the last round | 69.8 ms |
-| DA-82, `ROUNDS` 3 → 6 | 100.7 ms |
-| DA-82, a frame added before the first scroll | 76.2 ms, inside the spread |
-| DA-82 ending at the frame that first shows the diff | 53.8 ms |
+| Variant | `fileJumpMs`, median | lowest–highest |
+|---|---|---|
+| Before DA-82 | 25.6 ms | 14.6–49.8 |
+| Before DA-82, `ROUNDS` 3 → 6 | 31.6 ms | 26.7–38.4 |
+| DA-82, to the frame after the last round | 69.8 ms | 62.3–78.7 |
+| DA-82, `ROUNDS` 3 → 6 | 100.7 ms | 85.6–109.1 |
+| DA-82, a frame added before the first scroll | 76.2 ms | 63.1–95.0 |
+| DA-82 ending at the frame that first shows the diff | 53.8 ms | 47.4–85.7 |
+| The same, a frame added before the first scroll | 52.1 ms | 47.4–82.2 |
 
 So a regression inside `revealCard` that costs work — another round — moves the
-line now and did not before. An idle frame added before the first scroll moves
-neither window: with the frame-rate limit off, a frame with nothing to draw
-costs about a millisecond. The hook also fails the run when the diff has not
-mounted within ten frames, or when the store's current file after the jump is
-not the file jumped to. The resolution tables below, of DA-110 and DA-115,
-measured the window before DA-82 on their jump rows.
+line now and did not before. A frame added before the first scroll moved neither
+window beyond its spread, +6.4 and −1.7 ms; the assumption, not measured, is
+that with the frame-rate limit off a frame with little to draw costs next to
+nothing, so a regression that only adds frames is out of the gate's sight
+(DA-82.3). The hook also fails the run when the diff has not mounted within ten
+frames, or when the store's current file after the jump is not the file jumped
+to. The resolution tables below, of DA-110 and DA-115, and the `jumps` step of
+the wall-per-step table measured the window before DA-82; since DA-82 that step
+read 181–324 ms of wall time on the container.
 
 **Switching review sessions** covers the whole wait — the press, the request,
 the read, the render — and fails the build like any other line. **It is the

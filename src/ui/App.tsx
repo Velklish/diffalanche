@@ -121,11 +121,12 @@ export function App() {
   const jumpToFile = useCallback(async (index: number) => {
     const entry = useStore.getState().files.find((one) => one.index === index);
     if (!entry) throw new Error(`no file ${index}`);
-    const diff = `[data-file="${CSS.escape(entry.id)}"] .file-body.mounted`;
+    // A card collapsed or with an omitted diff has no body to wait for.
+    const unmounted = `[data-file="${CSS.escape(entry.id)}"] .file-body:not(.mounted)`;
     const start = performance.now();
     await revealFile(entry.repo, entry.file.path);
     let painted = await afterPaint();
-    for (let frame = 1; document.querySelector(diff) === null; frame += 1) {
+    for (let frame = 1; document.querySelector(unmounted) !== null; frame += 1) {
       if (frame >= MOUNT_FRAMES) throw new Error(`the diff of ${entry.id} did not mount`);
       painted = await afterPaint();
     }

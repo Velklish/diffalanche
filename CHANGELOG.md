@@ -330,11 +330,12 @@ and `bun run release` refuses a version that has no section. See
   a file hit of global search now share: out of browse mode, the file made
   current, `revealCard` — and times it to the frame after the last round that
   shows the file's diff, where it used to scroll a card of its own choosing and
-  stop at the next frame, which in two of its three jumps still showed the
-  card's empty spacer. A round added to `revealCard` now moves the line: on a
+  stop at the next frame — the frame on which, in two of its three jumps, the
+  card still showed its spacer instead of its diff. A round added to `revealCard` now moves the line: on a
   4-core container 69.8 ms became 100.7 with six rounds, against 25.6 and 31.6
-  before. The hook fails the run when the diff does not mount within ten frames
-  or the jump leaves another file current. `data-file-index` is gone from the
+  before; a regression that only adds frames is still out of the unpaced gate's
+  sight (DA-82.3). The hook fails the run when the diff does not mount within
+  ten frames or the jump leaves another file current. `data-file-index` is gone from the
   file card, and the development machine's reading of the new window is DA-82.1
   ([11-perf.md](docs/reference/11-perf.md#the-gate)).
 - **The perf gate takes about 45 s instead of about 66, and CPU per frame is
