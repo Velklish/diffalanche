@@ -1,9 +1,5 @@
-/**
- * `GET /api/repos/branches` (DA-24): the branches the base picker chooses from,
- * summarised over the whole root. A base is one spec per session applied to
- * every repository, so the list is the union of their branches with how many
- * repositories carry each ([07-server.md](../docs/reference/07-server.md)).
- */
+/** `GET /api/repos/branches` (DA-24): the union of the root's branches, with how many
+ * repositories carry each ([07-server.md](../docs/reference/07-server.md#the-branches)). */
 import { execFileSync } from "node:child_process";
 import { mkdtempSync, rmSync } from "node:fs";
 import { devNull, tmpdir } from "node:os";
@@ -35,9 +31,8 @@ beforeAll(async () => {
   root = makeRoot();
   const [alpha, beta] = REPOS;
 
-  // A clone stands in for a remote: `git clone` writes `refs/remotes/origin/*`
-  // and the `origin/HEAD` that names the default branch, which is exactly what
-  // the route reads and what a `git init` fixture never has.
+  // A bare copy stands in for a remote: the fetch writes `refs/remotes/origin/*` and `set-head`
+  // the `origin/HEAD` the route reads, neither of which a `git init` fixture has.
   const bare = mkdtempSync(join(tmpdir(), "diffalanche-remote-"));
   git(join(root, alpha), ["clone", "--bare", "-q", ".", bare]);
   git(join(root, alpha), ["remote", "add", "origin", bare]);

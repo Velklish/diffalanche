@@ -1,12 +1,5 @@
-/**
- * One writer of the concurrency test: appends a single reply to one comment
- * through the storage read-modify-write helper. It runs as its own process, so
- * the lock is exercised the way the UI and several CLI processes exercise it —
- * `node tests/helpers/append-reply.ts <dataDir> <session> <commentId> <author>`.
- * Node runs this `.ts` file without a build step, which needs Node >= 22.18,
- * where type stripping is on by default; CI pins Node 22 and the package asks
- * for >= 22.
- */
+/** One writer of `tests/storage-concurrency.test.ts`, a process of its own so the lock is taken
+ * as the UI and the CLI take it (03-storage.md, "What the unit tests hold"). */
 import { updateComments } from "../../src/core/storage/index.ts";
 
 const [dataDir, session, commentId, author] = process.argv.slice(2);

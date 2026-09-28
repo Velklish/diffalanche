@@ -1,12 +1,5 @@
-/**
- * The live stream ([ADR-005](../../docs/adr/adr-005-live-update.md)): what the
- * watcher noticed, on its way to the browser. Events flow one way — the server
- * pushes, the browser fetches what an event names — so this is SSE and not a
- * socket, and `EventSource` reconnects on its own.
- *
- * Frames are kept in a ring so a client that reconnects with `Last-Event-ID`
- * gets what it missed instead of reloading the review.
- */
+/** The live stream: SSE, because updates flow one way (ADR-005), with a ring of frames for a
+ * client that reconnects with `Last-Event-ID` (07-server.md, "The live stream"). */
 import type { Context } from "hono";
 import { streamSSE } from "hono/streaming";
 import type { ActivityEvent, EventBus, WatcherEvent } from "../core/watcher/index.ts";
@@ -17,29 +10,16 @@ type EventFrame = { id: number; event: string; data: string };
 /** How many frames a client can miss and still be caught up rather than reloaded. */
 const REPLAY_CAPACITY = 200;
 
-/**
- * The frame a client gets instead of a replay it can no longer have: it says
- * "read the review again", which is the only honest answer when the events that
- * would have brought it up to date are gone.
- */
+/** The frame instead of a replay the ring can no longer give: "read the review again", the only
+ * honest answer once the events that would have caught it up are gone. */
 const RELOAD_EVENT = "reload";
 
-/**
- * How often a stream that has nothing to say says so. Anything between the
- * browser and the server may drop a connection that has been silent, and a
- * comment line costs nothing.
- */
+/** How often a silent stream says so: anything between browser and server may drop a silent
+ * connection, and a comment line costs nothing. */
 export const HEARTBEAT_MS = 15_000;
 
-/**
- * The first thing a stream says, before it has anything to report. A response
- * head is not on the wire until something is written into the body, so without
- * this a client learns that its stream is up only when the first heartbeat
- * arrives — fifteen seconds of a page that is connected and cannot say so
- * ([08-ui.md](../../docs/reference/08-ui.md)). The subscription is made when
- * the request is handled, so nothing is missed in that window; it is the
- * silence that is invisible.
- */
+/** The first thing a stream says: a head is not on the wire until the body has bytes, and the
+ * page would wait for the first heartbeat to know it is connected (07-server.md, 08-ui.md). */
 const HELLO = ": connected\n\n";
 
 /** One open stream. `end` is the server stopping, not the client leaving. */
@@ -51,11 +31,8 @@ type Client = {
   session: string | null;
 };
 
-/**
- * What a client that reconnects is owed: the frames it missed, or the one frame
- * that tells it to read the review again because the ring cannot reach that far
- * back. Never both.
- */
+/** What a reconnecting client is owed: the frames it missed, or the one frame that says to read
+ * the review again because the ring cannot reach that far back — never both. */
 type Replay = { frames: EventFrame[]; reload: EventFrame | null };
 
 export type EventStream = {
@@ -95,10 +72,8 @@ export function createEventStream(
       return frame;
     },
     since(id) {
-      // The oldest frame still in the ring, and the newest that was ever sent.
-      // A client is caught up when its last id is at least the one before the
-      // oldest — and not ahead of the newest, which is what a server that has
-      // restarted looks like to a browser that kept its `Last-Event-ID`.
+      // Caught up from `oldest - 1` to `newest`; an id ahead of the newest is a browser that
+      // kept its `Last-Event-ID` across a restart of the server.
       const oldest = ring[0]?.id ?? nextId;
       const newest = ring.at(-1)?.id ?? nextId - 1;
       if (id >= oldest - 1 && id <= newest) {
@@ -139,11 +114,8 @@ export function createEventStream(
   };
 }
 
-/**
- * The bus on the stream: every event goes out under its own name with the whole
- * event as the data, `type` included, so a client can listen by name or read
- * them all off one handler.
- */
+/** The bus on the stream: each event under its own name with the whole event as data, `type`
+ * included, so a client can listen by name or read them all off one handler. */
 export function forwardEvents(bus: EventBus, stream: EventStream): () => void {
   return bus.subscribe((event: WatcherEvent) => {
     stream.emit(event.type, event);
@@ -157,12 +129,8 @@ export function forwardActivity(stream: EventStream): (event: ActivityEvent) => 
   };
 }
 
-/**
- * `GET /api/events`. A client that reconnects sends `Last-Event-ID` and gets
- * what it missed from the ring before the live frames; a client that is new
- * gets the live ones only, because the review it just loaded is the state
- * everything before that id led to.
- */
+/** `GET /api/events`: a reconnecting client gets what it missed before the live frames, a new
+ * one the live frames only (07-server.md, "The live stream"). */
 export function streamEvents(events: EventStream, heartbeatMs: number = HEARTBEAT_MS) {
   return (c: Context): Response =>
     streamSSE(c, async (stream) => {
@@ -199,10 +167,8 @@ export function streamEvents(events: EventStream, heartbeatMs: number = HEARTBEA
         },
       };
 
-      // Reading the ring and subscribing happen with nothing awaited between
-      // them, so no frame can fall into the gap or arrive out of order. A
-      // client that is new asks for nothing: the review it just loaded is the
-      // state everything before this point led to.
+      // The ring is read and the client subscribed with nothing awaited between, so no frame
+      // falls into the gap or arrives out of order; a new client asks for nothing.
       const seen = lastEventId(c);
       const missed: Replay = seen === null ? { frames: [], reload: null } : events.since(seen);
       const unsubscribe = events.subscribe(client);

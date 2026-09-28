@@ -4,15 +4,8 @@ import { isAbsolute, join, relative, resolve, sep } from "node:path";
 import { byCodePoint } from "../order.ts";
 import type { Repository, ScanConfig, ScanResult, ScanWarning } from "../types.ts";
 
-/**
- * Finds the repositories under `root`: every directory holding `.git` at most
- * `config.depth` levels below an entry of `config.roots`. A repository is not
- * scanned inside, so nested submodules and worktrees under it are not listed
- * (`docs/SPEC.md` section 3, decision 3).
- *
- * The scan reads the filesystem and nothing else — no git process is started,
- * so a repository cannot be touched by it.
- */
+/** Finds the repositories under `root`, reading the filesystem and starting no git process
+ * ([01-scanner.md](../../../docs/reference/01-scanner.md)). */
 export async function scan(root: string, config: ScanConfig): Promise<ScanResult> {
   const absoluteRoot = resolve(root);
   const exclude = config.exclude.map(globToRegExp);
@@ -32,12 +25,8 @@ export async function scan(root: string, config: ScanConfig): Promise<ScanResult
   return { repositories: found.map((one) => one.repository), warnings };
 }
 
-/**
- * A repository with the main working tree of a linked worktree, before it is
- * resolved to a warning. `realPath` is the resolved `absolutePath`: a worktree
- * pointer records the real path, while the root a person types may run through
- * a symbolic link — `/var` on macOS is one — and the two would never match.
- */
+/** A repository with its linked worktree's main working tree; `realPath` is resolved because a
+ * typed root may run through a link (01-scanner.md, "Worktrees and submodules"). */
 type Found = { repository: Repository; realPath: string; mainWorkTree: string | null };
 
 type Walk = {
@@ -50,10 +39,8 @@ type Walk = {
 async function walk(dir: string, depth: number, ctx: Walk): Promise<void> {
   const repository = await read(dir, ctx.root);
   if (repository) {
-    // A found repository is never scanned inside (`docs/SPEC.md` section 3,
-    // decision 3), and the root is not an exception. It cannot be reviewed
-    // either — its path relative to itself is empty, and that is no id — so the
-    // review is empty and the warning says what to do about it.
+    // The root is not scanned inside either, and its empty path is no id, so it is a warning
+    // rather than a repository (01-scanner.md, "The root itself").
     if (repository.repository.path === "") {
       ctx.warnings.push({
         path: ".",
@@ -85,11 +72,8 @@ async function walk(dir: string, depth: number, ctx: Walk): Promise<void> {
   }
 }
 
-/**
- * Reads the `.git` of a candidate directory. A directory is an ordinary
- * repository; a file is the pointer of a linked worktree or of a submodule, and
- * only the first has a `worktrees` segment in the git directory it names.
- */
+/** Reads a candidate's `.git`: a directory is a repository, a file the pointer of a linked
+ * worktree or a submodule (01-scanner.md, "Worktrees and submodules"). */
 async function read(dir: string, root: string): Promise<Found | null> {
   const gitPath = join(dir, ".git");
   let gitStat: Awaited<ReturnType<typeof stat>>;
@@ -127,11 +111,8 @@ async function readGitDir(gitPath: string, dir: string): Promise<string | null> 
   return isAbsolute(value) ? resolve(value) : resolve(dir, value);
 }
 
-/**
- * The git directory of a linked worktree is `<main>/.git/worktrees/<name>`, so
- * the main working tree is two levels above the `worktrees` segment. A submodule
- * points at `<super>/.git/modules/<name>` instead and is not a worktree.
- */
+/** A linked worktree's git directory is `<main>/.git/worktrees/<name>`; a submodule's is
+ * `<super>/.git/modules/<name>` and is not a worktree. */
 function mainWorkTreeOf(gitDir: string): string | null {
   const parts = gitDir.split(sep);
   const at = parts.lastIndexOf("worktrees");
@@ -164,13 +145,8 @@ function excluded(name: string, path: string, exclude: RegExp[]): boolean {
   return exclude.some((pattern) => pattern.test(name) || pattern.test(path));
 }
 
-/**
- * A glob of `exclude` as a regular expression: `**` crosses directories, `*`
- * and `?` stay inside one path segment. It is matched against the directory's
- * own name and against its path relative to the root, so both `node_modules`
- * and `repos/legacy/**` do what they look like they do. A trailing `/`, the way
- * `.gitignore` writes a directory, is dropped.
- */
+/** A glob of `exclude` as a regular expression: `**` crosses directories, `*` and `?` stay in one
+ * segment, a trailing `/` is dropped (01-scanner.md, "What is skipped"). */
 export function globToRegExp(glob: string): RegExp {
   const pattern = glob.endsWith("/") ? glob.slice(0, -1) : glob;
   let out = "";

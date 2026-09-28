@@ -1,7 +1,5 @@
-/**
- * What the UI's patch readers do with the two patches of a type change
- * ([02-git.md](../docs/reference/02-git.md)).
- */
+/** What the UI's patch readers do with the two patches of a type change
+ * ([02-git.md](../docs/reference/02-git.md)). */
 import { parseDiff } from "react-diff-view";
 import { describe, expect, it } from "vitest";
 import { firstAddedLine } from "../src/ui/anchor.ts";

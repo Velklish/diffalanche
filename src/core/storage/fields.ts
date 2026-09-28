@@ -1,9 +1,5 @@
-/**
- * The field readers every file of the data directory is validated with. They
- * exist once because `config.json` is checked the same way the session files
- * are: the files are meant to be edited by hand (`docs/SPEC.md` section 3,
- * decision 5), so every refusal has to name the file and the field.
- */
+/** The field readers of every file of the data directory, `config.json` included: hand-edited files
+ * need every refusal to name file and field (03-storage.md, "Validation and errors"). */
 import { StorageError } from "./errors.ts";
 
 export function fail(file: string, field: string | null, message: string): never {

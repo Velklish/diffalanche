@@ -4,12 +4,8 @@ import type { FileEntry } from "../src/ui/store.ts";
 import { useStore, withComments } from "../src/ui/store.ts";
 import type { Comment, FileChange, RepositoryChange } from "../src/ui/types.ts";
 
-/**
- * Global search and the `J` / `K` order (DA-26). The ranking and the preview
- * are pure and are checked here; the modal itself and the rest of the keyboard
- * map are in `e2e/keyboard.spec.ts`, where there are keys to press
- * ([08-ui.md](../docs/reference/08-ui.md)).
- */
+/** DA-26's global search and `J` / `K` order: the pure ranking and preview here, the modal and
+ * the other keys in `e2e/keyboard.spec.ts`, where there are keys to press (08-ui.md). */
 
 const PATCH = [
   "diff --git a/src/store.ts b/src/store.ts",

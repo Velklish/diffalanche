@@ -1,8 +1,5 @@
-/**
- * The data directory: where a review session lives and how it is read and
- * written. `docs/SPEC.md` section 7 defines the layout, `docs/reference/03-storage.md`
- * describes what this module does with it.
- */
+/** The data directory: where a review session lives and how it is read and written
+ * ([03-storage.md](../../../docs/reference/03-storage.md); the layout is `docs/SPEC.md` section 7). */
 import { randomUUID } from "node:crypto";
 import type { Dirent } from "node:fs";
 import { mkdir, readdir, readFile, rename, rm, stat } from "node:fs/promises";
@@ -57,14 +54,8 @@ function reviewsDir(dataDir: string): string {
   return resolve(dataDir, "reviews");
 }
 
-/**
- * A session name is a directory name and nothing more. Without this guard
- * `resolve` would happily leave the data directory: `../../repos/group/svc`
- * would put review files inside a reviewed repository, which the tool must
- * never write to. The domain checks names too, but the check belongs here as
- * well — this is the module that touches the file system, and `current` is a
- * hand-edited file whose content reaches these functions directly.
- */
+/** One path segment, or `resolve` could leave the data directory for a reviewed repository; here
+ * too, as `current` is hand-edited (03-storage.md, "The data directory"). */
 function assertSessionSegment(dataDir: string, name: string): string {
   if (name === "" || name === "." || name === ".." || /[\\/]/.test(name)) {
     throw new StorageError(
@@ -129,11 +120,8 @@ export async function ensureDataDir(dataDir: string): Promise<string> {
   return dataDir;
 }
 
-/**
- * Whether the data directory holds this review session. It answers from the
- * presence of `review.json` alone: a session whose file is broken still exists,
- * and a caller that treated it as absent would overwrite it.
- */
+/** From `review.json` being there, not from it parsing: a caller that took a broken session for
+ * an absent one would overwrite it. */
 export async function sessionExists(dataDir: string, name: string): Promise<boolean> {
   return exists(reviewPath(dataDir, name));
 }
@@ -193,10 +181,6 @@ export function timestamp(): string {
   return new Date().toISOString();
 }
 
-// ---------------------------------------------------------------------------
-// files of a session
-// ---------------------------------------------------------------------------
-
 export async function readReview(dataDir: string, name: string): Promise<Review> {
   const path = reviewPath(dataDir, name);
   const text = await readText(path);
@@ -244,15 +228,8 @@ export async function writeDiffCache(
   await writeFileAtomic(diffCachePath(dataDir, name), toJson(diff), { durable: false });
 }
 
-// ---------------------------------------------------------------------------
-// the current session
-// ---------------------------------------------------------------------------
-
-/**
- * `current` is one line: the name of the current session and a newline. It is
- * a pointer and nothing else, so `cat current` answers the question and an
- * editor does not add a second line to it.
- */
+/** `current` is one line, the name and a newline: a pointer `cat` answers, trimmed on reading so
+ * an editor's newline changes nothing (03-storage.md, "The data directory"). */
 export async function readCurrent(dataDir: string): Promise<string | null> {
   const text = await readText(currentPath(dataDir));
   if (text === null) return null;
@@ -286,19 +263,12 @@ export async function removeSession(dataDir: string, name: string): Promise<void
   await rm(aside, { recursive: true, force: true });
 }
 
-// ---------------------------------------------------------------------------
-// writing comments
-// ---------------------------------------------------------------------------
-
 /** The session's two files as a writer sees them inside the lock. */
 type SessionDraft = {
   /** Changed in place, or replaced outright; written back either way. */
   review: Review;
-  /**
-   * The comments, read on first use. A writer that never asks for them leaves
-   * `comments.json` alone: rewriting a file nothing changed wakes the watcher
-   * for nothing.
-   */
+  /** Read on first use; a writer that never asks leaves `comments.json` alone, as rewriting an
+   * unchanged file wakes the watcher for nothing. */
   comments: Comment[];
 };
 
@@ -307,14 +277,8 @@ type UpdateSessionOptions = LockOptions & {
   create?: Review;
 };
 
-/**
- * The one write path of a session's files. Under the session's lock it reads
- * what is there, lets `change` alter the draft, checks the lock is still ours,
- * and writes back. Reading outside the lock and writing inside it is what loses
- * a reply written in between, so the read is inside too; and `assertHeld` is
- * here rather than in each writer, because a writer that forgets it is outside
- * the guarantee without anything saying so.
- */
+/** The one write path of a session's files: read, changed and written under its lock, with
+ * `assertHeld` called here for every writer (03-storage.md, "Read-modify-write"). */
 export async function updateSession<T>(
   dataDir: string,
   name: string,
@@ -373,10 +337,8 @@ export async function updateSession<T>(
   );
 }
 
-/**
- * The read-modify-write every comment writer goes through: `updateSession`
- * with only the comments in view.
- */
+/** `updateSession` with only the comments in view; the domain's writers take the whole draft, as
+ * they decide against the scope in `review.json` (03-storage.md, "Read-modify-write"). */
 export async function updateComments<T>(
   dataDir: string,
   name: string,
@@ -385,15 +347,8 @@ export async function updateComments<T>(
   return updateSession(dataDir, name, (draft) => update(draft.comments));
 }
 
-// ---------------------------------------------------------------------------
-// listing sessions
-// ---------------------------------------------------------------------------
-
-/**
- * The session names under `reviews/`, sorted. A directory without a
- * `review.json` is not a session: it is left out and reported, because
- * silently skipping it looks like the session was lost.
- */
+/** The session names under `reviews/`, sorted; a directory without `review.json` is reported, as
+ * silently skipping it would look like a lost session. */
 export async function listSessionNames(dataDir: string): Promise<SessionListing> {
   const dir = reviewsDir(dataDir);
   let entries: Dirent[];

@@ -1,12 +1,8 @@
 import { afterEach, describe, expect, it, vi } from "vitest";
 import { useStore } from "../src/ui/store.ts";
 
-/**
- * The empty states of DA-27 in the store: which of them a root shows, and what
- * `Create` sends. A root with no session is not a review that failed — the
- * server says so with `no-current-session` — and the screen that offers to make
- * one is what that means ([08-ui.md](../docs/reference/08-ui.md)).
- */
+/** DA-27's empty states in the store: which one a root shows and what `Create` sends. No session
+ * is `no-current-session`, not a failed review ([08-ui.md](../docs/reference/08-ui.md)). */
 
 const SCAN = {
   root: "/root",
@@ -60,10 +56,8 @@ function refusal(code: string, status = 404): Response {
 
 afterEach(() => {
   vi.unstubAllGlobals();
-  // `reviewName` and `status` go back too: the store is one module-level
-  // instance shared by every test in this file, and a test that left a task
-  // name behind would send the next one's requests into that task without
-  // saying so (DA-55).
+  // `reviewName` and `status` reset too: the store is one instance for the whole file, and a task
+  // name left behind would send the next test's requests into that task silently (DA-55).
   useStore.setState({
     scan: null,
     scanFailure: null,
@@ -134,10 +128,8 @@ describe("creating the first session", () => {
 
     await useStore.getState().createSession();
 
-    // The first session of a root becomes `current`: this screen is exactly
-    // the state in which there is none to leave alone, and a root the CLI
-    // cannot name without `--review` is a root the tool half works in
-    // ([ADR-010](../docs/adr/adr-010-review-task-scope.md), decision 7).
+    // A root's first session becomes `current`: there is none to leave alone, and a root the CLI
+    // cannot name without `--review` is one the tool half works in (ADR-010, decision 7).
     expect(calls[0]).toEqual({
       url: "/api/sessions",
       body: { name: "ls-1", base: "head", use: true },
@@ -169,9 +161,8 @@ describe("creating the first session", () => {
   });
 
   it("leaves `current` alone once the root has a session, and takes the window there", async () => {
-    // Every session but the first: `current` is what a terminal beside this
-    // window is on, and only `review use` moves it (ADR-010, decision 7). The
-    // window follows the task it made through its own address instead.
+    // Every later session leaves `current` to the terminal beside it — only `review use` moves it
+    // (ADR-010, decision 7); the window follows the task it made through its own address.
     const calls = serve({
       "/api/sessions": () => new Response(JSON.stringify(REVIEW.session), { status: 201 }),
       "/api/review?review=ls-1": () => new Response(JSON.stringify(REVIEW)),

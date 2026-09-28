@@ -1,7 +1,5 @@
-/**
- * `export`: the review as markdown grouped by repository, the text the UI's
- * `raw` tab shows (`docs/SPEC.md` section 8, `docs/design/HANDOFF.md` section 9).
- */
+/** `export`: the review as markdown grouped by repository, the text the UI's `raw` tab shows
+ * (`docs/SPEC.md` section 8, `docs/design/HANDOFF.md` section 9). */
 import { exportMarkdown, list, readSession } from "../../core/domain/index.ts";
 import { choice, noExtra } from "../args.ts";
 import type { Command } from "../command.ts";

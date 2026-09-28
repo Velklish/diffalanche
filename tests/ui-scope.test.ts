@@ -15,15 +15,8 @@ import {
   toggleRepo,
 } from "../src/ui/scope.ts";
 
-/**
- * The scope as the screen holds it (DA-55): the draft the editor and select
- * mode pick into, the count the `SCOPE` pill prints, and the sentence the one
- * destructive confirmation of the product asks.
- *
- * What the draft becomes is checked against the domain's own `assertScope`,
- * the check the server runs before it writes: a picker that could build a scope
- * the format refuses would be a picker whose `Apply` fails at random.
- */
+/** DA-55's scope on the screen: the draft, the `SCOPE` pill's count, the confirmation's sentence,
+ * and the draft held to the domain's `assertScope` (08-ui.md, "The scope editor"). */
 
 const REPO = "repos/core/cargos-api";
 const OTHER = "repos/platform/loads-search";
@@ -174,9 +167,8 @@ describe("what a scope edit takes out of the task", () => {
 
 describe("the question asked before comments are deleted", () => {
   it("names what is going, how many comments there are, and how many are open", () => {
-    // The name is the one `removedFrom` produces — the path with its repository
-    // in front of it — because two files of the same name in two repositories
-    // would otherwise be the same sentence.
+    // The name `removedFrom` gives, the path with its repository in front, since two files of one
+    // name in two repositories would otherwise be the same sentence.
     const [removed] = removedFrom(
       [{ repo: OTHER, paths: ["src/Tariffs/TariffService.cs", "x.ts"] }],
       [{ repo: OTHER, paths: ["x.ts"] }],

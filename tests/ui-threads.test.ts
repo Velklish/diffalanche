@@ -3,12 +3,8 @@ import { useStore, withComments } from "../src/ui/store.ts";
 import { relativeTime } from "../src/ui/time.ts";
 import type { Comment } from "../src/ui/types.ts";
 
-/**
- * What a write on a thread does to the store before, during, and after the
- * server answers (DA-23). The rail is optimistic: the card changes at once and
- * the server's answer replaces it, or the threads the rail had before come back
- * with the refusal in the toast ([08-ui.md](../docs/reference/08-ui.md)).
- */
+/** A thread write in the store before, during and after the answer (DA-23): the card changes at
+ * once, then takes the server's answer or its old threads and a toast (08-ui.md, "Threads"). */
 
 function comment(over: Partial<Comment> = {}): Comment {
   return {

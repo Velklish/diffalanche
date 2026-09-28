@@ -1,8 +1,5 @@
-/**
- * Relative time, as every timestamp on the screen is written: `12m ago`. The
- * handoff recomputes it every five seconds, so it is a pure function of the
- * moment it is asked for rather than of the moment the thread was written.
- */
+/** Relative time, as every timestamp on the screen is written (`12m ago`): a pure function of the
+ * moment it is asked for, because the handoff recomputes it every five seconds. */
 
 const SECOND = 1_000;
 const MINUTE = 60_000;
@@ -21,12 +18,8 @@ export function relativeTime(iso: string, now: number = Date.now()): string {
   return `${Math.floor(ago / DAY)}d ago`;
 }
 
-/**
- * The same clock at the resolution the feed and the changed-hunk marker are
- * read at: `12s ago` while it is seconds, and the same words as above after
- * that. The handoff's activity panel counts in seconds — `<файл> · 12s ago` —
- * and a hunk that changed a moment ago is exactly what "just now" would hide.
- */
+/** The same clock in seconds for the feed and the changed-hunk marker (`<файл> · 12s ago`): a
+ * hunk that changed a moment ago is exactly what "just now" would hide. */
 export function elapsed(at: number, now: number = Date.now()): string {
   const ago = Math.max(0, now - at);
   if (ago < MINUTE) return `${Math.floor(ago / SECOND)}s ago`;

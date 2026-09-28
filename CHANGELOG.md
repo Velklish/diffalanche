@@ -43,6 +43,7 @@ and `bun run release` refuses a version that has no section. See
   and a held document of a session gone, or made again under its name, goes. `Ctrl-C` and `Ctrl-D` at the question are a no. The embedding index is
   left to its next reader, which drops the deleted session's comments —
   measured at 33–38 ms once over 5 000 of them.
+
 - **Suggestions from history and `AUTO` in the comment form** (DA-36). While a
   comment is typed, `FROM YOUR HISTORY` lists the five nearest past comments of
   every session from `GET /api/suggest`, asked once typing pauses for 200 ms and
@@ -64,6 +65,7 @@ and `bun run release` refuses a version that has no section. See
   `confirmed:<author>`, absent read as `manual`) without a new schema version: a
   build from before it drops the field when it writes the file, which loses the
   labels and nothing else ([03-storage.md](docs/reference/03-storage.md#schema-versions)).
+
 - **The embedding model reaches both channels** (DA-41). The npm package
   downloads the model and this platform's ONNX Runtime files once, on the first
   `suggest` or `index rebuild` or the first suggestion `serve` is asked for, from
@@ -87,6 +89,7 @@ and `bun run release` refuses a version that has no section. See
   files, sizes and cache, and the agent's CLI reference makes `model pull
   --embedding` a step of its own before `suggest`, since a download is not resumed
   ([09-ml.md](docs/reference/09-ml.md#delivery)).
+
 - **`suggest` and `GET /api/suggest`** (DA-35). `diffalanche suggest --body <text>
   [--json]` answers with the five past comments nearest the text across every
   review session — each with its similarity, severity, session, file and line —
@@ -102,6 +105,7 @@ and `bun run release` refuses a version that has no section. See
   A blank `--body`, and a root nobody reviewed, are refused in one line. Each
   severity of the synthetic review now has two texts of its own, so its comments
   cluster: the same eight texts, count and seed.
+
 - **The embedding model runs in a process of its own** (DA-34.1, DA-34.2).
   `suggest`, `index rebuild` and the server's first suggestion start the model in
   a child process — `node dist/embed-child.js` in the npm package, the binary
@@ -123,6 +127,7 @@ and `bun run release` refuses a version that has no section. See
   `--lag` take the event loop's measurement again, and `perf/index-scale.ts
   query` and `serve` print each process's peak
   ([09-ml.md](docs/reference/09-ml.md#in-a-process-of-its-own)).
+
 - **The embedding index, and `index rebuild` and `index status`** (DA-34).
   `src/core/ml/index` keeps a vector for every comment of every review session,
   with its session, id, severity, anchor and text, in `index/index.bin` of the
@@ -139,6 +144,7 @@ and `bun run release` refuses a version that has no section. See
   no session gets no `index/`. `index status [--json]` says what it holds and what
   it is missing without loading the model. The npm bundle leaves the embedder out
   until DA-41 delivers the runtime.
+
 - **The reference's frame tables are checked against `WatcherEvent`** (DA-109).
   The events of [05-watcher.md](docs/reference/05-watcher.md), the stream of
   [07-server.md](docs/reference/07-server.md) and the handlers of
@@ -150,6 +156,7 @@ and `bun run release` refuses a version that has no section. See
   tables that carry them, and each file is held to its anchor's shape. 08-ui had
   no row for `sessions-changed`; it has one now. How the check reads both sides
   is in the [reference](docs/reference/README.md#the-frame-tables-mirror-watcherevent).
+
 - **Every export has an importer, and every route is registered once** (DA-59).
   `noUnusedLocals` does not see an exported symbol, and Biome has no rule that
   does, so `tests/exports.test.ts` reads the imports and exports of every
@@ -169,6 +176,7 @@ and `bun run release` refuses a version that has no section. See
   checks are described in the
   [reference](docs/reference/README.md#checks-that-read-the-code) and in
   [07-server.md](docs/reference/07-server.md).
+
 - **The marks that carry a state without being text have a contrast check**
   (DA-56.2). The history mark, the select-mode tick and its unpicked `·`, and the
   focus ring are measured at WCAG 1.4.11's 3:1 in both themes, in a group of their
@@ -176,6 +184,7 @@ and `bun run release` refuses a version that has no section. See
   the focus ring does since DA-56.7. `DESIGN.md` now says which dots are
   decoration — those beside a word that says the same — and that the dividers
   are.
+
 - **The recovery paths of live update are tested** (DA-96). A `reload` frame
   reading the review again, the footer saying `reconnecting` while the browser
   retries and staying as it was once it has closed the stream, and the queue that
@@ -184,6 +193,7 @@ and `bun run release` refuses a version that has no section. See
   one of them green. They are unit tests against a stubbed `EventSource`, shared
   with the other live tests; why not a browser spec is in
   [08-ui.md](docs/reference/08-ui.md).
+
 - **The embedding model loads, and `model status` says where it is** (DA-33).
   `src/core/ml/embed` pins `multilingual-e5-small` in int8 ONNX, reads it from
   `$XDG_CACHE_HOME/diffalanche/models` (`~/.cache` without the variable), loads it once per
@@ -230,9 +240,11 @@ and `bun run release` refuses a version that has no section. See
   folded away while browsing, not unmounted. A comment can be left on a line there and lands
   in the same session with its path; its anchor is captured from the file itself in the same
   `{ lineContent, hunk, before, after }` shape, `hunk` being the header of the context window.
+
 - **`↑ N lines` brings in real context.** A hunk header's new control puts the working tree's
   lines above the hunk into the diff, twenty at a time, up to the hunk above; `collapse context`
   hides them with the bundled context.
+
 - **`GET /api/repos/:repo/tree` and `GET /api/repos/:repo/file?path=&rev=`** answer what browse
   mode and the context read: every file with where it exists, the base revision and the working
   tree merged, and one file whole. Both stay inside the task's scope, and the file route reads
@@ -252,20 +264,24 @@ and `bun run release` refuses a version that has no section. See
   task is about: `2 repos · 5 files`, or `все репозитории` for a session with no
   scope. A closed row keeps its counters, carries a `CLOSED` chip, and steps
   back by tone the way a resolved thread does.
+
 - **A task is closed and reopened from its row.** The same press does both, and
   it is the human's gesture: the server signs the write with the configured user
   and `role: human` and takes neither from the request. Closing is a marker and
   not a lock — comments, replies and resolves go on working on a closed task —
   so there is no confirmation in front of it and no red button.
+
 - **The row says which window is on it, and which task the CLI answers about.**
   Two different chips, because they are two different facts: switching a task
   moves this window's address and never `current`, so the reader can be on one
   task while the terminal beside them is on another. Neither says `CURRENT`:
   there is no main task.
+
 - **A task that appears while the window is open raises a quiet mark** on the
   session pill and does nothing else — no toast, no switch, no scroll, and the
   composer being written in stays open. Opening the menu clears it. A task this
   window created, closed or reopened raises no mark: the reader has seen it.
+
 - **The scope on the screen** (DA-55). A `SCOPE` pill sits beside `BASE` and
   says what the task is about — `2 repos · 5 files` — and opens the **scope
   editor**: an overlay over the whole root with a tick per repository and per
@@ -274,15 +290,18 @@ and `bun run release` refuses a version that has no section. See
   screen carries the scope and nothing else — the tree, the reading column, the
   counters and the rail all speak about the task, and nothing names what was
   left outside it.
+
 - **Taking something out of a task asks first.** Removing a repository or a file
   that carries comments opens a confirmation naming it, how many comments would
   go with it and how many of those are open, and only then consents. Cancelling
   writes nothing. This is the only place in the product that destroys review
   data, and it never happens without that dialog.
+
 - **Select mode.** A second tab beside `changes` turns the tree into a picking
   surface with a bar at the foot of the sidebar — `N repos · M files` and
   `New task…`, which asks for a name and a base and creates the task with that
   scope. Outside the mode the tree is exactly what it was.
+
 - **A window shows the task its address names.** `?review=<name>` decides what
   this window loads, and switching a task in the menu changes that address
   rather than `current`: several agents work on several tasks at once and none
@@ -372,6 +391,7 @@ and `bun run release` refuses a version that has no section. See
   of up to about 1 ms now passes the local gate, and 8.3 ms stays the goal of
   `docs/SPEC.md` section 6. Whether 2.1 still fits a runner is DA-115.1
   ([11-perf.md](docs/reference/11-perf.md#where-a-runs-time-goes)).
+
 - **The live dots no longer pulse** (DA-115). The footer's `watching` and
   `reconnecting` dots and the activity panel's live ones stand still in their
   colour, the word beside them saying the state; `dcpulse` is gone and `dcin`
@@ -380,6 +400,7 @@ and `bun run release` refuses a version that has no section. See
   compositing on about two and a half cores while the page sat idle, against
   0.02 + 0.02 CPU-seconds a second at 60 Hz ([08-ui.md](docs/reference/08-ui.md)).
   `e2e/shell.spec.ts` holds that nothing on the page animates without end.
+
 - **The perf gate says where its time goes** (DA-115). Every repetition prints
   `wall per step, ms: …` on stderr — Bun's start, the server, the browser, the
   first render, the scroll, each measured action and the closes — and the gate
@@ -407,6 +428,7 @@ and `bun run release` refuses a version that has no section. See
   eight runs a side, where no difference could come out as one. A single run
   names some line of seven different on identical trees about once in
   seventeen, so a `worse` counts when a second run agrees.
+
 - **The UI suite asks the load precondition, before and after** (DA-54.4). `bun
   run test:ui` is a suite about time, and a busy machine reddened a live-update
   spec a quiet one passes, while `bun run perf` beside it declined on the same
@@ -439,6 +461,7 @@ and `bun run release` refuses a version that has no section. See
   (DA-110.1). The ceiling, the bypass and the place of `perf` in `gates` are
   unchanged; why the other candidates lost is in
   [11-perf.md](docs/reference/11-perf.md).
+
 - **A severity the model chose no longer votes in later suggestions** (DA-36.2).
   A comment sent with `AUTO` stored its neighbours' vote as its severity, and the
   embedding index kept the severity without who chose it, so the next similar
@@ -498,6 +521,7 @@ and `bun run release` refuses a version that has no section. See
   one row, the tightest, and the other six get whatever it produces — so moving
   any other millisecond budget does not touch it. `docs/SPEC.md` section 6 keeps 8.3 ms as the target with the measured
   number and its date beside it, and closing the gap is DA-56.5.
+
 - **The shell's two screenshots mask the sidebar footer** (DA-54.2). The footer
   prints `127.0.0.1:<port>`, so the free port above moved four digits of
   monospace text and both baselines failed on 33 pixels of 1.4 million — a
@@ -506,6 +530,7 @@ and `bun run release` refuses a version that has no section. See
   `/api/activity` is stubbed in the same file: a baseline may only carry what
   does not vary. The footer's text stays covered by direct assertions in six
   specs, `shell.spec.ts` among them.
+
 - **The UI suite asks the operating system for its port** (DA-54.2). It held a
   fixed 4881 with `reuseExistingServer` off, which is right for one person
   running it by hand and wrong for a gate: two workers on one machine could not
@@ -514,6 +539,7 @@ and `bun run release` refuses a version that has no section. See
   interface belongs to the machine. It now binds port 0 in a child process the
   way `e2e/acceptance.config.ts` does, pins the number in `DIFFALANCHE_UI_PORT`
   for the workers Playwright forks, and passes it to `e2e/server.ts`.
+
 - **The Playwright UI suite runs in a gate and in CI** (DA-54.2). Its
   ninety-five tests — the sidebar, the thread rail, live update, the repository
   bar — ran only when somebody typed `bun run test:ui`, so a UI regression
@@ -543,6 +569,7 @@ and `bun run release` refuses a version that has no section. See
   prints **Not evidence.** with the load above the table; a bypass invisible in
   the output would be the development allowance the ADR rejected, renamed. The
   threshold comes from fifteen runs on one machine and is recorded with them.
+
 - **Either side panel comes off the screen, and a long line wraps** (DA-107).
   `[` hides the sidebar and `]` the thread rail — whole, not narrowed and not
   into a drawer — and so do the `‹` and `›` in each panel's own top row; while a
@@ -557,17 +584,20 @@ and `bun run release` refuses a version that has no section. See
   height a card claims before its diff is mounted counts wrapped rows from the
   width of the code column in characters, recomputed when a panel is hidden and
   when the window is resized and measured against no DOM at all.
+
 - **The planning documents say where the project is** (DA-84). `docs/SPEC.md`'s
   status line, `README.md`'s status and the SPEC row of `docs/README.md` all say
   Phase 1 shipped as v0.1.0 and its findings are closed from the backlog;
   `docs/ROADMAP.md` names no task numbers any more — a task belongs to a phase by
   what it delivers, and the tracker is the only mapping.
+
 - **An agent's reply under a comment is at most three sentences** (DA-108). One
   when the finding is fixed, three when it is declined, with no restating of the
   comment, no greeting and no lists. `skills/diffalanche-apply` shows a
   paragraph-long reply beside its two-sentence form, and the decline example in
   its CLI reference has the three sentences; `docs/SPEC.md` section 9 carries
   the cap.
+
 - **A comment in code is at most two lines** (DA-57, [ADR-011](docs/adr/adr-011-comment-length.md)).
   `//`, `/* */` and JSDoc alike, across `.ts`, `.tsx`, `.css`, `.yml` and shell.
   Knowledge that does not fit moves to its `docs/reference/` section, or to an ADR
@@ -575,6 +605,7 @@ and `bun run release` refuses a version that has no section. See
   no limit. 720 blocks in the repository are over the line the day this lands; DA-58
   brings them in and turns the count into a gate, and until then the rule binds new
   and edited code.
+
 - **Every route a window uses takes `?review=<name>`, writes included** —
   `GET /api/comments/:id`, `/api/warnings`, `/api/repos/:repo/diff`,
   `/api/export`, `POST /api/comments`, `/api/comments/:id/replies`, and
@@ -701,6 +732,7 @@ and `bun run release` refuses a version that has no section. See
   and a thread on a line of a changed file that no
   hunk shows opens that file in browse mode at its line instead of staying in
   the rail alone.
+
 - **A window on a task deleted elsewhere goes to `current`** (DA-40.1). A task
   deleted by the CLI or by another window left a window that was showing it by
   `?review=` on the failure screen. It now goes where `current` points, as the
@@ -709,24 +741,28 @@ and `bun run release` refuses a version that has no section. See
   keeps its screen and its way back. A press on the task's row in a menu that
   was open while it went lands on that screen, without the `?review=` toast, and
   the row stays in an open menu until it is opened again (DA-40.2).
+
 - **A stream the browser has closed says `disconnected`, with a way back** (DA-96.1).
   When the browser stopped retrying the live stream, the sidebar footer kept the
   living dot and `watching` while no frame would arrive again. It now says
   `disconnected` with a still `crit` dot and ends in `reconnect`, which makes a
   new stream and reads the review again once it is open, since a new stream has
   nothing to replay the missed frames by.
+
 - **The comment form says the row the arrows chose, and the model going away**
   (DA-36.1). The chosen suggestion was marked only by `aria-current` on a row
   that never takes the focus, so a screen reader heard nothing as `↑` / `↓`
   moved; the 503 sentence and `AUTO` going out of reach, with `WARNING` then
   what `⌘⏎` sends, were shown and not said. A live region in the form now says
   each of them once, and not every answer that arrives while the reader types.
+
 - **A long toast stays long enough to be read** (DA-102.1). A refusal the
   server or the store puts in the toast is a sentence written for the CLI —
   DA-102's storage refusal is 116 characters — and it had the same 2.2 seconds
   as `Markdown скопирован`. A toast of up to 60 characters, every answer the
   handoff draws, still lives 2.2 s; each character past that adds 50 ms, up to
   10 s, so that refusal now stays 5 s.
+
 - **A thread on the old side sits under the deleted line it names** (DA-37.2).
   The file card grouped threads by line number alone, so a comment written with
   `comment --side old` on a deleted line sat under the new-side line of the same
@@ -734,6 +770,7 @@ and `bun run release` refuses a version that has no section. See
   the old side's half, across the diff as a new side's strip is, and its bar is
   on the old side's gutter. A thread on the old side of a context line sits
   where one on its new side would.
+
 - **The keyboard stops draw the system's focus ring** (DA-56.8). The file
   card's collapse caret and the base picker's `ref` field drew the browser's own
   ring, the two hunk controls and global search's `ещё совпадения` still drew
@@ -927,6 +964,7 @@ and `bun run release` refuses a version that has no section. See
   *appended*, so another task's change set arrived whole, against another base,
   with the composer usable on its lines. Switching a task also reopens the
   stream, because an open `EventSource` keeps the address it was made with.
+
 - **The scope editor picks from its own task** (DA-77). Its candidate list is the
   whole root, as it must be — the editor offers what the task is not about yet —
   but it was read against the **current** session's base while being written into
@@ -988,6 +1026,7 @@ and `bun run release` refuses a version that has no section. See
   link it exists to show. The UI's patch readers learned the same qualification —
   a `diff --git` line ends a patch, so the second one's header stopped being
   counted as diff rows.
+
 - **"This file was not written" is asserted by the time of the write** (DA-88.1).
   A byte comparison cannot see a rewrite that puts the same bytes back, which is
   exactly what a rescan of an unchanged repository does, so the checks named
@@ -995,6 +1034,7 @@ and `bun run release` refuses a version that has no section. See
   way the suite says it — the mtime stamped back before the command and asserted
   after it, with the bytes beside it — and the four places that asserted it by
   content alone use it.
+
 - **Two writes that skipped the session's lock now take it** (DA-67). A comment
   checked the scope before the lock and wrote inside it, so a `review scope set`
   narrowing in between left a comment on a path the scope no longer had — stored,
@@ -1011,6 +1051,7 @@ and `bun run release` refuses a version that has no section. See
   repository into it afterwards dropped everything the scan had found for the
   rest, and the cache answered for the same base and scope, so the server served
   it stale until an fs event fired.
+
 - **The generator claims its stamp before it writes anything** (DA-69). It wrote
   `synth.json` last, so `bun run perf` interrupted inside `synth` left the
   fixture directory non-empty and unstamped — and the erase guard, which now
@@ -1020,6 +1061,7 @@ and `bun run release` refuses a version that has no section. See
   rewritten whole at the end with the session and its counts. A stamp without
   the counts is a run that did not finish: `fixtureDrift` says so and the gate
   regenerates, which is what the guard is supposed to allow.
+
 - **The release no longer ships its checksums manifest inside the npm package**
   (DA-106). The checksums step wrote `SHA256SUMS.txt` into `dist/`, and the same
   job publishes to npm from that tree with no rebuild in between: `files` in
@@ -1043,6 +1085,7 @@ and `bun run release` refuses a version that has no section. See
   per frame` over budget on all three trees at rest, `1193ab3` included, which
   makes it attributable to no task of this wave (DA-56.4), and the long-task
   count flipping its verdict with the machine rather than the code (DA-69.1).
+
 - **The perf gate no longer reports green on what it did not measure** (DA-69).
   Two ways it could. The freshness check was the existence of
   `.diffalanche/current`, and `current` exists whatever it points at — the
@@ -1056,6 +1099,7 @@ and `bun run release` refuses a version that has no section. See
   `ok`, because `NaN > 500` and `0 > 8.3` are both false: it is now a third
   verdict, `UNMEASURED`, which prints and exits 1, and a missing `TaskDuration`
   throws where it can be named instead of standing in as a CPU-per-frame of 0.
+
 - **The perf gate asks what it is about to erase** (DA-63). `--fixture` names a
   directory the gate owns and empties, and the guard that makes that safe lived
   in `scripts/synth.ts` — the process the gate spawns *after* deleting, so it
@@ -1067,6 +1111,7 @@ and `bun run release` refuses a version that has no section. See
   refused whatever they contain. `bun run perf -- --fixture .` from the
   repository root would have taken the working tree and its `.git`; it now exits
   1 with the path named and nothing deleted.
+
 - **A live patch that lands late no longer costs the reader their place**
   (DA-55.4). The scroll anchoring waited one frame and then measured; a store
   write only schedules React's work, and under load React could land it after
@@ -1085,6 +1130,7 @@ and `bun run release` refuses a version that has no section. See
   write now notices that a live frame overtook it and keeps what the frame
   brought — there is nothing left to undo, because the frame took the optimistic
   draft with it. Nothing was ever lost on disk; what was wrong was the screen.
+
 - **`Reply` opens one field, in the copy of the thread it was pressed on**
   (DA-94). A thread is on screen twice on purpose — under the line it is
   anchored to and in the rail — and both copies drew the reply field and both
@@ -1094,6 +1140,7 @@ and `bun run release` refuses a version that has no section. See
   screen reader found two controls labelled `reply` for one thread. The store
   remembers which copy was pressed; a thread with no widget still opens its
   field in the rail.
+
 - **A toast repeated gets its full 2.2 seconds** (DA-105). The lifetime was
   counted from the first time that exact string was set: a repeat compared equal
   under `Object.is`, so the component never re-rendered, the timer never
@@ -1101,6 +1148,7 @@ and `bun run release` refuses a version that has no section. See
   the first — which is exactly when a reader repeats an action, because they did
   not see the answer. A toast is now a message and the raise that made it, and
   every site that sets one goes through the same call.
+
 - **One `esc` closes one thing, and one overlay is on screen at a time**
   (DA-70). The ladder is a list in `src/ui/overlays.ts` that the keyboard asks;
   before it, two hand-written lists of overlay flags in `keys.ts` both missed
@@ -1110,6 +1158,7 @@ and `bun run release` refuses a version that has no section. See
   that is not the palette are refused rather than stacked: two overlays trap the
   ring in two places and answer one press twice. Adding an overlay is a row in
   that list and no edit to the keyboard.
+
 - **The focus goes back to what opened the ladder, not to what a swap replaced**
   (DA-100). The scope editor, its confirmation and the new-task form take one
   position in the tree, so each swap used to record the button it was replacing
@@ -1117,6 +1166,7 @@ and `bun run release` refuses a version that has no section. See
   leaving the reader with no ring and the next `Tab` starting from the top of
   the page. The opener is recorded once per ladder and given back when the
   ladder has emptied.
+
 - **A warning found after the bar was dismissed is shown again** (DA-79). The
   rule was a property of the live frame and is now a property of the state: one
   writer of the field, which the stream's `warnings` frame and the review
@@ -1126,6 +1176,7 @@ and `bun run release` refuses a version that has no section. See
   warning in the document and show nothing at all — the reader went on reviewing
   against a base that had silently fallen back. An identical list still changes
   nothing, so an ordinary re-read does not bring the bar back.
+
 - **A test fixture no longer inherits the developer's own data directory**
   (DA-54.1). `bun run test:ui`, `bun run test:e2e` and `bun run perf` neutralise
   `DIFFALANCHE_DATA_DIR` and `$XDG_CONFIG_HOME` the way `bun run test` already
@@ -1153,6 +1204,7 @@ and `bun run release` refuses a version that has no section. See
   code 2. Both entry points take their streams from one helper, so the npm
   channel and the binary answer alike. See
   [06-cli.md](docs/reference/06-cli.md).
+
 - **`serve --review <name>` opens on that task instead of being ignored**
   (DA-81). The flag parsed everywhere and was read by every command but this
   one, so a misspelling was exit 0 with no message while the same name was exit
@@ -1162,6 +1214,7 @@ and `bun run release` refuses a version that has no section. See
   so an unknown name is the domain's own refusal and nothing is left running.
   `current` is not moved and never enters the address on its own. See
   [06-cli.md](docs/reference/06-cli.md).
+
 - **A rebound name no longer reads the review** (DA-62). Both origin guards
   asked whether the client's `Origin` matched the client's own `Host`, which a
   DNS-rebinding page controls on both sides. Every request under `/api/` now
@@ -1169,6 +1222,7 @@ and `bun run release` refuses a version that has no section. See
   `127.0.0.1` and `localhost`, the two names the IPv4 loopback socket it binds
   can be reached under — with a `403` for anything else, on reads as much as on
   writes. See [07-server.md](docs/reference/07-server.md).
+
 - **A refused listening socket is one line and exit code 1** (DA-71). `serve`
   worded "port 4880 is already in use" and then threw it as a bare `Error`, so
   the CLI printed the sentence with a stack trace under it and exited 2 — the
@@ -1178,6 +1232,7 @@ and `bun run release` refuses a version that has no section. See
   socket keeps the stack trace and exit code 2. See
   [06-cli.md](docs/reference/06-cli.md) and
   [07-server.md](docs/reference/07-server.md).
+
 - **A data directory that cannot be created is a refusal, not a stack trace**
   (DA-99). `ensureDataDir` and `ensureSessionDir` let a raw `EACCES` out of
   `mkdir` untouched, which reached the person as an errno string and exit code
@@ -1186,6 +1241,7 @@ and `bun run release` refuses a version that has no section. See
   the directory and why — permission, a read-only filesystem, no space, a file
   in the way — and an errno it does not word is rethrown as it was. See
   [03-storage.md](docs/reference/03-storage.md).
+
 - **`serve` no longer dies on a file it just decided to tolerate** (DA-64). The
   server starts on a `comments.json` that is not JSON and says so through the
   address; the CLI then read the same document a second time for the line under
@@ -1193,6 +1249,7 @@ and `bun run release` refuses a version that has no section. See
   watcher that was already running. That line now says the review could not be
   read and points at the address, which names the file. See
   [06-cli.md](docs/reference/06-cli.md).
+
 - **`GET /api/repos/:repo/diff?review=` no longer reads git outside the root**
   (DA-72). The segment came from the URL and went straight to a `join` against
   the root, so a percent-encoded `../` — which Hono decodes before routing sees
@@ -1254,6 +1311,7 @@ and `bun run release` refuses a version that has no section. See
   session. It now renames the lock aside first, the way a takeover does, and
   deletes the directory it read the token from — one rename more on a path that
   every write ends with. See [03-storage.md](docs/reference/03-storage.md).
+
 - **A nested repository's git directory is no longer watched whole** (DA-103).
   The pruning was anchored at the watched repository's own `.git`, so a plain
   nested clone — or an old-style submodule with a real git directory in the
@@ -1267,6 +1325,7 @@ and `bun run release` refuses a version that has no section. See
   exactly the rules it had. A modern submodule was never affected: its git
   directory is a file into `.git/modules/`, which was already pruned. See
   [05-watcher.md](docs/reference/05-watcher.md).
+
 - **Closing the watcher waits for the rescan in flight** (DA-97). `close` was
   synchronous and stopped only what had not started: an item already inside its
   own `await` ran to the end, holding the session lock and writing `diff.json`
@@ -1278,6 +1337,7 @@ and `bun run release` refuses a version that has no section. See
   failed-listen path await it. The walk of a polling tree is deliberately not
   part of the promise: it reads, and writes nothing into the data directory. See
   [05-watcher.md](docs/reference/05-watcher.md).
+
 - **A failed write inside the recursive-watch probe no longer ends the server**
   (DA-92). The probe writes into a temporary directory until the watch answers,
   and the first of those writes was detached from the promise the probe awaits:
@@ -1289,6 +1349,7 @@ and `bun run release` refuses a version that has no section. See
   server on the walk that much sooner. The same detached shape in the SSE
   stream's `end` — `void stream.close()` in `src/server/events.ts` — is caught
   too. See [05-watcher.md](docs/reference/05-watcher.md).
+
 - **A watch that dies mid-session no longer loses the window it dies in**
   (DA-85). When an error from inotify or FSEvents handed a tree to the walk, the
   walk opened with a silent baseline and every edit made between the failure and
@@ -1304,6 +1365,7 @@ and `bun run release` refuses a version that has no section. See
   unused `Watcher.polling()` is gone, and a tree watcher's `ready` is the live
   one rather than the dead watch's. See
   [05-watcher.md](docs/reference/05-watcher.md).
+
 - **A broken `comments.json` no longer stops the session events** (DA-86). The
   reload of the data directory read the comments without a guard, so a file
   broken by hand while the server ran took the rest of the chain down with it:
@@ -1313,6 +1375,7 @@ and `bun run release` refuses a version that has no section. See
   already was for an unreadable file at start-up, and the failure is reported
   once on the way into the broken state rather than once per burst. See
   [05-watcher.md](docs/reference/05-watcher.md).
+
 - **A `git add -f` is no longer swallowed by a cached ignore verdict** (DA-74).
   The answers git gave about a repository's paths were dropped when a burst
   named `.gitignore`, `.git/info/exclude` or `.git/index` in full, and a runtime
@@ -1337,11 +1400,13 @@ and `bun run release` refuses a version that has no section. See
   configuration could not be read`. A repository with a filter driver — git-lfs
   is the common one — is shown the content that is on disk rather than what the
   driver would make of it.
+
 - **A scan the first-run screen could not read says so** (DA-98). `loadScan`
   dropped a refusal with a bare `return`, and the screen's three metrics stayed
   dashes — the same thing they show before anything has been asked. The store
   now keeps why the scan was refused, and the screen carries the server's own
   sentence under the metrics with a retry beside it.
+
 - **A scan no longer starts one git process per repository all at once**
   (DA-98). `scanReview` and the server's scan and candidate routes each mapped
   over every repository under the root with an unbounded `Promise.all`, so the
@@ -1350,6 +1415,7 @@ and `bun run release` refuses a version that has no section. See
   chosen by measurement on the synthetic review: the curve flattens past six and
   unbounded is no faster than eight. The peak is asserted in processes, not
   seconds — 23 with the bound where it was 50 without.
+
 - **A file untracked with `git rm --cached` is listed once** (DA-76). The diff
   reported the deletion the index made and `ls-files` reported the file still on
   disk, both correctly, and the change set carried the path twice: the counters
@@ -1357,12 +1423,14 @@ and `bun run release` refuses a version that has no section. See
   could not be anchored, because the lookup takes the first match and that entry
   had no new-side lines. The change set keeps the deletion — what the change
   actually is — and the file being still on disk is a warning.
+
 - **An added or deleted binary file is no longer reported as modified** (DA-95).
   A patch git writes without `---`/`+++` lines has no hunks, so the parser
   answered `modify` for a staged binary addition, a binary deletion and a staged
   empty text file alike. The status now comes from the header — `new file mode`
   and `deleted file mode` — and a mode-only change stays `modified`, because
   `new mode` is not `new file mode`.
+
 - **A git failure says which of four things went wrong** (DA-66). `gitOrNull`
   swallowed every failure into `null`, and `null` meant one thing: a git that
   could not be started was reported as `HEAD does not resolve: no commits yet`
@@ -1373,6 +1441,7 @@ and `bun run release` refuses a version that has no section. See
   rest of the review still comes back; a machine that cannot run git is not
   reported per repository but raised, and the CLI prints it as one line and
   exits 1 instead of a stack trace and 2.
+
 - **An untracked symbolic link is no longer read through** (DA-73). The reader
   stat'd and read the entry `ls-files --others` named, following the link: a file
   outside the repository landed in the review as an addition of its content, and
@@ -1381,6 +1450,7 @@ and `bun run release` refuses a version that has no section. See
   read with `readlink` — what git records for a tracked one — so a dangling link
   and a link to a directory are recorded the same way rather than refused, and
   nothing outside the repository is read at all.
+
 - **A scan no longer writes `.git/index` in every repository it reads** (DA-65).
   `git diff` refreshes the index on its way out, which takes `.git/index.lock`
   and rewrites `.git/index` — a write to a reviewed repository, and a race with
@@ -1390,6 +1460,7 @@ and `bun run release` refuses a version that has no section. See
   changed with it: it compares `.git/index`, HEAD and every ref of each fixture
   before and after, and asserts the set of subcommands a scan runs, where
   `git status --porcelain` alone was blind to all of it.
+
 - **The git reader no longer inherits the environment it was started in**
   (DA-87, [ADR-012](docs/adr/adr-012-git-trust-model.md)). `GIT_CONFIG_COUNT` /
   `GIT_CONFIG_KEY_n` / `GIT_CONFIG_VALUE_n`, `GIT_CONFIG_PARAMETERS`, `GIT_DIR`,
@@ -1410,6 +1481,19 @@ and `bun run release` refuses a version that has no section. See
   sentence. The rule — a failure the reader is told about carries the server's
   message, a background read stays silent — is in
   [08-ui.md](docs/reference/08-ui.md).
+
+- **Every comment in the code is two lines or fewer, and a gate holds it**
+  (DA-58). 706 blocks over two lines — `src/`, `tests/`, `e2e/`, `perf/`,
+  `scripts/` and `.github/`, JSX and `#` comments counted — are down to 0: the
+  knowledge they carried moved into the reference sections of the subsystems
+  (02–08 and 11), the section banners went, the rest became one line of why and a
+  pointer, and the comments that disagreed with their code were corrected. No
+  code line changed but `tests/ci-names.test.ts`, which now reads the required
+  check names from [11-perf.md](docs/reference/11-perf.md#the-checks-a-pull-request-requires)
+  instead of `ci.yml`'s header comment. `bun run check:comments` is one of the
+  gates and a step of CI's `check` job
+  ([11-perf.md](docs/reference/11-perf.md#the-comment-gate)); the duplicated
+  `ForbiddenError` doc of `src/server/errors.ts` went with the sweep (DA-62.1).
 
 ## [0.1.0] - 2026-09-05
 

@@ -1,9 +1,5 @@
-/**
- * The command line as `util.parseArgs` reads it — the parser Node 22 and Bun
- * both ship, so the CLI needs no argument library — plus the readers that turn
- * one flag into the value a command wants and refuse anything else with a
- * message naming the flag.
- */
+/** The command line as `util.parseArgs` reads it, and the readers that turn one flag into a
+ * command's value or refuse it naming the flag (06-cli.md, "How a command is defined"). */
 import { parseArgs } from "node:util";
 import { UsageError } from "./errors.ts";
 import type { CommandSpec } from "./spec.ts";
@@ -46,11 +42,8 @@ export function text(args: Arguments, name: string): string | undefined {
   return typeof value === "string" ? value : undefined;
 }
 
-/**
- * Every value of a flag that may be given more than once, in the order it was
- * typed, and an empty list when it was not given at all. Only a flag its
- * command declared `multiple` arrives as a list; every other one is one value.
- */
+/** Every value of a flag given more than once, in the order typed, and `[]` when it was not
+ * given; only a flag its command declared `multiple` arrives as a list. */
 export function texts(args: Arguments, name: string): string[] {
   const value = args.values[name];
   if (!Array.isArray(value)) return [];

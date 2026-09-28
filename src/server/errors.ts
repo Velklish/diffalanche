@@ -1,9 +1,5 @@
-/**
- * How a refusal reaches the browser. The domain has one error type with a code
- * ([ADR-004](../../docs/adr/adr-004-agent-contract.md)); the API turns the code
- * into a status and passes the message through untouched, so the UI never has
- * to word a refusal the domain has already worded.
- */
+/** How a refusal reaches the browser: the domain's code becomes a status and its message passes
+ * untouched, so the UI never words a refusal twice (07-server.md, "Refusals"). */
 import type { Context } from "hono";
 import { HTTPException } from "hono/http-exception";
 import type { DomainErrorCode } from "../core/domain/index.ts";
@@ -14,30 +10,12 @@ import { NoSuchSessionError, StorageError } from "../core/storage/index.ts";
 /** The body of every refusal: the code to branch on, the message to show. */
 export type ErrorBody = { error: string; message: string };
 
-/**
- * The refusal a scope edit gets while comments are anchored under what it
- * removes. It carries the count and the ids on top of the message, so the
- * editor of DA-55 can word its own question — "delete 3 comments?" — instead of
- * showing a message written for the CLI
- * ([04-domain.md](../../docs/reference/04-domain.md)).
- */
+/** The 409 of a scope edit that would drop comments: the count and ids ride beside the message
+ * so the scope editor words its own question (07-server.md, "Refusals"). */
 type ScopeConflictBody = ErrorBody & { count: number; comments: string[] };
 
-/**
- * A request the domain never gets to see: a body that is not an object, a
- * severity that is not one, a missing field. The domain checks what a comment
- * is; this checks that what arrived is a comment at all.
- */
-/**
- * A request that may not write here at all: one a page on another origin sent.
- * The server serves one person on `127.0.0.1` and has no authentication
- * (`docs/SPEC.md` section 11), so the origin of a write is the whole check.
- */
-/**
- * A request that may not write here at all: one a page on another origin sent.
- * The server serves one person on `127.0.0.1` and has no authentication
- * (`docs/SPEC.md` section 11), so the origin of a write is the whole check.
- */
+/** A request that may not write here at all — one a page on another origin sent — or, from the
+ * host check, not even read (07-server.md, "Which host it answers for", "Who may write"). */
 export class ForbiddenError extends Error {
   readonly code = "forbidden";
 
@@ -47,6 +25,8 @@ export class ForbiddenError extends Error {
   }
 }
 
+/** A request the domain never gets to see — a body not an object, a severity not one, a field
+ * missing: the domain checks what a comment is, this that it is a comment at all. */
 export class RequestError extends Error {
   readonly code = "invalid-request";
 
@@ -56,11 +36,8 @@ export class RequestError extends Error {
   }
 }
 
-/**
- * The codes that mean "there is nothing here" rather than "that request is
- * wrong". A review that has no current session is one of them: the first-run
- * screen reads that 404 and offers to create a session.
- */
+/** The codes that mean "there is nothing here" rather than "that request is wrong"; the
+ * first-run screen reads the 404 of no current session and offers to create one. */
 const NOT_FOUND: ReadonlySet<DomainErrorCode> = new Set<DomainErrorCode>([
   "no-current-session",
   "no-such-session",
@@ -71,10 +48,8 @@ function statusOf(error: DomainError): 400 | 404 {
   return NOT_FOUND.has(error.code) ? 404 : 400;
 }
 
-/**
- * A file of the data directory that cannot be read is not the caller's mistake,
- * so it is a 500 with the file and the field the storage named.
- */
+/** A refusal as its status and body; a data-directory file that cannot be read is not the
+ * caller's mistake, so it is a 500 with the file and the field the storage named. */
 export function errorResponse(error: Error, c: Context): Response {
   if (error instanceof ForbiddenError) {
     return c.json<ErrorBody>({ error: error.code, message: error.message }, 403);
@@ -89,9 +64,8 @@ export function errorResponse(error: Error, c: Context): Response {
   if (error instanceof RequestError) {
     return c.json<ErrorBody>({ error: error.code, message: error.message }, 400);
   }
-  // The one refusal that is neither "there is nothing here" nor "that request
-  // is wrong": the request is well formed and the state says no, and what it
-  // needs is a decision — a 409 with the comments it would take.
+  // Neither "nothing here" nor "that request is wrong": well formed, the state says no, and it
+  // needs a decision — a 409 with the comments it would take.
   if (error instanceof ScopeCommentsError) {
     return c.json<ScopeConflictBody>(
       {

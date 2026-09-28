@@ -1,9 +1,5 @@
-/**
- * Everything the domain refuses is one error type with a code. The CLI turns
- * any of them into exit code 1 and the message; the API turns the code into a
- * status. A caller that wants to tell one refusal from another reads `code`,
- * never the message.
- */
+/** Every domain refusal is one type with a `code`: the CLI answers it with exit code 1, the API
+ * with a status, and a caller tells refusals apart by `code`, never by the message. */
 export type DomainErrorCode =
   /** A session name outside the allowed character set, or a reserved one. */
   | "invalid-name"
@@ -47,15 +43,8 @@ export class DomainError extends Error {
 /** How many comment ids a refusal spells out before it counts the rest. */
 const NAMED_IDS = 12;
 
-/**
- * The refusal that narrowing the scope raises while comments are anchored under
- * what it removes (`docs/SPEC.md` section 7). It carries every id, because the
- * caller decides what to do with them, while the message names the count and
- * the first of them: a line with two hundred ids on it answers nobody. The
- * message names the CLI flag, which is the contract this refusal is written
- * for; the API hands the UI `count` and `comments` so it can word its own
- * question ([07-server.md](../../../docs/reference/07-server.md)).
- */
+/** A narrowing with comments under it: every id for the caller, the count, the first ids and the
+ * CLI flag for the reader ([04-domain.md](../../../docs/reference/04-domain.md), "Writing a scope"). */
 export class ScopeCommentsError extends DomainError {
   /** The comments the narrowing would delete, in the order they were written. */
   readonly comments: string[];

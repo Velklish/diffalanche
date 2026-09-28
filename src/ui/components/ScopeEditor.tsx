@@ -5,16 +5,8 @@ import { useStore } from "../store.ts";
 import type { CandidateRepository } from "../types.ts";
 import { Overlay } from "./Overlay.tsx";
 
-/**
- * The scope editor of handoff section 12: an overlay over the **whole root**,
- * with a tick per repository and per file and the count of what is picked.
- *
- * It is the one surface of the product that shows what the task is not about,
- * and that is the whole reason it exists as an overlay rather than as a mode of
- * the tree: a scope cannot be widened from a tree that already hides what is
- * missing ([ADR-010](../../../docs/adr/adr-010-review-task-scope.md), decision
- * 2). It is opened from the `SCOPE` pill, by hand, and closes again.
- */
+/** The scope editor of handoff section 12, an overlay over the whole root: a scope cannot be
+ * widened from a tree that hides what is missing (08-ui.md, "The scope editor"). */
 export function ScopeEditor() {
   const status = useStore((store) => store.candidatesStatus);
   const candidates = useStore((store) => store.candidates);
@@ -86,9 +78,8 @@ function Candidate({ repository }: { repository: CandidateRepository }) {
       <button
         type="button"
         className="scope-row"
-        // `mixed` is what ARIA has for a repository some of whose files are
-        // picked: without it the row would say "not picked" while the tick
-        // says otherwise, and the tick is `aria-hidden` on purpose.
+        // Some files picked is `mixed`: the tick is `aria-hidden`, so the row carries the state
+        // (08-ui.md, "Select mode").
         aria-pressed={mark === "partial" ? "mixed" : mark === "on"}
         onClick={() => pickRepo(repository.path, files)}
       >
@@ -119,12 +110,8 @@ function Candidate({ repository }: { repository: CandidateRepository }) {
   );
 }
 
-/**
- * The tick of a row, here and in select mode. The partial mark is a repository
- * some of whose files are picked — a state the on-disk scope has no entry for,
- * which is why it is drawn here and never written. The state itself is on the
- * row, in `aria-pressed`, so the glyph is for the eye.
- */
+/** The tick of a row, here and in select mode; the partial mark is drawn and never written, and
+ * the state itself is the row's `aria-pressed` (08-ui.md, "The scope editor"). */
 export function Tick({ mark }: { mark: Mark }) {
   return (
     <span className={`tick ${mark}`} aria-hidden="true">
@@ -133,22 +120,16 @@ export function Tick({ mark }: { mark: Mark }) {
   );
 }
 
-/**
- * The one question in the product that stands in front of destroyed review
- * data: a scope edit that removes an entry deletes the comments anchored under
- * it, and the count comes from the server's own refusal — a 409 that wrote
- * nothing (ADR-010, decision 6). Cancelling writes nothing either: the refusal
- * already left `comments.json` where it was.
- */
+/** The one question in front of destroyed review data, counted from the server's 409 that wrote
+ * nothing (ADR-010, decision 6; 08-ui.md, "The confirmation"). */
 export function ScopeConfirmation({ confirm }: { confirm: ScopeConfirm }) {
   const applying = useStore((store) => store.applying);
   const cancel = useStore((store) => store.cancelScopeConfirm);
   const applyScope = useStore((store) => store.applyScope);
 
   return (
-    // The dialog's name is the question itself: a confirmation is read out by
-    // what it asks, and a screen reader entering it should hear the file and
-    // the count rather than a category.
+    // Named by the question itself, so a screen reader hears the file and the count rather than
+    // a category.
     <Overlay
       width={460}
       className="confirm"
@@ -178,12 +159,8 @@ export function ScopeConfirmation({ confirm }: { confirm: ScopeConfirm }) {
   );
 }
 
-/**
- * `New task…` of select mode: the name and the base of the task being made out
- * of what the tree has picked. It is written with `use: false` — the UI never
- * moves `current` — and this window opens what it made (ADR-010, decisions 4
- * and 7).
- */
+/** `New task…` of select mode, created with `use: false` and opened in this window (ADR-010,
+ * decisions 4 and 7; 08-ui.md, "The task this window is on"). */
 export function NewTaskForm() {
   const name = useStore((store) => store.newName);
   const base = useStore((store) => store.newBase);
@@ -208,8 +185,7 @@ export function NewTaskForm() {
             value={name}
             placeholder="ls-240588"
             aria-label="name"
-            // The form is opened by a press, so the field the reader came for
-            // is where the ring goes.
+            // The form is opened by a press, so the field the reader came for takes the ring.
             // biome-ignore lint/a11y/noAutofocus: the overlay exists for this field
             autoFocus
             onChange={(event) => useStore.getState().setNewName(event.target.value)}

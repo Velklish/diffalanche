@@ -1,8 +1,5 @@
-/**
- * The live stream of DA-18: what the watcher noticed reaches the browser over
- * SSE within the budget, a client that reconnects is caught up rather than
- * reloaded, and stopping the server ends the streams.
- */
+/** DA-18's live stream: a watcher's notice reaches the browser over SSE within the budget, a
+ * client that reconnects is caught up rather than reloaded, and stopping the server ends it. */
 import { execFile } from "node:child_process";
 import { mkdtempSync, rmSync } from "node:fs";
 import { rm, writeFile } from "node:fs/promises";
@@ -30,11 +27,8 @@ const REPO = "repos/core/cargos-api";
  * arrives late on a loaded machine has still arrived (11-perf.md, "Waits"). */
 const DEADLINE_MS = 20_000;
 
-/**
- * Bun's own test runner leaves `fs.watch` quiet after its first events, while a
- * real server under Bun keeps reporting (`docs/reference/05-watcher.md`), so
- * the walk is what these tests run on there.
- */
+/** Under Bun's test runner `fs.watch` goes quiet after its first events, so these tests run on
+ * the walk there (05-watcher.md, "What it watches, and what it ignores"). */
 const NATIVE_WATCH = process.env.DIFFALANCHE_TEST_RUNTIME !== "bun";
 
 let root: string;
@@ -206,13 +200,8 @@ afterAll(async () => {
 });
 
 describe("the live stream", () => {
-  /**
-   * The head of a response is not on the wire until something is written into
-   * the body, so a stream that says nothing until its first heartbeat leaves a
-   * client unable to tell a connection that is up from one that is still being
-   * made — fifteen seconds of it (DA-25.1). This is measured over a socket and
-   * not through `app.request`, because it is the socket that buffers.
-   */
+  /** A head is on the wire only once the body has bytes, and a quiet stream's first would be the
+   * 15 s heartbeat (DA-25.1); timed over a socket, which is what buffers, not `app.request`. */
   it("answers as soon as it is subscribed, without waiting for a heartbeat", async () => {
     const started = Date.now();
     const response = await fetch(`${server.url}/api/events`);
@@ -277,10 +266,8 @@ describe("the live stream", () => {
         config.dataDir,
       ]);
 
-      // The clock starts when the CLI has written, not when it was spawned: a
-      // Node process under a full parallel suite can take seconds to start, and
-      // that is not the watcher's latency. The wait itself is generous for the
-      // same reason (DA-31.1).
+      // Timed from the CLI's write, not its spawn: a Node process in a full parallel suite can take
+      // seconds to start, which is not the watcher's latency, so the wait is generous (DA-31.1).
       const written = Date.now();
       const frame = await stream.next("reply-added");
       const data = JSON.parse(frame.data) as { id: string; commentId: string };

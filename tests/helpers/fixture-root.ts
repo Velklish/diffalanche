@@ -1,9 +1,5 @@
-/**
- * A fixture root in the layout of `docs/SPEC.md` section 10:
- * `repos/<group>/<repo>`, each repository with one commit, one edited line, and
- * one untracked file. Git runs with its own identity and without the machine's
- * configuration, so the fixture is the same on every developer's laptop.
- */
+/** A root in the layout of `docs/SPEC.md` section 10, one commit, edited line and untracked file
+ * per repository, by a git with its own identity and no machine config: the same on any laptop. */
 import { execFileSync } from "node:child_process";
 import { mkdirSync, mkdtempSync, writeFileSync } from "node:fs";
 import { devNull, tmpdir } from "node:os";
@@ -26,11 +22,8 @@ function git(cwd: string, args: string[]): void {
   });
 }
 
-/**
- * Puts the working trees back the way `makeRoot` left them, without touching
- * git: the repositories are built once per test file and every test starts from
- * the same change set.
- */
+/** Puts the working trees back as `makeRoot` left them, without git: repositories are built once
+ * per test file and every test starts from the same change set. */
 export function resetWorkingTrees(root: string): void {
   for (const repo of REPOS) {
     const edited = LINES.map((line, index) => (index === EDITED_LINE - 1 ? EDITED_AFTER : line));

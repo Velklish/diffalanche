@@ -1,8 +1,7 @@
 name: release
 
-# One annotated tag, made by `scripts/release.ts` and pushed by the owner, is
-# the whole trigger. Nothing here creates a tag, and nothing releases from a
-# branch: what is published is the commit the tag points at.
+# One annotated tag, made by `scripts/release.ts` and pushed by the owner, is the whole trigger:
+# nothing here tags or releases from a branch, and the tag's commit is what is published.
 on:
   push:
     tags: ["v*"]
@@ -32,10 +31,8 @@ jobs:
 
       - name: the version comes from the tag
         id: version
-        # `package.json` is the second opinion, not the source: a tag that
-        # disagrees with it would publish one version under another's name.
-        # `scripts/release.ts` checks the same pair before the tag is made, so
-        # this is the check surviving a tag made by hand.
+        # `package.json` is the second opinion: `scripts/release.ts` checks the pair before tagging,
+        # and this catches a tag made by hand, which would publish under another version's name.
         run: |
           set -eu
           version="${GITHUB_REF_NAME#v}"
@@ -44,9 +41,8 @@ jobs:
             echo "::error::tag $GITHUB_REF_NAME says $version, package.json says $declared"
             exit 1
           fi
-          # A pre-release — 0.1.0-rc.1 — goes to the `next` dist-tag and is
-          # marked a pre-release on GitHub, so `npx diffalanche` keeps pointing
-          # at the last stable version.
+          # A pre-release such as 0.1.0-rc.1 goes to `next` and is marked so on GitHub, so
+          # `npx diffalanche` keeps pointing at the last stable version.
           case "$version" in
             *-*) dist_tag=next; prerelease=--prerelease ;;
             *) dist_tag=latest; prerelease= ;;
@@ -61,9 +57,8 @@ jobs:
       - name: the release notes are this version's changelog section
         env:
           VERSION: ${{ steps.version.outputs.version }}
-        # Keep a Changelog gives one section per version, so the notes are read
-        # rather than written; a version with no section stops the release here,
-        # before anything is published.
+        # Keep a Changelog gives a section per version, so the notes are read, not written; a
+        # version with no section stops the release here, before anything is published.
         run: |
           set -eu
           awk -v head="## [$VERSION]" '
@@ -78,17 +73,13 @@ jobs:
             exit 1
           fi
 
-      # `bun build --compile` cross-compiles, so all six binaries come out of
-      # one runner. A matrix of six would install the toolchain and rebuild the
-      # UI six times to emit one file each, and the checksums would have to be
-      # collected back from six uploads instead of computed over one directory.
-      # The binaries are not executed here: running each channel on its own
-      # platform is the `smoke` matrix of ci.yml, on the commit this tag names.
       # The binaries carry the model, and the release carries it for the npm channel: both are
       # the pinned files, checked against the manifest's SHA-256 as they are fetched.
       - name: the embedding model
         run: bun run model:fetch
 
+      # One runner cross-compiles all six binaries; they run in ci.yml's `smoke` matrix, not here
+      # (docs/reference/11-perf.md, "The release").
       - name: build both channels
         run: bun run build
 
@@ -122,17 +113,8 @@ jobs:
           (cd "$RUNNER_TEMP/assets" && grep -v ' diffalanche-' "$manifest" | sha256sum -c -)
           cat "$manifest"
 
-      # The GitHub release first, npm second: a published npm version cannot be
-      # taken back, and this step can be run again. Which is the point of the
-      # three commands: the npm publish below is the step most likely to fail on
-      # its own — a token, a name, a registry — and the only way to retry it is
-      # to re-run the job, which comes back through here. So an existing release
-      # is reused rather than a second one refused, and the assets are replaced.
-      #
-      # It is a draft until the binaries are on it. A gigabyte and a half takes time to
-      # upload, and an upload can fail: published-then-filled would show a
-      # release page with notes and no downloads, for seconds on the happy path
-      # and until someone noticed on the unhappy one.
+      # GitHub first and npm last, which cannot be taken back: a re-run reuses this release, a draft
+      # until its assets are on, and replaces them (docs/reference/11-perf.md, "The release").
       - name: github release
         env:
           GH_TOKEN: ${{ github.token }}
@@ -153,14 +135,8 @@ jobs:
         env:
           NODE_AUTH_TOKEN: ${{ secrets.NPM_TOKEN }}
           DIST_TAG: ${{ steps.version.outputs.dist_tag }}
-        # `--provenance` signs the package with this workflow's OIDC token: the
-        # npm page then names the commit and the run it was built from. `files`
-        # in package.json keeps the six binaries out of the tarball — they are
-        # release assets, and the npm channel is the bundle and the UI.
-        #
-        # Without the `NPM_TOKEN` secret the step says so and stops green: the
-        # GitHub release above is then the whole release, which is how a tag is
-        # published before the npm channel is opened.
+        # `--provenance` signs with this run's OIDC token; without `NPM_TOKEN` the step stops green
+        # and the GitHub release is the whole release (docs/reference/11-perf.md, "The release").
         run: |
           set -eu
           if [ -z "${NODE_AUTH_TOKEN:-}" ]; then

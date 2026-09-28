@@ -1,10 +1,5 @@
-/**
- * Builds the change set of a fixture repository in the shape anchor capture
- * reads: hunks with per-line old and new numbers. Core-a's DA-7 produces this
- * from `gitdiff-parser`; the test parses `git diff` itself, so the anchors it
- * checks are measured against git's own output rather than against another
- * copy of the same parser.
- */
+/** A fixture's change set with per-line numbers, parsed here from `git diff` rather than by
+ * `gitdiff-parser` as the tool does, so anchors are checked against git's own output. */
 import { execFileSync } from "node:child_process";
 import type { Hunk, RepositoryChange } from "../../src/core/types.ts";
 

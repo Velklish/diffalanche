@@ -1,13 +1,5 @@
-/**
- * What every command is handed: the configuration with `--root`, `--data-dir`,
- * and `--port` already folded in, the review session `--review` names or the
- * current one, and where to write.
- *
- * Both are functions, and both answer the same value on every call. Reading
- * the configuration is a file read that can fail on a `config.json` edited by
- * hand, and `diffalanche version` is what a person runs to find out what they
- * have installed: a command that needs neither must not be stopped by either.
- */
+/** What every command is handed: the configuration with the flags folded in, the session, and
+ * where to write; the first two are read lazily (06-cli.md, "How a command is defined"). */
 import { stat } from "node:fs/promises";
 import { resolve } from "node:path";
 import type { Config } from "../core/config/index.ts";
@@ -19,13 +11,8 @@ import { count, text } from "./args.ts";
 import { UsageError } from "./errors.ts";
 import type { Output } from "./output.ts";
 
-/**
- * A path a flag names. `--root` has to be there already: a typo in it would
- * otherwise be answered by a review of an empty directory, and the data
- * directory the tool then created inside it. `--data-dir` may be missing,
- * because it is the one place the tool creates — but a file where it should be
- * is a mistake either way.
- */
+/** A path a flag names: `--root` must exist, `--data-dir` may not yet, and a file in either
+ * place is a mistake (06-cli.md, "Global flags"). */
 async function assertDirectory(flag: string, value: string, mustExist: boolean): Promise<void> {
   const path = resolve(process.cwd(), value);
   let info: Awaited<ReturnType<typeof stat>>;
@@ -50,11 +37,8 @@ export type Context = {
   session: () => Promise<string>;
 };
 
-/**
- * Builds the context from the parsed arguments. `--port` is read here too,
- * although only `serve` offers it: the port is part of the configuration, and
- * `loadConfig` is the one place that checks it.
- */
+/** Builds the context; `--port` is read here although only `serve` offers it, because the port
+ * is configuration and `loadConfig` is the one place that checks it. */
 export function createContext(args: Arguments, io: Output, ui: UiAssets): Context {
   let config: Promise<Config> | null = null;
   let session: Promise<string> | null = null;

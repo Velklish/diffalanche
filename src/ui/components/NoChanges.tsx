@@ -1,11 +1,7 @@
 import { useStore } from "../store.ts";
 
-/**
- * The "no changes" screen of handoff section 10: the session is there and its
- * change set is empty — a base that resolves to what the working trees already
- * hold. The two ways out are the two things that would change the answer: the
- * base, and the session.
- */
+/** The "no changes" screen of handoff section 10: an empty change set, and the two ways out that
+ * would change the answer — the base and the session (08-ui.md, "Empty states"). */
 export function NoChanges() {
   const session = useStore((store) => store.session);
   const openBase = useStore((store) => store.openBase);

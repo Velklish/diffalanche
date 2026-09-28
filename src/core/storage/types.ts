@@ -1,27 +1,16 @@
-/**
- * The on-disk shapes of `docs/SPEC.md` section 7. Storage owns them because it
- * is the only module that reads and writes these files; every other module
- * takes the parsed value and never touches the JSON.
- */
+/** The on-disk shapes of `docs/SPEC.md` section 7, owned by storage as the only module that reads
+ * and writes the files; every other module takes the parsed value. */
 import type { BaseSpec, ReviewBundle, ScanWarning } from "../types.ts";
 
 /** The version every file of the data directory is written with. */
 export const SCHEMA_VERSION = 2;
 
-/**
- * The versions of `review.json` and `comments.json` this build reads. A file of
- * version 1 predates the scope of a review task (DA-53): it is read as a task
- * over the whole root that is still open, and written back as version 2 the
- * next time anything writes it. `diff.json` is not in this list — it is a cache,
- * and one of a version this build does not know is discarded and scanned again.
- */
+/** The `review.json` and `comments.json` versions this build reads; `diff.json`, a cache, is not
+ * in the list ([03-storage.md](../../../docs/reference/03-storage.md), "Schema versions"). */
 export const READABLE_VERSIONS: readonly number[] = [1, SCHEMA_VERSION];
 
-/**
- * The base of a review session, as `review.json` stores it under `base`: the
- * change-set reader's own `BaseSpec` (`docs/SPEC.md` section 3, decision 4).
- * One name for one thing — storage parses it, git resolves it.
- */
+/** The `base` of `review.json`: the change-set reader's own `BaseSpec`, one name for one thing —
+ * storage parses it, git resolves it. */
 export type Base = BaseSpec;
 
 export type Severity = "critical" | "warning" | "nit" | "question";
@@ -32,13 +21,8 @@ export type Side = "new" | "old";
 /** Whether the review task is still being worked on. A human sets both. */
 export type ReviewStatus = "open" | "closed";
 
-/**
- * One entry of a scope: a whole repository, or a repository with the paths the
- * task is about. Both kinds are one list, so "the diff of these repositories"
- * and "the diff of these files" are one concept
- * ([ADR-010](../../../docs/adr/adr-010-review-task-scope.md)). A path is
- * relative to the repository, exactly as `comments.json` writes it.
- */
+/** A whole repository, or one with the paths the task is about, in one list and one concept
+ * ([ADR-010](../../../docs/adr/adr-010-review-task-scope.md)); paths as `comments.json` has them. */
 export type ScopeEntry = {
   repo: string;
   /** `null` — the whole repository. */
@@ -48,12 +32,8 @@ export type ScopeEntry = {
 /** What a review task is about; `null` is the whole root, the way sessions used to be. */
 export type Scope = ScopeEntry[] | null;
 
-/**
- * The values themselves, in the order they are written about: the schema checks
- * a file against them and the CLI checks a flag against them, and two lists of
- * the same four words drift the moment one of them gains a fifth.
- * `SEVERITIES` is worst first (`docs/SPEC.md` section 3, decision 7).
- */
+/** The one list the schema and the CLI both check against: two lists drift once one gains a
+ * word. `SEVERITIES` is worst first (`docs/SPEC.md` section 3, decision 7). */
 export const SEVERITIES: readonly Severity[] = ["critical", "warning", "nit", "question"];
 export const COMMENT_STATUSES: readonly CommentStatus[] = ["open", "resolved"];
 export const REVIEW_STATUSES: readonly ReviewStatus[] = ["open", "closed"];
@@ -98,10 +78,7 @@ export type Reply = {
   createdAt: string;
 };
 
-/**
- * A comment with its thread. The anchor level is read from the nulls: `repo`
- * null is the whole review, `path` null a repository, `line` null a file.
- */
+/** A comment with its thread; the level is read off the nulls of `repo`, `path` and `line`. */
 export type Comment = {
   id: string;
   repo: string | null;
@@ -122,10 +99,7 @@ export type Comment = {
   replies: Reply[];
 };
 
-/**
- * `review.json`: the metadata of one review session. The fields are written in
- * this order, which is the order `docs/SPEC.md` section 7 shows them in.
- */
+/** `review.json`, its fields in the order `docs/SPEC.md` section 7 shows and a write puts them. */
 export type Review = {
   version: number;
   name: string;
@@ -147,12 +121,8 @@ export type CommentsFile = {
   comments: Comment[];
 };
 
-/**
- * `diff.json`: the change set of the last scan, the set `diff --json` prints.
- * It records the base **and the scope** it was computed with, because a session
- * whose base or scope has changed since has a cache that answers a different
- * question than the one now being asked.
- */
+/** `diff.json`, the set `diff --json` prints, with the base and scope it was computed for: after
+ * either changes, it answers another question (03-storage.md, "Validation and errors"). */
 export type DiffCache = {
   version: number;
   base: Base;

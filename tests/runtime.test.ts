@@ -1,12 +1,5 @@
-/**
- * Which runtime the unit suite is running on. `bun run test` starts Vitest
- * through Bun, but Vitest runs the tests themselves on Node — inside a test
- * `process.versions.bun` is undefined and `process.execPath` is the Node
- * binary. `bun run test:bun` is what puts them on Bun's own runtime, and this
- * is the check that says which of the two happened: a Vitest that quietly went
- * back to spawning Node workers fails the job that asked for Bun instead of
- * passing it. See [11-perf.md](../docs/reference/11-perf.md).
- */
+/** Which runtime the suite is on: `bun run test` puts the tests on Node, `test:bun` on Bun, and
+ * a Vitest back on Node workers fails here ([11-perf.md](../docs/reference/11-perf.md)). */
 import { Hono } from "hono";
 import { expect, test } from "vitest";
 import { startServer } from "../src/server/runtime.ts";

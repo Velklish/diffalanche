@@ -1,8 +1,5 @@
-/**
- * The markdown export: open comments grouped by repository, the layout of
- * `docs/design/HANDOFF.md` section 9. The UI's `raw` tab shows exactly this
- * text and `Copy .md` copies it, so it is the export, not a rendering of one.
- */
+/** The markdown export of `docs/design/HANDOFF.md` section 9; the UI's `raw` tab and `Copy .md`
+ * use this very text ([04-domain.md](../../../docs/reference/04-domain.md), "Markdown export"). */
 import { byCodePoint } from "../order.ts";
 import type { Comment, Review } from "../storage/index.ts";
 import { formatBase } from "./sessions.ts";
@@ -24,10 +21,8 @@ function indent(text: string, prefix: string): string {
     .join("\n");
 }
 
-/**
- * A block quote is per line, not per paragraph: marking only the first line
- * drops everything after a blank one out of the quote.
- */
+/** Per line, not per paragraph: marking only the first line drops everything after a blank one
+ * out of the quote. */
 function quote(text: string): string {
   return text
     .split("\n")
@@ -35,11 +30,7 @@ function quote(text: string): string {
     .join("\n");
 }
 
-/**
- * By code point, never by locale: the export ships from `npx` on Node and from
- * a Bun binary, and `localeCompare` would order the same review differently in
- * the two depending on the machine's ICU data.
- */
+/** By path, then line, by code point and never by locale ([order.ts](../order.ts) says why). */
 function order(a: Comment, b: Comment): number {
   return byCodePoint(a.path ?? "", b.path ?? "") || (a.line ?? 0) - (b.line ?? 0);
 }
@@ -61,11 +52,8 @@ function section(title: string, comments: Comment[]): string[] {
   return lines;
 }
 
-/**
- * The export of the comments it is given: the caller decides whether that is
- * the open ones or all of them (`export [--status open|all]`). The heading
- * counts the open comments among them, as the design's meta line does.
- */
+/** The export of the comments it is given, open or all as the caller chose; the heading counts
+ * the open ones among them, as the design's meta line does. */
 export function exportMarkdown(review: Review, comments: Comment[]): string {
   const open = comments.filter((comment) => comment.status === "open").length;
   const title = review.title === null ? "" : ` — ${review.title}`;

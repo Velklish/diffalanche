@@ -1,9 +1,5 @@
-/**
- * The base of a review session in the two forms the screen needs: the argument
- * the domain's own parser takes — `head`, `branch`, `branch:<name>`, or a ref
- * (`docs/SPEC.md` section 8) — and the short label the header and the menu
- * print. The grammar is the CLI's, so one base is written one way everywhere.
- */
+/** A base as the argument the domain's parser takes (`head`, `branch`, `branch:<name>`, a ref;
+ * `docs/SPEC.md` section 8) and as the label the header prints (08-ui.md, "The header"). */
 import type { Base, BaseMode } from "./types.ts";
 
 /** The base written back as the argument that produces it; `null` when it is not one. */

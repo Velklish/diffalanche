@@ -5,13 +5,8 @@ import { readDismissed, useStore, withComments } from "../src/ui/store.ts";
 import type { ActivityEvent, Comment, FileChange, RepositoryChange } from "../src/ui/types.ts";
 import { FakeSource } from "./helpers/event-source.ts";
 
-/**
- * Live update (DA-25): what an event does to the review the page already holds.
- * The rule the handoff states is that a data update repaints the affected lines
- * and threads and never the card, so what is asserted here is identity — the
- * objects a card is memoised on have to survive an edit in the file next to it
- * ([08-ui.md](../docs/reference/08-ui.md)).
- */
+/** DA-25's live update: an edit repaints lines and threads, never the card, so the assertions are
+ * that a card's memo inputs survive an edit next door (08-ui.md, "Patching, not repainting"). */
 
 const ONE = [
   "diff --git a/src/a.ts b/src/a.ts",
@@ -490,10 +485,8 @@ describe("a session-changed frame the page caused itself", () => {
   });
 
   it("lets go of a write that never produced a frame", () => {
-    // A switch away and back inside the watcher's debounce leaves `current`
-    // where it was and emits nothing at all. Without an age on the mark it
-    // would sit there for the life of the page and swallow the next real
-    // event for that session — an agent's `review base`, say.
+    // A switch away and back inside the debounce emits nothing; a mark with no age would then take
+    // the session's next real event for the page's whole life — an agent's `review base`, say.
     loaded();
     useStore.setState({ selfWrites: new Map([["review:ls-1", Date.now() - 60_000]]) });
 
@@ -501,14 +494,8 @@ describe("a session-changed frame the page caused itself", () => {
     expect(useStore.getState().selfWrites.size).toBe(0);
   });
 
-  /**
-   * One press on a closed row is two frames: closing the *current* task
-   * rewrites metadata the watcher compares and a status the session snapshot
-   * compares, so `session-changed` and `sessions-changed` both come back
-   * ([05-watcher.md](../docs/reference/05-watcher.md)). A single mark would be
-   * taken by whichever arrived first, and the other would then read the review
-   * again or raise a mark in the header about the reader's own press.
-   */
+  /** Closing the current task comes back as two frames, so the review's mark and the history's are
+   * kept apart (08-ui.md, "Closing a task, and what the mark in the header is"). */
   it("keeps the review's mark and the history's mark apart", () => {
     loaded();
     useStore.setState({ selfWrites: new Map() });
@@ -581,9 +568,8 @@ describe("the warnings bar", () => {
     useStore.getState().dismissWarnings();
     useStore.getState().setWarnings([{ path: "repos/b", message: "ref does not resolve" }]);
 
-    // Through the store's own reader, not the global: `sessionStorage` is a
-    // browser's, and this suite runs on Node and on Bun, which does not declare
-    // it. What is asserted is what a reload would find.
+    // Through the store's reader, not the global: `sessionStorage` is a browser's, and Bun, the
+    // suite's other runtime, does not declare it. What is asserted is what a reload would find.
     expect(readDismissed()).toBeNull();
   });
 

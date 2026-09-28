@@ -3,12 +3,8 @@ import { fileURLToPath } from "node:url";
 import type { Page } from "@playwright/test";
 import { expect, test } from "@playwright/test";
 
-/**
- * The header of DA-24: the session menu and its create form, the base picker,
- * the two counters that filter the rail, the export, and the scanner warnings.
- * What reached the disk is read back with the CLI, which is the contract the
- * agents get and the only reader that proves the file was written.
- */
+/** The header of DA-24: session menu, base picker, rail counters, export and warnings; the disk is
+ * read back with the CLI, the agents' contract and the proof the file was written. */
 
 const root = fileURLToPath(new URL("..", import.meta.url));
 const FIXTURE = ".perf/e2e";
@@ -40,35 +36,19 @@ async function open(page: Page) {
   await page.locator(".file-card .diff").first().waitFor();
 }
 
-/**
- * Puts the fixture back on the session and the base the other specs expect.
- * Through the API and not the CLI: the server holds the review document until
- * something tells it the session changed, and its own write routes are what
- * tell it — a CLI write is only noticed when the watcher gets round to it.
- *
- * It runs after every test, whatever the test did, so an assertion that failed
- * half way cannot hand the next spec — or the next run — a fixture sitting on a
- * session it invented. `request` rather than the page, because a test that
- * failed before it navigated has no page to evaluate in.
- */
+/** Back on the session and base the other specs expect, after every test, through the API, with
+ * `request` since a test that failed early has no page (08-ui.md, "Putting the fixture back"). */
 test.afterEach(async ({ request }) => {
-  // `data` and not a bodyless post: a write with no content type is
-  // form-shaped to the server's `csrf()`, which then wants the
-  // `Sec-Fetch-Site` a browser sets and this client does not
-  // ([07-server.md](../docs/reference/07-server.md)). The answers are checked,
-  // because a refused restore is a silent one and the next spec pays for it.
+  // `data`, since `csrf()` takes a bodyless post as form-shaped (07-server.md); the answers are
+  // checked, as a refused restore is silent and the next spec pays for it.
   const used = await request.post(`/api/sessions/${SESSION}/use`, { data: {} });
   expect(used.ok(), await used.text()).toBe(true);
   const based = await request.put(`/api/sessions/${SESSION}/base`, { data: { base: "head" } });
   expect(based.ok(), await based.text()).toBe(true);
 });
 
-/**
- * The same, plus the navigation that shows it, for a test that goes on
- * afterwards. `goto("/")` and not a reload: switching a task writes
- * `?review=<name>` into this window's address, so a reload would come back on
- * the task the test just moved to (DA-55).
- */
+/** The same plus a navigation, for a test that goes on: `goto("/")`, since a reload would come back
+ * on the `?review=<name>` the switch wrote (DA-55). */
 async function restore(page: Page) {
   await page.evaluate(async (name: string) => {
     const json = { "content-type": "application/json" };
@@ -98,9 +78,8 @@ test("the menu creates a session, opens it here, and leaves current where it was
   await expect(page.locator(".pill-name").first()).toHaveText(name);
   expect(new URL(page.url()).searchParams.get("review")).toBe(name);
   expect(cli("review", "list")).toContain(name);
-  // `current` is what a human typing a command by hand gets, and only
-  // `review use` moves it (ADR-010, decision 7): the CLI still answers for the
-  // session it was on, which is the one with the fixture's comments in it.
+  // Only `review use` moves `current` (ADR-010, decision 7), so the CLI still answers for the
+  // session it was on, the one with the fixture's comments.
   expect(currentSession()).toBe(SESSION);
   expect(currentComments().length).toBeGreaterThan(0);
   expect(JSON.parse(cli("list", "--json", "--status", "all", "--review", name))).toHaveLength(0);

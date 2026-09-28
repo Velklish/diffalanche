@@ -1,9 +1,5 @@
-/**
- * The watcher of [ADR-005](../docs/adr/adr-005-live-update.md): an edit in one
- * repository reaches `diff.json` and the event bus inside the budget of
- * `docs/SPEC.md` section 6, and a write into the data directory from another
- * process becomes comment events.
- */
+/** [ADR-005](../docs/adr/adr-005-live-update.md)'s watcher: an edit reaches `diff.json` and the bus
+ * inside `docs/SPEC.md` section 6's budget, and a data-directory write becomes comment events. */
 import { execFile } from "node:child_process";
 import {
   chmodSync,
@@ -82,12 +78,8 @@ function median(values: number[]): number {
   return [...values].sort((a, b) => a - b)[Math.floor(values.length / 2)] as number;
 }
 
-/**
- * Bun's own test runner leaves `fs.watch` quiet after the first events — a real
- * server under Bun keeps reporting, which is what
- * `docs/reference/05-watcher.md` records — so the walk is what these tests
- * exercise there, and the recursive watch is exercised under Node.
- */
+/** Under Bun's test runner `fs.watch` goes quiet after its first events, so the walk is exercised
+ * there, the recursive watch under Node (05-watcher.md, "What it watches, and what it ignores"). */
 const NATIVE_WATCH = process.env.DIFFALANCHE_TEST_RUNTIME !== "bun";
 
 let root: string;
@@ -110,33 +102,8 @@ function changesOf(mark: number, repo: string): { event: WatcherEvent; at: numbe
 
 let settled = 0;
 
-/**
- * Proves the watch of one repository is delivering before anything is measured
- * against it.
- *
- * `fs.watch` with `recursive: true` arms asynchronously: it returns before the
- * platform is delivering, and a write made in that window is **lost outright**
- * rather than delayed. Measured on this fixture — the watcher started and
- * stopped thirty times, a file written the moment `startWatcher` returned —
- * four writes of the thirty produced no event at all inside five seconds, while
- * the other twenty-six produced one in about 190 ms. That is what a
- * `no diff-changed within 20000 ms` here has always been: not a slow machine,
- * but a write nobody was listening for.
- *
- * The write is **repeated** rather than waited on for longer: what is being
- * waited out is a lost write, and no ceiling brings one back. It is done per
- * repository, because each tree is its own watch.
- *
- * **The probe file's removal is waited for by its own event, never by a sleep.**
- * Taking the file away changes the repository's change set back, so it produces
- * a `diff-changed` of its own, and that event is the only proof it has been
- * through the queue. A fixed pause here was wrong in the way this file already
- * warns about at `settle()`: a machine slow enough to deliver it late hands the
- * *next* test an event for the repository that was armed last. Measured on
- * `main` as one red run in six — the first test received `loads-search` where
- * it expected `cargos-api`, 21 ms in, which is an event arriving early for
- * somebody else rather than one arriving late.
- */
+/** Proves one repository's watch is delivering before anything is measured against it; why by a
+ * repeated write and an awaited removal: 05-watcher.md, "What the unit tests hold". */
 async function arm(repo: string): Promise<void> {
   const deadline = performance.now() + 30_000;
   for (let attempt = 0; ; attempt += 1) {
@@ -162,12 +129,8 @@ async function arm(repo: string): Promise<void> {
 /** The settles that ran out of their deadline, told apart once the file is done (11-perf.md). */
 const overdue: { settle: number; written: number }[] = [];
 
-/**
- * A change in another repository, waited for. Rescans run in one queue, so the
- * event of a change made after another one proves the earlier one has been
- * through — which is what a test that expects *no* event needs, rather than a
- * sleep long enough to be wrong on a loaded machine.
- */
+/** A change in another repository, waited for: rescans run in one queue, so its event proves the
+ * earlier change is through — what a test expecting *no* event needs instead of a sleep. */
 async function settle(): Promise<void> {
   settled += 1;
   const mark = performance.now();
@@ -201,11 +164,8 @@ function reportOverdue(): void {
   }
 }
 
-/**
- * The rescan of the watched repository, waited for. `settle` only proves that a
- * change made in *another* repository has been through, which says nothing
- * about a write to this one that the walk has not snapshotted yet.
- */
+/** The watched repository's own rescan, waited for: `settle` proves only that another
+ * repository's change is through, not a write here the walk has not snapshotted yet. */
 async function waitForChangeOf(repo: string, mark: number, timeoutMs = 20_000): Promise<void> {
   const deadline = performance.now() + timeoutMs;
   for (;;) {
@@ -215,13 +175,8 @@ async function waitForChangeOf(repo: string, mark: number, timeoutMs = 20_000): 
   }
 }
 
-/**
- * A change git sees and the watch does not: `node_modules` is out of the watch
- * and no rule of these tests names it, so it is in the change set the next
- * rescan of the repository reads. That is what makes "no rescan" visible at
- * all — an ignored file rescanned on its own finds the change set exactly as
- * the cache has it and announces nothing either way.
- */
+/** A change git sees and the watch does not, under `node_modules`, so the next rescan has something
+ * to announce and "no rescan" is visible (05-watcher.md, "What the unit tests hold"). */
 async function hide(name: string, content: string): Promise<void> {
   mkdirSync(join(root, REPO, "node_modules", name), { recursive: true });
   await writeFile(join(root, REPO, "node_modules", name, "index.ts"), content);
@@ -232,21 +187,8 @@ async function reveal(name: string): Promise<void> {
   await rm(join(root, REPO, "node_modules", name), { recursive: true, force: true });
 }
 
-/**
- * The first event of a type since a mark, **whichever repository it is about**.
- * `changesOf` is the filtered one; this is deliberately not, and the difference
- * is not an oversight to tidy up.
- *
- * A caller that expects an event of its own and receives another repository's
- * fails on the assertion that follows, naming both — which is exactly how the
- * cross-repository event `arm()` used to leave behind was found: `expected
- * 'repos/platform/loads-search' to be 'repos/core/cargos-api'`, 21 ms in. Given
- * a filter here, that event would have been skipped over in silence and the
- * test would have gone on to catch its own a moment later, green every time
- * while the watcher was handing out somebody else's news. **The lack of a
- * filter is what makes a stray event visible at all**, so anything that leaks
- * one is a defect to fix at the source rather than to hide here.
- */
+/** The first event of a type since a mark, for any repository: unfiltered on purpose, so a stray
+ * event fails the assertion after it (05-watcher.md, "What the unit tests hold"). */
 async function waitFor(
   type: WatcherEvent["type"],
   mark: number,
@@ -347,11 +289,8 @@ describe("watcher", () => {
     const elapsed: number[] = [];
     const rescans: number[] = [];
     let first = 0;
-    // Three edits and the median of them, the way the performance gate reads
-    // its own numbers: one slow run on a busy machine is not a regression. Each
-    // edit is its own file: a runtime that coalesces the changes of one file
-    // into one event — macOS does, under Bun — would otherwise answer the
-    // second edit with the event of the first.
+    // The median of three edits, as the gate reads its own; a file each, as a runtime that
+    // coalesces one file's changes (macOS, under Bun) would answer an edit with the last's event.
     for (let run = 0; run < RUNS; run += 1) {
       const mark = performance.now();
       if (run === 0) first = mark;
@@ -379,15 +318,13 @@ describe("watcher", () => {
     process.stderr.write(
       `update after an edit: ${median(elapsed).toFixed(1)} ms, one rescan beside it ${median(rescans).toFixed(1)} ms\n`,
     );
-    // Only where the tree is watched. On the walk the number is the interval
-    // and the cost of the walk itself, which is why a platform without a
-    // recursive watch cannot meet this budget at all.
+    // Only where the tree is watched: on the walk the number is the interval plus the walk, which
+    // is why a platform with no recursive watch cannot meet this budget at all.
     if (NATIVE_WATCH) expect(median(own)).toBeLessThan(BUDGET_MS);
   }, 60_000);
 
-  // The two below read what the test above produced — its activity line and the
-  // file it wrote — so one failure there is three here. That is a dependency
-  // between tests and not three defects.
+  // The two below read what the test above produced, its activity line and its file, so one
+  // failure there is three here: a dependency between tests, not three defects.
   it("leaves the diff change unattributed while no agent has written", () => {
     const lines = activity.filter((event) => event.repo === REPO);
     expect(lines.at(-1)).toMatchObject({ verb: "changed", author: null });
@@ -409,9 +346,8 @@ describe("watcher", () => {
     const mark = performance.now();
     await writeFile(join(root, REPO, "again.ts"), "export const again = 1;\n");
     await waitFor("diff-changed", mark);
-    // A cache holding only the repository that changed would be read as a
-    // review of one repository. The file follows the event, so it is read until
-    // it is there.
+    // A cache holding only the changed repository would read as a one-repository review; the file
+    // follows the event, so it is read until it is there.
     const deadline = performance.now() + 20_000;
     let repositories = 0;
     while (performance.now() < deadline) {
@@ -435,9 +371,8 @@ describe("watcher", () => {
     const gitignore = join(root, REPO, ".gitignore");
     const built = join(root, REPO, "dist", "bundle.js");
     mkdirSync(join(root, REPO, "dist"), { recursive: true });
-    // The rules are a change of their own: they decide which untracked files
-    // the change set has, so this write wakes the watcher, and the burst that
-    // follows must not be the one carrying it.
+    // The rules are a change of their own — they decide which untracked files the change set has —
+    // so this write wakes the watcher, and the burst under test must not be the one carrying it.
     const rulesMark = performance.now();
     await writeFile(gitignore, "dist/\n");
     await waitForChangeOf(REPO, rulesMark);
@@ -475,9 +410,8 @@ describe("watcher", () => {
   it("says nothing about a path .git/info/exclude names", async () => {
     mkdirSync(join(root, REPO, ".git", "info"), { recursive: true });
     mkdirSync(join(root, REPO, "coverage"), { recursive: true });
-    // Writing the rules is a change, and this one has to be through before the
-    // burst under test: a hidden change gives its rescan something to announce,
-    // so there is an event to wait for rather than a `settle` to hope on.
+    // This rules write must be through before the burst under test; a hidden change gives its
+    // rescan something to announce, so there is an event to wait for, not a `settle` to hope on.
     await hide("right-pad-rules", "module.exports = 2;\n");
     const rulesMark = performance.now();
     await writeFile(join(root, REPO, ".git", "info", "exclude"), "coverage/\n");
@@ -499,9 +433,8 @@ describe("watcher", () => {
   }, 30_000);
 
   it("has no answer where git has none", async () => {
-    // Not a repository, so git refuses. The answer is `null` rather than an
-    // empty set: an empty set would be cached as "none of these is ignored",
-    // and a failure must leave nothing behind.
+    // Not a repository, so git refuses; `null` rather than an empty set, which would be cached as
+    // "none of these is ignored" when a failure must leave nothing behind.
     const outside = mkdtempSync(join(tmpdir(), "diffalanche-not-a-repo-"));
     try {
       expect(await checkIgnore(outside, ["dist/bundle.js"])).toBeNull();
@@ -524,10 +457,8 @@ describe("watcher", () => {
     await writeFile(built, "console.log(2);\n");
     await settle();
 
-    // `git add -f` makes it tracked, and a tracked file is in the diff whatever
-    // a pattern says. The index moving is what tells the watcher to ask again,
-    // and it has to be its own burst: coalesced with the edit below, the edit
-    // would ride on the rescan the index earned rather than on a fresh answer.
+    // `git add -f` tracks it, so it is in the diff whatever a pattern says; the index move has the
+    // watcher ask again and is its own burst, or the edit below would ride its rescan.
     const stagedMark = performance.now();
     await run("git", ["-C", join(root, REPO), "add", "-f", "dist/tracked.js"]);
     await waitForChangeOf(REPO, stagedMark);
@@ -551,9 +482,8 @@ describe("watcher", () => {
   it("wakes for a burst inside .git whatever the rules say about it", async () => {
     const gitignore = join(root, REPO, ".gitignore");
     const head = join(root, REPO, ".git", "HEAD");
-    // git makes no exception for its own directory: this pattern has it answer
-    // that `.git/HEAD` is ignored. A burst that is only a branch switch would
-    // then be swallowed and the base of the review go stale in silence.
+    // git makes no exception for its own directory: this pattern makes `.git/HEAD` ignored, and a
+    // burst that is only a branch switch would be swallowed and the review's base go stale unseen.
     const rulesMark = performance.now();
     await writeFile(gitignore, "HEAD\n");
     await waitForChangeOf(REPO, rulesMark);
@@ -566,9 +496,8 @@ describe("watcher", () => {
     // moves it, and no reviewed repository is changed by it.
     await writeFile(head, await readFile(head, "utf8"));
     await waitForChangeOf(REPO, headMark);
-    // The name a runtime reports for it is its own — Bun hands back the bare
-    // `.git` where Node names the file — so what is asserted is that the burst
-    // was git's directory and nothing else.
+    // Runtimes name it differently — Bun the bare `.git`, Node the file — so what is asserted is
+    // that the burst was git's directory and nothing else.
     const woke = changesOf(headMark, REPO).flatMap(
       (one) => (one.event as { files: string[] }).files,
     );
@@ -587,9 +516,8 @@ describe("watcher", () => {
     const nested = join(root, REPO, "nested", "clone", ".git");
     mkdirSync(join(nested, "objects", "ff"), { recursive: true });
     writeFileSync(join(nested, "HEAD"), "ref: refs/heads/main\n");
-    // `nested/` is what makes this a check rather than a coincidence: git
-    // answers that everything under it is ignored, this burst included. The
-    // fixture's own `vendor/lib` is a modern submodule and was never affected.
+    // `nested/` makes this a check, not a coincidence: git calls everything under it ignored, this
+    // burst included. The fixture's own `vendor/lib` is a modern submodule, never affected.
     const rulesMark = performance.now();
     await writeFile(gitignore, "nested/\n");
     await waitForChangeOf(REPO, rulesMark);
@@ -642,9 +570,8 @@ describe("watcher", () => {
     );
     expect(ignored?.size).toBe(paths.length);
 
-    // A burst larger than the pipe between the two processes: the list is
-    // written to standard input, and a failure there is not allowed to become
-    // an uncaught exception in a server.
+    // A burst bigger than the pipe between the processes: the list goes to standard input, and a
+    // failure there must not become an uncaught exception in a server.
     const many = Array.from({ length: 5_000 }, (_, one) => `target/many-${one}.js`);
     expect((await checkIgnore(join(root, REPO), many))?.size).toBe(many.length);
 
@@ -780,9 +707,8 @@ describe("the snapshot the session events are read from", () => {
 
     chmodSync(reviews, 0o000);
     try {
-      // A failed listing is not an empty data directory. Answering with one
-      // would make every session news again on the next readable pass, and a
-      // few hundred of those would push the replay out of the stream's ring.
+      // A failed listing is not an empty data directory: that answer would make every session news
+      // on the next readable pass, and a few hundred would push the replay out of the ring.
       expect(await snapshotSessions(own, first)).toBeNull();
     } finally {
       chmodSync(reviews, 0o755);
@@ -907,9 +833,8 @@ describe("what a repository's watch reports", () => {
   }, 30_000);
 
   it("takes every name a write in the data directory can be reported under", () => {
-    // macOS coalesces the changes of one directory and a runtime reports any of
-    // the names involved: the file, the temporary file renamed over it, the
-    // lock the write took, or the directory itself. All of them are the signal.
+    // macOS coalesces a directory's changes and a runtime may report any name involved — the file,
+    // the temporary file renamed over it, the write's lock, the directory — and all are the signal.
     expect(dataIgnore("reviews/synth/comments.json", "file")).toBe(false);
     expect(dataIgnore("reviews/synth/comments.json.tmp-9e7c", "file")).toBe(false);
     expect(dataIgnore("reviews/synth/.lock/info.json", "file")).toBe(false);
@@ -1393,10 +1318,8 @@ describe("the repository signal", () => {
         await new Promise((done) => setTimeout(done, 5));
       }
     };
-    // This watcher is not the suite's, so the suite's `arm` says nothing about
-    // it: a freshly established watch can miss the first write to a tree, which
-    // is what `arm` exists for. Neither "it arrived" nor "it did not" means
-    // anything until the instrument is known to be live.
+    // Not the suite's watcher, so the suite's `arm` says nothing about it: a fresh watch can miss a
+    // tree's first write, and neither "arrived" nor "did not" means anything until it is live.
     const armOwn = async (repo: string): Promise<void> => {
       const deadline = performance.now() + 30_000;
       for (let attempt = 0; ; attempt += 1) {
@@ -1442,15 +1365,12 @@ describe("the repository signal", () => {
       );
       expect(changed).toContain(REPO);
 
-      // The claim the two call sites exist for: a file written with the bytes
-      // it already had moved no line, so it announces nothing. Counted rather
-      // than looked for, because "nothing arrived" is only an answer once
-      // something else has.
+      // What the two call sites exist for: rewriting a file's own bytes moves no line and announces
+      // nothing; counted, not looked for, since "nothing arrived" is an answer once something has.
       const settledCount = changed.filter((repo) => repo === REPO).length;
       await writeFile(inside, "export const inside = 1;\n");
-      // The barrier: a second write in the other repository, whose signal comes
-      // from the burst and therefore always comes. Waiting for it is what makes
-      // the count below a verdict instead of a race.
+      // The barrier: a write in the other repository, whose signal comes from the burst and so
+      // always comes; waiting for it makes the count below a verdict instead of a race.
       const barrier = changed.filter((repo) => repo === OTHER_REPO).length;
       await writeFile(outside, "export const outside = 2;\n");
       await until(() => changed.filter((repo) => repo === OTHER_REPO).length > barrier);
@@ -1531,10 +1451,8 @@ describe("the sessions a watcher follows", () => {
         await new Promise((done) => setTimeout(done, 5));
       }
     };
-    // The data directory's watch is the same `watchTree` the repositories get,
-    // and on the native path its `ready` is `Promise.resolve()` — it says
-    // nothing about when the OS starts delivering. So this watcher is armed
-    // too: a write is made and waited for before anything is measured.
+    // The data directory gets the same `watchTree`, whose native `ready` is `Promise.resolve()` and
+    // says nothing about delivery, so this watcher is armed too before anything is measured.
     const armData = async (): Promise<void> => {
       const file = join(dataDir, "reviews", SESSION, "comments.json");
       const deadline = performance.now() + 30_000;

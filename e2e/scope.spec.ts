@@ -6,15 +6,8 @@ import type { APIRequestContext, Page } from "@playwright/test";
 import { expect, test } from "@playwright/test";
 import { dataDirOf } from "../src/core/storage/index.ts";
 
-/**
- * The scope on the screen (DA-55): the `SCOPE` pill, the editor over the whole
- * root, the one confirmation that destroys review data, select mode, and the
- * `?review=` that decides what a window is on.
- *
- * What reached the disk is read from the data directory rather than from the
- * page: the point of every one of these is what was written, and the screen is
- * only how it was asked for.
- */
+/** The scope on the screen (DA-55): the pill, the editor, the one destructive confirmation, select
+ * mode and `?review=`; what was written is read from the data directory, not the page. */
 
 const root = fileURLToPath(new URL("..", import.meta.url));
 const FIXTURE = ".perf/e2e";
@@ -23,13 +16,8 @@ const SESSION = "synth";
  * neutralised names none, so it is the default one under the root (DA-54.1). */
 const DATA = dataDirOf(join(root, FIXTURE));
 
-/**
- * Exactly this path and not one it is a prefix of. The fixture holds both
- * `repos/core/cargos-api` and `repos/core/cargos-api-worktree`, and
- * Playwright's `hasText` is a substring match: a filter written with the bare
- * path would take two rows the moment the worktree had changes, and strict mode
- * would fail on a collision rather than on a defect.
- */
+/** Exactly this path: `hasText` is a substring match and the fixture has `cargos-api` and
+ * `cargos-api-worktree`, so strict mode would fail on a collision, not a defect. */
 function exactly(text: string): RegExp {
   return new RegExp(`^${text.replace(/[.*+?^${}()|[\]\\]/g, "\\$&")}$`);
 }
@@ -81,11 +69,8 @@ type Task = {
   left: string;
 };
 
-/**
- * A task about **two repositories and five files** — the shape the card's
- * verification names — built through the CLI with `--no-use`, so `current` is
- * where it was and this window is the only thing that moves.
- */
+/** A task about **two repositories and five files**, the card's shape, made with `--no-use` so
+ * `current` stays and only this window moves. */
 async function scopedTask(request: APIRequestContext): Promise<Task> {
   const found = await candidates(request);
   const first = found.find((one) => one.files.length >= 3);
@@ -128,12 +113,8 @@ test("a task carries its scope and nothing else, and the pill counts it", async 
   await expect(page.locator(".repo-row")).toHaveCount(2);
   await expect(page.locator(".pill.scope .pill-name")).toHaveText("2 repos · 5 files");
 
-  // Nothing outside the scope is *shown* — no summary, no collapsed section, no
-  // count of what was left out (ADR-010, decision 2). The repository the task
-  // is not about is absent from the markup of the review, not hidden by a
-  // stylesheet. The workspace and not the whole page: the scanner's warnings
-  // bar names a worktree of the root, which is a warning about the scan rather
-  // than a repository the review is showing.
+  // Out of scope is absent from the markup, not hidden (ADR-010, decision 2); the workspace and not
+  // the page, since the warnings bar names a worktree of the root.
   expect(await page.locator(".workspace").innerHTML()).not.toContain(task.left);
 });
 
@@ -144,9 +125,8 @@ test("a session with no scope has no pill at all", async ({ page }) => {
 });
 
 test("a task the data directory has not names itself and offers a way back", async ({ page }) => {
-  // The one address a person types and pastes by hand, so the one failure most
-  // likely to be a typo. `open()` is not used: the page never reports ready,
-  // because there is no review to show.
+  // The one address typed by hand, so the likeliest typo; no `open()`, as with no review the page
+  // never reports ready.
   await page.goto("/?review=nope-nope");
   await expect(page.locator(".no-changes-title")).toContainText("nope-nope");
   await expect(page.locator(".failure")).toContainText("nope-nope");

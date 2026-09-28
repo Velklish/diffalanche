@@ -11,11 +11,8 @@ const HINTS: [string, string][] = [
   ["[ ]", "panels"],
 ];
 
-/**
- * The 30 px bar of handoff section 1.6: the hotkeys on the left, and on the
- * right what this review is being read against. The prototype's demo-state
- * switcher sat there too; it is a prototype affordance and is not built.
- */
+/** The 30 px bar of handoff section 1.6; the prototype's demo-state switcher is not built
+ * (08-ui.md, "The header"). */
 export function StatusBar() {
   const session = useStore((store) => store.session);
   const open = useStore((store) => store.counters.counters.open);

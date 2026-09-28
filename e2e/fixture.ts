@@ -1,15 +1,5 @@
-/**
- * The fixture the acceptance suite runs against: the small profile of the
- * synthetic review, plus the one repository `docs/SPEC.md` section 10 asks for
- * that the generator does not make — a clone with a remote, a feature branch
- * with a commit ahead of the remote default branch, and a clean working tree.
- *
- * It lives here rather than in `scripts/synth.ts` because the generator's
- * profiles are what the performance gate measures: a repository added there
- * would move the gate's numbers to prove something the gate does not check.
- * The acceptance fixture is its own directory, so `bun run test:ui` and
- * `bun run perf` keep the fixture they had.
- */
+/** The acceptance fixture: the small profile plus the feature-branch clone section 10 wants, kept
+ * out of the generator so the gate's numbers do not move (08-ui.md, "The fixture"). */
 
 import { execFileSync } from "node:child_process";
 import { mkdirSync, writeFileSync } from "node:fs";
@@ -24,14 +14,8 @@ export const FEATURE_REPO = "repos/tools/tariff-store";
 /** Where the remote it was cloned from lives: outside `repos/`, so no scan finds it. */
 const UPSTREAM = "sources/tariff-store-upstream";
 export const FEATURE_BRANCH = "feature/rounding";
-/**
- * A worktree checked out *inside* a repository — the other half of the sentence
- * in section 10, next to the generator's nested submodule. It is ignored by the
- * repository that holds it, so the working tree the `branch` criterion needs to
- * be clean stays clean. The test asserts the outcome — nothing under the holder
- * is listed — not which of the scanner's two guards stopped there: at this
- * layout's depth the depth limit and the no-descent rule coincide.
- */
+/** A worktree nested inside a repository, which ignores it to stay clean; the test asserts the
+ * outcome, not which scanner guard stopped there (08-ui.md, "The fixture"). */
 export const NESTED_WORKTREE = `${FEATURE_REPO}/nested/inner`;
 /** The file the feature branch commits, and the line only its own side carries. */
 export const FEATURE_FILE = "src/tariff/rounding.ts";
@@ -79,11 +63,8 @@ function write(path: string, lines: string[]): void {
   writeFileSync(path, `${lines.join("\n")}\n`, "utf8");
 }
 
-/**
- * The clone and its feature branch. In `head` mode the repository has nothing
- * to show — its working tree is clean — and in `branch` mode the commit the
- * branch is ahead by is the whole change set. That difference is the criterion.
- */
+/** The clone and its feature branch: nothing to show in `head` mode, its one commit the whole
+ * change set in `branch` mode — and that difference is the criterion. */
 function addFeatureRepository(out: string): void {
   const upstream = join(out, UPSTREAM);
   mkdirSync(upstream, { recursive: true });
@@ -102,9 +83,8 @@ function addFeatureRepository(out: string): void {
 
   const clone = join(out, FEATURE_REPO);
   mkdirSync(dirname(clone), { recursive: true });
-  // A clone records `refs/remotes/origin/HEAD`, which is where `branch` mode
-  // reads the remote default branch from when the session names no branch
-  // ([02-git.md](../docs/reference/02-git.md)).
+  // A clone records `refs/remotes/origin/HEAD`, where `branch` mode with no branch named reads
+  // the remote default ([02-git.md](../docs/reference/02-git.md)).
   execFileSync("git", [...GIT_CONFIG, "clone", "-q", upstream, clone], { env: GIT_ENV });
   git(clone, "checkout", "-q", "-b", FEATURE_BRANCH);
   write(join(clone, FEATURE_FILE), [

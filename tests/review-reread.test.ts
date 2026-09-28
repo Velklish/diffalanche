@@ -1,8 +1,5 @@
-/**
- * Two re-reads of one held document that end in the other order from the one they were asked
- * in. A plain race does not reach that order, so the domain's `list` is mocked for this file and
- * the steps are ordered with a gate, as `tests/storage-lock-race.test.ts` orders its writers.
- */
+/** Two re-reads of one held document ending in the reverse of the order asked: a race never gets
+ * there, so the domain's `list` is mocked and gates order the steps, as the lock race does. */
 import { mkdtempSync, rmSync } from "node:fs";
 import { tmpdir } from "node:os";
 import { join } from "node:path";

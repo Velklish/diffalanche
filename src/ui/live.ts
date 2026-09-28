@@ -1,15 +1,5 @@
-/**
- * Live update ([ADR-005](../../docs/adr/adr-005-live-update.md)): the page holds
- * one `EventSource` on `GET /api/events`, fetches what an event names, and
- * patches the store — the review is read again only when an event says so.
- *
- * Reconnection and `Last-Event-ID` are the browser's own: `EventSource` retries
- * a dropped stream and sends back the id of the last frame it saw, which is the
- * reason ADR-005 chose SSE over a socket. What this module adds around that is
- * the `reload` frame, the connection state the sidebar footer shows, and the
- * ring of activity lines a page that has just connected would otherwise start
- * empty with ([07-server.md](../../docs/reference/07-server.md)).
- */
+/** Live update (ADR-005): one `EventSource`, a fetch of what each event names and a patch of the
+ * store; reconnecting and `Last-Event-ID` are the browser's own (08-ui.md, "Live update"). */
 import type { RepositoryChange } from "../core/types.ts";
 import type { ActivityEvent } from "../core/watcher/activity.ts";
 import type { WatcherEvent } from "../core/watcher/bus.ts";
@@ -31,11 +21,8 @@ const SETTLES_KEPT = 200;
 const PROBE_DEPTH = 240;
 const PROBE_STEP = 12;
 
-/**
- * What the reader is looking at and where it sat, taken before a patch is
- * applied. Content that changes above it moves it down the page; putting it
- * back where it was is what keeps the reading position through an agent's edit.
- */
+/** What the reader is looking at and where it sat, taken before a patch: putting it back is what
+ * keeps the reading position when content above it changes. */
 type Anchor = { element: Element; top: number; scrollY: number } | null;
 
 export function startLive(): () => void {
@@ -58,14 +45,12 @@ export function startLive(): () => void {
  * to replay them by, so the review is read again once it is open (08-ui.md, DA-96.1). */
 function connect(behind: boolean): () => void {
   const store = () => useStore.getState();
-  // The task this window is on, so the server knows whose comments to follow.
-  // A **registry and not a filter**: the frames are still one broadcast on one
-  // sequence of ids ([07-server.md](../../docs/reference/07-server.md)).
+  // The task this window is on, so the server knows whose comments to follow: a registry and not
+  // a filter, the frames are one broadcast ([07-server.md](../../docs/reference/07-server.md)).
   const source = new EventSource(onTask("/api/events"));
 
-  // One queue: two events arriving together are two patches, and a patch that
-  // reads the store while another is halfway through it would write back a
-  // state that never existed.
+  // One queue: a patch that read the store while another was halfway through it would write
+  // back a state that never existed.
   let queue: Promise<void> = Promise.resolve();
   const run = (task: () => Promise<void>): void => {
     queue = queue.then(task).catch((error: unknown) => {
@@ -75,9 +60,8 @@ function connect(behind: boolean): () => void {
     });
   };
 
-  // The stream answers as soon as it is subscribed, with a comment line, so
-  // this fires on connect rather than fifteen seconds later with the first
-  // heartbeat ([07-server.md](../../docs/reference/07-server.md)).
+  // The stream answers with a comment line as soon as it subscribes, so this fires on connect and
+  // not with the first heartbeat fifteen seconds later (07-server.md).
   let missed = behind;
   source.onopen = () => {
     store().setConnection("watching");
@@ -105,9 +89,8 @@ function connect(behind: boolean): () => void {
   on<Extract<WatcherEvent, { type: "diff-changed" }>>("diff-changed", (event) =>
     diffChanged(event.repo),
   );
-  // The three comment frames name the task their thread belongs to, and the
-  // stream is one broadcast, so a window drops what is not its own: reading it
-  // would answer `no-such-comment` and put a toast up for somebody else's write.
+  // A comment frame names its thread's task and a window drops the others: reading one would answer
+  // `no-such-comment` and raise a toast for somebody else's write.
   on<Extract<WatcherEvent, { type: "comment-added" }>>("comment-added", (event) =>
     onScreen(event.session) ? thread(event.id) : undefined,
   );
@@ -117,35 +100,24 @@ function connect(behind: boolean): () => void {
   on<Extract<WatcherEvent, { type: "comment-status" }>>("comment-status", (event) =>
     onScreen(event.session) ? thread(event.id) : undefined,
   );
-  // The metadata of a task changed — its base, scope, title or status. Only the
-  // window showing that task cares: re-reading megabytes for another task's
-  // change would take the reader's own away and put it back
-  // ([ADR-010](../../docs/adr/adr-010-review-task-scope.md)).
+  // A task's metadata changed; only the window showing it re-reads, as megabytes for another task
+  // would take the reader's own review away and put it back (ADR-010).
   on<Extract<WatcherEvent, { type: "session-changed" }>>("session-changed", (event) => {
     if (!onScreen(event.name)) return;
-    // The page's own base change comes back through the watcher like anyone
-    // else's. It has already read the review it names, and reading it again
-    // would cost megabytes for nothing.
+    // The page's own base change comes back through the watcher; the review it names is already
+    // read, and reading it again would cost megabytes for nothing.
     if (store().claimSelf("review", event.name)) return;
     return store().loadReview();
   });
-  // `current` moved. A window with no `?review=` shows whatever `current` is and
-  // writes there too, so it has to follow the pointer or it would show one task
-  // and write into another ([08-ui.md](../../docs/reference/08-ui.md)). A window
-  // opened on a task of its own does not follow: that is the whole point of the
-  // address.
+  // A window with no `?review=` shows and writes where `current` points, so it follows the pointer;
+  // a window on a task of its own does not, which is what the address is for (08-ui.md).
   on<Extract<WatcherEvent, { type: "current-changed" }>>("current-changed", (event) => {
     if (store().reviewName !== null) return;
     if (store().claimSelf("review", event.name)) return;
     return store().loadReview();
   });
-  // A task appeared in the data directory, or one was closed or reopened —
-  // whichever session it is, current or not. It is the one frame that is news
-  // about the *history* rather than about this review, and it is answered with
-  // a mark in the header and nothing else: no toast, no switch, nothing that
-  // moves the reading position or takes an open composer away. The reader goes
-  // on reading and opens the task when they are ready
-  // ([ADR-010](../../docs/adr/adr-010-review-task-scope.md)).
+  // A task appeared, was closed or reopened: news about the history, answered with a mark in the
+  // header and nothing else (08-ui.md, "Closing a task, and what the mark in the header is").
   on<Extract<WatcherEvent, { type: "sessions-changed" }>>("sessions-changed", (event) => {
     store().noteHistory(event.name);
   });
@@ -172,22 +144,16 @@ function onScreen(session: string): boolean {
   return shown === null || shown === session;
 }
 
-/**
- * The feed as the server has it since it started, merged by id: a reconnect
- * replays the frames it missed as well, and a line that arrives twice is one
- * line ([05-watcher.md](../../docs/reference/05-watcher.md)).
- */
+/** The feed as the server has it, merged by id, so a reconnect's replay of a line it already
+ * holds is still one line ([05-watcher.md](../../docs/reference/05-watcher.md)). */
 async function readActivity(): Promise<void> {
   const response = await fetch("/api/activity");
   if (!response.ok) return;
   useStore.getState().pushActivity((await response.json()) as ActivityEvent[]);
 }
 
-/**
- * One repository's change set as it now stands. A 404 is the repository leaving
- * the review — `GET /api/repos/:repo/diff` answers `no-such-repository` when it
- * has no changes left — and is as much of an update as a new diff is.
- */
+/** One repository's change set as it stands; a 404, `no-such-repository` once it has no changes
+ * left, is the repository leaving the review, as much an update as a new diff. */
 async function diffChanged(repo: string): Promise<void> {
   // Stamped at request time: what the window is on when the answer lands may
   // not be what it was on when the question went out.
@@ -201,17 +167,13 @@ async function diffChanged(repo: string): Promise<void> {
   const anchor = capture();
   useStore.getState().applyRepositoryDiff(repo, next, asked);
   await settle(anchor);
-  // The frame that showed the new diff, on the wall clock the harness edits the
-  // file by: this is the far end of the 300 ms budget of `docs/SPEC.md`
-  // section 6.
+  // The frame that showed the new diff, on the harness's wall clock: the far end of the 300 ms
+  // budget of `docs/SPEC.md` section 6.
   perf.liveUpdate = { repo, at: Date.now() };
 }
 
-/**
- * One thread, whichever event named it. `replyId` is the reply that arrived, so
- * an answer from an agent — and only from an agent — reaches the reader as a
- * toast as well as in the rail.
- */
+/** One thread, whichever event named it; `replyId` is the reply that arrived, so an agent's answer,
+ * and only an agent's, is a toast as well as a line in the rail. */
 async function thread(id: string, replyId?: string): Promise<void> {
   const response = await fetch(onTask(`/api/comments/${id}`));
   if (!response.ok) {
@@ -233,26 +195,14 @@ function where(comment: Comment): string {
   return comment.path === null ? comment.repo : comment.path;
 }
 
-/**
- * The narrowest element at the reading position, and the offset it sits at. A
- * patch that grows a card above the reader makes the page taller there, and
- * without this the text under their eyes moves by the difference.
- *
- * It is deliberately not the card or the repository section around that point:
- * a section's own top does not move when a card *inside* it grows, so anchoring
- * to one is anchoring to nothing — measured as a whole hunk of drift on the
- * fixture (`e2e/live.spec.ts`).
- */
+/** The narrowest element at the reading position, and its offset: never the card or section around
+ * it, whose top stays put as a card inside grows (08-ui.md, "The reading position…"). */
 function capture(): Anchor {
   const centre = document.querySelector(".centre")?.getBoundingClientRect();
   if (!centre) return null;
   const x = centre.left + centre.width / 2;
-  // Down from the probe until the topmost element there belongs to the column
-  // that scrolls. The header is sticky, the scanner's warnings bar sits under
-  // it at the top of the page, and the repository bar is stuck below both and
-  // is itself inside `.centre`: none of the three moves when a card grows, so
-  // an anchor on one of them is an anchor on nothing. The probe starts below
-  // all of them (DA-54).
+  // Down from the probe until the topmost element is in the scrolling column: the header, warnings
+  // and repository bars do not move when a card grows, so they anchor nothing (DA-54).
   for (let y = PROBE_Y; y < PROBE_Y + PROBE_DEPTH; y += PROBE_STEP) {
     const element = document.elementFromPoint(x, y);
     if (element?.closest(".centre")) {

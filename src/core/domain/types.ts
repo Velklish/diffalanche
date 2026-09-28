@@ -17,10 +17,7 @@ export type SessionSummary = {
   /** Comments of the session by status. */
   open: number;
   resolved: number;
-  /**
-   * Repositories with changes in the last scan, from `diff.json`; `null` when
-   * the session has never been scanned and there is no cache to count.
-   */
+  /** Repositories with changes in the last scan, from `diff.json`; `null` before the first scan. */
   repositories: number | null;
 };
 

@@ -1,7 +1,5 @@
-/**
- * What the comment commands share: the body they are given, where a comment
- * sits, and how a thread is printed. `docs/SPEC.md` sections 8 and 9.
- */
+/** What the comment commands share: the body they are given, where a comment sits, and how
+ * a thread is printed. `docs/SPEC.md` sections 8 and 9. */
 import type { Config } from "../core/config/index.ts";
 import { anchorLabel } from "../core/domain/index.ts";
 import { findRepositories } from "../core/index.ts";
@@ -19,10 +17,8 @@ export { ROLES, SEVERITIES, SIDES };
 export const DEFAULT_AUTHOR = "agent";
 export const DEFAULT_ROLE: Role = "agent";
 
-/**
- * The body of a comment or a reply. `-` reads standard input, which is how a
- * long finding gets in without the shell mangling it.
- */
+/** The body of a comment or a reply; `-` reads standard input, which is how a long finding
+ * gets in without the shell mangling it. */
 export async function readBody(args: Arguments, io: Output): Promise<string> {
   const value = required(args, "body");
   if (value !== "-") return requireText(value);
@@ -35,12 +31,8 @@ function requireText(body: string): string {
   return body;
 }
 
-/**
- * Refuses a `--repo` that names no repository under the root. It runs before
- * anything a command writes: a path nothing is at is a mistyped flag, and a
- * command that has already rewritten `diff.json` or stored a comment on a
- * repository the review does not have leaves the mistake behind it.
- */
+/** Refuses a `--repo` naming no repository under the root, before anything is written: a
+ * mistyped flag must not leave a rewritten `diff.json` or a stored comment behind (06-cli.md). */
 export async function assertRepository(config: Config, repo: string): Promise<void> {
   const found = await findRepositories(config);
   if (!found.includes(repo)) throw repositoryNotFound(repo);
@@ -63,10 +55,8 @@ function message(author: string, role: Role, at: string): string {
   return `${author} (${role}) at ${at}`;
 }
 
-/**
- * One thread as a person reads it: the comment, the lines its anchor was taken
- * from with the anchored one marked, and every reply.
- */
+/** One thread as a person reads it: the comment, the lines its anchor was taken from with the
+ * anchored one marked, and every reply. */
 export function thread(comment: Comment): string {
   const lines = [
     `${comment.id}  ${comment.severity}${labelled(comment)}  ${comment.status}`,

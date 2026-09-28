@@ -138,21 +138,16 @@ export async function currentBranch(cwd: string): Promise<string> {
   return (await gitOrNull(cwd, ["rev-parse", "--short", "HEAD"]))?.trim() ?? "HEAD";
 }
 
-/**
- * The remote a base branch is looked up on: `origin` when it exists, otherwise
- * the first remote the repository has, and `null` when it has none.
- */
+/** The remote a base branch is looked up on: `origin` when it exists, otherwise the first remote,
+ * and `null` when there is none. */
 export async function defaultRemote(cwd: string): Promise<string | null> {
   const remotes = ((await gitOrNull(cwd, ["remote"])) ?? "").split("\n").filter(Boolean);
   if (remotes.includes("origin")) return "origin";
   return remotes[0] ?? null;
 }
 
-/**
- * The default branch of a remote, as `refs/remotes/<remote>/HEAD` records it:
- * `origin/main`. The symbolic ref exists only when the clone set it up, which a
- * `git init` fixture never does.
- */
+/** A remote's default branch as `refs/remotes/<remote>/HEAD` records it, `origin/main`; only a
+ * clone sets that ref up (02-git.md, "The three base modes"). */
 export async function remoteDefaultBranch(cwd: string, remote: string): Promise<string | null> {
   const ref = await gitOrNull(cwd, [
     "symbolic-ref",
@@ -185,34 +180,15 @@ export function diff(cwd: string, base: string, overrides: string[] = []): Promi
   return git(cwd, args, overrides);
 }
 
-/**
- * The untracked files of the working tree. Git itself never reports one in a
- * diff — only `git add --intent-to-add` would, and that writes to the index.
- */
+/** The untracked files, which git never reports in a diff without an index write
+ * (02-git.md, "Untracked files"). */
 export async function untrackedFiles(cwd: string): Promise<string[]> {
   const raw = await git(cwd, ["ls-files", "--others", "--exclude-standard", "-z"]);
   return raw.split("\0").filter(Boolean);
 }
 
-/**
- * Which of `paths` git ignores, asked in one process for the whole list, or
- * `null` when git could not answer. The rules are git's own — `.gitignore` at
- * every level, `.git/info/exclude`, and the user's ignore file — and the index
- * is read, so a file that is tracked is never reported: it is in the diff
- * whatever a pattern says about it.
- *
- * `check-ignore` writes nothing, which is why it is the question to ask; `git
- * status` refreshes the index and the tool never writes to a reviewed
- * repository (`docs/SPEC.md` section 11). Exit code 1 is the answer "none of
- * them" rather than a failure; anything else — a git that will not start, a
- * repository it refuses — is `null`, and the caller does the work rather than
- * keeping an answer it did not get.
- *
- * The list arrives on standard input, which is where the errors of a pipe live:
- * a process that never started, or one that exited before it read everything,
- * makes the write fail. Unhandled, that failure is an uncaught exception in a
- * server that has no reason to stop.
- */
+/** Which of `paths` git ignores, in one process, or `null` when git could not answer; exit 1 and
+ * the pipe's errors are in [02-git.md](../../../docs/reference/02-git.md), "Asking what git ignores". */
 export function checkIgnore(cwd: string, paths: string[]): Promise<Set<string> | null> {
   return new Promise((resolve) => {
     const child = execFile(

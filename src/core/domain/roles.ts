@@ -1,11 +1,5 @@
-/**
- * Who may do what ([ADR-004](../../../docs/adr/adr-004-agent-contract.md)).
- * Agents open comments and answer them; a human closes. The check lives here
- * rather than in the shipped skills, because a skill is advice and an agent
- * that never read one could still close what it may not, and it lives in its
- * own module because both a thread and a review task are closed by the same
- * rule ([ADR-010](../../../docs/adr/adr-010-review-task-scope.md)).
- */
+/** Agents open and answer, a human closes ([ADR-004](../../../docs/adr/adr-004-agent-contract.md)),
+ * checked here rather than in the skills, for threads and tasks alike (04-domain.md, "Roles"). */
 import type { Role } from "../storage/index.ts";
 import { DomainError } from "./errors.ts";
 

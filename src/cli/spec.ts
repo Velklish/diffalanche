@@ -1,19 +1,12 @@
-/**
- * What every command takes, written once. `util.parseArgs` is configured from
- * these definitions and `--help` is printed from them, so the flags a command
- * accepts and the flags it documents cannot drift apart (DA-13).
- */
+/** What every command takes, written once: `util.parseArgs` and `--help` both read it, so the
+ * flags a command accepts and documents cannot drift apart (DA-13). */
 
 type OptionSpec = {
   type: "string" | "boolean";
   /** The value's name in the usage line; a boolean option carries none. */
   value?: string;
-  /**
-   * Whether the flag may be given more than once, the way the entries of a
-   * scope are typed: `--repo a --repo b`. The parser collects them into a list
-   * and `texts()` reads it; a flag without this keeps the last value, which is
-   * what a flag that names one thing should do.
-   */
+  /** Given more than once, as a scope's entries are (`--repo a --repo b`), and read by `texts()`;
+   * without it the last value wins, as a flag that names one thing should. */
   multiple?: boolean;
   about: string;
 };
@@ -27,12 +20,8 @@ export type CommandSpec = {
   options: Record<string, OptionSpec>;
 };
 
-/**
- * The flags every command takes. `--review` and `--data-dir` are the two of
- * `docs/SPEC.md` section 8; `--root` is with them because the data directory
- * defaults to `<root>/.diffalanche`, and without it no command run from
- * anywhere but the root could find the review.
- */
+/** The flags every command takes: the two of `docs/SPEC.md` section 8, and `--root`, which the
+ * data directory is derived from (06-cli.md, "Global flags"). */
 export const GLOBAL: Record<string, OptionSpec> = {
   review: {
     type: "string",

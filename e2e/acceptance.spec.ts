@@ -12,20 +12,8 @@ import {
   NESTED_WORKTREE,
 } from "./fixture.ts";
 
-/**
- * The acceptance list of `docs/SPEC.md` section 10, one named test per line of
- * it, run against the binary of the runner's platform over the fixture
- * `e2e/fixture.ts` builds (`e2e/acceptance.config.ts`). The server is that
- * binary and so is every `diffalanche` the tests shell out to: what is checked
- * here is the artefact that ships, not the sources it was built from.
- *
- * The tests are thin on purpose. Each one asserts the sentence of section 10
- * and nothing more; the behaviour behind a sentence is covered in depth by the
- * spec that owns that screen — `sidebar.spec.ts`, `composer.spec.ts`,
- * `threads.spec.ts`, `live.spec.ts`, `header.spec.ts` — which run against the
- * dev server on the fast path of `bun run test:ui`. The table in
- * `docs/reference/08-ui.md` names both for every criterion.
- */
+/** Section 10 of `docs/SPEC.md`, one thin test per line, against the binary; the spec owning each
+ * screen covers it in depth (`docs/reference/08-ui.md`, "The criteria and the tests"). */
 
 /** A send in `AUTO` waits for the vote, and the first request loads the model: a deadline only a
  * hang reaches ("Waits in the suites", 11-perf.md), inside a test given twice that. */
@@ -36,11 +24,8 @@ function cli(...args: string[]): string {
   return execFileSync(BINARY, [...args, "--root", FIXTURE], { cwd: ROOT, encoding: "utf-8" });
 }
 
-/**
- * Git in the fixture, read-only and with the developer's own configuration out
- * of the way, so a `status.showUntrackedFiles` in a global config cannot change
- * what a test sees.
- */
+/** Git in the fixture, read-only, with the developer's config out of the way so a global
+ * `status.showUntrackedFiles` cannot change what a test sees. */
 function git(repo: string, ...args: string[]): string {
   return execFileSync("git", ["-C", join(ROOT, FIXTURE, repo), ...args], {
     env: { ...process.env, GIT_CONFIG_GLOBAL: devNull, GIT_CONFIG_SYSTEM: devNull },
@@ -64,11 +49,8 @@ async function open(page: Page) {
   await page.goto("/");
   await page.waitForFunction(() => window.__perf?.ready === true);
   await page.locator(".file-card").first().waitFor();
-  // And then for the stream, which is a second effect and not part of loading
-  // the review: `reply-added`, `comment-status` and `session-changed` are
-  // pushed and never asked for again, so a CLI write that lands between the
-  // first card and `onopen` reaches nobody and is lost for good. Waiting for
-  // the footer is what `live.spec.ts` does, for the same reason.
+  // And for the stream: a CLI write before its `onopen` is pushed to nobody and lost for good
+  // (08-ui.md, "The stream before a CLI write"); `live.spec.ts` waits the same way.
   await expect(page.locator(".sidebar-foot")).toContainText("watching");
 }
 
@@ -84,23 +66,14 @@ function comments(status: "open" | "all" = "all"): Comment[] {
   return JSON.parse(cli("list", "--json", "--status", status)) as Comment[];
 }
 
-/**
- * Puts the fixture back on the session and the base the rest of the file
- * expects, whatever the test that just ran did with them. Through the API, and
- * not the CLI, for the reason `header.spec.ts` gives: the server holds the
- * review document until one of its own write routes drops it, and a CLI write
- * is only noticed once the watcher gets round to it.
- */
+/** Back on the session and base the file expects, through the API and not the CLI, for the
+ * reason `header.spec.ts` gives (08-ui.md, "Putting the fixture back"). */
 test.afterEach(async ({ request }) => {
   const used = await request.post(`/api/sessions/${SESSION}/use`, { data: {} });
   expect(used.ok(), await used.text()).toBe(true);
   const based = await request.put(`/api/sessions/${SESSION}/base`, { data: { base: "head" } });
   expect(based.ok(), await based.text()).toBe(true);
 });
-
-// ---------------------------------------------------------------------------
-// What a scan finds
-// ---------------------------------------------------------------------------
 
 test("serve lists every repository with changes", async ({ page }) => {
   await open(page);
@@ -132,10 +105,8 @@ test("a submodule or worktree nested inside a repository is not listed", async (
   await open(page);
   const found = await scan(page);
 
-  // Both halves of the sentence. The generator puts a submodule at `vendor/lib`
-  // of the first repository, and the fixture puts a worktree inside the one
-  // with the remote; each is a git working tree of its own, and no scan may
-  // offer either as a repository.
+  // Both halves: the generator's submodule at `vendor/lib` of the first repository and the
+  // fixture's worktree inside the one with the remote; no scan may offer either.
   const host = found.repositories.find((repository) => repository.kind === "repo");
   expect(host).toBeDefined();
   const listed = found.repositories.map((repository) => repository.path);
@@ -151,10 +122,6 @@ test("a submodule or worktree nested inside a repository is not listed", async (
     expect(listed.filter((path) => path.startsWith(`${holder}/`))).toEqual([]);
   }
 });
-
-// ---------------------------------------------------------------------------
-// What the diff carries, and what a scan leaves behind
-// ---------------------------------------------------------------------------
 
 test("an untracked file is in the diff", async ({ page }) => {
   await open(page);
@@ -199,10 +166,6 @@ test("a scan leaves git status as it found it", async ({ page }) => {
   expect(after).toEqual(before);
 });
 
-// ---------------------------------------------------------------------------
-// The base
-// ---------------------------------------------------------------------------
-
 test("branch mode shows what a feature branch committed ahead of the remote default branch", async ({
   page,
 }) => {
@@ -215,11 +178,8 @@ test("branch mode shows what a feature branch committed ahead of the remote defa
 
   await page.getByRole("button", { name: /BASE/ }).click();
   await page.getByRole("button", { name: /^branch/ }).click();
-  // The picker's first row, the one that names no branch: `branch` mode then
-  // reads each repository's own remote default branch, which is the criterion.
-  // The row whose *name* is "default branch", exactly: `origin/main` is listed
-  // below it and its note reads "default branch · 1 repos", so anything looser
-  // than an exact match on the name finds both.
+  // The first row, naming no branch, so each repository reads its own remote default; matched
+  // exactly, as `origin/main` below it carries the note "default branch · 1 repos".
   await page
     .locator(".picker-branch")
     .filter({ has: page.getByText("default branch", { exact: true }) })
@@ -237,10 +197,6 @@ test("branch mode shows what a feature branch committed ahead of the remote defa
   await card.scrollIntoViewIfNeeded();
   await expect(card.locator(".diff")).toContainText(FEATURE_LINE);
 });
-
-// ---------------------------------------------------------------------------
-// The comment round trip
-// ---------------------------------------------------------------------------
 
 test("a comment written in the UI is in list --json without a restart", async ({ page }) => {
   test.setTimeout(SEND_DEADLINE_MS * 2);
@@ -313,10 +269,6 @@ test("a reply made with reply is in the activity feed under the agent's --author
   await expect(page.locator(".feed-list")).toContainText(`pavel replied in ${thread.path}`);
 });
 
-// ---------------------------------------------------------------------------
-// The session
-// ---------------------------------------------------------------------------
-
 test("review use switches the UI and the CLI at once", async ({ page }) => {
   await open(page);
   const other = `acc-${Date.now().toString(36)}`;
@@ -336,11 +288,8 @@ test("review use switches the UI and the CLI at once", async ({ page }) => {
   expect(JSON.parse(cli("list", "--json", "--review", other)) as Comment[]).toHaveLength(0);
 });
 
-/**
- * A thread on a line, taken from the end of the list. The tests here share one
- * fixture and one server, and two of them write into a thread; taking the last
- * one leaves the front of the list to whoever comes looking for the first.
- */
+/** A thread on a line, from the end of the list: two tests write into a thread on the shared
+ * fixture, and the last leaves the front of the list to whoever takes the first. */
 function anchored(): Comment {
   const threads = comments("open").filter(
     (comment) => comment.repo !== null && comment.path !== null && comment.line !== null,

@@ -1,8 +1,5 @@
-/**
- * Starting the server: one call that scans the root, reads the change set,
- * begins watching, and opens the socket on `127.0.0.1`. `diffalanche serve` is
- * this function plus the built UI of its delivery channel.
- */
+/** Starting the server: scan, watch, read the change set, open the socket on `127.0.0.1`;
+ * `diffalanche serve` is this plus its channel's built UI (07-server.md, "Starting it"). */
 import type { Config } from "../core/config/index.ts";
 import { DomainError } from "../core/domain/index.ts";
 import { scan } from "../core/index.ts";
@@ -21,16 +18,11 @@ type ReviewServerOptions = {
   config: Config;
   /** Request logging to stderr. */
   verbose?: boolean | undefined;
-  /**
-   * Where the built UI comes from: `directoryAssets` for the npm channel and
-   * every run from source, `embeddedAssets` for a binary. Without it the page
-   * is a 404 naming the command that builds it.
-   */
+  /** Where the built UI comes from, `directoryAssets` or a binary's `embeddedAssets`; without it
+   * the page is a 404 naming the command that builds it (07-server.md). */
   ui?: UiAssets | undefined;
-  /**
-   * `false` walks the reviewed trees instead of watching them, for a filesystem
-   * whose notifications cannot be trusted ([05-watcher.md](../../docs/reference/05-watcher.md)).
-   */
+  /** `false` walks the reviewed trees instead of watching them, for a filesystem whose
+   * notifications cannot be trusted ([05-watcher.md](../../docs/reference/05-watcher.md)). */
   recursive?: boolean | undefined;
   /** Where `GET /api/suggest` embeds; a harness passes its own to read the model's process. */
   suggest?: SuggestService | undefined;
@@ -50,10 +42,8 @@ export type ReviewServer = {
 
 const NO_UI: UiAssets = { read: async () => null };
 
-/**
- * The server listens on `127.0.0.1` and nowhere else: there is no host to pass
- * and no way to reach it from another machine (`docs/SPEC.md` section 11).
- */
+/** The server listens on `127.0.0.1` and nowhere else: there is no host to pass and no way to
+ * reach it from another machine (`docs/SPEC.md` section 11). */
 export async function startReviewServer(options: ReviewServerOptions): Promise<ReviewServer> {
   const { config } = options;
   await ensureDataDir(config.dataDir);
@@ -87,9 +77,8 @@ export async function startReviewServer(options: ReviewServerOptions): Promise<R
     onRepositoryChanged: review.repositoryChanged,
     // Deleted, or deleted and made again, by any process: what the server held for it goes.
     onSessions: review.sessionsRead,
-    // The tasks windows are open on, taken from the live streams rather than
-    // from the document cache: a connection exists exactly while a window does,
-    // and a cache's eviction answers a question about memory (05-watcher.md).
+    // From the live streams, not the document cache: a connection exists exactly while a window
+    // does, and eviction answers a question about memory (07-server.md, 05-watcher.md).
     sessions: () => events.sessions(),
     // A held document of a task nobody follows hears of a terminal's write from nothing else.
     onDataChanged: review.dataChanged,
@@ -121,9 +110,8 @@ export async function startReviewServer(options: ReviewServerOptions): Promise<R
   // its two events costs the next reader a re-read.
   bus.subscribe((event) => {
     if (event.type === "diff-changed" || event.type === "warnings") return;
-    // A task that appeared or was closed elsewhere in the data directory is
-    // news for the page, not for this document: the sessions are read per
-    // request and the review the page is on has not changed.
+    // A task that appeared or closed elsewhere is news for the page, not this document: the
+    // sessions are read per request and the page's review has not changed.
     if (event.type === "sessions-changed") return;
     // `current` moving changes which document a bare request resolves to and
     // not what any document says, so nothing is dropped for it.
@@ -137,12 +125,8 @@ export async function startReviewServer(options: ReviewServerOptions): Promise<R
     review.invalidateComments(event.session);
   });
 
-  // The change set is read and `diff.json` written before the socket opens, so
-  // the review opens from the cache and a rescan has something to replace one
-  // repository of. This is a warm-up and not a gate: a root with no current
-  // session has none of it and opens the first-run screen instead, and a file
-  // that cannot be read is a refusal the request gets as its own answer — a
-  // server that refused to start would leave the person with no way to see why.
+  // The first document is built before the socket opens, as a warm-up and not a gate: a server
+  // that refused to start would leave no way to see why (07-server.md, "Refusals").
   try {
     await review.document();
   } catch (error) {
@@ -196,8 +180,8 @@ export class ListenError extends Error {
   }
 }
 
-/** A port that is taken is the one failure worth its own sentence. An errno this
- * function does not word is rethrown as it is, which is what exit code 2 is for. */
+/** A port that is taken and one this user may not have are the failures worth a sentence; any
+ * other errno is rethrown as it is, which is what exit code 2 is for. */
 function listenError(error: unknown, port: number): Error {
   const code = (error as { code?: unknown } | null)?.code;
   if (code === "EADDRINUSE") {

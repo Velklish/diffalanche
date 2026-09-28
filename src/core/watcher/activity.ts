@@ -1,9 +1,5 @@
-/**
- * The activity feed ([ADR-005](../../../docs/adr/adr-005-live-update.md)): what
- * the server noticed while a review is open, derived from the watcher's events
- * and capped at the last few hundred. Events live in memory and are gone when
- * the server stops, so nothing here is written to disk.
- */
+/** The activity feed ([ADR-005](../../../docs/adr/adr-005-live-update.md)): derived from the watcher's
+ * events, capped, in memory only (05-watcher.md, "The activity feed"). */
 
 /** The verb of a feed line; the UI writes the sentence around it. */
 type ActivityVerb =
@@ -14,10 +10,8 @@ type ActivityVerb =
   | "replied"
   | "commented";
 
-/**
- * One line of the feed. The target is `repo`, and `path` inside it when the
- * event is about a file; both are `null` for a comment on the whole review.
- */
+/** One line of the feed: `repo`, and `path` inside it when the event is about a file; both are
+ * `null` for a comment on the whole review. */
 export type ActivityEvent = {
   /** Position in the feed, counted from one; the UI keys rows by it. */
   id: number;
@@ -36,10 +30,8 @@ const ACTIVITY_CAPACITY = 200;
 const EDITING_WINDOW_MS = 120_000;
 
 export type ActivityLog = {
-  /**
-   * A comment or a reply was written. The author is remembered for the
-   * repository, so the diff changes that follow are attributed to them.
-   */
+  /** A comment or a reply was written; the author is remembered for the repository, so the diff
+   * changes that follow are attributed to them. */
   wrote: (
     verb: "commented" | "replied",
     author: string,

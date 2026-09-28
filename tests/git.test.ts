@@ -65,11 +65,8 @@ let marks: string;
 let writesBefore: Map<string, string>;
 let writesAfter: Map<string, string>;
 
-/**
- * A remote with a default branch, a clone with a feature branch ahead of it and
- * a clean working tree, and a repository with no remote at all: the three shapes
- * the base modes of `docs/SPEC.md` section 3, decision 4 behave differently on.
- */
+/** The three shapes the base modes (`docs/SPEC.md` section 3, decision 4) differ on: a remote
+ * with a default branch, a clone with a feature branch ahead and a clean tree, and no remote. */
 beforeAll(() => {
   root = mkdtempSync(join(tmpdir(), "diffalanche-git-"));
   mkdirSync(join(root, "repos/g"), { recursive: true });

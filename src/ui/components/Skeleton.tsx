@@ -1,8 +1,5 @@
-/**
- * What the page shows while the server answers: the header is already real, the
- * sidebar keeps placeholder rows, the centre one empty card. No spinner, and
- * the panels have their final widths, so nothing moves when the data arrives.
- */
+/** The page while the server answers: no spinner, and the panels at their final widths, so
+ * nothing moves when the data arrives (08-ui.md, "Loading"). */
 
 const ROWS = [0.82, 0.54, 0.71, 0.46, 0.63, 0.78, 0.51, 0.68];
 

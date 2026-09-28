@@ -3,13 +3,8 @@ import { fileURLToPath } from "node:url";
 import type { Locator, Page } from "@playwright/test";
 import { expect, test } from "@playwright/test";
 
-/**
- * The composer of DA-22: dragging over the new side of a diff, what the strip
- * says it is anchored to, and what reaches the disk. The comments are read back
- * with the CLI, which is the contract the agents get
- * ([ADR-004](../docs/adr/adr-004-agent-contract.md)) and the only reader that
- * proves the file was written rather than the page updated.
- */
+/** The composer of DA-22, read back with the CLI: the agents' contract (ADR-004) and the only
+ * reader that proves the file was written, not only the page updated. */
 
 const root = fileURLToPath(new URL("..", import.meta.url));
 const FIXTURE = ".perf/e2e";

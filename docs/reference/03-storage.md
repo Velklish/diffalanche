@@ -123,7 +123,10 @@ target's own directory** — a rename across filesystems is a copy, and a copy i
 the torn write this exists to prevent — flushes it with `fsync`, and renames it
 over the target. A reader therefore sees either the previous file or the new
 one. A write that fails before the rename removes its temporary file and leaves
-the target exactly as it was.
+the target exactly as it was. The temporary file is created exclusively and its
+suffix is a random UUID rather than the pid: an operating system reuses pids,
+and the leftover of a crashed process that had the same one would fail the
+exclusive create.
 
 Two guarantees live here, and only the first is about readers. The rename is
 atomic against a concurrent reader whatever else happens. **Surviving a power
@@ -198,7 +201,14 @@ A writer that finds the lock taken retries with a backoff of 5 ms doubling to
 that instant the holder is gone and the lock is taken over, so a process killed
 mid-write blocks the next one for `staleMs` and no longer. While a holder is
 between its `mkdir` and its `info.json` the file is not there yet, and the
-directory's own age plus the default stands in for the deadline.
+directory's own age plus the default stands in for the deadline — as it does for
+a holder that died in that gap.
+
+A claim can also fail in that gap. A takeover that found the previous lock stale
+a moment earlier, and has not looked since, may rename the fresh directory aside
+between this writer's `mkdir` and its write of `info.json`; the write then meets
+`ENOENT`. The claim did not happen, so that is a failed try and the writer waits
+and tries again, not a fault.
 
 A writer that does give up says what it read out of the lock — `held by pid 4213
 since 2026-09-11T03:28:10.031Z, its lease running to 2026-09-11T03:28:40.031Z;
@@ -221,6 +231,12 @@ Reading the lock and moving it are still two steps, so what gets moved may no
 longer be the lock that was found stale. The token settles it: after the rename
 the moved directory's `info.json` is compared with the one the staleness check
 read, and a lock that is not the stale one is renamed straight back.
+
+A moved lock with no `info.json` at all is nobody's: its holder died between the
+`mkdir` and the write, or has not finished claiming it. It is deleted rather
+than put back. Put back, it would be a lock no writer owns and no writer may take
+over until it ages out; deleted, it makes the unfinished claim fail as above,
+and that writer tries again.
 
 **The end-to-end guarantee is the rename together with `assertHeld` in every
 writer**, not either alone. The rename keeps two takeovers from both winning;
@@ -323,6 +339,16 @@ The two kinds of path are relative to different directories on purpose:
 current directory, while `roots` is written into a file that travels with the
 root and so follows the root.
 
+The data directory comes from the first source that names one, most specific
+first: `--data-dir` (this run), `DIFFALANCHE_DATA_DIR` (this shell), the
+`dataDir` of the user's `$XDG_CONFIG_HOME/diffalanche/config.json` (this
+person), else `<root>/.diffalanche` ([06-cli.md](06-cli.md)). Everything but the
+flag is relative to the root, so one value serves every root. An empty variable
+counts as unset: a shell that exports it blank is not asking for a data
+directory named `""`. The environment and the configuration directory are
+parameters of `loadConfig`, so a test never reads the developer's own
+environment or `~/.config`.
+
 A missing `config.json` is not an error — the defaults are the configuration.
 A present one is validated like every other file of the data directory: `port`
 has to be a port, `depth` a whole number of levels, `lsp.<language>` a non-empty
@@ -379,7 +405,8 @@ the directory and why:
 ```
 
 The reasons it words are `EACCES` and `EPERM` — permission denied — plus
-`EROFS`, `ENOSPC` and `ENOTDIR`. An errno outside that set is rethrown
+`EROFS`, `ENOSPC`, `ENOTDIR`, and `EEXIST`: a recursive `mkdir` passes over a
+directory that is already there and refuses a file at the same path with it. An errno outside that set is rethrown
 untouched: storage says what it can name and does not dress up what it cannot,
 which is the difference between exit code 1 and exit code 2 in
 [06-cli.md](06-cli.md). The same error reaches an HTTP write through
@@ -532,3 +559,34 @@ later.
   `review use`: the last of the two to write wins.
 - Nothing writes `config.json`: it is read and never rewritten. Writing it from
   the UI is Phase 2.
+
+## What the unit tests hold
+
+`tests/storage-concurrency.test.ts` is the gate of
+[ADR-003](../adr/adr-003-on-disk-format.md): concurrent writers lose nothing.
+Twenty processes append one reply each to the same comment, and every reply has
+to be in the file. Each writer is `tests/helpers/append-reply.ts`, which appends
+a single reply through the read-modify-write helper `updateComments` and runs as
+a process of its own, so the lock is exercised the way the UI and several CLI
+processes exercise it:
+
+```sh
+node tests/helpers/append-reply.ts <dataDir> <session> <commentId> <author>
+```
+
+The test starts it with `process.execPath`, so it is Node under `bun run test`
+and Bun under `bun run test:bun`. Node runs the `.ts` file with no build step,
+which needs Node 22.18 or later, where type stripping is on by default; CI pins
+Node 22 and `engines.node` asks for 22 or later
+([06-cli.md](06-cli.md#how-a-command-is-defined)).
+
+`tests/storage-lock-race.test.ts` puts two writers on one stale lock. The
+windows it opens are narrow, and a plain race does not reach them: the writers
+pass through them together and the result looks correct. So `node:fs/promises`
+is mocked for that file and the steps are ordered with gates rather than with
+sleeps, which makes the sequence the same on a fast machine and on a loaded one.
+The assertions read the disk through the synchronous API, which the mock does
+not touch. `tests/storage-atomic.test.ts` mocks the same module to stage the
+crash between the temporary write and the rename, and
+`tests/review-reread.test.ts` orders two re-reads of a held document with the
+same kind of gate.

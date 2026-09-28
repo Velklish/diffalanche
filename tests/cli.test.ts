@@ -1,9 +1,5 @@
-/**
- * The commands of DA-13 on a fixture root: sessions, the change set, the exit
- * codes, and the usage. `run` is called in process because it is what the two
- * entry points call and what returns the exit code; the two-process case that
- * only a real process can show is in `tests/cli-comments.test.ts`.
- */
+/** DA-13's commands on a fixture root: sessions, the change set, exit codes, usage. Why `run` is
+ * called in process: [06-cli.md](../docs/reference/06-cli.md#what-the-unit-tests-hold). */
 import { execFileSync, spawn } from "node:child_process";
 import { chmodSync, existsSync, mkdirSync, readFileSync, rmSync, writeFileSync } from "node:fs";
 import { createServer } from "node:net";
@@ -374,9 +370,8 @@ describe("diff", () => {
     expect(printed.repositories.map((repo: { path: string }) => repo.path)).toEqual([...REPOS]);
     expect(printed.totals).toMatchObject({ repositories: 2, files: 4 });
 
-    // The cache is what was printed, byte for byte: `docs/SPEC.md` section 7
-    // says they are one set, and two objects that parse the same could still be
-    // two different files.
+    // Byte for byte: `docs/SPEC.md` section 7 makes the cache and the output one set, and two
+    // objects that parse the same could still be two different files.
     const cache = readFileSync(dataFile("reviews", "alpha", "diff.json"), "utf8");
     expect(result.out).toBe(cache);
     expect(printed.base).toEqual({ mode: "head" });

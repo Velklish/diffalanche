@@ -76,7 +76,8 @@ on holding the session lock and writing — re-creating `reviews/<name>/` under 
 root that had just been removed, or failing into `onError` under whatever ran
 next, and leaving the lock directory for the next writer to wait out. Neither
 the recursive watch nor the polling timer keeps the process alive on its own —
-the server's socket decides how long the process runs.
+a watcher is something a server owns, and the server's socket decides how long
+the process runs; otherwise a finished test would hang on a watcher it forgot.
 
 The walk of `src/core/watcher/tree.ts` is not part of that promise: its `tick`
 can be in flight when `close` returns. It reads and writes nothing into the data
@@ -131,8 +132,9 @@ a runtime whose watch goes quiet. It says nothing through `onWalk`: the walk is
 the caller's own choice, and a line about it would tell the operator what they
 asked for.
 
-Accepting `recursive: true` is not the same as honouring it, so the answer comes
-from a probe rather than from a version table: `supportsRecursiveWatch(dataDir)`
+Accepting `recursive: true` is not the same as honouring it — a runtime that
+takes the option and watches only the top directory would leave a silent dead
+watcher — so the answer comes from a probe rather than from a version table: `supportsRecursiveWatch(dataDir)`
 creates a temporary directory inside the data directory, watches it, and writes
 a file one level down every fifty milliseconds until it is reported back or half
 a second has passed. Writing once is not enough — Bun's watch arms a moment
@@ -142,9 +144,13 @@ process — the answer is a property of the runtime, not of a directory — and 
 reviewed repository is touched by it. Every write it makes is caught: a disk
 that fills between the `mkdir` and the write answers "no" at once instead of
 ending the process, because the probe's contract is a boolean and never a
-throw, and its one caller has no error path. Measured with that probe: Node 25.2
+throw, and its one caller has no error path. Its timeout, unlike the watcher's
+own timers, is not `unref`'d: while the probe waits it is the only thing holding
+the event loop, and a process that exited there would exit before the server it is
+starting ever listened. Measured with that probe: Node 25.2
 and Bun 1.3 on macOS both recurse and both report the path relative to the
-watched directory. A watch that fails after it started — an error from inotify or
+watched directory; the watch and the walk alike hand paths over with forward
+slashes on every platform. A watch that fails after it started — an error from inotify or
 FSEvents — closes itself and the walk takes over, rather than ending the process
 with an unhandled event.
 
@@ -245,6 +251,13 @@ In the data directory every change is one signal: the reload reads `current`,
 `comments.json`, `review.json`, and the status of every session, and compares
 each with the last read, so a name that turns out to be the lock, or a temporary
 file, or the directory itself costs a handful of small reads and says nothing.
+A whole-file write is a temporary file and a rename over the target, and the
+runtimes differ in which name they report: Node the file, Bun the temporary one,
+and Bun under a test runner only the directory the change was under. The lock
+is deliberately not left out: it is not data, but a runtime that coalesces the
+changes of one directory into one notification — macOS does, and Bun reports
+what is left — can hand the lock back as the only name of a write that changed a
+session's files.
 Two things are left out: `diff.json`, because the watcher writes it, and everything under
 `index/` — the embedding index, which the tool writes whenever a suggestion or `index rebuild`
 brings it up to date and which no page shows ([09-ml.md](09-ml.md#the-index)); reading the
@@ -308,6 +321,12 @@ the same, because the CLI writes the same directory.
 | `sessions-changed` | `{ name, status }` | a review task appeared in the data directory, or a task's status changed — whichever session it is |
 | `warnings` | `{ list }` | the warnings of the change set are not what they were |
 
+The bus is in-process: the server's live stream is one listener and the activity
+feed is built from the same events. A listener is called in the order it
+subscribed, over a copy of the list, so one that unsubscribes itself while an
+event is being delivered — which is what a closing stream does — does not
+shorten the list under the loop.
+
 A file touched without its content changing — a build output written again, a
 save with the same bytes — is not a change of the review: the recomputed entry
 is compared with the cached one, patch by patch, and nothing is announced when
@@ -344,6 +363,18 @@ a delete and a `review new` inside one debounce look the same by name, and the
 only baseline that tells them apart is the `createdAt` of the document the
 server built — which a session created, read and made again before the watcher
 first listed it never gave the watcher at all.
+
+**A listing of `reviews/` that fails is not an empty data directory.** The
+statuses keep what they knew and `onSessions` is not called: replacing the
+snapshot with an empty one would make every session news again on the next
+readable burst, and a few hundred of those frames would push the replay out of
+the stream's ring ([07-server.md](07-server.md#the-live-stream)). The followed
+sessions are still read, one `review.json` each, and go through the same
+metadata comparison — skipping them would lose a change that landed in that
+burst for good, since the next readable burst would find no difference and say
+nothing. Until a listing first succeeds there is no baseline, and the first
+readable one becomes it. A session whose `review.json` cannot be read on a burst
+keeps the status it had: a file caught mid-write is not a task that changed.
 
 **One press can produce both.** Closing the *current* task writes a `status`
 that `metadataOf` reads and that the session snapshot compares, so
@@ -534,14 +565,23 @@ are sorted is in [02-git.md](02-git.md). What the rescan adds around it is its
 own: a repository whose recomputed entry equals the cached one is not written at
 all, and the new change set is handed over before the write. The cache carries
 the hunks: it is the only place they live, and anchor capture reads them there,
-while the review response of the server drops them for speed.
+while the review response of the server drops them for speed. What the task's
+scope leaves of the repository is what goes in (`filterChange`,
+[02-git.md](02-git.md)): a repository the task is not about comes back empty and
+drops out of the cache, the way a repository without changes does.
+
+The cache is read, compared and written under the session's lock: the CLI writes
+the same directory, and a rescan that read the cache outside the lock would
+overwrite what the CLI wrote in between.
 
 With no cache at all — or with one computed against a base that is no longer the
-session's — there is nothing to patch, and a cache holding the one repository
+session's, or for another scope, which answers a different question — there is
+nothing to patch, and a cache holding the one repository
 that changed would be read as a review of one repository, so the whole change
 set is read instead, by `scanReview` of
 [`src/core/change-set.ts`](../../src/core/change-set.ts). That read happens
-outside the session lock, which is taken only for the write. A patched cache
+outside the session lock, which is taken only for the write: it takes as long as
+every repository takes, and the CLI writes the same directory meanwhile. A patched cache
 keeps the base it records.
 
 ## The activity feed
@@ -595,3 +635,54 @@ the same run where it was before.
 
 A platform without a recursive watch cannot meet the budget at all: there the
 interval of the walk is added to every measurement.
+
+## What the unit tests hold
+
+`tests/watcher.test.ts` measures the watcher on a fixture of its own, and four of
+its helpers carry rules a reader of a red run needs.
+
+**`arm` proves a watch is delivering before anything is measured against it.** A
+watch is not live when it returns
+([What it watches, and what it ignores](#what-it-watches-and-what-it-ignores)): a
+write made before the first delivery is lost outright rather than delayed. So
+`arm` repeats the write rather than waiting longer for one — what is waited out
+is a lost write, and no ceiling brings one back — and it does so per repository,
+because each tree is its own watch. A watcher a test starts itself is not the
+suite's, so the suite's `arm` says nothing about it: the signal tests arm their
+own, and the data directory's watch is armed too, since on the native path its
+`ready` is `Promise.resolve()`, which says nothing about when the OS starts
+delivering.
+
+**The probe file's removal is waited for by its own event, never by a sleep.**
+Taking the file away changes the repository's change set back, so it produces a
+`diff-changed` of its own, and that event is the only proof it has been through
+the queue. A fixed pause there was wrong in the way `settle` exists to avoid: a
+machine slow enough to deliver the removal late handed the *next* test an event
+for the repository armed last. Measured on `main` as one red run in six — the
+first test received `repos/platform/loads-search` where it expected
+`repos/core/cargos-api`, 21 ms in, which is an event arriving early for somebody
+else rather than one arriving late.
+
+**`waitFor` does not filter by repository, on purpose.** It returns the first
+event of a type since a mark, whichever repository it is about; `changesOf` is
+the filtered one, and the difference is not an oversight to tidy up. A caller
+that expects an event of its own and receives another repository's fails on the
+assertion that follows, naming both — which is how the stray event `arm` used to
+leave behind was found: `expected 'repos/platform/loads-search' to be
+'repos/core/cargos-api'`. Given a filter, that event would have been skipped in
+silence and the test would have caught its own a moment later, green every time
+while the watcher handed out somebody else's news. The lack of a filter is what
+makes a stray event visible at all, so anything that leaks one is a defect to fix
+at its source rather than to hide in the helper.
+
+**`hide` writes a change git sees and the watch does not.** `node_modules` is out
+of the watch and no rule of these tests names it, so the file is in the change
+set the next rescan of the repository reads. That is what makes "no rescan"
+visible at all: an ignored file rescanned on its own finds the change set exactly
+as the cache has it and announces nothing either way.
+
+The latency test takes the median of three edits, the way the performance gate
+reads its own numbers: one slow run on a busy machine is not a regression
+([Budget](#budget)). Each edit writes a file of its own, because a runtime that
+coalesces the changes of one file into one event — macOS does, under Bun — would
+otherwise answer the second edit with the event of the first.

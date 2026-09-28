@@ -1,9 +1,5 @@
-/**
- * How tall a file card will be before its diff has ever been mounted, counted
- * from the patch alone. `styles.css` pins the row heights, so the count is the
- * height and the scrollbar does not drift while unseen files are scrolled past
- * ([ADR-008](../../docs/adr/adr-008-diff-rendering-verdict.md)).
- */
+/** A file card's height before its diff has ever mounted, counted from the patch: `styles.css` pins
+ * the rows, so the count is the height (08-ui.md, "Virtualisation"; ADR-008). */
 import type { FileStatus } from "../core/types.ts";
 import type { DiffView } from "./store.ts";
 import type { Comment } from "./types.ts";
@@ -127,13 +123,8 @@ export function measureLines(
   return { height: rows * ROW_HEIGHT, width };
 }
 
-/**
- * A thread card is written text, so its height is not fixed the way a diff row
- * is; these are the parts of it `styles.css` does fix — the borders, the
- * padding, the header, and the actions row — and the width the block gives one
- * line of body at 12.5px. The count is close enough that a card carrying
- * threads holds its place in the scrollbar before it has ever been mounted.
- */
+/** A thread card is written text, not fixed rows: these are the parts `styles.css` does fix, and
+ * the characters one line of 12.5 px body holds in the block (08-ui.md, "Threads"). */
 const THREAD_LINE_HEIGHT = 19;
 const THREAD_CHARS = 82;
 const THREAD_CHROME = 82;
@@ -164,12 +155,8 @@ function wrapped(body: string): number {
   return lines;
 }
 
-/**
- * The new-side lines a collapsed hunk hides. `trimContext` in the renderer
- * drops the context that leads and trails a hunk's changes, so a thread
- * anchored to one of those lines has no row to sit under while the hunk is
- * collapsed — and no height to claim either.
- */
+/** The new-side lines a collapsed hunk hides: `trimContext` drops the context before and after its
+ * changes, so a thread on one of them has no row to sit under and no height to claim. */
 export function hiddenLines(patch: string, collapsed: Record<number, boolean>): Set<number> {
   const hidden = new Set<number>();
   if (Object.values(collapsed).every((one) => one !== true)) return hidden;
@@ -186,9 +173,8 @@ export function hiddenLines(patch: string, collapsed: Record<number, boolean>): 
 
   const closeHunk = () => {
     if (hunk < 0 || collapsed[hunk] !== true) return;
-    // What `trimContext` keeps is the span from the first change to the last;
-    // a hunk with no change of its own has nothing to keep, and `leading` is
-    // then all of it.
+    // `trimContext` keeps the span from the first change to the last; a hunk with no change of
+    // its own keeps nothing, and `leading` is then all of it.
     for (const one of leading) hidden.add(one);
     for (const one of trailing) hidden.add(one);
   };
