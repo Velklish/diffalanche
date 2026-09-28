@@ -33,8 +33,9 @@ none has been tried in isolation.
 
 ## Out of scope
 
-- The other environment reds of the same run (the embedding model, the `chmod`
-  test under root, the Bun stack-trace tests), which are the environment's.
+- The other environment reds of the same run: the embedding model and the Bun
+  stack-trace tests, which are the environment's, and the `chmod` test under
+  root, which is DA-117.1.
 
 ## Verification
 
