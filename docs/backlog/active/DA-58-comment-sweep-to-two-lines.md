@@ -1,9 +1,9 @@
 # DA-58 · Bring every comment over two lines into the rule: compress, move to docs, or delete
 
-- **Order:** 230
 - **Scope:** all subsystems (see [reference](../../reference/README.md))
 - **Created:** 2026-09-11
 - **Dependencies:** [DA-57](../../archive/DA-57-code-comments-are-two-lines/task.md)
+- **Taken:** 2026-09-28
 
 ## Context
 

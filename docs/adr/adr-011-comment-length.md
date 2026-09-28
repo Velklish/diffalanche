@@ -67,7 +67,7 @@ have had no such rule, so a comment and its code diverge silently.
 ## Consequences
 
 - 720 blocks are out of compliance the day this is accepted. Bringing them in is
-  [DA-58](../backlog/queue/DA-58-comment-sweep-to-two-lines.md), which also turns
+  [DA-58](../backlog/active/DA-58-comment-sweep-to-two-lines.md), which also turns
   the count above into a gate; until then the rule binds new and edited code
   only.
 - `docs/reference/` grows. That is the point: the sections become the place the
