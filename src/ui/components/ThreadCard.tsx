@@ -30,24 +30,20 @@ export const ThreadCard = memo(function ThreadCard({
 
   const resolved = thread.status === "resolved";
   const state = resolved ? "RESOLVED" : isAwaiting(thread) ? "awaiting" : null;
-  // On the file's own tab the repository would be the same word on every card;
-  // on the tab that spans the review it is what says which one this is, and it
-  // goes there (DA-54).
+  // Only on the tab that spans the review: on the file's own tab it would be the same word on
+  // every card (DA-54).
   const repo = scope === "all" ? thread.repo : null;
 
   return (
-    // The card is a region the reader points at, and everything inside it that
-    // does something is a button of its own; the focus click is on the header
-    // rather than on the card, so selecting the body text does not move it.
+    // The focus click is on the header rather than the card, so selecting the body text does not
+    // move the focus (08-ui.md, "Threads").
     <article
       className={cardClass(focused, resolved)}
       data-thread={thread.id}
       aria-current={focused ? "true" : undefined}
     >
-      {/* The repository is the one thing in the header that goes somewhere else,
-          so it is the one button beside the focus click; everything the focus
-          click owns — the chip, the anchor, the state, and the space between
-          them — is inside it, and pressing any of it focuses the thread. */}
+      {/* The repository goes somewhere else, so it is the one button beside the focus click,
+          which owns the rest of the header (08-ui.md, "Threads"). */}
       <div className="thread-head">
         {repo === null ? null : <RepoJump repo={repo} />}
         <button type="button" className="thread-focus" onClick={() => onFocus(thread.id)}>
@@ -89,12 +85,8 @@ export const ThreadCard = memo(function ThreadCard({
   );
 });
 
-/**
- * The repository of a thread, and the way to it: the same `revealCard` the tree
- * jumps with, so the section lands under the header and the 50 ms budget of
- * `docs/SPEC.md` section 6 holds here too. The label is the last segment, which
- * is what the rail has room for; the full path is the title.
- */
+/** The repository of a thread, by the `revealCard` the tree jumps with, so its 50 ms budget holds
+ * here too; the rail has room for the last segment (08-ui.md, "Threads"). */
 function RepoJump({ repo }: { repo: string }) {
   return (
     <button
@@ -158,9 +150,8 @@ function ReplyField({ id, busy }: { id: string; busy: boolean }) {
   const text = useStore((store) => store.replyText);
   const setReplyText = useStore((store) => store.setReplyText);
 
-  // The field opened because `Reply` was pressed, so it is where the reader
-  // already is; a callback ref rather than `autoFocus`, which fires once per
-  // mount and not once per thread.
+  // `Reply` was pressed, so the field takes the ring: a callback ref, as `autoFocus` fires once
+  // per mount and not once per thread.
   const focusHere = useCallback((element: HTMLTextAreaElement | null) => element?.focus(), []);
 
   return (

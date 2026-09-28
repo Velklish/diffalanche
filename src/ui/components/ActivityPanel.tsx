@@ -3,15 +3,8 @@ import { LIVE_WINDOW_MS, useStore } from "../store.ts";
 import { elapsed } from "../time.ts";
 import type { ActivityEvent } from "../types.ts";
 
-/**
- * The AGENT ACTIVITY panel of handoff section 4, at the foot of the thread
- * rail: a header that says how many agents are live, and — when it is opened,
- * which it is not by default — the lines the server has noticed since the
- * review was opened, newest first, with their times counted in seconds.
- *
- * The lines are the server's own ([05-watcher.md](../../../docs/reference/05-watcher.md));
- * the sentence around each verb is written here.
- */
+/** The AGENT ACTIVITY panel of handoff section 4: the server's lines, the sentence around each
+ * verb written here (08-ui.md, "The activity panel and the footer"). */
 export function ActivityPanel() {
   const events = useStore((store) => store.events);
   const open = useStore((store) => store.feedOpen);
@@ -57,10 +50,8 @@ function FeedRow({ event, now }: { event: ActivityEvent; now: number }) {
   );
 }
 
-/**
- * Green while an agent is working, accent when one answered, `--bd` for a diff
- * that changed with nobody's name on it — the three the handoff draws.
- */
+/** Green while an agent is working, accent when one answered, `--bd` for a diff that changed
+ * with nobody's name on it — the three the handoff draws. */
 function dot(event: ActivityEvent): string {
   if (event.verb === "editing") return "ok";
   return event.verb === "changed" ? "diff" : "acc";
@@ -80,11 +71,8 @@ function sentence(event: ActivityEvent): string {
   }
 }
 
-/**
- * How many agents the header calls live: the names that wrote or edited inside
- * the window the watcher attributes changes for. A diff that changed with
- * nobody's name on it is not somebody working.
- */
+/** The names that wrote or edited inside the watcher's attribution window; a diff that changed
+ * with nobody's name on it is not somebody working. */
 function liveAgents(events: ActivityEvent[], now: number): number {
   const since = now - LIVE_WINDOW_MS;
   const names = new Set<string>();

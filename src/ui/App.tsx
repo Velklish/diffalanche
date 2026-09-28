@@ -49,18 +49,16 @@ export function App() {
     return () => window.removeEventListener("resize", measure);
   }, []);
 
-  // `?review=<name>` is what this window is on, so `Back` is a way through the
-  // tasks it has shown. Switching pushes an entry; this is what walks it
-  // ([ADR-010](../../docs/adr/adr-010-review-task-scope.md)).
+  // Switching a task pushes `?review=<name>`, so `Back` walks the tasks this window has shown
+  // (08-ui.md, "The task this window is on").
   useEffect(() => {
     const follow = () => void useStore.getState().syncTaskFromUrl();
     window.addEventListener("popstate", follow);
     return () => window.removeEventListener("popstate", follow);
   }, []);
 
-  // The stream is opened after the first read is asked for and stays open for
-  // the life of the page: what it carries is what keeps the review current
-  // without a reload ([ADR-005](../../docs/adr/adr-005-live-update.md)).
+  // Opened after the first read is asked for, and open for the life of the page: it is what keeps
+  // the review current without a reload ([ADR-005](../../docs/adr/adr-005-live-update.md)).
   useEffect(() => startLive(), []);
 
   useClock();
@@ -98,14 +96,8 @@ export function App() {
     return painted - start;
   }, [files, openComposerAt]);
 
-  /**
-   * The swap of a review session: from the press to the frame that shows the
-   * other review — the `POST` that makes it current, the read of the review
-   * that follows, and the render. `docs/SPEC.md` section 6 qualifies only the
-   * first-render row with "after the server responds"; this row has no such
-   * qualifier, so the window is the whole wait, and a session whose change set
-   * has to be computed is part of what the reader waits for.
-   */
+  /** A session switch, from the press to the frame showing the other review: the whole wait, as
+   * the spec's row has no "after the server responds" (11-perf.md, "Switching review sessions"). */
   const switchSession = useCallback(async (name: string) => {
     const start = performance.now();
     await useStore.getState().switchSession(name);
@@ -179,16 +171,8 @@ export function App() {
   );
 }
 
-/**
- * The overlays of handoff sections 5, 6, 9 and 12, each opening over the same
- * scrim — and **one at a time**. `Overlay` holds the focus and listens for
- * `esc` on the document, so two of them on screen would trap the ring in two
- * places at once and give one `esc` press to both: the confirmation would take
- * the editor and its draft away with it. The three of the scope are therefore
- * exclusive here rather than stacked, and the confirmation *replaces* the
- * editor while it is being answered — `Отмена` puts the editor back with the
- * draft it had ([08-ui.md](../../docs/reference/08-ui.md)).
- */
+/** The overlays of handoff sections 5, 6, 9 and 12, one at a time: the scope's three are exclusive
+ * here, so the confirmation replaces the editor (08-ui.md, "Overlay and toast"). */
 function Overlays() {
   const baseOpen = useStore((store) => store.baseOpen);
   const exportOpen = useStore((store) => store.exportOpen);
@@ -211,11 +195,8 @@ function Overlays() {
   );
 }
 
-/**
- * How often the relative times on screen are recounted, as the handoff's
- * activity panel requires. One timer for the page, in the store, rather than
- * one per row.
- */
+/** How often the relative times on screen are recounted: one timer for the page, in the store,
+ * rather than one per row (08-ui.md, "Patching, not repainting"). */
 const TICK_MS = 5_000;
 
 function useClock(): void {

@@ -3,14 +3,8 @@ import { useStore } from "../store.ts";
 import type { BaseMode, BranchCandidate } from "../types.ts";
 import { Overlay } from "./Overlay.tsx";
 
-/**
- * The base picker of handoff section 5: three modes, the branch candidates of
- * the whole root under the one that needs them, a free field under the other,
- * and a footer that says what will be applied. A base is one spec per session,
- * resolved in every repository separately (`docs/SPEC.md` section 3, decision
- * 4), which is why the candidates are counted across repositories rather than
- * listed per repository.
- */
+/** The base picker of handoff section 5: one spec per session, resolved in every repository, so
+ * the candidates are counted across repositories (08-ui.md, "The header"). */
 const MODES: { mode: BaseMode; title: string; about: string }[] = [
   { mode: "head", title: "head", about: "рабочее дерево против HEAD" },
   { mode: "branch", title: "branch", about: "merge-base с выбранной веткой" },
@@ -72,11 +66,8 @@ export function BasePicker() {
   );
 }
 
-/**
- * The branches of every repository under the root, folded into one list. An
- * empty one is not a mistake: a root of repositories that were never cloned has
- * no remote and no branch but its own.
- */
+/** The branches of every repository under the root, folded into one list; an empty one is not a
+ * mistake (08-ui.md, "The header"). */
 function Candidates() {
   const branches = useStore((store) => store.branches);
   const status = useStore((store) => store.branchesStatus);

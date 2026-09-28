@@ -106,11 +106,8 @@ function Tab({ tab }: { tab: SidebarTab }) {
   );
 }
 
-/**
- * The foot of select mode: what is picked, and the task it becomes. The count
- * is the scope's own, so it says the same thing the `SCOPE` pill of the task
- * will say once it exists ([scope.ts](../scope.ts)).
- */
+/** The foot of select mode, counted by [scope.ts](../scope.ts) so it says what the new task's
+ * `SCOPE` pill will say (08-ui.md, "Select mode"). */
 function SelectBar() {
   const draft = useStore((store) => store.selectDraft);
   const openNewTask = useStore((store) => store.openNewTask);
@@ -173,14 +170,8 @@ function Watching() {
   );
 }
 
-/**
- * The sentence every repository row points at, once. The row's second action is
- * reachable only by the key: an assistive technology that activates the row
- * synthesises a click whose target is the row itself, which jumps, and the
- * caret is `aria-hidden` because it draws a state the row already carries. So
- * the keys are said out loud rather than left to be discovered by pressing them
- * (DA-54).
- */
+/** The sentence every repository row points at: its second action is reachable only by the key,
+ * so the keys are said out loud (DA-54, 08-ui.md, "Navigation"). */
 const KEYS_ID = "repo-row-keys";
 
 /** One sentence for the whole tree; every row's `aria-describedby` names it. */
@@ -195,14 +186,8 @@ function RowKeys() {
   );
 }
 
-/**
- * The row of handoff section 1.3, and its two targets: the caret puts the
- * branch away, the rest of the row goes to that repository in the reading
- * column — or, in select mode, picks it. It is one tab stop and one focus ring
- * — the row itself — and the two actions are told apart twice: the pointer by
- * where it landed, the keyboard by which key was pressed. `Enter` acts, `Space`
- * toggles (DA-54).
- */
+/** The row of handoff section 1.3: one tab stop, two targets told apart by where the pointer
+ * landed and by the key — `Enter` acts, `Space` toggles (DA-54, 08-ui.md, "Navigation"). */
 function RepoBranch({
   repo,
   files,
@@ -226,9 +211,8 @@ function RepoBranch({
     ? () => pickTreeRepo(repo.path, paths)
     : () => void revealCard(`[data-repo-section="${CSS.escape(repo.path)}"]`);
   const toggle = () => toggleRepo(repo.path);
-  // `mixed` is what ARIA has for a repository some of whose files are picked.
-  // The tick is `aria-hidden`, so the row is where that state has to live, and
-  // without `mixed` it would say "not picked" while the tick says otherwise.
+  // Some files picked is `mixed`: the tick is `aria-hidden`, so the row carries the state
+  // (08-ui.md, "Select mode").
   const pressed = select
     ? { "aria-pressed": mark === "partial" ? ("mixed" as const) : mark === "on" }
     : {};
@@ -249,17 +233,15 @@ function RepoBranch({
         }}
         onKeyDown={(event: KeyboardEvent<HTMLButtonElement>) => {
           if (event.key !== "Enter" && event.key !== " ") return;
-          // A button acts on both keys by itself; this row has two things to do
-          // and the key is what says which, so the native activation has to be
-          // stopped before it fires the click.
+          // A button acts on both keys by itself, and here the key says which action, so the
+          // native activation is stopped before it fires the click.
           event.preventDefault();
           if (event.key === "Enter") act();
           else toggle();
         }}
       >
-        {/* The state it changes is on the row, where a screen reader reads it
-            when the row takes the focus; the glyph itself is for the eye and
-            for the pointer. */}
+        {/* The state is on the row, read when it takes the focus; the glyph is for the eye
+            and the pointer. */}
         <span className="caret repo-toggle" aria-hidden="true">
           {collapsed ? "▸" : "▾"}
         </span>
@@ -371,11 +353,8 @@ type TreeRow = { path: string; file: FileChange | null };
 /** `rows` is the `all files` tab's list, and `null` on the other two tabs. */
 type Branch = { repo: RepositoryChange; files: FileChange[]; rows: TreeRow[] | null };
 
-/**
- * Substring over the repository path and the file path. A repository whose own
- * path matches keeps all of its files; one that matches through its files keeps
- * the files that matched.
- */
+/** Substring over both paths: a repository matched by its own path keeps all its files, one
+ * matched through its files keeps those (08-ui.md, "Navigation"). */
 function filterTree(repositories: RepositoryChange[], query: string): Branch[] {
   const needle = query.trim().toLowerCase();
   if (needle === "") return repositories.map((repo) => ({ repo, files: repo.files, rows: null }));

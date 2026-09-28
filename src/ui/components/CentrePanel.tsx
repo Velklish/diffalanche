@@ -8,21 +8,12 @@ import { FileCard } from "./FileCard.tsx";
 import { NoChanges } from "./NoChanges.tsx";
 import { FileCardSkeleton } from "./Skeleton.tsx";
 
-/**
- * How long the scroll has to settle before the sidebar follows it. One hit test
- * when the scroll stops, rather than three hundred intersections per frame: the
- * harness scrolls the whole review in five seconds and the budget is 8.3 ms of
- * CPU per frame. Where it asks is `PROBE_Y` of [reveal.ts](../reveal.ts).
- */
+/** The quiet before the sidebar follows the scroll: one hit test at `PROBE_Y` when it stops, not
+ * an intersection per card per frame (08-ui.md, "Navigation"). */
 const SETTLE_MS = 120;
 
-/**
- * A review that could not be read. When the window was on a task of its own —
- * `?review=<name>`, the address an agent prints and a person pastes — the way
- * out is named as well as the reason: a mistyped name is the one failure here a
- * reader can fix by hand, and without a way back they are left on a screen with
- * nothing on it ([08-ui.md](../../../docs/reference/08-ui.md)).
- */
+/** A review that could not be read; on a `?review=` task of its own the way back is named too,
+ * since a mistyped name is fixable by hand (08-ui.md, "The task this window is on"). */
 function Failure() {
   const failure = useStore((store) => store.failure);
   const task = useStore((store) => store.reviewName);
@@ -107,10 +98,8 @@ function useReturnFromBrowse(browse: boolean): void {
   }, [browse]);
 }
 
-/**
- * A comment on the whole review has no diff to sit under, so it opens at the
- * top of the reading column — the one place that belongs to every repository.
- */
+/** A comment on the whole review has no diff to sit under, so it opens at the top of the reading
+ * column — the one place that belongs to every repository. */
 function ReviewComposer() {
   const open = useStore((store) => store.composer !== null && store.composer.repo === null);
   return open ? (
@@ -131,10 +120,8 @@ function RepoSection({ repo }: { repo: RepositoryChange }) {
 
   return (
     <section className="repo" data-repo-section={repo.path}>
-      {/* One line, stuck under the header while this repository is being read
-          and pushed out by the next one, because it is sticky inside its own
-          section. The path here is not a jump target: the reader is already in
-          this repository. */}
+      {/* Sticky inside its own section, so the next one pushes it out; the path is not a jump
+          target (08-ui.md, "The page"). */}
       <div className="repo-head">
         <span className="repo-path">{repo.path}</span>
         <span className="repo-base">
@@ -165,10 +152,8 @@ function RepoSection({ repo }: { repo: RepositoryChange }) {
   );
 }
 
-/**
- * `<base> · merge-base <sha>` of the handoff. The word is only true in `branch`
- * mode; in the others the revision is the ref itself, and the line says so.
- */
+/** `<base> · merge-base <sha>` of the handoff; the word is only true in `branch` mode, and in the
+ * others the revision is the ref itself. */
 function baseLine(base: ResolvedBase | null): string {
   if (base === null) return "no base — outside the review";
   const sha = base.sha.slice(0, 7);

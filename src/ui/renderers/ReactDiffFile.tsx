@@ -31,12 +31,8 @@ import { elapsed } from "../time.ts";
 import type { Severity } from "../types.ts";
 import { SEVERITIES } from "../types.ts";
 
-/**
- * The core of refractor plus the nine grammars below: the root export of the
- * package registers every Prism language and puts them all in the bundle.
- * Each grammar registers the ones it builds on, so `tsx` brings `jsx` and
- * `typescript` with it.
- */
+/** refractor's core plus nine grammars: the root export would bundle every Prism language
+ * (08-ui.md, "The diff"). */
 for (const language of [csharp, go, javascript, json, jsx, markdown, python, tsx, typescript]) {
   refractor.register(language);
 }
@@ -54,11 +50,8 @@ const LANGUAGES: Record<string, string> = {
   json: "json",
 };
 
-/**
- * `react-diff-view` was written against refractor 3, whose `highlight` returned
- * the array of nodes; refractor 5 returns a hast root. The shim keeps the
- * current refractor without pinning the library to an old major.
- */
+/** `react-diff-view` expects refractor 3's array of nodes, and refractor 5 returns a hast root
+ * (08-ui.md, "The diff"). */
 const highlighter = {
   highlight: (value: string, language: string) => refractor.highlight(value, language).children,
 } as unknown as { highlight: typeof refractor.highlight };
@@ -78,39 +71,22 @@ export type DiffSlots = {
   rows: (DiffRow & { node: ReactNode })[];
 };
 
-/**
- * How the card is told about the drag that selects a range. The library binds
- * the handlers to its own cells, which is where the line a pointer is over is
- * known; the store turns them into a selection (DA-22).
- */
+/** The drag that selects a range, from the library's cells, where the line under a pointer is
+ * known; the store turns it into a selection (DA-22, 08-ui.md, "Commenting"). */
 export type LineEvents = {
   /** `mousedown` on a line of the new side, with whether shift was held. */
   onLineDown: (line: number, shift: boolean) => void;
-  /**
-   * `mouseenter` over a line. `held` is whether a button is still down: a
-   * pointer that comes back over the diff with none held was let go outside
-   * the window, and the drag ended there rather than going on for ever.
-   */
+  /** `mouseenter` over a line; `held` false means the button was let go outside the window. */
   onLineEnter: (line: number, held: boolean) => void;
 };
 
-/**
- * The bar a line with a thread carries in its gutter, in the colour of the
- * worst open severity on it (`docs/design/HANDOFF.md`, "Границы"). It is a
- * class on the row and a `box-shadow` in the stylesheet: the library calls
- * `generateLineClassName` once per row, and anything drawn per *cell* — a
- * `renderGutter` that returns an element — costs about a millisecond of the
- * eight the scrolled frame has (DA-23).
- */
+/** The gutter bar of a line with threads, a class on the row rather than an element per cell,
+ * which cost a millisecond of the frame (DA-23, 08-ui.md, "Threads"). */
 export type LineMarkers = {
   /** By `rowKey`. */
   severityByRow: Map<string, Severity>;
-  /**
-   * The hunks of this file that changed while the review has been open, by
-   * their `@@` header, and when they did. The header of such a hunk takes the
-   * accent border and says how long ago, which is what the handoff's live
-   * update asks for instead of a repainted card (DA-25).
-   */
+  /** The hunks that changed while the review has been open, by `@@` header, and when: marked
+   * instead of a repainted card (DA-25, 08-ui.md, "Patching, not repainting"). */
   changed: ChangedHunks | null;
 };
 
@@ -143,10 +119,6 @@ export function ReactDiffFile({
   lines,
   markers,
 }: ReactDiffFileProps) {
-  /**
-   * `zip` pairs a deletion with the insertion beside it, so the two columns of
-   * the split view line up instead of running one block after the other.
-   */
   // Every patch of the entry, not the first: this card is the one place both
   // halves of a file that changed type are shown.
   const parsed = useMemo(() => mergedPatch(file.patch, file.status), [file.patch, file.status]);
@@ -174,13 +146,8 @@ export function ReactDiffFile({
 
   const widgets = useMemo(() => keyed(shown, slots, view), [shown, slots, view]);
 
-  /**
-   * A selection runs over the new column, so the old one starts nothing and
-   * extends nothing, and neither does a cell with no line on the new side — a
-   * deletion, or the filler beside it. The unified view has one column and
-   * names no side. `preventDefault` on the press is what stops the browser
-   * from selecting the code as text underneath the drag.
-   */
+  /** A selection runs over the new column only; `preventDefault` keeps the browser from selecting
+   * the code as text under the drag (08-ui.md, "Commenting"). */
   const events = useMemo<EventMap>(
     () => ({
       onMouseDown: ({ side, change }, event) => {
@@ -270,11 +237,8 @@ export function ReactDiffFile({
   );
 }
 
-/**
- * How long ago this hunk changed, recounted from the store's clock every five
- * seconds. Only a hunk that has changed mounts one, so the review's other three
- * hundred cards subscribe to nothing.
- */
+/** How long ago this hunk changed, from the store's five-second clock; only a changed hunk mounts
+ * one, so the other cards subscribe to nothing. */
 function HunkUpdated({ at }: { at: number }) {
   const now = useStore((store) => store.tick);
   return <span className="hunk-updated">updated {elapsed(at, now)}</span>;

@@ -64,15 +64,8 @@ type FileCardProps = {
   file: FileChange;
 };
 
-/**
- * The file card of handoff section 1.4: header with the caret, the path, the
- * comment badge, the state chip, the file-level comment and the split/unified
- * segments, and under it the diff, mounted only near the viewport.
- *
- * It subscribes to the store by its own id, so opening the composer in one file
- * re-renders one card and not the other 299 — without that it takes thirteen
- * seconds instead of fifteen milliseconds.
- */
+/** The file card of handoff section 1.4, subscribed to the store by its own id so a composer
+ * re-renders one card, not 300 (08-ui.md, "Store", "The diff"). */
 export const FileCard = memo(function FileCard({ id, repo, file }: FileCardProps) {
   const view = useStore((store) => store.diffView[id] ?? "split");
   const collapsedCard = useStore((store) => store.collapsedFiles[id] === true);
@@ -134,12 +127,8 @@ export const FileCard = memo(function FileCard({ id, repo, file }: FileCardProps
   const shape = useMemo(() => measurePatch(file.patch, view, columns), [file.patch, view, columns]);
   const hunks = collapsedHunks ?? NO_HUNKS_COLLAPSED;
 
-  /**
-   * The threads of this file grouped by the line their widget sits under. A
-   * line a collapsed hunk hides has no row to sit under, so its thread has no
-   * widget, no marker, and no height here either — it is still in the rail,
-   * which is where it is reached from.
-   */
+  // Threads by the line their widget sits under; one on a line a collapsed hunk hides has no
+  // widget, marker or height here, and is reached from the rail (08-ui.md, "Threads").
   const hidden = useMemo(() => hiddenLines(file.patch, hunks), [file.patch, hunks]);
   // Parsed only for a card that has threads to place or context brought in: most have neither.
   const placing = threads.length > 0 || context !== null;
@@ -352,11 +341,8 @@ function severityByRow(anchored: Anchored): Map<string, Severity> {
   return severities;
 }
 
-/**
- * The rows the library inserts under a line. A line can carry both the threads
- * already written on it and the composer for the next one, and the library
- * indexes one row per line, so the two are one node.
- */
+/** The rows the library inserts under a line: its threads and the composer are one node, since
+ * the library indexes one row per line. */
 function widgetRows(anchored: Anchored, composerLine: number | null): DiffSlots["rows"] {
   const composer = composerLine === null ? null : rowKey({ side: "new", line: composerLine });
   const rows: DiffSlots["rows"] = [...anchored].map(([key, { row, threads }]) => ({

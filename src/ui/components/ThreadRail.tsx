@@ -8,11 +8,8 @@ import { ActivityPanel } from "./ActivityPanel.tsx";
 import { PanelAway } from "./PanelAway.tsx";
 import { ThreadCard } from "./ThreadCard.tsx";
 
-/**
- * The 392 px right column of handoff section 1.5: the two tabs with their
- * counts, the `unanswered` chip, the thread cards, and the collapsed activity
- * panel. A card here and the widget under its line are the same component.
- */
+/** The 392 px right column of handoff section 1.5; a card here and the widget under its line are
+ * the same component (08-ui.md, "Threads"). */
 export function ThreadRail() {
   const comments = useStore((store) => store.comments);
   const repo = useStore((store) => store.repo);
@@ -40,9 +37,8 @@ export function ThreadRail() {
   return (
     <aside className="rail" aria-label="threads">
       <div className="rail-tabs">
-        {/* Open threads, like every other number on the screen: the header's
-            counters, the tree's badges, and the card's own badge all count what
-            is still to be done. Resolved ones are listed, not counted. */}
+        {/* Open threads, like every other number on the screen; resolved ones are listed, not
+            counted (08-ui.md, "Threads"). */}
         <Tab
           scope="file"
           label={`This file ${open(here)}`}
@@ -64,8 +60,7 @@ export function ThreadRail() {
         >
           unanswered
         </button>
-        {/* The other half of the same question, and the one the header's second
-            counter turns on. It appears only while it is on: the handoff has
+        {/* The header's second counter turns it on, and it shows only while on: the handoff has
             one chip here, and a filter the header set has to be undoable. */}
         {awaitingOnly ? (
           <button type="button" className="chip on" aria-pressed onClick={toggleAwaiting}>
@@ -124,11 +119,8 @@ function open(comments: Comment[]): number {
   return comments.filter((comment) => comment.status === "open").length;
 }
 
-/**
- * The focused card is brought into the rail's own scroll. Focus is set from
- * both ends — a card here, and the widget under a line in the diff — and from
- * the diff end the card can be a long way down a list of two hundred.
- */
+/** The focused card, brought into the rail's own scroll: focused from the diff, it can be a long
+ * way down the list (08-ui.md, "Threads"). */
 function useFocusInView(): void {
   const focusId = useStore((store) => store.focusId);
   useEffect(() => {
@@ -139,11 +131,8 @@ function useFocusInView(): void {
   }, [focusId]);
 }
 
-/**
- * The centre panel owns the empty states of the screen; the rail says its own in
- * one line. A change set with nothing in it has no current file either, and a
- * rail that spoke about "this file" there would be speaking about nothing.
- */
+/** The rail's own empty state in one line; with no current file it speaks about the review
+ * (08-ui.md, "Threads"). */
 function nothing(
   scope: RailScope,
   unansweredOnly: boolean,

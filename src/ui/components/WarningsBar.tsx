@@ -1,11 +1,7 @@
 import { useStore } from "../store.ts";
 
-/**
- * The scanner warnings of handoff section 1.2: what the scan and the base
- * resolution had to say, above the workspace and below the header. Dismissing
- * is per session, because a warning is about the base that session resolves and
- * the next one resolves its own.
- */
+/** The scanner warnings of handoff section 1.2, dismissed per session: a warning is about the base
+ * that session resolves (08-ui.md, "The header"). */
 export function WarningsBar() {
   const warnings = useStore((store) => store.warnings);
   const session = useStore((store) => store.session?.name ?? null);
