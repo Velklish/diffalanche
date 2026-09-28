@@ -1,9 +1,5 @@
-/*
- * The two families of the handoff, bundled as local assets: the tool works
- * offline, so the page never asks Google Fonts for them. Subsets are the ones
- * the interface needs — latin and latin-ext everywhere, cyrillic for the
- * monospace family because the interface has Russian strings.
- */
+/* The handoff's two families as local assets, since the tool works offline; cyrillic only for the
+ * monospace family, which has the Russian strings (08-ui.md, "Tokens, themes, fonts"). */
 
 @font-face {
   font-family: "Instrument Sans";

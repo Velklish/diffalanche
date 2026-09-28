@@ -1,10 +1,5 @@
-/**
- * What a live update does to the change set the page already holds
- * (`docs/design/HANDOFF.md`, "Performance & live update"): a repository's new
- * diff replaces the old one file by file and hunk by hunk, so a card whose file
- * did not change keeps the object it was rendered from — and with it its DOM,
- * its tokens, and the reader's place in it.
- */
+/** A live update merged into the change set file by file and hunk by hunk, so an unchanged card
+ * keeps its object, its DOM and the reader's place (08-ui.md, "Patching, not repainting"). */
 import type { FileData } from "react-diff-view";
 import { parseDiff } from "react-diff-view";
 import type { FileChange, FileStatus, RepositoryChange } from "../core/types.ts";
@@ -28,12 +23,8 @@ type PatchHunk = { header: string; body: string };
 /** The hunks of a file that changed, by their `@@` header, and when they did. */
 export type ChangedHunks = { hunks: Set<string>; at: number };
 
-/**
- * The repository as it now stands, keeping every object that says the same
- * thing as before. `before` itself comes back when nothing in it changed at
- * all: a watcher that woke on a file the change set does not carry — a build
- * output, a file the base already had — must not re-render the review.
- */
+/** The repository as it now stands, keeping every object that says the same; `before` itself when
+ * nothing changed, so a watcher waking on a file the change set lacks re-renders nothing. */
 export function mergeRepository(
   before: RepositoryChange,
   next: RepositoryChange,
@@ -65,12 +56,8 @@ function sameFile(before: FileChange, next: FileChange): boolean {
   );
 }
 
-/**
- * What the repository header shows: the branch it is on, the base it resolved
- * to, and what the resolution had to say. The warnings are compared by what
- * they say and not by how many there are — a base that stopped resolving for a
- * different reason is a different sentence on the screen.
- */
+/** The repository header's branch, resolved base and warnings; warnings compare by what they say,
+ * since a base that stopped resolving for another reason is another sentence on the screen. */
 function sameHead(before: RepositoryChange, next: RepositoryChange): boolean {
   return (
     before.branch === next.branch &&
@@ -81,12 +68,8 @@ function sameHead(before: RepositoryChange, next: RepositoryChange): boolean {
   );
 }
 
-/**
- * The hunks of the new patch that the old one did not have, by header. A hunk
- * is the same hunk when its header and its body are both unchanged: an edit
- * further down the file renumbers the headers of everything after it, and those
- * hunks did change — their line numbers are part of what the reader sees.
- */
+/** The new patch's hunks the old one lacked, by header. Header and body must both match: an edit
+ * above renumbers every header after it, and those numbers are part of what the reader sees. */
 export function changedHunks(before: string, next: string): Set<string> {
   const had = new Set(splitHunks(before).map(whole));
   const changed = new Set<string>();
@@ -126,12 +109,8 @@ export function splitHunks(patch: string): PatchHunk[] {
   return hunks;
 }
 
-/**
- * Whether the new side of a patch still carries a line — an added line or a
- * context line. It is what an open composer is re-validated against: the form
- * is keyed to a line of the diff, and a line the edit took away has no row left
- * for it to sit under.
- */
+/** Whether the new side still carries a line, added or context, which an open composer is keyed to
+ * and re-validated against (08-ui.md, "The reading position and the open form"). */
 export function hasNewLine(patch: string, line: number): boolean {
   let at = 0;
   let started = false;
