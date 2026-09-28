@@ -613,13 +613,14 @@ node -e '
 What stays red in such a container, on the base as well:
 
 - the embedding tests, until the model's hosts are allowed;
-- `tests/watcher.test.ts` › "keeps what it knew when `reviews/` cannot be
-  listed, and does not empty it", which takes the right to list away with
-  `chmod` and the container runs as root — DA-117.1;
-- two tests of `e2e/history.spec.ts`, which pass in CI — DA-116;
 - the perf budgets, which a container of a few cores is over on the untouched
   base: the case [11-perf.md](docs/reference/11-perf.md#a-red-the-machine-caused)
   settles.
+
+Two reds the container used to add are gone: the unreadable-`reviews/` test of
+`tests/watcher.test.ts` no longer relies on a mode root ignores (DA-117.1), and
+the two tests of `e2e/history.spec.ts` that failed there were the container's
+Bun 1.3.11, which the hook now replaces with CI's (DA-116).
 
 ## Releases
 

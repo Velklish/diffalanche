@@ -8,4 +8,4 @@
 
 **Documentation in the same pass.** README ("Design artifacts and the design hook", "Cloud sessions"); `AGENTS.md`; [11-perf.md](../../reference/11-perf.md#a-red-the-machine-caused); [08-ui.md](../../reference/08-ui.md) (the context loader's command); `CHANGELOG.md`, `### Added` and `### Changed`.
 
-**Filed, not closed.** [DA-117.1](../../backlog/queue/DA-117.1-chmod-test-under-root.md) (major, queue, top) — the unreadable-reviews test takes the right away with `chmod`, which root keeps.
+**Filed, not closed.** [DA-117.1](../DA-117.1-chmod-test-under-root/task.md) (major, queue, top) — the unreadable-reviews test takes the right away with `chmod`, which root keeps.
