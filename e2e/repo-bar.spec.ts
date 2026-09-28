@@ -1,12 +1,8 @@
 import type { Page } from "@playwright/test";
 import { expect, test } from "@playwright/test";
 
-/**
- * The repository boundary of DA-54: the bar that says which repository is being
- * read, the hairline between two sections, and the two jumps to a repository —
- * from the tree and from a thread card. The heights the assertions use are the
- * handoff's: 52 px of header and 38 px of bar under it.
- */
+/** The repository boundary of DA-54: the bar, the hairline between sections, and the jumps from the
+ * tree and a thread card, at the handoff's 52 px header and 38 px bar. */
 
 const HEADER = 52;
 const BAR = 38;
@@ -136,9 +132,8 @@ test("a hairline marks every boundary and there is none above the first", async 
   // The first section opens the column; a line above it would be a boundary
   // with nothing on the other side.
   expect(first?.width).toBe("0px");
-  // The token is resolved by the browser rather than parsed here: whatever
-  // notation `--bd2` is written in, both sides of the comparison come back in
-  // the one `getComputedStyle` answers in.
+  // The browser resolves the token, so both sides come back in `getComputedStyle`'s notation,
+  // whatever `--bd2` is written in.
   const hairline = await page.evaluate(() => {
     const probe = document.createElement("div");
     probe.style.borderTopColor = "var(--bd2)";
@@ -243,9 +238,8 @@ test("the repository of a thread card jumps to its section", async ({ page }) =>
   const path = await repo.getAttribute("title");
   if (path === null) throw new Error("the thread card names no repository");
 
-  // From the far end of the document, so the jump has somewhere to go: at the
-  // top of the page a card of the first repository would be all but arrived
-  // already, and the test would pass without the click doing anything.
+  // From the far end, so the jump has somewhere to go: at the top a first-repository card is all
+  // but arrived, and the test would pass without the click.
   await page.evaluate(() =>
     window.scrollTo({ top: document.body.scrollHeight, behavior: "instant" }),
   );

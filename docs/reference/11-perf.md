@@ -128,6 +128,10 @@ itself is not comparable: object mtimes differ, and the sibling worktree's
 every git call, so a developer's own git configuration cannot change the
 fixture.
 
+The generator is written against `node:` modules and uses no `Bun.*`, on
+purpose: the Vitest suite runs under Node and imports `scripts/synth.ts`
+directly.
+
 ## The fixture's environment
 
 The same argument holds for the data directory, and it is one function rather
@@ -261,7 +265,14 @@ and one line per comment. No rows and a reader that broke are told apart:
 `jq -e` exits 4 when a filter produced no output, which is what an empty comment
 list is, and 2, 3, or 5 when the input or the filter was wrong. Without that
 difference a `jq` that cannot parse the JSON would satisfy every expectation of
-zero comments.
+zero comments. The Node reader writes nothing and exits 0 for an empty list, and
+exits non-zero when it throws.
+
+`read_json`, the function both readers sit behind, leaves its answer in
+`QUERY_OUT` and the answer's line count in `QUERY_ROWS` rather than handing it
+back through a command substitution: a substitution runs in a subshell, where
+the `exit` that stops the run on a broken reader would end only the subshell,
+and the scenario would walk on.
 
 The script needs `bun` for the fixture, `curl` for the running server, and `git`,
 which the generator uses. One channel takes about 4 seconds on an M1 Pro.
@@ -1364,8 +1375,24 @@ is a red that no longer means anything, so each number has one owner:
 | The five budgets of `docs/SPEC.md` section 6 | `bun run perf` | the median of five repetitions, times `RUNNER_ALLOWANCE` on a runner, declined on a busy machine |
 | 300 ms on top of one rescan: the watcher's own share of an update | `tests/watcher.test.ts`, "rescans the edited repository alone and has the new hunk in diff.json in time" | the median of three edits, each less one rescan of that repository timed beside it once the watcher's write has landed; only where the tree is watched |
 | One frame for a jump from the tree | `e2e/sidebar.spec.ts`, "choosing a file brings its card into view on the frame the click produced" | the card is in view on the frame the click produced; the 50 ms is the gate's |
-| 750 ms from a task made elsewhere to the header mark | `e2e/history.spec.ts`, `MARK_CEILING_MS` | one sample, 2.5 times the 300 ms of a live update; no gate line measures the mark, and the spec says why |
+| 750 ms from a task made elsewhere to the header mark | `e2e/history.spec.ts`, `MARK_CEILING_MS` | one sample, 2.5 times the 300 ms of a live update; no gate line measures the mark, for the reason below |
 | `HEARTBEAT_MS`, 15 s, for the head of the live stream | `tests/events.test.ts`, "answers as soon as it is subscribed, without waiting for a heartbeat" | the head arrives before a heartbeat is due and its first bytes are not one |
+
+**The header mark's ceiling.** `MARK_CEILING_MS` is how long a task made
+outside the window may take to raise the quiet mark in the header, and it is
+the only ceiling the mark has. It is 2.5 times the 300 ms `docs/SPEC.md`
+section 6 gives a live update, because a strict 300 on a loaded machine would
+fail on the machine rather than on the code. 2.5 was `RUNNER_ALLOWANCE` of
+`perf/budgets.ts` when the ceiling was set; the allowance has been 2.1 since it
+was tuned to the CPU-per-frame line ([the gate](#the-gate)), and the ceiling did
+not move with it — whether it should is DA-58.3. The perf gate does not measure
+the mark: `BUDGETS` has no line for it, and the nearest one, `updateMs`, times
+an edit in a repository reaching the card of that file — the `diff-changed`
+path, which shares nothing with this one but the stream itself. A line for it
+would mean a metric in `perf/harness.ts` and a row in section 6 of the
+specification, which is a change to the contract. So the spec prints the
+measurement on every run, `task created to header mark: <n> ms`, and a
+regression is at least visible: 246 ms and 234 ms when the ceiling was written.
 
 A number printed and not held — `edit to diff-changed`, `reply written to
 reply-added`, `check-ignore over 50 paths`, `file jump, one frame` — is there to
@@ -1405,6 +1432,51 @@ saying so; the job runs the suite as the gate does, and everything else in it
 runs on Linux too ([08-ui.md](08-ui.md#ui-tests)). It is the sixth of the seven, placed between
 `bun run test:bun` and `bun run perf` so that the two browser gates are
 adjacent and a machine that has to serialise them serialises one window.
+
+### The checks a pull request requires
+
+What is required on a pull request to `main` is a branch protection rule — a
+GitHub setting on the repository, not a file in it. The rule matches
+**check-run names**, not job ids: a job reports under its `name:` when it has
+one and under its id when it does not, and a matrix job reports one check per
+cell. The names to list, spelled as they report:
+
+| Check run | Job id |
+|---|---|
+| `check` | `check` |
+| `unit suite on Bun` | `test-bun` |
+| `perf` | `perf` |
+| `UI suite` | `ui` |
+| `smoke node on ubuntu-latest` | `smoke` |
+| `smoke node on macos-latest` | `smoke` |
+| `smoke bun on ubuntu-latest` | `smoke` |
+| `smoke bun on macos-latest` | `smoke` |
+| `smoke binary on ubuntu-latest` | `smoke` |
+| `smoke binary on macos-latest` | `smoke` |
+| `acceptance on ubuntu-latest` | `e2e` |
+| `acceptance on macos-latest` | `e2e` |
+
+There is no check called `test-bun`, none called `ui`, none called `smoke` and
+none called `e2e`: a rule asking for those waits for a report that never comes,
+and every pull request sits at "Expected — waiting for status to be reported"
+instead. `smoke node on windows-latest` is deliberately not in the list until
+DA-45 has run that cell and fixed what it finds: nobody has watched it pass, so
+it is not a gate yet ([the job](#the-job)). The `pull_request` trigger stays
+unfiltered — a pull request between two work branches is worth the same run, and
+what makes a check required is the rule, not the trigger.
+
+The same list is also the header comment of `ci.yml`, which is the copy
+`tests/ci-names.test.ts` holds against the names the workflow reports; pointing
+the test at this table, and shrinking the comment, is DA-58.4.
+
+### Concurrency
+
+A superseded run of a pull request is cancelled: its group is the workflow and
+the pull request's ref, with `cancel-in-progress: true`. A push to `main` gets a
+group of its own, one per commit, rather than `cancel-in-progress: false` in a
+shared one: a shared group cancels the runs *queued* in it too, so three pushes
+inside one run's duration would leave the middle commit with no CI result at
+all.
 
 ## The release
 

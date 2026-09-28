@@ -1,10 +1,5 @@
-/**
- * Where the acceptance suite finds the two things it drives: the binary of the
- * runner's own platform, built by `bun run build -- --target current`, and the
- * fixture it serves. Both the server under test and the CLI the tests read back
- * with are that one file — the acceptance list of `docs/SPEC.md` section 10 is
- * about the shipped artefact, not about the sources it was built from.
- */
+/** The binary of this platform (`--target current`) and the fixture it serves: server and CLI are
+ * that one file, since section 10 is about the shipped artefact, not the sources. */
 import { arch, platform } from "node:process";
 import { fileURLToPath } from "node:url";
 

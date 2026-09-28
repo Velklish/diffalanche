@@ -1,9 +1,5 @@
-/**
- * The performance gate: measures the shipped page on the synthetic review
- * several times and fails when the median of any budget line is over budget.
- *
- *   bun perf/gate.ts [--fixture <dir>] [--runs <n>]
- */
+/** The performance gate, `bun perf/gate.ts [--fixture <dir>] [--runs <n>]`: the shipped page
+ * measured several times, red when a line's median is over budget (11-perf.md, "The gate"). */
 import { execFileSync } from "node:child_process";
 import { appendFileSync, rmSync } from "node:fs";
 import { fixtureEnv } from "../src/core/config/index.ts";

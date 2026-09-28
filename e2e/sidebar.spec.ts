@@ -6,10 +6,8 @@ type Review = {
   comments: { repo: string | null; path: string | null; status: string }[];
 };
 
-/**
- * The file card the reading position points at: the one under the header and
- * the repository bar. `PROBE_Y` of `src/ui/reveal.ts`.
- */
+/** The card at the reading position, under the header and the repository bar (`PROBE_Y` of
+ * `src/ui/reveal.ts`). */
 function underTheHeader(): string | null {
   return (
     document
@@ -132,9 +130,8 @@ test("a file chosen in the tree is still the current one once the cards have mou
   const wanted = await row.locator(".file-name").textContent();
 
   await row.click();
-  // The cards around the target replace their estimated heights with their real
-  // ones as they mount, and the reading position follows the target rather than
-  // the pixel it was at ([ADR-008](../docs/adr/adr-008-diff-rendering-verdict.md)).
+  // Cards around the target swap estimated heights for real ones as they mount, and the position
+  // follows the target ([ADR-008](../docs/adr/adr-008-diff-rendering-verdict.md)).
   await expect.poll(() => page.evaluate(underTheHeader)).toBe(wanted);
   await expect(page.locator(".file-row.on .file-name")).toHaveText(wanted ?? "");
 });

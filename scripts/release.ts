@@ -1,16 +1,6 @@
 #!/usr/bin/env bun
-/**
- * The local half of a release: everything that can be checked before a tag
- * exists, and then the annotated tag itself.
- *
- *   bun run release 0.1.0
- *   bun run release 0.1.0 -- --dry-run
- *
- * It never pushes. Pushing the tag is the owner's step, and that push is the
- * only thing `.github/workflows/release.yml` reacts to — so everything this
- * script checks is checked while nothing has been published yet. See
- * [docs/reference/11-perf.md](../docs/reference/11-perf.md).
- */
+/** The local half of a release: every check a tag does not need, then the tag. It never pushes;
+ * the owner's push is the workflow's only trigger ([11-perf.md](../docs/reference/11-perf.md)). */
 import { execFileSync } from "node:child_process";
 import { readFileSync } from "node:fs";
 import { argv, chdir, exit, stderr, stdout } from "node:process";
@@ -64,10 +54,8 @@ stdout.write(`release ${tag}${dryRun ? " (dry run)" : ""}\n`);
 const root = git(["rev-parse", "--show-toplevel"]).trim();
 chdir(root);
 
-// 1. The version the tag names is the version the package declares. The tag is
-//    the argument here and `GITHUB_REF_NAME` in the workflow; both are checked
-//    against `package.json`, because a tag that disagrees with it publishes one
-//    version under another's name.
+// 1. The tag's version is the one `package.json` declares, here and again in the workflow: a
+//    tag that disagrees publishes one version under another's name.
 const declared = JSON.parse(readFileSync("package.json", "utf8")).version;
 if (declared !== version) {
   fail(`package.json is ${declared}, this release is ${version}; edit it and commit first`);
@@ -80,9 +68,8 @@ const dirty = git(["status", "--porcelain"]).trim();
 if (dirty !== "") fail(`the working tree is not clean:\n${dirty}`);
 ok("the working tree is clean");
 
-// 3. On `main`. The README and the reference both say a release is a tag on
-//    `main`; a tag made on a work branch would publish a commit that is not in
-//    the history everyone else reads, and nothing downstream would notice.
+// 3. On `main`, as the README and the reference say: a tag on a work branch publishes a commit
+//    outside the history everyone reads, and nothing downstream would notice.
 function currentBranch(): string {
   // `--quiet` for the same reason as `tagExists`: without it git prints its own
   // `fatal:` to the terminal before the message below is written.
@@ -115,10 +102,8 @@ function tagExists(name: string): boolean {
 if (tagExists(tag)) fail(`${tag} already exists; delete it or release the next version`);
 ok(`${tag} is free`);
 
-// 5. The changelog has this version's section. The script does not write it:
-//    moving Unreleased under a heading is an edit, an edit dirties the tree,
-//    and a tag made after it would point at the commit before the edit. So the
-//    section is a commit the owner makes, and this refuses until it is there.
+// 5. The changelog has this version's section, a commit the owner makes: an edit here would
+//    dirty the tree, and the tag would point at the commit before it.
 const lines = readFileSync("CHANGELOG.md", "utf8").split("\n");
 const heading = `## [${version}]`;
 const start = lines.findIndex((line) => line.startsWith(heading));
@@ -129,10 +114,8 @@ if (start === -1) {
       "  leave a fresh empty Unreleased above it, and commit that.",
   );
 }
-// The section is what the workflow lifts out as the release notes, and it is
-// read the same way here: from under the heading to the next `## [`. A heading
-// with nothing under it passes a check for the heading alone and then fails the
-// workflow, after six binaries have been built and the tag is on the remote.
+// Read as the workflow lifts the notes, heading to next `## [`: an empty section passes a heading
+// check and fails the workflow after the binaries are built and the tag is on the remote.
 const after = lines.slice(start + 1);
 const next = after.findIndex((line) => line.startsWith("## ["));
 const notes = next === -1 ? after : after.slice(0, next);

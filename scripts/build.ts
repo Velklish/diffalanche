@@ -44,11 +44,8 @@ function currentTarget(): string {
   return `${platform === "win32" ? "windows" : platform}-${arch}`;
 }
 
-/**
- * Which binaries to compile. A release builds all six; a CI job that only runs
- * the binary it built compiles one, which is six times less work on a runner
- * that throws the other five away.
- */
+/** Which binaries to compile: a release builds six, and a CI job that runs only its own compiles
+ * one rather than throw five away (06-cli.md, "The two channels"). */
 function parse(args: string[]): Target[] {
   let name: string | undefined;
   for (let i = 0; i < args.length; i += 1) {
@@ -155,9 +152,8 @@ function generateEmbeddedUi(): void {
   );
 }
 
-/** The entry of one target: the UI, and the model and the runtime's native files the binary
- * carries, by their release names (09-ml.md, "Delivery"); darwin-x64 carries none. Started with
- * `CHILD` and no argument it is the model's process (`spawned.ts`); with one, a command. */
+/** One target's entry: the UI, and the model and native runtime files by release names (09-ml.md,
+ * "Delivery"; none on darwin-x64); `CHILD` and no argument make it the model's process. */
 function generateEntry(target: Target): string {
   const files = embedded(
     `${target.platform === "windows" ? "win32" : target.platform}-${target.arch}`,
@@ -196,11 +192,8 @@ function size(path: string): string {
   return `${(statSync(path).size / 1024 / 1024).toFixed(1)} MiB`;
 }
 
-/**
- * `bun build --compile` leaves a 60 MiB `.<hash>-00000000.bun-build` file in the
- * working directory, under a new name every run. Ignored by git, but it piles
- * up in a checkout, so the build that made them takes them away again.
- */
+/** `bun build --compile` leaves a 60 MiB `.<hash>-00000000.bun-build` under a new name each run;
+ * git ignores it, but it piles up in a checkout, so the build that made it removes it. */
 function removeCompileLeftovers(): void {
   for (const name of readdirSync(".")) {
     if (name.endsWith(".bun-build")) rmSync(name, { force: true });

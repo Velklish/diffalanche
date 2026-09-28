@@ -1,8 +1,5 @@
-/**
- * The performance harness of `docs/SPEC.md` section 6: it drives headless
- * Chromium over the synthetic review and reports the numbers of the budget
- * table.
- */
+/** The performance harness of `docs/SPEC.md` section 6: headless Chromium over the synthetic
+ * review, reporting the budget table's numbers (11-perf.md, "The measurement harness"). */
 import { execFileSync } from "node:child_process";
 import { appendFile, readFile, rm, writeFile } from "node:fs/promises";
 import { join } from "node:path";
@@ -30,12 +27,8 @@ import { directoryAssets, startReviewServer } from "../src/server/index.ts";
 
 export type VariantSpec = { name: string; query: string };
 
-/**
- * The page as it ships. The Phase 0 spike carried both diff libraries and
- * measured eight combinations of library, highlighting, and virtualisation from
- * one build; ADR-008 chose one and DA-21 removed the switches, so there is one
- * page left to measure.
- */
+/** The page as it ships: ADR-008 chose one of the spike's eight combinations and DA-21 removed the
+ * switches, so one page is left to measure (11-perf.md, "The measurement harness"). */
 export const VARIANTS: VariantSpec[] = [{ name: "default", query: "" }];
 
 /** The two sessions a run switches between; the second one the harness makes. */
@@ -155,9 +148,8 @@ export async function measure(
     process.stderr.write(`first switch to a session, cold: ${round(cold)} ms\n`);
     lap("cold switch");
 
-    // Both ways, and the slower of them counts: the run has to leave the
-    // fixture on the session it found it on, so the switch back happens either
-    // way and there is no reason to measure only one of the two.
+    // Both ways, the slower counting: the run must leave the fixture on the session it found, so
+    // the switch back happens anyway.
     const there = (await page.evaluate(
       (name: string) => window.__perf.switchSession(name),
       sessions.other,
@@ -195,20 +187,8 @@ export async function measure(
   }
 }
 
-/**
- * The budget of `docs/SPEC.md` section 6 for a change in one repository: a file
- * of the fixture is edited here, and the page — the shipped one, listening on
- * `/api/events` because that is what it does — says when the card of that file
- * has the new diff in it. That is the watcher, the rescan, the stream, the
- * fetch, the patch, and the paint: the whole of what the person waits for.
- *
- * The card is scrolled to first, so it is mounted and the measurement is of a
- * diff that is on the screen rather than of one held in the store; the probe
- * line is looked for in the card afterwards, so a number that came from an
- * event about something else cannot pass for this one.
- *
- * The edit is taken back out afterwards, so the fixture is what it was.
- */
+/** Section 6's update budget: a fixture file edited until the shipped page shows it in that file's
+ * mounted card, then taken back out (11-perf.md, "The measurement harness"). */
 async function measureUpdate(page: Page, baseUrl: string, fixture: string): Promise<number> {
   const scan = (await (await fetch(`${baseUrl}/api/scan`)).json()) as {
     repositories: { path: string; hasChanges: boolean }[];
@@ -363,15 +343,8 @@ const OTHER_COMMENTS = 40;
  * `${current}-b` did (`docs/reference/11-perf.md`). */
 const SCRATCH_SESSION = "perf-scratch";
 
-/**
- * The fixture carries one review session; switching between sessions needs two.
- * The second is made here rather than by the generator, because it is the
- * harness that measures the switch and nothing else needs it.
- *
- * It is given the first one's change set — the base is the same, so the answer
- * is the same — and comments of its own, so the swap really is a different set
- * of threads and not an empty rail.
- */
+/** The second session a switch needs, made here since only the harness needs it: the first one's
+ * change set and comments of its own (11-perf.md, "The gate"). */
 async function twoSessions(config: Config): Promise<Sessions> {
   const current = await resolveSessionName(config.dataDir);
   const other = SCRATCH_SESSION;
@@ -415,10 +388,8 @@ async function twoSessions(config: Config): Promise<Sessions> {
       }
     }
   } finally {
-    // `createSession` made it current. Whatever happened after that, the
-    // fixture is left on the session it was found on: the next run reads
-    // `current` and would otherwise measure the wrong review — or, worse,
-    // measure it and say nothing.
+    // `createSession` made it current; whatever happened, the next run reads `current` and would
+    // otherwise measure the wrong review — or, worse, measure it and say nothing.
     await makeCurrent(config.dataDir, current);
   }
   return { current, other };

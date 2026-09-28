@@ -1,12 +1,8 @@
 import type { Page } from "@playwright/test";
 import { expect, test } from "@playwright/test";
 
-/**
- * The empty states of DA-27. The server behind these tests is the one with the
- * fixture in it, so what a root without a session answers is stubbed the way
- * `shell.spec.ts` stubs the review: the screens are the UI's, and what the
- * server says about such a root is `tests/server.test.ts`.
- */
+/** The empty states of DA-27, a sessionless root's answers stubbed as `shell.spec.ts` stubs the
+ * review: the screens are the UI's, and what the server says there is `tests/server.test.ts`'s. */
 
 /** What `GET /api/scan` answers before any session exists. */
 const SCAN = {

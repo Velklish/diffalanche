@@ -5,10 +5,8 @@ on:
     branches: [main]
   pull_request:
 
-# A superseded run of a pull request is cancelled. A push to `main` gets a group
-# of its own, one per commit, rather than `cancel-in-progress: false` in a shared
-# one: a shared group cancels the runs *queued* in it too, so three pushes inside
-# one run's duration would leave the middle commit with no CI result at all.
+# A superseded pull-request run is cancelled; a push to `main` gets a group per commit, since a
+# shared group cancels queued runs too (docs/reference/11-perf.md, "Concurrency").
 concurrency:
   group: ci-${{ github.workflow }}-${{ github.event_name == 'pull_request' && github.ref || github.sha }}
   cancel-in-progress: true
@@ -128,9 +126,8 @@ jobs:
   smoke:
     name: smoke ${{ matrix.channel }} on ${{ matrix.os }}
     runs-on: ${{ matrix.os }}
-    # Windows is written here and verified in DA-45, which runs it, fixes what
-    # it finds, and makes the job required. Until then a red Windows job is
-    # something to read, not a blocked pull request.
+    # Windows is written, not verified: DA-45 runs it and makes it required, and until then a red
+    # Windows job is something to read, not a blocked pull request.
     continue-on-error: ${{ matrix.os == 'windows-latest' }}
     strategy:
       fail-fast: false
@@ -214,14 +211,11 @@ jobs:
           path: ~/.cache/diffalanche/models
           key: embedding-model-${{ hashFiles('src/core/ml/embed/model.ts') }}
       - run: bun run model:fetch
-      # Building the binary of this runner and generating the fixture are the
-      # first two steps of the web server command in `e2e/acceptance.config.ts`,
-      # so the job runs the one command a developer runs and there is no second
-      # place where the build could drift from it.
+      # The suite's web server builds the binary and the fixture, so the job runs the one command a
+      # developer runs and the build has no second place to drift (11-perf.md, "The CI jobs").
       - run: bun run test:e2e
-      # One row per criterion of specification section 10, whether the job
-      # passed or failed: the list is only worth having when it says which line
-      # of the acceptance list went red.
+      # One row per criterion of section 10, passed or failed: the list is worth having only when it
+      # says which line of the acceptance list went red.
       - name: the criteria in the run summary
         if: always()
         run: |

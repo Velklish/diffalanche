@@ -5,12 +5,8 @@ import { fileURLToPath } from "node:url";
 import type { Page } from "@playwright/test";
 import { expect, test } from "@playwright/test";
 
-/**
- * Live update (DA-25): what an agent's work does to a page nobody reloaded. The
- * writes come from the CLI and the edits from the filesystem, because that is
- * where they come from in the product — the page is only told about them
- * ([ADR-005](../docs/adr/adr-005-live-update.md)).
- */
+/** Live update (DA-25) on a page nobody reloaded: writes from the CLI, edits from the disk, as in
+ * the product, where the page is only told ([ADR-005](../docs/adr/adr-005-live-update.md)). */
 
 const root = fileURLToPath(new URL("..", import.meta.url));
 const FIXTURE = ".perf/e2e";
@@ -37,12 +33,8 @@ function cli(...args: string[]): string {
   });
 }
 
-/**
- * The last open thread the fixture carries on a line. The specs share one
- * fixture, and the ones that write into a thread take the first they find, so
- * this one takes the other end of the list: two specs writing into one thread
- * is one of them failing on the other's work.
- */
+/** The last open thread on a line: the writing specs take the first on the shared fixture, and two
+ * specs writing into one thread is one failing on the other's work. */
 function lastThread(): Comment {
   const anchored = comments("open").filter(
     (comment) => comment.repo !== null && comment.path !== null && comment.line !== null,
@@ -114,12 +106,8 @@ test("an edit patches its own card, holds the reading position, and leaves the c
   const edited = `${repository.path}/${repository.files[0]?.path}`;
   const untouched = `${repository.path}/${repository.files[1]?.path}`;
 
-  // The second card is put *across* the reading probe — its top just above,
-  // its body under it — so the reading position is inside it and the edit lands
-  // above that, which is the case the anchoring exists for. Scrolling it "into
-  // view" is not enough: a page that cannot scroll any further leaves the probe
-  // in the card that grows, or in the warnings bar, and the test would then be
-  // measuring something the anchoring does not promise to hold.
+  // The second card across the reading probe, so the edit lands above the reading position; "into
+  // view" alone can leave the probe elsewhere (08-ui.md, "A card across the reading probe").
   const placed = await page.locator(`[data-file="${untouched}"]`).evaluate((element) => {
     // `PROBE_Y` of `src/ui/reveal.ts`: below the header and the repository bar.
     const probe = 100;
@@ -205,10 +193,8 @@ test("an edit patches its own card, holds the reading position, and leaves the c
     await expect(page.locator(".composer-field")).toHaveValue("half a sentence");
   } finally {
     writeFileSync(target, original);
-    // The restore is an edit too, and the watcher reports it a few hundred
-    // milliseconds later. Wait for the page to have taken it, or the frame lands
-    // in the next spec's page — one that stubbed the review empty and then grew
-    // a whole repository out of a `diff-changed` it never asked for (DA-25.4).
+    // The restore is an edit the watcher reports a few hundred ms later: wait for the page to take
+    // it, or its frame grows a repository in the next spec's stubbed page (DA-25.4).
     await expect(page.locator(`[data-file="${edited}"]`)).not.toContainText(
       "an agent added this while the review was open",
     );
