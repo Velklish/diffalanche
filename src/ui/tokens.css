@@ -1,8 +1,5 @@
-/*
- * Every design token of `docs/design/HANDOFF.md`, both themes, on the root
- * element. Dark is the default; the light theme is a `data-theme` override the
- * header toggle writes and `localStorage` remembers.
- */
+/* Every token of `docs/design/HANDOFF.md`, both themes, on the root: dark by default, light as the
+ * `data-theme` override the header toggle writes and `localStorage` remembers. */
 
 :root {
   color-scheme: dark;
@@ -77,12 +74,8 @@
   --shadowSm: 0 10px 26px rgba(70, 64, 54, 0.16);
 }
 
-/*
- * How far `dcin` moves what it brings in. It is a token rather than a literal
- * so that `prefers-reduced-motion` can take it to zero: the arrival keeps its
- * fade — which is what says something appeared — and loses the travel, without
- * a second keyframe (`DESIGN.md`, The One-Keyframe Rule).
- */
+/* How far `dcin` moves: a token so `prefers-reduced-motion` can take it to zero, keeping the fade
+ * that says something appeared, without a second keyframe (`DESIGN.md`, The One-Keyframe Rule). */
 :root {
   --dcin-shift: 4px;
 }
@@ -98,11 +91,7 @@
   }
 }
 
-/*
- * A reader who has asked their system for less motion gets the state changes
- * and not the movement: `dcin` fades without travelling. The travel is a token
- * so that this is a value and not a second keyframe.
- */
+/* Less motion asked for: the state changes stay and the movement goes, so `dcin` only fades. */
 @media (prefers-reduced-motion: reduce) {
   :root {
     --dcin-shift: 0px;

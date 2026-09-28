@@ -4,15 +4,8 @@ import { useStore } from "../store.ts";
 import type { BaseMode } from "../types.ts";
 import { Logo } from "./Logo.tsx";
 
-/**
- * The first-run screen of handoff section 10: what a root shows when no review
- * session has ever been made in it. `GET /api/review` refuses such a root with
- * `no-current-session`, and this is what that refusal means to a person
- * ([07-server.md](../../../docs/reference/07-server.md)).
- *
- * The three metrics come from `GET /api/scan`, the one route that reads git per
- * request: without a session there is no change set to answer them from.
- */
+/** The first-run screen of handoff section 10, for `no-current-session`; its metrics are the
+ * scan's, as there is no change set to count from (08-ui.md, "Empty states"). */
 export function FirstRun() {
   const scan = useStore((store) => store.scan);
   const name = useStore((store) => store.newName);
@@ -96,14 +89,8 @@ export function FirstRun() {
   );
 }
 
-/**
- * The base of the session about to be made. The handoff's screen has a `BASE`
- * button opening the picker of section 5, and the picker cannot serve this
- * screen: it applies a base to a session, and there is none yet. So the modes
- * are here, and what they write is `newBase` — the same field the sessions
- * menu's own form writes and `createSession` reads, in the grammar the CLI and
- * the server share.
- */
+/** The base of the session about to be made, into `newBase`: the picker applies a base to a
+ * session, and there is none yet (08-ui.md, "Empty states"). */
 function BaseDraft() {
   const base = useStore((store) => store.newBase);
   const setBase = useStore((store) => store.setNewBase);

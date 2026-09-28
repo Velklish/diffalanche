@@ -1,8 +1,5 @@
-/**
- * The gate of [ADR-003](../docs/adr/adr-003-on-disk-format.md): concurrent
- * writers lose nothing. Twenty processes append one reply each to the same
- * comment; every reply has to be in the file.
- */
+/** [ADR-003](../docs/adr/adr-003-on-disk-format.md)'s gate, concurrent writers lose nothing:
+ * twenty processes append one reply each to one comment, and every reply is in the file. */
 import { execFile } from "node:child_process";
 import { mkdtempSync, rmSync } from "node:fs";
 import { tmpdir } from "node:os";

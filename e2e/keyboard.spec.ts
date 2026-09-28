@@ -3,11 +3,8 @@ import { fileURLToPath } from "node:url";
 import type { Page } from "@playwright/test";
 import { expect, test } from "@playwright/test";
 
-/**
- * The keyboard map and global search of DA-26: every row of the handoff's table
- * on the fixture, and the modal it opens. What a key wrote is read back with
- * the CLI, which is what proves the file changed and not only the store.
- */
+/** The keyboard map and global search of DA-26, row by row of the handoff's table; what a key
+ * wrote is read back with the CLI, which proves the file changed and not only the store. */
 
 const root = fileURLToPath(new URL("..", import.meta.url));
 const FIXTURE = ".perf/e2e";
@@ -145,9 +142,8 @@ test("a word of a comment lists the thread with its line in the preview", async 
 
 test("J walks the open threads and wraps at the end", async ({ page }) => {
   await open(page);
-  // Every open thread, the ones anchored to the whole review included: `J`
-  // walks those too, and a count that left them out would stop one short of
-  // where it started.
+  // Every open thread, review-level ones included: `J` walks those too, and a count without them
+  // would stop one short of where it started.
   const walk = comments("open");
   if (walk.length < 2) throw new Error("the fixture has fewer than two open threads");
 

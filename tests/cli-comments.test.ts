@@ -1,8 +1,5 @@
-/**
- * The comment commands of DA-14 on a fixture root: what an agent reads, what it
- * writes, and the one thing only a human may do (`docs/SPEC.md` sections 8 and
- * 9, [ADR-004](../docs/adr/adr-004-agent-contract.md)).
- */
+/** DA-14's comment commands: what an agent reads and writes, and the one thing only a human
+ * may do (`docs/SPEC.md` sections 8, 9, [ADR-004](../docs/adr/adr-004-agent-contract.md)). */
 import { execFile } from "node:child_process";
 import { readFileSync, rmSync, writeFileSync } from "node:fs";
 import { join } from "node:path";
@@ -77,9 +74,8 @@ async function openFinding(...extra: string[]): Promise<string> {
   );
 }
 
-// The repositories are built once: no test here commits, and the one that edits
-// a working tree is undone by `resetWorkingTrees`. Only the data directory is
-// new for each test, which is what the tests actually write to.
+// Repositories are built once — no test commits, and `resetWorkingTrees` undoes the one that
+// edits a tree; only the data directory, what the tests write to, is new for each test.
 beforeAll(() => {
   root = makeRoot();
 });
@@ -184,10 +180,8 @@ describe("comment", () => {
   });
 
   it("rescans when the base changed, instead of patching a cache of the previous one", async () => {
-    // Two `ref` bases that resolve to the same revision and record themselves
-    // differently in every repository: same mode, different ref, so only a
-    // comparison that looks past the mode sees that the cache is the answer to
-    // the previous question.
+    // Two `ref` bases on one revision, recorded differently: same mode, different ref, so only a
+    // comparison that looks past the mode sees the cache answers the previous question.
     await invoke(["review", "base", "main"]);
     await invoke(["diff", "--json"]);
     const before = JSON.parse(

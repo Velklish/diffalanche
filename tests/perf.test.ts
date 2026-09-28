@@ -140,9 +140,8 @@ describe("perf gate", () => {
   });
 
   it("prints a line that is measured but still waiting for its task, and does not fail it", () => {
-    // The real table has one such line — the session switch, waiting for
-    // DA-24.1 — but the rule is checked against a table of its own so that it
-    // stays covered when that one is turned on.
+    // No line of the real table is pending now, so the rule is held on a table of its own and stays
+    // covered whether or not a budget waits for its task.
     const waiting: Budget[] = [
       {
         label: "something a later task finishes",

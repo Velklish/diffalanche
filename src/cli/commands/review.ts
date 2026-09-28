@@ -1,8 +1,5 @@
-/**
- * `review new`, `review use`, `review list`, `review base`, `review scope`, and
- * `review close`/`review reopen`: the review sessions of `docs/SPEC.md` section
- * 8, each one call into the domain.
- */
+/** The `review` group — `new`, `use`, `list`, `base`, `scope` and its three, `close`, `reopen`,
+ * `delete`: the review sessions of `docs/SPEC.md` section 8, each a thin layer over the domain. */
 import { findRepositories } from "../../core/change-set.ts";
 import {
   assertDeletable,
@@ -56,11 +53,8 @@ const SCOPE_OPTIONS = {
   },
 } as const;
 
-/**
- * `--path <repo>:<file>`. The repository comes first and the colon separates
- * them, so a path with a colon in it still reads: the first colon is the
- * separator and everything after it is the file.
- */
+/** `--path <repo>:<file>`: the first colon is the separator and everything after it is the
+ * file, so a file with a colon in its name still reads. */
 function parsePathFlag(value: string): { repo: string; path: string } {
   const colon = value.indexOf(":");
   const repo = colon === -1 ? "" : value.slice(0, colon);
@@ -115,9 +109,8 @@ export const reviewNew: Command = {
     const base = parseBaseArgument(text(args, "base") ?? DEFAULT_BASE);
     const scope = scopeOf(scopeChange(texts(args, "repo"), texts(args, "path")));
     const config = await context.config();
-    // Before the session exists: a task whose scope names a repository the root
-    // has not is a task that shows nothing, and it must not be left on disk for
-    // the next `review list` to explain.
+    // Before the session exists: a scope naming a repository the root has not shows nothing,
+    // and must not be left on disk for the next `review list` to explain.
     if (scope !== null) assertScope(scope, await findRepositories(config));
 
     const use = !flag(args, "no-use");
@@ -133,9 +126,8 @@ export const reviewNew: Command = {
       );
       return 0;
     }
-    // The address rather than the name alone: an agent that opens a task hands
-    // the human a link and leaves `current` where it is
-    // ([ADR-010](../../../docs/adr/adr-010-review-task-scope.md)).
+    // The address rather than the name alone: an agent hands the human a link and leaves
+    // `current` where it is ([ADR-010](../../../docs/adr/adr-010-review-task-scope.md)).
     context.io.out(
       `created review session ${review.name} (base ${formatBase(review.base)})${about}; ` +
         "current is unchanged\n",
@@ -345,12 +337,8 @@ export const reviewScopeRemove: Command = {
   },
 };
 
-/**
- * The session `review close` and `review reopen` work on: the name typed after
- * the command, else `--review`, else the current one. Several agents work on
- * several tasks at once, and each names the one it means
- * ([ADR-010](../../../docs/adr/adr-010-review-task-scope.md)).
- */
+/** The session `close` and `reopen` work on: the name typed, else `--review`, else the current
+ * one, since agents on several tasks at once each name theirs (ADR-010). */
 async function named(context: Context, args: Arguments): Promise<string> {
   return args.positionals[0] ?? (await context.session());
 }
@@ -372,9 +360,8 @@ export const reviewClose: Command = {
   run: async (context, args) => {
     noExtra(args, 1);
     const { dataDir } = await context.config();
-    // The role is checked in the domain, as it is for `resolve`: a task is
-    // closed by a human ([ADR-004](../../../docs/adr/adr-004-agent-contract.md),
-    // [ADR-010](../../../docs/adr/adr-010-review-task-scope.md)).
+    // The role is checked in the domain, as it is for `resolve`: a task is closed by a human
+    // (ADR-004, ADR-010).
     const review = await closeSession(dataDir, await named(context, args), {
       author: text(args, "author") ?? DEFAULT_AUTHOR,
       role: choice(args, "role", ROLES) ?? DEFAULT_ROLE,

@@ -1,7 +1,5 @@
-/**
- * "This file was not written", by the time of the write and not by the bytes
- * ([06-cli.md](../../docs/reference/06-cli.md)).
- */
+/** "This file was not written", by the time of the write and not by the bytes
+ * ([06-cli.md](../../docs/reference/06-cli.md)). */
 import { readFileSync, statSync, utimesSync } from "node:fs";
 import { expect } from "vitest";
 

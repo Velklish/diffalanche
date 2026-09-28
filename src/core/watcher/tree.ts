@@ -1,10 +1,5 @@
-/**
- * Watching one directory tree. `fs.watch` with `recursive: true` is the whole
- * implementation where the runtime has it; where it does not, the same
- * interface is served by walking the tree on a timer and comparing what
- * changed. Both report paths relative to the watched directory, with forward
- * slashes on every platform.
- */
+/** One directory tree: the recursive `fs.watch` where the runtime has it, a walk on a timer where
+ * not (05-watcher.md, "What it watches…"). Paths are relative, with forward slashes. */
 import type { Dirent } from "node:fs";
 import { watch } from "node:fs";
 import { mkdir, mkdtemp, readdir, rm, stat, writeFile } from "node:fs/promises";
@@ -35,12 +30,8 @@ export type TreeWatcherOptions = {
 export type TreeWatcher = {
   /** `true` when the tree is walked on a timer instead of watched. */
   polling: () => boolean;
-  /**
-   * Resolves once the tree is being watched for real. The walk of the fallback
-   * takes its baseline first, and a change made before that baseline exists is
-   * part of it rather than a change — so a caller that is about to say "the
-   * server is up" waits for this.
-   */
+  /** Resolves once the tree is watched for real: a change before the walk's baseline is part of
+   * it, so a caller about to say "the server is up" waits (05-watcher.md, "Starting it"). */
   ready: Promise<void>;
   close: () => void;
 };
@@ -56,12 +47,8 @@ const PROBE_WRITE_MS = 50;
 /** One way of watching a tree, before `watchTree` puts the two behind one face. */
 export type TreeSource = { polling: boolean; ready: Promise<void>; close: () => void };
 
-/**
- * Neither the recursive watch nor the timer keeps the process alive on its own:
- * a watcher is something a server owns, and the server's socket is what decides
- * how long the process runs. Without this a finished test would hang on a
- * watcher it forgot.
- */
+/** Neither the watch nor the timer keeps the process alive: the server's socket decides that
+ * (05-watcher.md, "Starting it"). */
 export function watchTree(options: TreeWatcherOptions): TreeWatcher {
   let current: TreeSource | null = null;
   let closed = false;
@@ -198,14 +185,8 @@ async function snapshot(dir: string, ignore: Ignore): Promise<Map<string, string
   return files;
 }
 
-/**
- * Whether this runtime's `fs.watch` really recurses. Accepting `recursive: true`
- * is not the same as honouring it — a runtime that accepts the option and
- * watches only the top directory would leave a silent dead watcher — so the
- * answer comes from a probe: a file written in a nested directory has to be
- * reported. The probe writes inside `dir`, which is the data directory; no
- * reviewed repository is touched.
- */
+/** Whether this runtime's `fs.watch` really recurses, answered by a probe that writes inside the
+ * data directory only (05-watcher.md, "What it watches…"). */
 export async function supportsRecursiveWatch(dir: string): Promise<boolean> {
   // The answer is the runtime's, not the directory's, so it is asked once and
   // every watcher after the first gets it without writing anything.
@@ -238,13 +219,11 @@ export async function probeRecursiveWatch(
         watcher.close();
         resolve(answer);
       };
-      // Not unref'd: this timer is the only thing holding the event loop while
-      // the probe waits, and a process that exits here would exit before the
-      // server it is starting ever listened.
+      // Not unref'd: it alone holds the event loop while the probe waits, or the process would exit
+      // before its server listened (05-watcher.md).
       const timer = setTimeout(() => done(false), PROBE_TIMEOUT_MS);
-      // Written again and again rather than once: a watch that arms a moment
-      // after `watch` returns — Bun's does — would miss a single write, and the
-      // answer would be "this runtime cannot recurse" for the rest of the run.
+      // Written again and again: a watch that arms a moment after `watch` returns, as Bun's does,
+      // misses a single write and would answer "cannot recurse" for the whole run.
       const writing = setInterval(() => {
         void write(join(nested, "deep"), `probe ${Date.now()}`).catch(() => undefined);
       }, PROBE_WRITE_MS);

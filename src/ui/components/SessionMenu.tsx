@@ -6,14 +6,8 @@ import { useStore } from "../store.ts";
 import { relativeTime } from "../time.ts";
 import type { ReviewStatus, SessionSummary } from "../types.ts";
 
-/**
- * The menu of handoff section 7: the history of review tasks. Two groups —
- * the open tasks and, under them, the closed ones — each row with its base, its
- * scope, its counters, and the gesture that closes it or opens it again. The
- * form that creates the next task is at the foot, and `Comment on review` is
- * here as well: it is the one anchor level that belongs to no repository and so
- * has nowhere else to be opened from (DA-22).
- */
+/** The menu of handoff section 7: the open and the closed tasks, the create form, and `Comment on
+ * review`, which has nowhere else to be opened from (DA-22; 08-ui.md, "The history of tasks"). */
 export function SessionMenu() {
   const sessions = useStore((store) => store.sessions);
   const shown = useStore((store) => store.session?.name ?? null);
@@ -23,15 +17,13 @@ export function SessionMenu() {
   const setSessionMenu = useStore((store) => store.setSessionMenu);
   const openComposer = useStore((store) => store.openComposer);
 
-  // The order inside a group is the server's own — most recently updated first
-  // ([04-domain.md](../../../docs/reference/04-domain.md)) — so the split is a
-  // filter and never a sort.
+  // The order inside a group is the server's own, most recently updated first, so the split is a
+  // filter and never a sort ([04-domain.md](../../../docs/reference/04-domain.md)).
   const open = sessions.filter((session) => session.status !== "closed");
   const closed = sessions.filter((session) => session.status === "closed");
 
-  // A `menu` holds menu items, and this one holds a form: the roles would be
-  // a lie to a screen reader. A named region says what it is and lets it carry
-  // whatever the handoff draws in it.
+  // A named region and not a `menu`, which holds menu items while this holds a form
+  // (08-ui.md, "The history of tasks").
   return (
     <section className="menu" aria-label="review sessions">
       <div className="menu-list">
@@ -85,12 +77,8 @@ export function SessionMenu() {
   );
 }
 
-/**
- * One of the two groups. A group with nothing in it is not drawn: an empty
- * heading would be a promise of rows that are not coming, and a root where
- * nothing has been closed yet is the ordinary state rather than a state worth
- * announcing.
- */
+/** One of the two groups, not drawn when empty: an empty heading promises rows that are not
+ * coming (08-ui.md, "The history of tasks"). */
 function SessionGroup({
   label,
   sessions,
@@ -105,9 +93,8 @@ function SessionGroup({
   switching: boolean;
 }) {
   if (sessions.length === 0) return null;
-  // The heading is what names the group, so the section takes no `aria-label`
-  // of its own: the two would be one thing said twice, and a named section is a
-  // landmark, which a popover of two groups has no use for.
+  // The heading names the group, so no `aria-label`: a named section is a landmark, which a
+  // popover of two groups has no use for.
   return (
     <section className="menu-group">
       <h2 className="menu-group-label">{label}</h2>
@@ -123,19 +110,8 @@ function SessionGroup({
   );
 }
 
-/**
- * One task in the history. The row is a container with two targets, the way a
- * thread card is: the whole readable body switches this window to the task, and
- * the status gesture beside it is its own button. A nested button would be
- * neither valid markup nor reachable by keyboard.
- *
- * **The two chips say two different things and are not one chip.** `ЭТО ОКНО`
- * is the task *this window* is showing. `CLI` is the pointer a terminal beside
- * it uses without `--review`, and it is written as the pointer rather than as
- * `CURRENT`, because in a list of tasks that word reads as "the main one" and
- * there is no main task ([ADR-010](../../../docs/adr/adr-010-review-task-scope.md),
- * decision 7). Both on one row is an ordinary state, not an edge.
- */
+/** One task in the history: a container with two targets, and two chips, `ЭТО ОКНО` and `CLI`,
+ * that are two facts (08-ui.md, "Two chips about where the task is, and why they are not one"). */
 function SessionRow({
   session,
   here,
@@ -164,13 +140,8 @@ function SessionRow({
           {here ? <span className="chip here">ЭТО ОКНО</span> : null}
           {session.current ? (
             <>
-              {/*
-                Three letters carry less than the sentence behind them, so the
-                sentence is said rather than left in a `title` a pointer has to
-                hover to reach: a `title` on a span is neither reachable from
-                the keyboard nor read out by a screen reader, which announces
-                the text of the button this sits in.
-              */}
+              {/* The sentence is said, not left in a `title` only a hovering pointer reaches: a
+                  screen reader announces the button's text (08-ui.md, "Two chips…"). */}
               <span className="chip" title="указатель, которым пользуется CLI без --review">
                 CLI
               </span>
@@ -180,22 +151,14 @@ function SessionRow({
             </>
           ) : null}
           {closed ? <span className="chip">CLOSED</span> : null}
-          {/*
-            What the task is about, counted as the scope is written and by the
-            same function the `SCOPE` pill counts with, so the two numbers about
-            one thing cannot disagree ([08-ui.md](../../../docs/reference/08-ui.md)).
-          */}
+          {/* What the task is about, counted by the function the `SCOPE` pill counts with
+              (08-ui.md, "The scope on a row…"). */}
           <span className="chip scope">{historyScopeLabel(session.scope)}</span>
           <span className="chip">{formatBase(session.base)}</span>
         </span>
         {session.title === null ? null : <span className="session-title">{session.title}</span>}
-        {/*
-          `repos changed` and not `repos`: the scope chip above counts the
-          repositories the task **is about**, and this counts the ones that had
-          changes at the last scan. They are two numbers about two things, and
-          one word for both would read as a contradiction on the row where a
-          file of the scope has stopped changing (ADR-010, decision 5).
-        */}
+        {/* `repos changed`, not `repos`: what had changes at the last scan, not what the task is
+            about (ADR-010, decision 5; 08-ui.md, "The scope on a row…"). */}
         <span className="session-metrics">
           <span>{changedLabel(session.repositories)}</span>
           <span className="crit">{session.open} open</span>
@@ -203,14 +166,8 @@ function SessionRow({
           <span className="tx3">updated {relativeTime(session.updatedAt)}</span>
         </span>
       </button>
-      {/*
-        Closing is a marker and not a lock — a closed task still takes comments,
-        replies and resolves — and the same press opens it again, so it is a
-        ghost button and not the red one the scope editor's confirmation has
-        (`DESIGN.md`, Buttons). Only a human ever presses it: the server signs
-        the write with `config.user` and `role: human` and takes nothing from
-        the request.
-      */}
+      {/* A marker, not a lock, and the same press opens it again, so a ghost and not red
+          (`DESIGN.md`, Buttons; 08-ui.md, "Closing a task…"). */}
       <button
         type="button"
         className="ghost small session-status"
@@ -312,38 +269,21 @@ function focusDelete(name: string): void {
   document.querySelector<HTMLElement>(`[data-session-delete="${CSS.escape(name)}"]`)?.focus();
 }
 
-/**
- * The gesture, and the focus after it. The row is re-rendered into the *other*
- * group, so the button that was pressed unmounts and the ring would fall to the
- * document — inside an open popover, which is where a keyboard reader would
- * then have to find their way back from. The button of the same task in its new
- * group takes it instead, which is where the reader was.
- *
- * `afterPaint` and not the promise alone: the store is written when
- * `setTaskStatus` resolves, and React has not necessarily flushed the render
- * that moves the row by then. The new button does not exist until it has.
- */
+/** The gesture, and the ring after it: the row moves to the other group, so the same task's new
+ * button takes it, after the paint (08-ui.md, "Closing a task…"). */
 async function press(name: string, status: ReviewStatus): Promise<void> {
   const held = document.activeElement;
   await useStore.getState().setTaskStatus(name, status);
   await afterPaint();
-  // Where the ring went while the write was in flight decides this. It is on
-  // the body when the pressed button was unmounted under it, and still on that
-  // button when the write was refused and the row stayed where it was; either
-  // is the reader not having moved. Anything else is a reader who did move —
-  // the menu closes on a press outside it, and `Tab` walks on — and dragging
-  // them back to a row they have left is worse than a ring they can see.
+  // On `<body>` (the button unmounted) or still on it (the write was refused) is a reader who has
+  // not moved; anywhere else is one who did, and keeps where they are.
   const now = document.activeElement;
   if (now !== null && now !== document.body && now !== held) return;
   document.querySelector<HTMLElement>(`[data-session-status="${CSS.escape(name)}"]`)?.focus();
 }
 
-/**
- * `1 repo changed` / `7 repos changed`, and a dash while nothing has been
- * scanned. It counts like the scope chip beside it because the two sit on one
- * row and a singular next to a plural of the same word reads as a defect —
- * even though the two numbers are deliberately about different things.
- */
+/** `1 repo changed` / `7 repos changed`, a dash while nothing has been scanned; it inflects like
+ * the scope chip beside it (08-ui.md, "The scope on a row…"). */
 function changedLabel(repositories: number | null): string {
   if (repositories === null) return "— repos changed";
   return `${repositories} ${repositories === 1 ? "repo" : "repos"} changed`;

@@ -203,11 +203,8 @@ describe("anchor capture", () => {
   });
 });
 
-/**
- * A hunk that deletes lines both above and below the anchored one, so context
- * taken from the raw line list would carry the other side's text. The old side
- * runs 10-16 and the new side runs 10-16 over the same lines.
- */
+/** A hunk deleting lines above and below the anchored one, both sides 10-16, so context taken
+ * from the raw line list would carry the other side's text. */
 function mixedSides(): RepositoryChange {
   const lines: DiffLine[] = [
     { type: "context", content: "one", oldLine: 10, newLine: 10 },

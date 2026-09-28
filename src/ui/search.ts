@@ -48,10 +48,8 @@ const WHOLE = 100;
 const AT_BOUNDARY = 40;
 const PER_WORD = 12;
 
-/**
- * The hits of one query, best first. An empty query has no hits: the modal
- * opens on its placeholder rather than on a list of the whole review.
- */
+/** The hits of one query, best first; an empty query has none, so the modal opens on its
+ * placeholder rather than on a list of the whole review. */
 export function search(
   query: string,
   files: FileEntry[],
@@ -147,11 +145,8 @@ export function symbolHits(hits: SymbolHit[]): SearchHit[] {
   }));
 }
 
-/**
- * Substring and word overlap. The whole query inside the target is the strong
- * signal; a query whose words are scattered over it — `store live`, `ui a.ts` —
- * still counts, once per word.
- */
+/** Substring, then word overlap: the whole query inside the target is the strong signal, and
+ * words scattered over it — `store live`, `ui a.ts` — still count, once each. */
 function rank(haystack: string, needle: string, words: string[]): number {
   let score = 0;
   const at = haystack.indexOf(needle);
@@ -171,12 +166,8 @@ function firstLine(body: string): string {
   return body.split("\n")[0] ?? body;
 }
 
-/**
- * The lines the preview column shows: the new side of the patch around a
- * target, with the deletions kept in place so the reader sees what the change
- * replaced. A file has no target of its own, so it centres on its first change
- * — which is what the person searching for a path came to look at.
- */
+/** The preview column: the patch's new side around a target, the deletions kept in place; a file
+ * centres on its first change, which a path search came for (08-ui.md, "Global search"). */
 export function preview(patch: string, target: number | null, span = PREVIEW_LINES): PreviewLine[] {
   const rows: PreviewLine[] = [];
   let at = 0;

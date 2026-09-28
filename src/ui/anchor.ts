@@ -1,17 +1,10 @@
-/**
- * Where a comment attaches, in the words the screen uses for it. The anchor
- * level is read from the nulls, as `docs/SPEC.md` section 7 defines it, and the
- * lines are numbered on the new side, as the store holds them.
- */
+/** Where a comment attaches, in the screen's words: the level is read from the nulls
+ * (`docs/SPEC.md` section 7), and lines are numbered on the new side, as the store holds them. */
 import type { ComposerTarget } from "./store.ts";
 import type { Comment } from "./types.ts";
 
-/**
- * The line the `C` key and the perf harness open the composer on: the first
- * line the change set adds to this file. A patch with no added line — a pure
- * deletion — falls back to the first line of the new side, which is where the
- * deletion left a gap.
- */
+/** The line `C` and the perf harness open the composer on: the first added line, or for a pure
+ * deletion the first new-side line of its first hunk, which is where the deletion left a gap. */
 export function firstAddedLine(patch: string): number {
   let line = 1;
   let first: number | null = null;
@@ -39,11 +32,8 @@ export function firstAddedLine(patch: string): number {
   return first ?? 1;
 }
 
-/**
- * The first row of the composer: `→ new side · CargoService.cs L41–43 · 3 lines`
- * for a range, and the level itself for the anchors that have no line
- * (`docs/design/HANDOFF.md` section 2).
- */
+/** The composer's first row, `→ new side · CargoService.cs L41–43 · 3 lines` for a range, and the
+ * level itself for an anchor with no line (`docs/design/HANDOFF.md` section 2). */
 export function composerLabel(target: ComposerTarget, endLine: number | null): string {
   if (target.repo === null) return "→ review";
   if (target.path === null) return `→ ${target.repo} · repository`;
@@ -54,13 +44,8 @@ export function composerLabel(target: ComposerTarget, endLine: number | null): s
   return `→ ${side} · ${target.path} ${range} · ${lines} ${lines === 1 ? "line" : "lines"}`;
 }
 
-/**
- * What a thread card says it is attached to (`docs/design/HANDOFF.md` section
- * 3): `L42–45`, `file`, `review`. On the tab that spans the whole review the
- * repository is named in front of it, but as its own button rather than as part
- * of this string — it is a jump to that repository's section (DA-54), and the
- * card decides whether to show it.
- */
+/** What a thread card says it is attached to (HANDOFF.md section 3): `L42–45`, `file`, `review`.
+ * The repository is not in it: the card draws it as a button of its own, a jump (DA-54). */
 export function threadAnchor(comment: Comment): string {
   if (comment.repo === null) return "review";
   if (comment.path === null) return "repository";
@@ -69,13 +54,8 @@ export function threadAnchor(comment: Comment): string {
   return `L${comment.line}–${comment.endLine}`;
 }
 
-/**
- * The anchor as the export writes it: `src/a.ts:42-45`. This is the domain's
- * own `anchorLabel` written again, for the reason `src/ui/types.ts` gives about
- * its wire shapes — that module reaches the storage barrel, and the barrel
- * reaches the Node API. `tests/ui-anchor.test.ts` checks the two agree on every
- * anchor level.
- */
+/** The export's anchor, `src/a.ts:42-45`: the domain's `anchorLabel` again, which sits behind the
+ * Node API (08-ui.md, "Types of the on-disk format"); `tests/ui-anchor.test.ts` pairs the two. */
 export function exportAnchor(comment: Comment): string {
   if (comment.repo === null) return "review";
   if (comment.path === null) return "repository";

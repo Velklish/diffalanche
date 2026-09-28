@@ -1,11 +1,5 @@
-/**
- * Two writers on one stale lock. The windows these tests open are narrow, and a
- * plain race does not reach them: the writers pass through them together and
- * the result looks correct. So `node:fs/promises` is mocked for this file and
- * the steps are ordered with gates rather than with sleeps — the sequence is
- * then the same on a fast machine and on a loaded one. The assertions read the
- * disk through the synchronous API, which the mock does not touch.
- */
+/** Two writers on one stale lock, in windows too narrow for a plain race: `node:fs/promises` is
+ * mocked and gates order the steps (03-storage.md, "What the unit tests hold"). */
 import { mkdirSync, mkdtempSync, readdirSync, rmSync, writeFileSync } from "node:fs";
 import { tmpdir } from "node:os";
 import { dirname, join, sep } from "node:path";
@@ -158,9 +152,8 @@ afterEach(() => {
 
 describe("taking over a stale lock", () => {
   it("never lets both writers hold it, even when one takeover is slow", async () => {
-    // Removing a stale lock in place lets the second writer create its own
-    // inside the first writer's removal. The delay is on `rm` because that is
-    // the call the broken version makes.
+    // Removing a stale lock in place lets the second writer create its own inside the first's
+    // removal; the delay is on `rm` because that is the call the broken version makes.
     hooks.slowFirstRm = true;
 
     expect((await bothWriters()).sort()).toEqual(["a", "b"]);
@@ -181,8 +174,7 @@ describe("taking over a stale lock", () => {
   });
 
   it("survives a lock moved out from under a writer still claiming it", async () => {
-    // The second writer takes the stale lock over and creates its own, and the
-    // first writer's move lands while that claim is still unfinished: the lock
+    // The second writer takes the stale lock over and the first's move lands mid-claim: the lock
     // directory holds nothing but the other's half-written temporary file.
     const claiming = gate();
     const moved = gate();

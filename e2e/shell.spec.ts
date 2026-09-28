@@ -29,9 +29,8 @@ const THRESHOLD = 1560;
 
 async function open(page: Page) {
   await page.route("**/api/review", (route) => route.fulfill({ json: EMPTY_REVIEW }));
-  // The feed is the server's own and carries whatever the other specs wrote a
-  // moment ago, so `N live` in the activity panel would vary from run to run
-  // and the baselines with it (DA-25).
+  // The feed carries what other specs just wrote, so `N live` would vary from run to run and
+  // the baselines with it (DA-25).
   await page.route("**/api/activity", (route) => route.fulfill({ json: [] }));
   await page.goto("/");
   await page.waitForFunction(() => window.__perf?.ready === true);

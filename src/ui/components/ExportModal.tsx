@@ -6,13 +6,8 @@ import { useStore } from "../store.ts";
 import type { Comment } from "../types.ts";
 import { Overlay } from "./Overlay.tsx";
 
-/**
- * The export of handoff section 9. `raw` is the markdown `GET /api/export`
- * answers with, and it is what `Copy .md` writes to the clipboard; `rendered`
- * is that same export laid out, built from the comments of the same route
- * rather than by parsing the markdown back — the page has the comments, and a
- * markdown parser to read its own output would be the long way round.
- */
+/** The export of handoff section 9: `raw` is the route's markdown, `rendered` lays out the same
+ * route's comments rather than parsing it back (08-ui.md, "The header"). */
 export function ExportModal() {
   const view = useStore((store) => store.exportView);
   const status = useStore((store) => store.exportStatus);
@@ -112,13 +107,8 @@ function Item({ comment }: { comment: Comment }) {
   );
 }
 
-/**
- * The sections in the order `exportMarkdown` writes them: the whole review
- * first, then the repositories by code point, and inside each one the comments
- * by path and then by line. The two tabs are one export, so `rendered` may not
- * put it in a different order than `raw`
- * ([04-domain.md](../../../docs/reference/04-domain.md)).
- */
+/** The sections in the order `exportMarkdown` writes them, since the two tabs are one export
+ * (08-ui.md, "The header"; [04-domain.md](../../../docs/reference/04-domain.md)). */
 function sections(comments: Comment[]): { title: string; comments: Comment[] }[] {
   const out: { title: string; comments: Comment[] }[] = [];
   const wholeReview = comments.filter((comment) => comment.repo === null);

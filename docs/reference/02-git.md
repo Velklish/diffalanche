@@ -366,8 +366,9 @@ to be there — one fewer case for it to handle, and one more thing to explain.
 | `"too-large"` | a **tracked** file's patch is over `maxFileBytes` | kept: the patch was parsed, only not carried |
 | `"too-large"` | an **untracked** file is over `maxFileBytes` | 0 and 0: the file is never opened, so there is nothing to count |
 
-The limit defaults to `DEFAULT_MAX_FILE_BYTES`, 512 KiB per file, and is
-`maxFileBytes` of the reader's options. For a tracked file it caps what the
+The limit defaults to `DEFAULT_MAX_FILE_BYTES`, 512 KiB per file — far above a
+reviewable file and far below what would make the one review response heavy —
+and is `maxFileBytes` of the reader's options. For a tracked file it caps what the
 change set carries, not what git is asked for. For an untracked one it is
 checked against the file's own size before the read, which is the point: a huge
 untracked file is never loaded into memory at all. That one check is the whole
@@ -415,6 +416,27 @@ A `diff --git` block the parser makes nothing of — not known to happen — is
 listed as `binary`: the file is real, git printed the header, and while the
 reason for having no content is unknown, having none is the part that is true.
 
+## Asking what git ignores
+
+`checkIgnore(cwd, paths)` in `run.ts` is the watcher's question
+([05-watcher.md](05-watcher.md)): which of a burst's paths git ignores, asked
+with `check-ignore --stdin -z` in one process for the whole list. The rules are
+git's own — `.gitignore` at every level, `.git/info/exclude`, and the user's
+ignore file — and the index is read, so a tracked file is never reported: it is
+in the diff whatever a pattern says about it. `check-ignore` writes nothing,
+which is why it is the question asked; `git status` would answer it too, and
+refreshes the index on the way (`docs/SPEC.md` section 11).
+
+Exit code 1 is the answer "none of them", not a failure. Anything else — a git
+that will not start, a repository it refuses — is `null`, and the caller does the
+work rather than keeping an answer it did not get: the watcher rescans such a
+burst.
+
+The list goes in on standard input, which is where the errors of a pipe live: a
+process that never started, or one that exited before it read everything, makes
+the write fail. That failure is caught on `stdin` and answers `null`; unhandled,
+it would be an uncaught exception in a server that has no reason to stop.
+
 ## The whole review in one call
 
 `src/core/change-set.ts` puts the scanner and the reader above together, and
@@ -447,7 +469,8 @@ await refreshRepository(config, session, review.base, "repos/group/service-api",
   twenty-one must not pay for the other nineteen;
   `tests/scope-scan.test.ts` counts the processes rather than the seconds.
 - `filterChange(scope, change)` is what the scope leaves of one repository: a
-  repository the task is not about comes back with no files and no warnings, one
+  repository the task is not about comes back with no files and no warnings — a
+  warning about a repository outside the task is not this task's news — one
   the scope holds as a whole keeps every file, and one that names paths keeps
   those and no others. **The names are matched as they are written, a renamed
   file included**: a file whose name changed is at a path the scope does not
@@ -600,3 +623,33 @@ search.
 
 - The whole diff of a repository is read into memory as one string before it is
   split, so `maxFileBytes` bounds what is carried, not what is read.
+
+## What the unit tests hold
+
+`tests/scope-scan.test.ts` (DA-53) holds the scan of a scoped task to its scope,
+and measures it in git processes rather than in seconds: a task over two of the
+synthetic review's twenty-one repositories starts no git process in the other
+nineteen. Wall-clock time would say the same thing on a fast machine and
+something else on a loaded one; the number of processes says it either way.
+
+The count comes from a `git` of the test's own, first on `PATH`, that writes the
+directory it was run in and its arguments and then hands over to the real one.
+Everything the tool runs goes through `execFile("git", …)`, so nothing escapes
+it. The shim is on `PATH` only while one scan runs and is taken off in
+`finally`: a `beforeAll` that installed it for the length of the file would
+leave it behind for the worker's next file the moment anything in that hook
+threw. The configuration is loaded before the shim goes in, because with no user
+in the file it runs `git config user.name`, which is not part of what a scan
+costs.
+
+The fixture is the twenty-one repositories of the full profile with the content
+of the small one ([11-perf.md](11-perf.md#profiles)). A process costs the same
+over four changed lines as over four thousand, so carrying the full thirty
+thousand would only make the suite slower and the machine busier while the
+watcher tests next door measure latency.
+
+`tests/helpers/change-set.ts` builds a fixture repository's change set for the
+anchor tests — hunks with per-line old and new numbers — by parsing `git diff`
+itself rather than through `gitdiff-parser`, so the anchors it checks are
+measured against git's own output and not against another copy of the parser
+that produced them.

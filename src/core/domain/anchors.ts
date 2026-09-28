@@ -1,9 +1,5 @@
-/**
- * Capturing the anchor of a line comment from the change set: the line's own
- * text, the header of the hunk it sits in, and three lines of context on each
- * side (`docs/SPEC.md` section 3, decision 6). This is what Phase 3 re-anchors
- * from after the code moves, so it is taken once, when the comment is written.
- */
+/** The anchor of a line comment, taken once when it is written: Phase 3 re-anchors from it
+ * ([04-domain.md](../../../docs/reference/04-domain.md), "Anchor capture"). */
 import type { Anchor, Side } from "../storage/index.ts";
 import type { DiffLine, FileChange, Hunk, RepositoryChange } from "../types.ts";
 import { DomainError } from "./errors.ts";
@@ -15,11 +11,8 @@ function lineNumber(line: DiffLine, side: Side): number | null {
   return side === "new" ? line.newLine : line.oldLine;
 }
 
-/**
- * Finds the file in the change set, refusing with what is actually wrong: the
- * repository has no changes, the file has none, or the file was left out of the
- * diff and has no lines to anchor to at all.
- */
+/** The file in the change set, or a refusal naming what is wrong: no changes in the repository,
+ * none in the file, or a file left out of the diff with no lines to anchor to. */
 function findFile(repositories: RepositoryChange[], repo: string, path: string): FileChange {
   const repository = repositories.find((one) => one.path === repo);
   if (repository === undefined) {
@@ -68,11 +61,8 @@ function nearest(file: FileChange, side: Side, line: number): Hunk | null {
   return best;
 }
 
-/**
- * The anchor of a line comment. A line the change set does not have is refused
- * with the nearest hunk named, because "line 42 is not in the diff" alone
- * leaves the writer guessing where the diff actually is.
- */
+/** A line the change set does not have is refused with the nearest hunk named: the bare refusal
+ * leaves the writer guessing where the diff is. */
 export function captureAnchor(
   repositories: RepositoryChange[],
   repo: string,
@@ -83,11 +73,8 @@ export function captureAnchor(
   const file = findFile(repositories, repo, path);
 
   for (const hunk of file.hunks) {
-    // The context is the neighbourhood in the file the comment is about, so it
-    // is taken from the lines that side has — `context` and `insert` for `new`,
-    // `context` and `delete` for `old`. The raw list holds both sides, and
-    // slicing it puts text that never existed in that file into `before` and
-    // `after`, which is what re-anchoring later matches against.
+    // Context from the anchored side's lines only: the raw list holds both sides, and text from
+    // the other would never have existed in that file (04-domain.md, "Anchor capture").
     const onSide = hunk.lines.filter((one) => lineNumber(one, side) !== null);
     const index = onSide.findIndex((one) => lineNumber(one, side) === line);
     if (index === -1) continue;

@@ -1,9 +1,5 @@
-/**
- * What the CLI itself refuses: a flag that is not there, a value that is not
- * one of the choices, a command nobody typed. The domain and storage have their
- * own error types and the dispatcher treats all three the same — exit code 1
- * and one line on standard error.
- */
+/** What the CLI itself refuses: an unknown flag, a value off the choices, no command; the
+ * dispatcher treats it as the domain's and storage's errors — exit 1, one line (06-cli.md). */
 export class UsageError extends Error {
   constructor(message: string) {
     super(message);
@@ -11,12 +7,8 @@ export class UsageError extends Error {
   }
 }
 
-/**
- * The one refusal for a `--repo` that names no repository under the root. Both
- * the command that scans and the command that anchors give it, and a reader who
- * met it once should not have to work out whether the second wording means
- * something else.
- */
+/** The one refusal for a `--repo` naming no repository under the root: `diff` and `comment`
+ * both give it, so a reader who met it once need not wonder whether a second wording differs. */
 export function repositoryNotFound(repo: string): UsageError {
   return new UsageError(`--repo: no repository "${repo}" under the root`);
 }

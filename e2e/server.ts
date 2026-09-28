@@ -1,8 +1,5 @@
-/**
- * The server the UI tests run against: the built page over the small synthetic
- * review. The shell tests stub `GET /api/review` with an empty review, so both
- * the empty shell and a real diff are covered by one server.
- */
+/** The UI tests' server, the built page over the small synthetic review; the shell tests stub
+ * `GET /api/review` empty, so one server covers the empty shell and a real diff. */
 import { loadConfig } from "../src/core/config/index.ts";
 import { directoryAssets, startReviewServer } from "../src/server/index.ts";
 

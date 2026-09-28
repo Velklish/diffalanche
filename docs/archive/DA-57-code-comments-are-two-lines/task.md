@@ -33,7 +33,7 @@ already requires the opposite of its documentation, down to a token in
 `src/ui/tokens.css` changing in `DESIGN.md` in the same pass.
 
 This task records the rule. It does not bring the 720 blocks into line; that is
-[DA-58](../../backlog/queue/DA-58-comment-sweep-to-two-lines.md).
+[DA-58](../DA-58-comment-sweep-to-two-lines/task.md).
 
 ## Work to do
 

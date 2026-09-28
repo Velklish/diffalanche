@@ -1,11 +1,6 @@
 import type { Measurement, VariantSpec } from "./harness.ts";
 import { median } from "./harness.ts";
 
-/**
- * The budget table of `docs/SPEC.md` section 6, in code. A line the harness
- * cannot measure yet is `pending`: it is printed, never failed, and the task
- * named in `pendingUntil` turns it on.
- */
 /** The fields of a measurement a budget line can read: the numeric ones. */
 type MetricField = {
   [K in keyof Measurement]: Measurement[K] extends number ? K : never;
@@ -18,15 +13,13 @@ export type Budget = {
   field: MetricField | null;
   budget: number;
   unit: "ms" | "tasks";
-  /**
-   * The task that finishes this line. A line with no field is printed as
-   * pending; a line that has one and is still waiting for that task is
-   * measured and printed with the task named, and does not fail the build —
-   * the number does not yet cover everything the budget is about.
-   */
+  /** The task that finishes this line: with no field it prints as pending; with one it is measured
+   * and named but fails nothing, since the number does not yet cover the whole budget. */
   pendingUntil?: string;
 };
 
+/** The budget table of `docs/SPEC.md` section 6 in code; a line the harness cannot measure yet is
+ * `pending`, printed and never failed until the task in `pendingUntil` turns it on. */
 export const BUDGETS: Budget[] = [
   {
     label: "First render of the review after the server responds",
@@ -47,10 +40,8 @@ export const BUDGETS: Budget[] = [
   { label: "Update after an edit in one repository", field: "updateMs", budget: 300, unit: "ms" },
 ];
 
-/**
- * The page as it ships: no query string, so the gate measures the combination
- * ADR-008 chose rather than a variant kept for comparison.
- */
+/** The page as it ships, no query string: the gate measures what ADR-008 chose, not a variant kept
+ * for comparison. */
 export const GATE_VARIANT: VariantSpec = { name: "default", query: "" };
 
 /** The gate is set on what this machine reaches; 8.3 ms, the frame of 120 fps,

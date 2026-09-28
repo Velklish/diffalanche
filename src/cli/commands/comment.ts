@@ -61,16 +61,14 @@ export const comment: Command = {
     // Before anything is written: a comment stored on a repository the review
     // does not have shows up in `list` and in `export` and nowhere in the UI.
     if (repo !== null) await assertRepository(config, repo);
-    // And before the repository is read again: a comment outside the scope is
-    // refused, so an anchor the task is not about costs no git process on its
-    // way to the refusal. The domain checks it too, for every caller.
+    // Before the repository is read again, so an anchor outside the scope costs no git process
+    // on its way to the refusal; the domain checks it too, for every caller.
     assertAnchorInScope(review, repo, path);
     // And the levels, for the same reason: an anchor that is not a level is
     // refused by `addComment` anyway, after the read this saves.
     assertAnchorLevels({ repo, path, line, endLine });
-    // The anchor is captured from `diff.json`, so the repository the line is in
-    // is read again first: a comment written right after an edit has to point
-    // at the line that is there now.
+    // The anchor is captured from `diff.json`, so its repository is read again first: a comment
+    // written right after an edit has to point at the line that is there now.
     if (line !== null && repo !== null) {
       await refreshRepository(config, session, review.base, repo, review.scope);
     }

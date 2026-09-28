@@ -1,21 +1,6 @@
 #!/bin/sh
-#
-# One review through one delivery channel, end to end: the scenario the smoke
-# matrix of [ADR-006](../docs/adr/adr-006-verification.md) runs on every runtime.
-# The channel is the command this script is given.
-#
-#   scripts/smoke.sh node dist/cli.js
-#   scripts/smoke.sh bun src/cli/index.ts
-#   scripts/smoke.sh ./dist/diffalanche-darwin-arm64
-#
-# Run it from the repository root: the fixture comes from `bun run synth` and
-# the command is taken as it is typed, so its paths are the ones a person would
-# type there. The words of the command must not contain spaces — a POSIX shell
-# has one list, the positional parameters, and they carry the arguments.
-#
-# Everything is written under a temporary root that is removed on the way out;
-# no repository of the checkout is read or written. See
-# [docs/reference/11-perf.md](../docs/reference/11-perf.md).
+# One review end to end through the channel given as the command, ADR-006's smoke matrix; run
+# from the repository root, words without spaces (docs/reference/11-perf.md, "The smoke matrix").
 
 set -u
 
@@ -53,9 +38,8 @@ fail() {
     exit 1
 }
 
-# A file quoted back into the failure, indented, empty said out loud: a step
-# that failed with nothing on stderr is a different fault from one that failed
-# with a message, and a blank block hides which it was.
+# A file quoted into the failure, indented, `(empty)` said out loud: no stderr is a different
+# fault from a message, and a blank block hides which it was.
 quote() {
     if [ -s "$1" ]; then
         sed 's/^/    /' "$1" >&2
@@ -160,17 +144,8 @@ if (name === "anchor") {
 MJS
 fi
 
-# Reads one query and leaves the answer in QUERY_OUT, its line count in
-# QUERY_ROWS. It is a function rather than a value in a substitution because a
-# substitution runs in a subshell, where an `exit` ends the subshell and the
-# scenario walks on.
-#
-# No rows and a reader that broke are different answers. `jq -e` exits 4 when
-# the filter produced no output at all — an empty comment list — and 2, 3, or 5
-# when the input or the filter itself was wrong; the Node reader writes nothing
-# and exits 0 for an empty list, non-zero when it throws. Without the
-# difference, a `jq` that cannot parse the JSON satisfies every expectation of
-# zero comments.
+# The answer to QUERY_OUT and its lines to QUERY_ROWS, a function because `exit` in a substitution
+# ends only its subshell; no rows and a broken reader differ (11-perf.md, "The smoke matrix").
 read_json() { # <query> <file>
     if [ "$JSON" = jq ]; then
         QUERY_OUT=$(jq -er "$(jq_program "$1")" "$2" 2>"$WORK/reader.err")
@@ -195,9 +170,8 @@ read_json() { # <query> <file>
     fi
 }
 
-# One command of the channel under test. Its output is kept for the assertions
-# that follow it, and a non-zero exit stops the run with the three things
-# needed to reproduce it: the command, the code, and what it said on stderr.
+# One command of the channel under test, output kept for the assertions after it; a non-zero
+# exit stops the run with the command, the code and its stderr, enough to reproduce it.
 step() { # <what it is> <argument>...
     STEP=$1
     shift
@@ -225,9 +199,8 @@ step() { # <what it is> <argument>...
     printf '  %s\n' "$STEP"
 }
 
-# An expectation about the output of the step that just ran. The stdout it
-# failed on is printed with it: without it the message names a mismatch and
-# leaves the reader to run the command again by hand.
+# An expectation about the last step's stdout, printed with the failure so the reader need not
+# run the command again by hand.
 expect_stdout() { # <pattern> <what was expected>
     grep -q "$1" "$STDOUT" && return 0
     printf '\nsmoke: %s, after %s\n' "$2" "$STEP" >&2
@@ -247,11 +220,8 @@ expect_equal() { # <actual> <expected> <what it is>
     exit 1
 }
 
-# What `serve` said when it did not serve. `serve` is the one command that is
-# not run through `step()`, so it prints the same things itself — and both of
-# its streams, because this is where the answer often sits on stdout: an
-# address printed in a form the readiness check did not recognise, or a message
-# that never reached stderr at all.
+# What `serve` said when it did not serve: it bypasses `step()`, so both streams print here, as the
+# answer often sits on stdout — an address the check missed, or nothing on stderr at all.
 serve_failed() { # <port> <what happened> <exit code|->
     printf '\nsmoke: %s\n' "$2" >&2
     printf '  command    %s serve --root %s --port %s\n' "$CLI" "$ROOT" "$1" >&2
@@ -282,10 +252,8 @@ start_server() { # <port>
             fi
             serve_failed "$1" "serve exited instead of serving the review" "$code"
         fi
-        # The address line is what proves the answer comes from this server and
-        # not from whatever else holds the port: something already listening
-        # there answers `/api/review` with its own review, and a scenario that
-        # accepted it would test a stranger's server.
+        # The address line proves this server answered: whatever else holds the port answers
+        # `/api/review` with its own review, and accepting it would test a stranger's server.
         if grep -q "on http://127.0.0.1:$1" "$SERVE_OUT" &&
             curl -fsS -o "$WORK/review.json" "http://127.0.0.1:$1/api/review" 2>/dev/null; then
             return 0

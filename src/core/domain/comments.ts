@@ -1,8 +1,5 @@
-/**
- * Comments: writing one, replying, resolving, and reading them back.
- * `docs/SPEC.md` section 5 "Comments" and "Agent", section 7 for the shape, and
- * [ADR-004](../../../docs/adr/adr-004-agent-contract.md) for who may do what.
- */
+/** Writing, replying, resolving, reading back ([04-domain.md](../../../docs/reference/04-domain.md));
+ * who may do which is [ADR-004](../../../docs/adr/adr-004-agent-contract.md). */
 import type {
   Anchor,
   Comment,
@@ -83,24 +80,16 @@ export type CommentFilter = {
   unanswered?: boolean;
 };
 
-/**
- * Every function here starts with this. Without it a session that is not there
- * comes back as an empty list from `list`, as "no such comment" from `get`, and
- * as two different refusals from `addComment`, depending on the anchor level —
- * four answers to one question.
- */
+/** Every function here starts with it: without it a missing session gets four answers, one per
+ * caller and anchor level ([04-domain.md](../../../docs/reference/04-domain.md), "Comments"). */
 async function assertSession(dataDir: string, session: string): Promise<void> {
   if (!(await sessionExists(dataDir, session))) {
     throw new DomainError("no-such-session", `no review session "${session}"`);
   }
 }
 
-/**
- * What the session is about. Every read of the comments goes through it: a task
- * returns nothing outside its scope, so a comment that is not in it is not in
- * the answer ([ADR-010](../../../docs/adr/adr-010-review-task-scope.md)). A
- * session with no scope covers the whole root and filters nothing.
- */
+/** The scope every read of the comments filters by: a task returns nothing outside it
+ * ([04-domain.md](../../../docs/reference/04-domain.md), "Reading comments back"). */
 async function sessionScope(dataDir: string, session: string): Promise<Scope> {
   return (await readReview(dataDir, session)).scope;
 }
@@ -127,11 +116,8 @@ function nextReplyId(replies: Reply[]): string {
 /** The anchor of a comment, without what is written on it. */
 type AnchorLevels = Pick<NewComment, "repo" | "path" | "line" | "endLine">;
 
-/**
- * Checks that the anchor levels add up. `docs/SPEC.md` section 7 reads the
- * level off the nulls, so a line without a file or a range without a line is
- * not a level at all — it is a comment nothing can place.
- */
+/** The level is read off the nulls, so a line without a file or a range without a line is a
+ * comment nothing can place (04-domain.md, "Anchor levels"). */
 export function assertAnchorLevels(input: AnchorLevels): void {
   const repo = input.repo ?? null;
   const path = input.path ?? null;
@@ -155,11 +141,8 @@ export function assertAnchorLevels(input: AnchorLevels): void {
   }
 }
 
-/**
- * The change set the anchor is taken from. `diff.json` is the cache a scan
- * wrote, and it is the only source that carries hunks: the review response of
- * the server drops them for speed.
- */
+/** The change set anchors are taken from: `diff.json`, the one source that carries hunks
+ * ([04-domain.md](../../../docs/reference/04-domain.md), "Anchor capture"). */
 async function changeSet(dataDir: string, session: string): Promise<RepositoryChange[]> {
   const cache = await readDiffCache(dataDir, session);
   if (cache === null) {
@@ -195,10 +178,8 @@ export async function addComment(
   const repo = input.repo ?? null;
   const path = input.path ?? null;
   const line = input.line ?? null;
-  // A comment outside the scope would be stored and never read back: `list`,
-  // `show`, `export`, and the UI all answer inside the scope. A change outside
-  // the task belongs to another task, and the refusal says what this one is
-  // about (`docs/SPEC.md` section 9).
+  // The cheap refusal, before the anchor is read: a comment outside the scope would be stored
+  // and never read back (04-domain.md, "Writing a comment").
   assertAnchorInScope(await readReview(dataDir, session), repo, path);
   const side: Side | null = line === null ? null : (input.side ?? "new");
   const anchor =
@@ -272,13 +253,8 @@ async function anchorOf(
   }
 }
 
-/**
- * The comment this session has under that id. A comment outside the scope is
- * not one of them: the task returns nothing outside itself, so `show` and
- * `list` do not have it and `reply`, `resolve`, and `reopen` must not either —
- * one question, one answer. Nothing writes such a comment; a `comments.json`
- * edited by hand is where it comes from.
- */
+/** The comment under that id inside the scope: one outside it, from a hand edit, is
+ * `no-such-comment` to every reader ([04-domain.md](../../../docs/reference/04-domain.md)). */
 function find(comments: Comment[], id: string, scope: Scope = null): Comment {
   const comment = comments.find((one) => one.id === id && commentInScope(scope, one));
   if (comment === undefined) {

@@ -1,15 +1,5 @@
-/**
- * What a scoped scan costs, measured in git processes rather than in seconds
- * (DA-53): a task over two repositories of the synthetic review's twenty-one
- * must start no git process for the other nineteen. Wall-clock time would say
- * the same thing on a fast machine and something else on a loaded one; the
- * number of processes says it either way.
- *
- * The count comes from a `git` of the test's own, first on `PATH`, that writes
- * the directory it was run in and then hands over to the real one. Everything
- * the tool runs goes through `execFile("git", …)`
- * ([02-git.md](../docs/reference/02-git.md)), so nothing escapes it.
- */
+/** A scoped scan starts no git process outside its scope (DA-53), counted by a `git` shim first
+ * on `PATH` ([02-git.md](../docs/reference/02-git.md#what-the-unit-tests-hold)). */
 import { execFileSync } from "node:child_process";
 import { chmodSync, mkdtempSync, readFileSync, realpathSync, rmSync, writeFileSync } from "node:fs";
 import { tmpdir } from "node:os";
@@ -24,13 +14,8 @@ import { readCurrent, writeCurrent } from "../src/core/storage/index.ts";
 import { createReviewService } from "../src/server/review.ts";
 import { startReviewServer } from "../src/server/serve.ts";
 
-/**
- * The twenty-one repositories of the synthetic review (`docs/SPEC.md` section
- * 6), with the content of the small one. What is counted here is git processes,
- * and a process costs the same over four changed lines as over four thousand:
- * carrying the full thirty thousand would only make the suite slower and the
- * machine busier while the watcher next door measures latency.
- */
+/** The synthetic review's twenty-one repositories with the small profile's content: a process
+ * costs the same over four lines as four thousand (02-git.md, "What the unit tests hold"). */
 const PROFILE = { ...PROFILES.small, repos: PROFILES.full.repos };
 /** Two of the twenty-one, by the names the generator gives its first repositories. */
 const SCOPED = ["repos/core/cargos-api", "repos/platform/loads-search"];
@@ -77,13 +62,8 @@ function subcommands(): string[] {
   return [...names].sort();
 }
 
-/**
- * Counts the git processes of one scan and nothing else. `PATH` carries the
- * shim only while `scan` runs and is put back in `finally`, so no other test
- * file of this worker can inherit it — a `beforeAll` that installed it for the
- * length of the file would leave it behind the moment anything in that hook
- * threw.
- */
+/** Counts one scan's git processes. The shim is on `PATH` only inside `scan`, off in `finally`:
+ * a file-long `beforeAll` would leave it to the worker's next file the moment the hook threw. */
 async function count<T>(scan: () => Promise<T>): Promise<{ result: T; touched: string[] }> {
   writeFileSync(logPath, "");
   writeFileSync(argvPath, "");
@@ -104,9 +84,8 @@ beforeAll(async () => {
   // process started inside it reports the path it really has.
   realRoot = realpathSync(root);
   generate({ out: root, seed: 3, profile: PROFILE });
-  // Loaded before the shim is in place: the configuration reads
-  // `git config user.name` when the file names no user, and that call is not
-  // part of what a scan costs.
+  // Loaded before the shim: with no user in the file the configuration runs
+  // `git config user.name`, which is not part of what a scan costs.
   config = await loadConfig({ root });
 
   shim = mkdtempSync(join(tmpdir(), "diffalanche-git-shim-"));

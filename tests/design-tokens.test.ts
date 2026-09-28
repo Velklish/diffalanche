@@ -2,13 +2,8 @@ import { readFileSync } from "node:fs";
 import { fileURLToPath } from "node:url";
 import { describe, expect, it } from "vitest";
 
-/*
- * `DESIGN.md` is the token authority the Impeccable design skill reads, and
- * `src/ui/tokens.css` is what the browser reads. The rule in `AGENTS.md` is that
- * the two change together; this test is what enforces it. Dark tokens are keyed
- * in the frontmatter by their CSS variable name, light ones by that name plus
- * `-light`.
- */
+/* Holds `DESIGN.md`, the token authority, and `src/ui/tokens.css` to one set of values (AGENTS.md);
+ * dark tokens are keyed by the CSS variable's name, light ones by that name plus `-light`. */
 
 const root = fileURLToPath(new URL("..", import.meta.url));
 

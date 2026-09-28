@@ -22,9 +22,8 @@ export function Header() {
   const openExport = useStore((store) => store.openExport);
   const pill = useRef<HTMLSpanElement>(null);
 
-  // A press anywhere outside the pill and its menu closes it. The pill itself
-  // is inside, so pressing it a second time is its own toggle rather than a
-  // close followed by an immediate reopen.
+  // A press outside the pill and its menu closes it; the pill counts as inside, so a second press
+  // is its own toggle rather than a close and a reopen.
   useEffect(() => {
     if (!menuOpen) return;
     const close = (event: PointerEvent) => {
@@ -169,22 +168,8 @@ function PanelStub({ side }: { side: "sidebar" | "rail" }) {
   );
 }
 
-/**
- * The quiet mark of handoff section 1.1: a task appeared in the data directory,
- * or one was closed or reopened, while this window was open. It is a dot on the
- * pill that opens the history and **nothing else** — no toast, no switch, no
- * scroll, and nothing that closes a composer the reader is writing in. They go
- * on reading and open the task when they are ready; opening the menu clears it
- * (DA-56).
- *
- * It is `.dot`, the system's status dot, and not a shape of its own: the 7 px
- * status dot is the only circle `DESIGN.md` allows, and a second round
- * primitive beside it would be a change to the visual contract rather than a
- * mark (`DESIGN.md`, Shapes).
- *
- * The dot is not the news itself, so the sentence goes to a screen reader,
- * which has no dot to read.
- */
+/** The quiet mark of handoff section 1.1 and nothing else, drawn as the system's `.dot` with its
+ * sentence for a screen reader (DA-56, 08-ui.md, "The header"). */
 function HistoryMark() {
   const marked = useStore((store) => store.historyMark);
   if (!marked) return null;
@@ -196,16 +181,8 @@ function HistoryMark() {
   );
 }
 
-/**
- * The `SCOPE` pill of handoff section 1.1, beside `BASE` and the same control
- * shape: what this review task is about, and the way into the editor that
- * changes it.
- *
- * **A session with no scope has no pill at all.** It is about the whole root,
- * which is what a session has always been, and a pill saying so would be a
- * control for a state that is not a narrowing
- * ([ADR-010](../../../docs/adr/adr-010-review-task-scope.md)).
- */
+/** The `SCOPE` pill of handoff section 1.1; a session with no scope has none, the whole root not
+ * being a narrowing (08-ui.md, "The header"). */
 function ScopePill() {
   const scope = useStore((store) => store.session?.scope ?? null);
   const openScope = useStore((store) => store.openScope);

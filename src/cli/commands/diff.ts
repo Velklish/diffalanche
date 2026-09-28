@@ -1,7 +1,5 @@
-/**
- * `diff`: the change set of the session, rescanned and rewritten by every run
- * that exits 0 ([06-cli.md](../../../docs/reference/06-cli.md)).
- */
+/** `diff`: the change set of the session, rescanned and rewritten by every run that exits 0
+ * ([06-cli.md](../../../docs/reference/06-cli.md)). */
 import { formatScope, readSession, repositoryInScope } from "../../core/domain/index.ts";
 import { scanReview, totalsOf } from "../../core/index.ts";
 import type { DiffCache } from "../../core/storage/index.ts";
@@ -11,12 +9,8 @@ import type { Command } from "../command.ts";
 import { repositoryNotFound, UsageError } from "../errors.ts";
 import { json } from "../output.ts";
 
-/**
- * The change set as one patch. It is not a patch to apply — the files of one
- * repository are all `a/…` and `b/…`, and two repositories would collide — so
- * every repository is announced by a comment line before its files, the way
- * `git format-patch` puts prose above the diff it carries.
- */
+/** The change set as one patch to read, not to apply: two repositories' `a/…` would collide,
+ * so a `#` line announces each (06-cli.md, "The change set"). */
 function patch(cache: DiffCache): string {
   const parts: string[] = [];
   for (const repository of cache.repositories) {
@@ -33,15 +27,8 @@ function patch(cache: DiffCache): string {
   return parts.join("");
 }
 
-/**
- * What `--repo` leaves of the change set: that repository and the warnings
- * about it. The totals are counted again, so the numbers of the output always
- * describe the repositories printed under them.
- *
- * A path the scan found no repository at never reaches this: it is refused
- * before the cache is written, because a mistyped flag must not leave the
- * review rewritten behind it.
- */
+/** What `--repo` leaves of the change set, totals counted again for what is printed; a path
+ * with no repository was refused before the cache was written (06-cli.md, "The change set"). */
 function narrow(cache: DiffCache, repo: string | undefined): DiffCache {
   if (repo === undefined) return cache;
   const repositories = cache.repositories.filter((one) => one.path === repo);
@@ -76,22 +63,15 @@ export const diff: Command = {
     const config = await context.config();
     const review = await readSession(config.dataDir, session);
 
-    // The scan covers the whole root and the cache holds all of it: `--repo`
-    // narrows what is printed, never what is stored, because a cache with one
-    // repository in it would tell the UI and the next `comment` that the rest
-    // of the review has no changes.
-    // Inside the scope of the session: a task returns nothing outside it, so
-    // `diff` prints the repositories and the files the task is about and
-    // `diff.json` holds exactly those
-    // ([ADR-010](../../../docs/adr/adr-010-review-task-scope.md)).
+    // The scope narrows what is read and stored (ADR-010); `--repo` narrows only what is
+    // printed, so the cache never says the rest has no changes (06-cli.md, "The change set").
     const scanned = await scanReview(config, review.base, review.scope);
     // Before the write: an empty change set means the repository is there and
     // has nothing to show, and a path nothing is at must not print the same.
     const repo = text(args, "repo");
     if (repo !== undefined && !scanned.found.includes(repo)) throw repositoryNotFound(repo);
-    // A repository the root has but the task is not about is refused as well,
-    // and by its own message: the task returns nothing outside its scope, and
-    // an empty change set would read as "nothing changed there".
+    // A repository the root has but the task is not about is refused by its own message: an
+    // empty change set would read as "nothing changed there".
     if (repo !== undefined && !repositoryInScope(review.scope, repo)) {
       throw new UsageError(
         `no repository "${repo}" in the scope of review session "${review.name}", ` +

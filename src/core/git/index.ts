@@ -25,11 +25,8 @@ type BaseResolution = {
   warnings: string[];
 };
 
-/**
- * Resolves the session's base in one repository (`docs/SPEC.md` section 3,
- * decision 4). Every fallback is a warning, so the reason a repository is
- * measured against something other than what was asked for is never silent.
- */
+/** Resolves the session's base in one repository; every fallback is a warning
+ * ([02-git.md](../../../docs/reference/02-git.md), "The three base modes"). */
 async function resolveBase(cwd: string, spec: BaseSpec): Promise<BaseResolution> {
   if (spec.mode === "ref") {
     const sha = await revParse(cwd, spec.ref);
@@ -47,11 +44,8 @@ async function head(cwd: string, warnings: string[]): Promise<BaseResolution> {
   return { base: { mode: "head", ref: "HEAD", sha }, warnings };
 }
 
-/**
- * `branch`: the working tree against the merge base of HEAD and a branch — the
- * one the session names, or the remote default branch. A repository that cannot
- * follow that falls back, one step at a time, to `head`.
- */
+/** `branch`: against the merge base of HEAD and the named or remote default branch, falling
+ * back one step at a time to `head` (02-git.md, "The three base modes"). */
 async function branch(cwd: string, named: string | undefined): Promise<BaseResolution> {
   const warnings: string[] = [];
   let target = named;

@@ -1,8 +1,5 @@
-/**
- * `config.json` and the command-line flags that override it. The result is one
- * typed `Config` with every path already resolved, so nothing downstream has to
- * know what was written in the file and what came from a flag.
- */
+/** `config.json` and the flags that override it, as one `Config` with every path resolved
+ * ([03-storage.md](../../../docs/reference/03-storage.md), "Config"). */
 import { execFile } from "node:child_process";
 import { readFile } from "node:fs/promises";
 import { homedir, tmpdir, userInfo } from "node:os";
@@ -48,11 +45,8 @@ type ConfigOverrides = {
   port?: number;
 };
 
-/**
- * Where the data directory may come from besides the command line and the
- * root. Both are parameters so that a test never reads the developer's own
- * environment or `~/.config`.
- */
+/** Where the data directory may come from besides the flag and the root; parameters, so that a
+ * test never reads the developer's own environment or `~/.config`. */
 type ConfigSources = {
   /** The process environment; `DIFFALANCHE_DATA_DIR` is read from it. */
   env?: NodeJS.ProcessEnv;
@@ -95,12 +89,8 @@ export function configPath(dataDir: string): string {
   return resolve(dataDir, "config.json");
 }
 
-/**
- * Loads the configuration. `cwd` is the directory the command was run in: both
- * `--root` and `--data-dir` are relative to it, while everything inside the
- * file — and the data directory named by the environment or the user config —
- * is relative to the root.
- */
+/** `--root` and `--data-dir` resolve against `cwd`; the file, the variable and the user config
+ * against the root ([03-storage.md](../../../docs/reference/03-storage.md), "Config"). */
 export async function loadConfig(
   overrides: ConfigOverrides = {},
   cwd: string = process.cwd(),
@@ -131,16 +121,8 @@ export async function loadConfig(
   };
 }
 
-/**
- * The data directory, from the first source that names one: `--data-dir`
- * against the current directory; `DIFFALANCHE_DATA_DIR` against the root; the
- * `dataDir` of the user config against the root; else `<root>/.diffalanche`.
- * The order runs from the most to the least specific — the flag is this run,
- * the variable is this shell, the user config is this person — and everything
- * but the flag is relative to the root, so one value serves every root. An
- * empty variable counts as unset: a shell that exports it blank is not asking
- * for a data directory named "".
- */
+/** The first source that names a data directory, most specific first; all but the flag against
+ * the root, so one value serves every root ([06-cli.md](../../../docs/reference/06-cli.md)). */
 async function resolveDataDir(
   root: string,
   overrides: ConfigOverrides,
@@ -223,12 +205,8 @@ function asGrammars(file: string, value: unknown, root: string): Record<string, 
   return grammars;
 }
 
-/**
- * The name comments are signed with when the file does not give one: git's own
- * `user.name` read from the root, then the name of the operating system user
- * ([ADR-002](../../../docs/adr/adr-002-stack-and-delivery.md)). Git is read
- * through the binary, and reading a configuration value writes nothing.
- */
+/** Git's `user.name` in the root, else the operating system user, read through the binary
+ * ([ADR-002](../../../docs/adr/adr-002-stack-and-delivery.md), 03-storage.md "Config"). */
 async function resolveUser(root: string): Promise<string> {
   try {
     const { stdout } = await run("git", ["config", "user.name"], { cwd: root, encoding: "utf8" });

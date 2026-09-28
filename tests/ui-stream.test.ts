@@ -3,12 +3,8 @@ import { startLive } from "../src/ui/live.ts";
 import { useStore } from "../src/ui/store.ts";
 import { FakeSource } from "./helpers/event-source.ts";
 
-/**
- * What the live stream does with a frame that is not this window's (DA-68). The
- * frames are one broadcast — the ring and its ids are one per server — so the
- * dropping is the client's, by the session the frame carries
- * ([07-server.md](../docs/reference/07-server.md)).
- */
+/** Frames that are not this window's (DA-68): one broadcast and one ring per server, so the client
+ * drops them by the session a frame carries (07-server.md, "The task a request is about"). */
 
 function live(): { source: FakeSource; fetched: string[]; stop: () => void } {
   const fetched: string[] = [];
@@ -64,9 +60,8 @@ describe("a comment frame that belongs to another task", () => {
   });
 
   it("follows `current` when the window has no address, and only then", async () => {
-    // A window with no `?review=` shows whatever `current` is *and writes there*,
-    // so it has to follow the pointer: showing one task while writing into
-    // another is the damage ([08-ui.md](../docs/reference/08-ui.md)).
+    // A window with no `?review=` shows `current` *and writes there*, so it follows the pointer:
+    // showing one task while writing into another is the damage (08-ui.md).
     useStore.setState({ session: { name: "ls-1" } as never, reviewName: null });
     const { source, fetched, stop } = live();
     try {
@@ -93,9 +88,8 @@ describe("a comment frame that belongs to another task", () => {
   });
 
   it("re-reads on its own task's metadata and not on another task's", async () => {
-    // The second frame is the one batch 2 made possible: the watcher follows
-    // several sessions, so `session-changed` now arrives for tasks this window
-    // is not on, and re-reading megabytes for those is what ADR-010 forbids.
+    // The watcher follows several sessions, so `session-changed` arrives for tasks this window is
+    // not on, and rereading megabytes for those is what ADR-010 forbids.
     useStore.setState({ session: { name: "ls-1" } as never, reviewName: null });
     const { source, fetched, stop } = live();
     try {

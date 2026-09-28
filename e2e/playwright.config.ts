@@ -26,18 +26,12 @@ process.env.DIFFALANCHE_UI_PORT = String(PORT);
 // data directory — the server reads it, and so does every CLI a spec runs.
 Object.assign(process.env, fixtureEnv());
 
-/**
- * The UI tests: Playwright drives the built page, so they are not part of
- * `bun run test` (Vitest). `bun run test:ui` runs them; the baselines next to
- * the spec are the approved look of the shell. The fixture is the small profile
- * of the synthetic review, which is deterministic for a given seed.
- */
+/** The UI tests, Playwright over the built page and outside Vitest; the baselines beside the spec
+ * are the shell's approved look, over the seeded small profile (08-ui.md, "UI tests"). */
 export default defineConfig({
   testDir: ".",
-  // The acceptance list has its own configuration, its own fixture and its own
-  // server — the binary (`e2e/acceptance.config.ts`). Without this line the
-  // directory scan would collect it here too and run it against the dev server
-  // over the wrong fixture.
+  // The acceptance list has its own config, fixture and binary; without this the directory scan
+  // would run it here against the dev server over the wrong fixture.
   testIgnore: /acceptance\.spec\.ts$/,
   fullyParallel: false,
   workers: 1,
@@ -46,10 +40,8 @@ export default defineConfig({
     viewport: { width: 1560, height: 900 },
   },
   webServer: {
-    // The fixture is made from scratch every run: the specs write comments and
-    // replies into it, the generator does not clear what it finds, and a suite
-    // that reads what the last run left is a suite that fails on its own
-    // residue.
+    // From scratch every run: the specs write comments and replies into it, and a suite that
+    // reads what the last run left fails on its own residue.
     command:
       "bun run build:ui && rm -rf .perf/e2e && bun run synth -- --out .perf/e2e --small && bun e2e/server.ts",
     cwd: "..",

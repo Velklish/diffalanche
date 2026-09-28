@@ -1,9 +1,5 @@
-/**
- * The write lock of one review session ([ADR-003](../../../docs/adr/adr-003-on-disk-format.md)):
- * a `.lock` directory inside the session directory, created with `mkdir`, which
- * fails when it already exists and so is the atomic primitive here. The UI and
- * any number of CLI processes share this code, so no message is lost.
- */
+/** A session's write lock, a `.lock` directory whose `mkdir` is the atomic primitive, shared by the
+ * UI and every CLI process ([ADR-003](../../../docs/adr/adr-003-on-disk-format.md), 03-storage.md). */
 import { randomUUID } from "node:crypto";
 import { mkdir, readFile, rename, rm, stat } from "node:fs/promises";
 import { dirname, join } from "node:path";
@@ -24,21 +20,14 @@ export type LockOptions = {
   staleMs?: number;
 };
 
-/**
- * The lock as the body of `withLock` sees it. A body that runs longer than
- * `staleMs` can have the lock taken from it, so a body that writes calls
- * `assertHeld` immediately before the write and gets a refusal instead of a
- * silent overwrite of somebody else's work.
- */
+/** A body that outlives `staleMs` can lose the lock, so a writing body calls `assertHeld` right
+ * before the write and is refused rather than overwriting somebody else's work. */
 type Lock = {
   assertHeld: () => Promise<void>;
 };
 
-/**
- * What the holder writes into the lock. `expiresAt` is the holder's own
- * deadline: a writer that finds the lock past it takes it over, so a process
- * killed mid-write blocks the next one for that long and no longer.
- */
+/** What the holder writes into the lock; past `expiresAt` another writer takes it over, so a
+ * process killed mid-write blocks the next one for one lease and no longer. */
 type LockInfo = {
   token: string;
   pid: number;
@@ -46,11 +35,8 @@ type LockInfo = {
   expiresAt: string;
 };
 
-/**
- * Runs `fn` while holding the session's lock, and releases it whatever `fn`
- * does. Waiting is bounded: past `timeoutMs` the call refuses rather than
- * hanging a CLI process for ever.
- */
+/** Runs `fn` holding the session's lock and releases it whatever `fn` does; past `timeoutMs` it
+ * refuses rather than hang a CLI process for ever. */
 export async function withLock<T>(
   sessionDir: string,
   fn: (lock: Lock) => Promise<T>,
@@ -127,25 +113,16 @@ async function acquire(lockDir: string, token: string, staleMs: number): Promise
     // Not durable: a lock outlives neither the write it guards nor the crash.
     await writeFileAtomic(infoPath(lockDir), toJson(info), { durable: false });
   } catch (error) {
-    // The directory was moved out from under us between the `mkdir` and this
-    // write: another writer was taking over a lock it had found stale a moment
-    // earlier and had not looked at since. The claim simply did not happen, so
-    // this is a failed acquisition and not a fault.
+    // Moved aside after the `mkdir` by a takeover that found the old lock stale a moment earlier:
+    // the claim did not happen, a failed try and not a fault (03-storage.md, "The lock").
     if ((error as NodeJS.ErrnoException).code === "ENOENT") return false;
     throw error;
   }
   return true;
 }
 
-/**
- * Takes over a lock past its deadline by **renaming** it aside and deleting the
- * renamed directory. Removing it in place is not enough: two writers that find
- * the same stale lock would both remove it, the first would then create its
- * own, and the second's delayed removal would take that fresh lock away — two
- * holders and the lost write ADR-003 exists to prevent. A rename is atomic, so
- * exactly one of the two moves the stale lock and the other finds it gone and
- * simply tries again.
- */
+/** Renames a lock past its deadline aside, then deletes it: a removal in place lets two takers
+ * both win, a rename only one ([03-storage.md](../../../docs/reference/03-storage.md), "The lock"). */
 async function takeOverIfStale(lockDir: string): Promise<void> {
   const seen = await readInfo(lockDir);
   const deadline = await lockDeadline(lockDir, seen);
@@ -159,16 +136,8 @@ async function takeOverIfStale(lockDir: string): Promise<void> {
     throw error;
   }
 
-  // Reading the lock and moving it are two steps, so what was moved may not be
-  // the lock that was found stale: another writer can take over and start
-  // working in between. The token says which it is, and a live lock goes
-  // straight back.
-  //
-  // A moved lock with no `info.json` at all is nobody's: its holder either died
-  // between the `mkdir` and the write, or has not finished claiming it. Putting
-  // that back would leave a lock no writer owns and no writer may take over
-  // until it ages out; deleting it makes the unfinished claim fail, and that
-  // writer simply tries again.
+  // A live lock moved by mistake goes back, told apart by its token; one with no `info.json` is
+  // nobody's and is deleted, failing an unfinished claim (03-storage.md, "The lock").
   const moved = await readInfo(aside);
   if (moved !== null && moved.token !== seen?.token) {
     try {
@@ -182,11 +151,8 @@ async function takeOverIfStale(lockDir: string): Promise<void> {
   await rm(aside, { recursive: true, force: true });
 }
 
-/**
- * The deadline the holder recorded, or — while the holder is between `mkdir`
- * and its write, or after it died in that gap — the directory's own age plus
- * the default. `null` means the lock is gone and the caller should simply retry.
- */
+/** The recorded deadline, else the directory's age plus the default while a claim is unfinished
+ * or died unfinished; `null` when the lock is gone and the caller retries. */
 async function lockDeadline(
   lockDir: string,
   info: Partial<LockInfo> | null,

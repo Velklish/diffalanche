@@ -3,12 +3,8 @@ import { fileURLToPath } from "node:url";
 import type { Page } from "@playwright/test";
 import { expect, test } from "@playwright/test";
 
-/**
- * The thread rail of DA-23: what it lists on each of its two tabs, the
- * `unanswered` filter, the focus that runs both ways between a card and its
- * anchor, and the three writes. What reached the disk is read back with the
- * CLI, which is the contract the agents get.
- */
+/** The thread rail of DA-23: both tabs, `unanswered`, the focus between card and anchor, and the
+ * three writes, read back with the CLI that is the agents' contract. */
 
 const root = fileURLToPath(new URL("..", import.meta.url));
 const FIXTURE = ".perf/e2e";
@@ -50,12 +46,8 @@ function review(page: Page): Promise<Review> {
   return page.evaluate(async () => (await (await fetch("/api/review")).json()) as Review);
 }
 
-/**
- * A thread on a line, focused from the tab that spans the whole review. The
- * rail is what makes that thread's file the current one, so the test never has
- * to name a file in the tree — the small fixture repeats file names across
- * repositories, and a row picked by name is not the row of this thread.
- */
+/** A thread on a line, focused from the whole-review tab so the rail makes its file current: the
+ * small fixture repeats file names across repositories, and a name picks the wrong row. */
 async function focusOneThread(page: Page): Promise<Comment> {
   await open(page);
   const bundle = await review(page);
@@ -130,9 +122,8 @@ test("the whole header focuses the thread, and only the repository leaves it", a
   if (thread === undefined) throw new Error("the fixture has no thread on a file");
   await page.locator(".rail-tabs .tab").nth(1).click();
 
-  // The severity chip and the state sit inside the focus click, not beside it:
-  // pressing the chip focuses the thread, as pressing anywhere in the header
-  // did before the repository became a target of its own (DA-54).
+  // The chip and the state sit inside the focus click: pressing the chip focuses the thread, as the
+  // whole header did before the repository became its own target (DA-54).
   const card = page.locator(`.rail-list [data-thread="${thread.id}"]`);
   await card.locator(".sev-tag").click();
   await expect(card).toHaveClass(/\bon\b/);
@@ -275,10 +266,8 @@ test("a thread on a line the collapsed context hides is reached by showing it ag
   await open(page);
   const card = page.locator(".file-card").first();
 
-  // A context line that leads a hunk: `collapse context` is exactly what takes
-  // it away, so a thread on it is the case the rail has to answer for. Both
-  // gutters of a normal row carry the same change key; the new side is the
-  // second of them.
+  // A context line leading a hunk, which `collapse context` takes away; both gutters of a row carry
+  // the same change key, and the new side is the second.
   const key = await card.evaluate((element) => {
     const rows = [...element.querySelectorAll("tr")];
     const start = rows.findIndex((row) => row.classList.contains("diff-decoration"));

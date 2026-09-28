@@ -1,8 +1,5 @@
-/**
- * The write API of DA-17: every write goes through the domain with the name
- * from the configuration and `role: human`, and what it wrote is on disk for
- * the CLI to read a moment later.
- */
+/** DA-17's write API: every write goes through the domain with the configured name and
+ * `role: human`, and is on disk for the CLI to read a moment later. */
 import { execFile, execFileSync } from "node:child_process";
 import { mkdirSync, mkdtempSync, rmSync, writeFileSync } from "node:fs";
 import { tmpdir } from "node:os";
@@ -228,9 +225,8 @@ describe("comments over the API", () => {
     const created = (await (
       await post("/api/comments", { severity: "warning", body: "closed without a note" })
     ).json()) as Comment;
-    // `note` is optional, so no body at all is a verdict too. A write with no
-    // body carries no content type either, which is the shape a form has, so it
-    // has to say it came from the page — as a browser does on its own.
+    // `note` is optional, so no body is a verdict too; with no body there is no content type,
+    // a form's shape, so it must say it came from the page, as a browser does on its own.
     const resolved = await app.request(`/api/comments/${created.id}/resolve`, {
       method: "POST",
       headers: { "sec-fetch-site": "same-origin" },
@@ -335,14 +331,8 @@ describe("sessions over the API", () => {
 });
 
 describe("a window on a named task", () => {
-  /**
-   * The whole point of `?review=<name>` (DA-55): a window opened on a task both
-   * **shows and writes** that task. `current` is what a human typing a command
-   * by hand gets and only `review use` moves it
-   * ([ADR-010](../docs/adr/adr-010-review-task-scope.md), decision 7), so
-   * without the parameter on every route a window would read one task and
-   * write into another — a finding stored where nothing reads it back.
-   */
+  /** `?review=<name>` (DA-55): a window on a task shows *and writes* it; `current` moves only by
+   * `review use` (ADR-010, decision 7), so without it a window would read one task and write another. */
   it("writes into that task and leaves the current session's comments untouched", async () => {
     const where = await anchorable();
     const created = await post("/api/sessions", {
@@ -359,9 +349,8 @@ describe("a window on a named task", () => {
     // `use: false` is `review new --no-use`: the pointer stays where it was.
     expect(await readCurrent(config.dataDir)).toBe(SESSION);
 
-    // The window reads the task before anybody comments in it, and that read is
-    // what writes its change set: a line anchor is taken from the diff the
-    // person was shown ([04-domain.md](../docs/reference/04-domain.md)).
+    // The window's read of the task is what writes its change set, and a line anchor is taken from
+    // the diff the person was shown ([04-domain.md](../docs/reference/04-domain.md)).
     expect((await app.request("/api/review?review=on-task")).status).toBe(200);
 
     const unwritten = untouched(join(config.dataDir, "reviews", SESSION, "comments.json"));
@@ -577,10 +566,8 @@ describe("a write from another process", () => {
       const had = target.replies.length;
       await run(process.execPath, [appendReply, config.dataDir, SESSION, target.id, "claude"]);
 
-      // The watcher notices the file, the document is dropped, and the next
-      // read is the new state; the CLI writes the same way this helper does.
-      // The thread is read until it has the one reply more, rather than after a
-      // length of time that a loaded machine makes wrong.
+      // The watcher notices the file and drops the document, so the next read is the new state (the
+      // CLI writes as this helper does); polled for the extra reply, not a length of time.
       const deadline = Date.now() + 10_000;
       let replies = had;
       while (Date.now() < deadline) {

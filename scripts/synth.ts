@@ -1,12 +1,5 @@
-/**
- * Generator of the synthetic review: the fixture the performance gate, the diff
- * rendering spike, and the scanner and storage tests all measure against.
- *
- * Everything is derived from the seed, including the git author, committer, and
- * dates, so two runs with the same seed produce byte-identical trees outside
- * `.git`. Node-only APIs are used on purpose: the Vitest suite runs under Node
- * and imports this file directly.
- */
+/** The synthetic review generator, seeded down to git's author and dates; `node:` APIs and no
+ * `Bun.*`, as Vitest imports it under Node (11-perf.md, "Determinism"). */
 
 import { execFileSync } from "node:child_process";
 import {
@@ -82,10 +75,6 @@ const EPOCH = Date.parse("2026-09-01T09:00:00Z");
 const GIT_DATE = "2026-09-01T09:00:00+00:00";
 const GIT_USER = { name: "synth", email: "synth@diffalanche.invalid" };
 
-// ---------------------------------------------------------------------------
-// seeded randomness
-// ---------------------------------------------------------------------------
-
 type Random = () => number;
 
 function makeRandom(seed: number): Random {
@@ -110,10 +99,6 @@ function pick<T>(rnd: Random, values: readonly T[]): T {
   }
   return value;
 }
-
-// ---------------------------------------------------------------------------
-// content
-// ---------------------------------------------------------------------------
 
 type Language = "ts" | "cs" | "py" | "go" | "md";
 
@@ -279,10 +264,6 @@ function filePath(lang: Language, rnd: Random, seq: number): string {
   }
 }
 
-// ---------------------------------------------------------------------------
-// git
-// ---------------------------------------------------------------------------
-
 const GIT_CONFIG = [
   "-c",
   "init.defaultBranch=main",
@@ -317,10 +298,6 @@ function git(cwd: string, ...args: string[]): string {
     maxBuffer: 64 * 1024 * 1024,
   });
 }
-
-// ---------------------------------------------------------------------------
-// plan
-// ---------------------------------------------------------------------------
 
 const GROUPS = ["core", "platform", "services", "tools"] as const;
 
@@ -376,12 +353,8 @@ interface RepoPlan {
   files: FilePlan[];
 }
 
-/**
- * Splits `total` over `parts` so the sum is exact, the parts differ, and none
- * falls below `min`. The floor is handed out first and only the remainder is
- * spread, so the result can never add up to more than `total` — the top-up pass
- * can raise a change set towards the profile but has no way to lower one.
- */
+/** Splits `total` exactly over differing `parts` of at least `min`: the floor goes first, so the
+ * sum never overshoots — top-up can raise a change set, never lower one (11-perf.md). */
 function spread(rnd: Random, total: number, parts: number, min = 0): number[] {
   const rest = total - min * parts;
   if (rest < 0) {
@@ -468,10 +441,6 @@ function spreadCount(total: number, parts: number): number[] {
   const extra = total - base * parts;
   return Array.from({ length: parts }, (_, i) => base + (i < extra ? 1 : 0));
 }
-
-// ---------------------------------------------------------------------------
-// comments
-// ---------------------------------------------------------------------------
 
 const SEVERITIES = ["critical", "warning", "nit", "question"] as const;
 
@@ -635,10 +604,6 @@ function buildComments(
   return { comments, replies: replyCount };
 }
 
-// ---------------------------------------------------------------------------
-// generation
-// ---------------------------------------------------------------------------
-
 function write(path: string, content: string): void {
   mkdirSync(dirname(path), { recursive: true });
   writeFileSync(path, content, "utf8");
@@ -660,16 +625,8 @@ function countLines(content: string): number {
   return content.endsWith("\n") ? content.split("\n").length - 1 : content.split("\n").length;
 }
 
-/**
- * Raises the change set to the planned line count.
- *
- * A planned edit of `deleted` old lines into `inserted` new ones does not
- * produce `deleted + inserted` changed lines: realistic code repeats `}` and
- * blank lines, git matches those across the replaced block, and they become
- * context instead of changes — about a quarter of the plan on the profiles
- * here. The lines appended here carry the sequence counter, so no line matches
- * another and every one of them counts.
- */
+/** Raises the change set to the plan: git counts repeated `}` and blanks as context, about a
+ * quarter of it, so appended lines carry the counter and each one counts (11-perf.md). */
 function topUp(rnd: Random, repos: RepoPlan[], deficit: number, seq: Sequence): void {
   const targets = repos.flatMap((repo) => repo.files.filter((file) => !file.untracked));
   if (targets.length === 0) {
@@ -784,13 +741,8 @@ export function generate(options: SynthOptions): SynthReport {
 
   const { comments, replies } = buildComments(rnd, repos, profile.comments);
   const data = join(out, ".diffalanche");
-  // The two session files are written at version 1 on purpose, and stay there:
-  // the fixture is what every read of a data directory written before DA-53
-  // goes through, so the compatibility of `READABLE_VERSIONS` is exercised by
-  // the perf gate, the smoke matrix, and half the suite rather than by one test
-  // ([03-storage.md](../docs/reference/03-storage.md)). The tool raises them to
-  // the current version on its first write, which leaves the fixture on disk as
-  // it was generated.
+  // Version 1 on purpose, so the gate, the smoke matrix and the suite all exercise
+  // `READABLE_VERSIONS` ([11-perf.md](../docs/reference/11-perf.md), "What it produces").
 
   write(
     join(data, "config.json"),
@@ -861,10 +813,6 @@ function measure(out: string, repos: RepoPlan[], comments: number): SynthReport 
     comments,
   };
 }
-
-// ---------------------------------------------------------------------------
-// command line
-// ---------------------------------------------------------------------------
 
 const USAGE = `Usage: bun run synth -- --out <dir> [--seed <n>] [--small]
 

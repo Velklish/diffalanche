@@ -1,8 +1,5 @@
-/**
- * The measurement hooks the performance harness drives from the page side.
- * They live in the UI, not in the harness, because only the UI knows when a
- * frame it caused has actually been painted.
- */
+/** The hooks the performance harness drives from the page side: only the page knows when a frame
+ * it caused has been painted ([08-ui.md](../../docs/reference/08-ui.md), "Measurement hooks"). */
 
 type LongTask = { start: number; duration: number };
 
@@ -27,12 +24,8 @@ type PerfApi = {
   jumpToFile: (index: number) => Promise<number>;
   /** Makes a session current and reports the milliseconds to the frame that showed it. */
   switchSession: (name: string) => Promise<number>;
-  /**
-   * The repository whose new diff the page last painted, and the wall clock of
-   * the frame that showed it. `Date.now` and not `performance.now`, because the
-   * harness edits the file from another process and the two ends of the 300 ms
-   * budget have to be on one clock ([11-perf.md](../../docs/reference/11-perf.md)).
-   */
+  /** The repository whose new diff was painted last, and that frame's wall clock: `Date.now`, one
+   * clock with the harness's other process (08-ui.md, "Measurement hooks"). */
   liveUpdate: { repo: string; at: number } | null;
   /** What each `settle()` measured ([08-ui.md], DA-55.4). */
   settles: Settled[];

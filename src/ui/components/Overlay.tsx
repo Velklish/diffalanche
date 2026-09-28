@@ -35,11 +35,8 @@ export function Overlay({
 
   return (
     <div className="scrim">
-      {/*
-        The scrim closes on a click but is not a stop on the way round: it fills
-        the window and shows nothing, so a ring that landed on it would look
-        like a ring that had gone nowhere.
-      */}
+      {/* Closes on a click but is no stop on the way round: a ring on a full-window transparent
+          button would look like a ring gone nowhere (08-ui.md, "Overlay and toast"). */}
       <button
         type="button"
         className="scrim-hit"

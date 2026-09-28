@@ -1,15 +1,5 @@
-/**
- * The shapes the UI shares with the rest of the tool, in one import for the
- * components: the on-disk format of `docs/SPEC.md` section 7, the change set,
- * and the counters the domain computes. They are `src/core`'s own types — the
- * UI mirrored them while the domain was being written and now reads the
- * originals, so the two can no longer drift.
- *
- * `src/core/types.ts` and everything it imports has to stay a leaf of pure
- * types and pure functions: `src/ui/tsconfig.json` compiles the UI with
- * `"types": []` and type-checks that graph through these imports, so nothing in
- * it may reach the Node API ([07-server.md](../../docs/reference/07-server.md)).
- */
+/** The shapes the UI shares with the tool, in one import: `src/core`'s own, which must stay pure as
+ * the UI compiles with `"types": []` (08-ui.md, "Types of the on-disk format"). */
 
 export type {
   Counters,
@@ -48,18 +38,8 @@ export type {
 } from "../core/types.ts";
 export type { ActivityEvent } from "../core/watcher/activity.ts";
 
-/**
- * What `GET /api/repos/branches` answers with (DA-24): every branch of the
- * root, with the remote it belongs to, how many repositories carry it, and
- * whether a remote points its `HEAD` at it
- * ([07-server.md](../../docs/reference/07-server.md)).
- *
- * The server owns the shape, in `src/server/routes/branches.ts`, and this is
- * the same shape written again rather than imported: that module reaches the
- * Node API through git, and the UI compiles with `"types": []`. What keeps the
- * two from drifting is `tests/ui-wire.test.ts`, which is checked with both of
- * them in scope.
- */
+/** `GET /api/repos/branches` (DA-24, 07-server.md), written again: its owner, the server's
+ * `routes/branches.ts`, reaches git; `tests/ui-wire.test.ts` holds the two shapes together. */
 export type BranchCandidate = {
   /** `origin/main` for a branch of a remote, `main` for a local one. */
   name: string;
@@ -77,15 +57,8 @@ export type BranchList = {
   warnings: ScanWarning[];
 };
 
-/**
- * One row of `GET /api/sessions` (DA-24): the metadata of a review session with
- * the counters the menu of handoff section 7 shows.
- *
- * Written again here for the same reason as `BranchCandidate` below: the
- * domain's own `SessionSummary` lives in a module that reaches the storage
- * barrel, and the barrel reaches the Node API, which the UI compiles without.
- * `tests/ui-wire.test.ts` is what keeps the two the same type.
- */
+/** One row of `GET /api/sessions` (DA-24), written again: the domain's `SessionSummary` reaches the
+ * Node API through the storage barrel; `tests/ui-wire.test.ts` holds the two together. */
 export type SessionSummary = {
   name: string;
   title: string | null;
@@ -110,17 +83,8 @@ export type SessionList = {
   warnings: string[];
 };
 
-/**
- * What `GET /api/sessions/candidates` answers with (DA-55): the change set of
- * the whole root, whatever the task is about, which is what the scope editor
- * offers to pick from. It carries names and not diffs — a picker shows paths,
- * and the patch of a whole root is megabytes
- * ([07-server.md](../../docs/reference/07-server.md)).
- *
- * Written again here for the reason the two shapes above are: the server owns
- * it in `src/server/review.ts`, that module reaches git, and the UI compiles
- * with `"types": []`. `tests/ui-wire.test.ts` is what keeps them the same type.
- */
+/** `GET /api/sessions/candidates` (DA-55, 07-server.md): the whole root's names, not its diffs.
+ * Written again, as `src/server/review.ts` reaches git; `tests/ui-wire.test.ts` pairs the two. */
 export type CandidateFile = {
   path: string;
   oldPath: string | null;

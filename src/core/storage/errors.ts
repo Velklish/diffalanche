@@ -1,8 +1,5 @@
-/**
- * Everything storage refuses is one error type carrying the file it read or
- * wrote and, when the fault is inside the file, the field it is in. A message
- * that names neither costs the reader a grep through the data directory.
- */
+/** Every storage refusal names the file and, when the fault is inside it, the field: a message
+ * naming neither costs the reader a grep through the data directory. */
 export class StorageError extends Error {
   /** Path of the file or directory the fault is about. */
   readonly file: string;

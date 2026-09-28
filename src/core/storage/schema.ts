@@ -1,9 +1,5 @@
-/**
- * Validation of the files of the data directory. The files are meant to be
- * edited by hand (`docs/SPEC.md` section 3, decision 5), so a broken one is an
- * ordinary event: every refusal names the file and the field, and nothing
- * half-parsed reaches the caller.
- */
+/** Validation of hand-edited files: every refusal names the file and the field, and nothing
+ * half-parsed reaches the caller (03-storage.md, "Validation and errors"). */
 import {
   asArray,
   asNullableNumber,
@@ -44,12 +40,8 @@ export function toJson(value: unknown): string {
   return `${JSON.stringify(value, null, 2)}\n`;
 }
 
-/**
- * The version is checked before anything else: a file of a version this build
- * does not know is refused whole rather than read field by field. A version this
- * build still reads is turned into the current one, so what the caller holds is
- * always the current shape and the next write puts the file on it.
- */
+/** Checked first, refusing an unknown version whole; a readable one becomes the current, so the
+ * next write upgrades the file (03-storage.md, "Schema versions"). */
 function asVersion(file: string, value: unknown): number {
   if (typeof value !== "number" || !READABLE_VERSIONS.includes(value)) {
     fail(
@@ -70,12 +62,8 @@ function parseBase(file: string, field: string, value: unknown): Base {
   return branch === null ? { mode } : { mode, branch };
 }
 
-/**
- * One entry of the scope: a repository, with the paths it is about or without
- * them. An empty list of paths is refused for the same reason an empty scope
- * is — it is an entry that shows nothing, and the way to say "the whole
- * repository" is to leave `paths` out.
- */
+/** An empty `paths` is refused as an empty scope is: it shows nothing, and the whole repository
+ * is `paths` left out. */
 function parseScopeEntry(file: string, field: string, value: unknown): ScopeEntry {
   const raw = asObject(file, field, value);
   const repo = asString(file, `${field}.repo`, raw.repo);
@@ -91,13 +79,8 @@ function parseScopeEntry(file: string, field: string, value: unknown): ScopeEntr
   return { repo, paths };
 }
 
-/**
- * The scope of a review task (`docs/SPEC.md` section 7). Absent or `null` is the
- * whole root, which is what every session written before DA-53 means. An empty
- * array is refused: a task that shows nothing is a mistake, not a state. So is a
- * repository named twice — one repository is one entry, and two entries for it
- * would leave "the whole repository" and "these files" both true of it.
- */
+/** Absent or `null` is the whole root; an empty list and a repository named twice are refused
+ * (03-storage.md, "Validation and errors"). */
 function parseScope(file: string, field: string, value: unknown): Scope {
   if (value === undefined || value === null) return null;
   const entries = asArray(file, field, value);
@@ -173,11 +156,8 @@ function parseComment(file: string, field: string, value: unknown): Comment {
   };
 }
 
-/**
- * `review.json`. A file of version 1 carries none of the four fields DA-53
- * added: it is read as a task over the whole root that is still open, which is
- * what such a session has always meant, and the next write puts it on version 2.
- */
+/** A version 1 file lacks the four fields of DA-53 and reads as an open task over the whole
+ * root; the next write puts it on version 2. */
 export function parseReview(file: string, text: string): Review {
   const raw = asObject(file, null, parseJson(file, text));
   return {
@@ -207,24 +187,15 @@ export function parseComments(file: string, text: string): CommentsFile {
   };
 }
 
-/**
- * `diff.json` is written only by a scan and overwritten whole on the next one
- * ([ADR-003](../../../docs/adr/adr-003-on-disk-format.md)), so it is checked
- * down to its envelope only: the change set inside it is the git reader's
- * contract, not storage's.
- */
+/** Written only by a scan, so checked to its envelope and its key, `base` and `scope`; the change
+ * set inside is the git reader's contract (03-storage.md, "Validation and errors"). */
 export function parseDiffCache(file: string, text: string): DiffCache | null {
   const raw = asObject(file, null, parseJson(file, text));
-  // A cache of a version this build does not know is discarded rather than
-  // refused: it is the answer to a scan, and the caller can scan again. The two
-  // files that hold what a person wrote are the ones a bad version refuses.
+  // Discarded rather than refused: the caller can scan again, and only the two files a person
+  // wrote are refused for a bad version (03-storage.md, "Schema versions").
   if (raw.version !== SCHEMA_VERSION) return null;
-  // A cache written before `base` and `scope` were recorded cannot say what it
-  // was computed for, so it is no answer at all: `null` is "never scanned", and
-  // the caller scans. Only this file is treated that way — the tool writes it
-  // and rewrites it, and `docs/SPEC.md` section 7 already says hand edits are
-  // lost. A `scope` of `null` is the whole root and an answer like any other;
-  // what is missing here is the field itself.
+  // A missing `base` or `scope` field, not a `null` scope, cannot say what it answers: it reads
+  // as never scanned (03-storage.md, "Validation and errors").
   if (raw.base === undefined || raw.scope === undefined) return null;
   const base = parseBase(file, "base", raw.base);
   const scope = parseScope(file, "scope", raw.scope);

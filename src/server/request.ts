@@ -1,8 +1,5 @@
-/**
- * Reading a request body. The domain checks what a comment means — that a line
- * anchor has a file, that only a human resolves; this checks that what arrived
- * is of the right shape at all, and refuses with the field named.
- */
+/** Reading a request body: the domain checks what a comment means, this that what arrived has
+ * the right shape at all, refusing with the field named. */
 import type { Context } from "hono";
 import type { Scope, Severity, Side } from "../core/storage/index.ts";
 import { SEVERITIES, SEVERITY_SOURCES, SIDES } from "../core/storage/index.ts";
@@ -10,12 +7,8 @@ import { RequestError } from "./errors.ts";
 
 type Body = Record<string, unknown>;
 
-/**
- * The body as an object. A body has to arrive as `application/json`: a form or
- * a `text/plain` post is what a page on another origin can send without the
- * browser asking this server first, and no route here takes one. No body at all
- * is an empty object — `resolve` and `reopen` take a note or nothing.
- */
+/** The body as an object: `application/json` only, since a form-shaped post needs no preflight,
+ * and no body is `{}` for a bare `resolve` (07-server.md, "Who may write"). */
 export async function readBody(c: Context): Promise<Body> {
   const raw = await c.req.text();
   if (raw.trim() === "") return {};
@@ -53,11 +46,8 @@ export function optionalText(body: Body, field: string): string | undefined {
   return value;
 }
 
-/**
- * An anchor field that is absent as often as it is present: `repo: null` is the
- * whole review, `path: null` a repository, `line: null` a file, so a field the
- * client left out is `null` rather than a mistake (`docs/SPEC.md` section 7).
- */
+/** An anchor field, absent as often as present: a field left out is the level above rather
+ * than a mistake, `null` (`docs/SPEC.md` section 7; 07-server.md, "Writing"). */
 export function nullableText(body: Body, field: string): string | null {
   const value = body[field];
   if (value === undefined || value === null) return null;
@@ -76,12 +66,8 @@ export function nullableLine(body: Body, field: string): number | null {
   return value;
 }
 
-/**
- * The `scope` of `PUT /api/sessions/:name/scope`: a list of entries, or `null`
- * for the whole root. What the entries mean is the domain's — a repository the
- * root has not, a path outside its repository — and what arrives here is only
- * checked for being a scope at all.
- */
+/** The `scope` of a body: a list of entries, or `null` for the whole root; what the entries mean
+ * is the domain's to check, and here only that it is a scope at all. */
 export function scope(body: Body): Scope {
   const value = body.scope;
   if (value === undefined || value === null) return null;

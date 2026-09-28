@@ -6,15 +6,8 @@ import type { APIRequestContext, Page } from "@playwright/test";
 import { expect, test } from "@playwright/test";
 import { dataDirOf } from "../src/core/storage/index.ts";
 
-/**
- * The history of review tasks (DA-56): the two groups of the sessions menu, the
- * scope on a row, closing and reopening from the row, and the quiet mark a task
- * somebody else made raises in the header.
- *
- * What reached the disk is read from the data directory, because the point of
- * closing a task is the `status` in `review.json`; the screen is only how it
- * was asked for.
- */
+/** The task history (DA-56): the menu's two groups, a row's scope, close and reopen, and the mark a
+ * task made elsewhere raises; the disk is read directly, as a close is its `status`. */
 
 const root = fileURLToPath(new URL("..", import.meta.url));
 const FIXTURE = ".perf/e2e";
@@ -23,21 +16,8 @@ const SESSION = "synth";
  * configuration that could have named another one (DA-54.1). */
 const DATA = dataDirOf(join(root, FIXTURE));
 
-/**
- * The ceiling this suite holds the mark against: the 300 ms `docs/SPEC.md`
- * section 6 gives a live update, times the allowance a shared runner gets
- * (`RUNNER_ALLOWANCE` in `perf/budgets.ts`), because a strict 300 here on a
- * loaded machine would fail on the machine rather than on the code.
- *
- * **This is the only ceiling the mark has, and it is 2.5× the budget.** The
- * perf gate does not measure it: `BUDGETS` has no line for it, and the nearest
- * one, `updateMs`, times an edit in a repository reaching the card of that file
- * — the `diff-changed` path, which shares nothing with this one but the stream
- * itself. A line for it would mean a metric in `perf/harness.ts` and a row in
- * section 6 of the specification, which is a change to the contract and not
- * this task's to make. The measurement is printed on every run so a regression
- * is at least visible: 246 ms and 234 ms when this was written.
- */
+/** The mark's only ceiling, 2.5 times the 300 ms of a live update; no gate line measures it
+ * ([11-perf.md](../docs/reference/11-perf.md), "The header mark's ceiling"). */
 const MARK_CEILING_MS = 750;
 
 function cli(...args: string[]): string {
@@ -67,18 +47,8 @@ async function open(page: Page) {
 
 type Candidates = { repositories: { path: string; files: { path: string }[] }[] };
 
-/**
- * The four tasks the card's verification asks for, all under one prefix: two
- * open — one about the whole root, one about two repositories and five files —
- * and two closed. A fifth, about a single repository, is what the singular of
- * the row's own metric is checked on. Every one is created with `--no-use`, so
- * `current` stays where the fixture put it and this window is the only thing
- * that moves.
- *
- * The prefix is what the assertions filter by. The suites share one fixture and
- * run in one worker, so the sessions the specs before this one made are in the
- * data directory too; counting all the rows would be counting their residue.
- */
+/** The card's tasks under one prefix, all `--no-use`: whole root and 2 repos · 5 files open, two
+ * closed, one repository for the singular; the prefix filters out earlier specs' sessions. */
 async function fourTasks(request: APIRequestContext): Promise<{
   prefix: string;
   plain: string;
@@ -121,10 +91,8 @@ async function fourTasks(request: APIRequestContext): Promise<{
     cli("review", "new", name, "--base", "head", "--no-use");
     cli("review", "close", name, "--role", "human", "--author", "kim.p");
   }
-  // One repository, and read once: `SessionSummary.repositories` is the length
-  // of the task's `diff.json`, which does not exist until something reads the
-  // task. Without this read its row would print the dash a task nobody has
-  // opened gets, and the singular would have nothing to be checked on.
+  // Read once: `SessionSummary.repositories` counts a `diff.json` only a read writes, and without
+  // it the row prints an unopened task's dash and the singular goes unchecked.
   cli("review", "new", names.one, "--base", "head", "--no-use", "--repo", first.path);
   expect((await request.get(`/api/review?review=${names.one}`)).ok()).toBe(true);
   return names;
@@ -210,9 +178,8 @@ test("the menu is two groups, the open tasks above, each row saying what it is a
   await expect(mine(open_, names.scoped).locator(".chip.scope")).toHaveText("2 repos · 5 files");
   await expect(mine(open_, names.plain).locator(".chip.scope")).toHaveText("все репозитории");
 
-  // Both sides of the row inflect, and one of them is a dash. A task about one
-  // repository prints `1 repo` beside `1 repo changed`; a task nobody has
-  // opened has nothing counted rather than nothing found.
+  // Both sides of the row inflect: one repository prints `1 repo` beside `1 repo changed`, and a
+  // task nobody opened prints a dash — nothing counted rather than nothing found.
   const single = mine(open_, names.one);
   await expect(single.locator(".chip.scope")).toHaveText("1 repo");
   await expect(single.locator(".session-metrics span").first()).toHaveText("1 repo changed");
@@ -257,17 +224,12 @@ test("closing the task from its row writes the status, moves the row, and comes 
     await expect(row("Открытые задачи")).toHaveCount(0);
     await expect(row("Закрытые").locator(".session-metrics .crit")).toContainText("open");
 
-    // The ring is where the reader left it: the button they pressed unmounted
-    // with its row and was remounted in the other group, and a ring that fell
-    // to the document would strand a keyboard reader inside an open popover.
+    // The ring follows the pressed button into the other group; one that fell to the document
+    // would strand a keyboard reader inside an open popover.
     await expect(row("Закрытые").getByRole("button", { name: "Reopen" })).toBeFocused();
 
-    // **This is the one press that produces two frames.** `SESSION` is the
-    // current session, so its new `status` is metadata the watcher compares
-    // *and* a status the session snapshot compares: `session-changed` goes out,
-    // then `sessions-changed` ([05-watcher.md](../docs/reference/05-watcher.md)).
-    // Each is claimed under its own key, so neither raises a mark about the
-    // reader's own press — with one key the second frame would.
+    // **The one press that produces two frames**, each claimed under its own key so neither marks
+    // the reader's own press (08-ui.md, "The mark and the reader's own press").
     await arrived(page, `session-changed ${SESSION}`, 0);
     await arrived(page, `sessions-changed ${SESSION}`, 0);
     await expect(page.locator(".pill-mark")).toHaveCount(0);
@@ -314,10 +276,8 @@ test("a task made elsewhere raises the mark and moves nothing on the screen", as
   await expect(page.locator(".pill-mark")).toBeVisible({ timeout: MARK_CEILING_MS });
   process.stderr.write(`task created to header mark: ${Date.now() - started} ms\n`);
 
-  // The system's status dot and not a round shape of its own: the 7 px status
-  // dot is the only circle `DESIGN.md` allows (Shapes), and `.dot.acc` already
-  // existed. A second primitive beside it would be a change to the visual
-  // contract wearing the clothes of a mark.
+  // The 7 px status dot, `.dot.acc`: the only circle `DESIGN.md` allows (Shapes), where a round
+  // shape of its own would change the visual contract.
   await expect(page.locator(".pill-mark")).toHaveClass(/\bdot\b/);
 
   // The mark and nothing else: no toast, no switch, no scroll, and the form is
@@ -337,11 +297,8 @@ test("a task made elsewhere raises the mark and moves nothing on the screen", as
 });
 
 test("a task this window closes raises no mark of its own", async ({ page, request }) => {
-  // A task that is **not** current, so its close is one frame:
-  // `sessions-changed` alone, since `session-changed` is about the metadata of
-  // the current session and this is not it. A mark here would be a mark about
-  // the reader's own press. The two-frame case — closing the current task — is
-  // the spec above, which is where the keys have to stay apart.
+  // A task that is **not** current, so its close is `sessions-changed` alone; the two-frame case is
+  // the spec above (08-ui.md, "The mark and the reader's own press").
   const response = await request.post("/api/sessions", {
     data: { name: `own-${Date.now().toString(36)}`, base: "head", use: false },
   });
@@ -362,9 +319,8 @@ test("a task this window closes raises no mark of its own", async ({ page, reque
   await arrived(page, `sessions-changed ${made.name}`, 0);
   await expect(page.locator(".pill-mark")).toHaveCount(0);
 
-  // And the absence above is the claim working rather than the stream being
-  // asleep: a task made outside this window raises the mark on the same page,
-  // menu open and all.
+  // The absence is the claim working, not the stream asleep: a task made outside this window
+  // raises the mark on the same page, menu open and all.
   cli("review", "new", `else-${Date.now().toString(36)}`, "--base", "head", "--no-use");
   await expect(page.locator(".pill-mark")).toBeVisible({ timeout: MARK_CEILING_MS });
 });

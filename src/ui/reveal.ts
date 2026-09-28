@@ -1,11 +1,5 @@
-/**
- * Bringing a card into view and keeping it there. A card that has never been
- * mounted holds its place with a height counted from its patch, and every card
- * around the target replaces its estimate with its real height the moment it
- * mounts — which moves the target out from under the reader after the jump has
- * already happened. Scrolling again once they have settles it
- * ([ADR-008](../../docs/adr/adr-008-diff-rendering-verdict.md)).
- */
+/** Bringing a card into view and keeping it there: the cards around it swap estimates for real
+ * heights as they mount, so the scroll is repeated (08-ui.md, "Reaching a card"; ADR-008). */
 import { newSideLines, oldSideRows } from "./context.ts";
 import { afterPaint } from "./perf.ts";
 import { useStore } from "./store.ts";
@@ -13,21 +7,8 @@ import { useStore } from "./store.ts";
 /** How many times the scroll is repeated; two rounds settle the small fixture. */
 const ROUNDS = 3;
 
-/**
- * Where the page is asked what is being read, in pixels from the top of the
- * window: below everything stuck there — 52 px of header and the 38 px
- * repository bar under it — plus the 10 px of clearance the value carried when
- * the header was all there was (DA-54).
- *
- * One value because two probes ask the same question at the same point:
- * [components/CentrePanel.tsx](components/CentrePanel.tsx) asks which card is
- * being read, [live.ts](live.ts) asks what is under the reader's eyes before it
- * patches the page. A probe inside the bar hits the bar, which is sticky and
- * never moves, and both of them then anchor to nothing. The third copy of this
- * number is `.file-card { scroll-margin-top }` in [styles.css](styles.css),
- * where CSS cannot reach a constant: a card jumped to lands on the probe and is
- * the current file when the scroll settles, and the two move together.
- */
+/** Where the page asks what is being read: under the 52 px header and 38 px repository bar, plus
+ * 10 px. Two modules import it and three copies move with it (08-ui.md, "Navigation"). */
 export const PROBE_Y = 100;
 
 /** A changed file chosen from the tree or from global search: current, out of browse mode, in view.
@@ -51,16 +32,8 @@ export async function revealCard(selector: string): Promise<void> {
   }
 }
 
-/**
- * Focusing a thread and bringing its anchor into view: the card is scrolled to
- * first, because a file whose diff is not mounted has no line to scroll to yet,
- * and the widget is reached on the next painted frame, once the intersection
- * observer has mounted it
- * ([ADR-008](../../docs/adr/adr-008-diff-rendering-verdict.md)).
- *
- * It is what a click in the rail does, what `J` and `K` do, and what `⏎` on a
- * comment in global search does — one thread reached one way.
- */
+/** A thread focused and its anchor shown — the rail, `J`/`K`, a search hit: the card first, as an
+ * unmounted diff has no line yet, then the widget once the observer has mounted it (ADR-008). */
 export async function revealThread(id: string): Promise<void> {
   const store = useStore.getState();
   store.focusThread(id);
@@ -110,19 +83,14 @@ export async function revealThread(id: string): Promise<void> {
     browse(thread.path);
     return;
   }
-  // The anchor is on a line a collapsed hunk hides: the reader put it away, and
-  // the thread they just asked for is behind it. Show the context again and
-  // look once more, rather than leaving the click with no answer.
+  // A collapsed hunk hides the anchor, and the thread just asked for is behind it: show the
+  // context again and look once more rather than leave the click with no answer.
   store.expandHunks(file);
   await scrollToWidget(id);
 }
 
-/**
- * The page scrolls to the widget, and nothing else: `scrollIntoView` would also
- * scroll the card sideways, and the reader would come back to a diff whose left
- * column has slid out of it. The card may still be mounting, so it is looked
- * for over a few frames.
- */
+/** Only the page scrolls to the widget: `scrollIntoView` would slide the card sideways too
+ * (08-ui.md, "Threads"). The card may still be mounting, so it is looked for over a few frames. */
 async function scrollToWidget(id: string): Promise<boolean> {
   for (let frame = 0; frame < 3; frame += 1) {
     await afterPaint();
