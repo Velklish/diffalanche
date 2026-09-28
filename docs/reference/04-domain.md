@@ -100,6 +100,12 @@ index module writes today, for a cost the next suggestion pays once.
 shares: the session it was given, else the current one, else a refusal. It lives
 here rather than in each command.
 
+`readSession` turns a `review.json` that is not there into `no-such-session`,
+and only that. A file that is there but cannot be read or parsed keeps the
+`StorageError` naming the file and the field
+([03-storage.md](03-storage.md#validation-and-errors)): "no review session
+ls-240372" would send the reader looking for a session that is right there.
+
 `listSessions` returns one row per session, most recently updated first, with
 the counters the sessions menu shows (`docs/design/HANDOFF.md` section 7):
 
@@ -111,7 +117,10 @@ the counters the sessions menu shows (`docs/design/HANDOFF.md` section 7):
 | `repositories` | repositories in `diff.json`, or `null` when nothing has been scanned |
 
 `warnings` beside the sessions carries the directories under `reviews/` that are
-not sessions, exactly as storage reported them.
+not sessions, exactly as storage reported them. A session whose files are there
+but broken is not passed over to keep the list going: the counters come from
+files a person may edit, and the listing answers with the `StorageError` of the
+read that hit the broken one, which names the file to fix.
 
 ## Scope
 
@@ -144,7 +153,10 @@ entry *is* the repository and a finding about it sits on it.
 scan found and refuses everything by name: a repository the root has not, a
 repository named twice, an entry with an empty list of paths, and a path that is
 not a path inside its repository — absolute, trailing, or with a `.` or `..` in
-it. Whether a file has changes is never asked: a file in the scope with nothing
+it. A path is written the way `comments.json` writes one, relative and with
+forward slashes, and one that leaves its repository is refused rather than
+resolved: the scope decides what is read from a repository, and nothing may name
+a file outside the one it belongs to. Whether a file has changes is never asked: a file in the scope with nothing
 to show is kept by the task and left off the screen, which is decision 5 of the
 ADR.
 
@@ -153,7 +165,8 @@ repository that is in as a whole changes nothing, because the whole already
 holds it. `narrowScope` refuses what it cannot do rather than passing over it —
 a repository or a path the scope does not have, and a path of a repository the
 scope holds as a whole, since "everything but this file" is not an entry the
-format has. An entry whose last path is removed goes with it, and a narrowing
+format has — and a remove that silently did nothing would read as one that
+worked. An entry whose last path is removed goes with it, and a narrowing
 that would leave the task about nothing is refused: an empty scope is not a
 state. Both refuse a session whose scope is `null` — the whole root is as wide
 as a task gets, and there is nothing in it to remove.
@@ -169,7 +182,8 @@ change that drops none leaves `comments.json` alone and does not wake the
 watcher for nothing ([03-storage.md](03-storage.md#read-modify-write)).
 
 The message of `ScopeCommentsError` names the count, the first twelve ids, and
-the CLI flag: the CLI is the contract it is written for. A caller that words its
+the CLI flag: a line with two hundred ids on it answers nobody, and the CLI is
+the contract it is written for. A caller that words its
 own question reads `comments` off the error instead — that is what the API's 409
 carries ([07-server.md](07-server.md)).
 
@@ -244,8 +258,12 @@ exist at all, and only the rule needs the lock.
 same `assertHuman` that `resolve` and `reopen` use — the rule of
 [ADR-004](../adr/adr-004-agent-contract.md) reaching from a thread to the task
 the threads are in. It lives in `src/core/domain/roles.ts` because both callers
-need it and `comments.ts` already imports `scope.ts`. Setting a status that is
-already set writes nothing, so the moment a task was closed at stays the moment
+need it and `comments.ts` already imports `scope.ts`. A task is closed by that
+gesture and never by counting its comments (decision 3 of
+[ADR-010](../adr/adr-010-review-task-scope.md)). The session is looked for
+before the role is judged, the order `resolve` and `reopen` use, so a mistyped
+name answers "no review session" rather than "only a human may close". Setting
+a status that is already set writes nothing, so the moment a task was closed at stays the moment
 it was closed at. Closing is a marker and not a lock: `comment`, `reply`, and
 `resolve` all still work on a closed task.
 
@@ -282,6 +300,12 @@ reopen(dataDir, session, id, verdict): Promise<Comment>
 get(dataDir, session, id): Promise<Comment>
 list(dataDir, session, filter?): Promise<Comment[]>
 ```
+
+Every function of the module first checks that the session is there and
+refuses with `no-such-session` when it is not. Without that one check a missing
+session would get four answers to one question: an empty list from `list`,
+`no-such-comment` from `get`, and two different refusals from `addComment`,
+depending on the anchor level.
 
 Every write goes through storage's `updateSession`
 ([03-storage.md](03-storage.md#read-modify-write)), as `createSession` and
@@ -440,6 +464,8 @@ repository that carries comments, and of every file inside them: `total`,
 `open`, `resolved`, `unanswered`, `awaiting`, and `severity` — the worst
 severity **among the open comments** of that scope, `null` when none is open. A
 critical finding a human has already closed does not keep the file red.
+Repositories and files come sorted by name, by code point, so two calls on the
+same comments give the same order.
 
 "Worst" is the order of storage's `SEVERITIES` — worst first, `docs/SPEC.md`
 section 3, decision 7 — and the domain reads that list rather than keeping one
@@ -471,7 +497,16 @@ base branch:origin/develop · 5 open comments
 ```
 
 The caller decides what goes in, so `export --status open` and `--status all`
-are the same function over different lists.
+are the same function over different lists. The UI's `raw` tab shows exactly
+this text and `Copy .md` copies it, so it is the export and not a rendering of
+one ([08-ui.md](08-ui.md)).
+
+Inside a section the comments are ordered by path and then line, by code point
+and never by locale: the export ships from `npx` on Node and from a Bun binary,
+and `localeCompare` would order the same review differently in the two,
+depending on the machine's ICU data. A reply is quoted line by line rather than
+by paragraph, because a `>` on the first line only drops everything after a
+blank line out of the quote.
 
 **The base line deviates from the design on purpose.**
 `docs/design/HANDOFF.md` section 9 shows the meta line as `base origin/main` —

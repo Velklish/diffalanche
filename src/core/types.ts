@@ -18,15 +18,8 @@ export type ReviewTotals = {
   lines: number;
 };
 
-/**
- * What `GET /api/review` answers with: the change set of the current review
- * session together with everything the review needs to open — the session
- * itself, its comments, and the counters over them. Nothing is loaded lazily
- * afterwards (`docs/SPEC.md` section 6), so this is one document and one
- * response. The repositories carry no hunks: the renderer reads `patch`, and
- * carrying the structured lines as well costs more CPU per scrolled frame than
- * the budget has ([ADR-008](../../docs/adr/adr-008-diff-rendering-verdict.md)).
- */
+/** `GET /api/review`: everything the review opens with in one response, nothing loaded lazily; no
+ * hunks, since the renderer reads `patch` ([ADR-008](../../docs/adr/adr-008-diff-rendering-verdict.md)). */
 export type ReviewDocument = ReviewBundle & {
   /** `review.json` of the current session. */
   session: Review;
@@ -46,10 +39,8 @@ export type RepositoryChange = {
   warnings: string[];
 };
 
-/**
- * How a review session computes its change set (`docs/SPEC.md` section 3,
- * decision 4). One spec per session, resolved separately in every repository.
- */
+/** How a session computes its change set (`docs/SPEC.md` section 3, decision 4): one spec per
+ * session, resolved separately in every repository. */
 export type BaseSpec =
   | { mode: "head" }
   | { mode: "branch"; branch?: string | undefined }
@@ -75,12 +66,8 @@ export type FileChange = {
   status: FileStatus;
   additions: number;
   deletions: number;
-  /**
-   * The file's unified diff exactly as git prints it, `diff --git` header
-   * included: the renderer parses that header before the hunks
-   * ([ADR-008](../../docs/adr/adr-008-diff-rendering-verdict.md)). Empty for a
-   * file listed without content.
-   */
+  /** The unified diff exactly as git prints it, header included, which the renderer parses first
+   * ([ADR-008](../../docs/adr/adr-008-diff-rendering-verdict.md)); empty without content. */
   patch: string;
   /** The same diff structured, as `diff.json` stores it. Empty without content. */
   hunks: Hunk[];

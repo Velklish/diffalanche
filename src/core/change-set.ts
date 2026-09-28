@@ -1,12 +1,5 @@
-/**
- * One scan of the review: every repository under the root, read against the
- * session's base, in the shape `diff.json` stores and `diff --json` prints
- * (`docs/SPEC.md` sections 5 and 7). The CLI scans here; the server switches to
- * it in DA-16 and still has its own walk until then.
- *
- * The hunks are asked for, because the anchor of a line comment is captured
- * from them and `diff.json` is the only place they are kept.
- */
+/** One scan of the review in the shape `diff.json` stores, hunks included for anchor capture;
+ * everything that reads a whole review goes through it ([02-git.md](../../docs/reference/02-git.md)). */
 import type { Config } from "./config/index.ts";
 import { pathInScope, repositoryInScope, scopeEntry } from "./domain/scope.ts";
 import { readRepositoryChange } from "./git/index.ts";
@@ -94,26 +87,16 @@ export function replaceRepository(cached: PatchableCache, change: RepositoryChan
   return cache(root, base, scope, repositories, warnings, rootWarnings);
 }
 
-/**
- * Whether two bases name the same thing. It is compared field by field and not
- * through `formatBase`: that writes a base as the argument that produces it, so
- * a `ref` literally named `head` comes out as `head` and would pass for the
- * `head` mode — and `review.json` is edited by hand, so nothing keeps such a
- * base out of it.
- */
+/** Field by field, not through `formatBase`: a `ref` named `head`, which a hand-edited
+ * `review.json` can hold, formats as `head` and would pass for the `head` mode. */
 export function sameBase(left: BaseSpec, right: BaseSpec): boolean {
   if (left.mode === "head") return right.mode === "head";
   if (left.mode === "ref") return right.mode === "ref" && left.ref === right.ref;
   return right.mode === "branch" && (left.branch ?? null) === (right.branch ?? null);
 }
 
-/**
- * Whether two scopes name the same thing. A cache computed for another scope
- * answers a different question just as one computed against another base does:
- * it holds the repositories and the files of the scope it was read under, and
- * the entries are compared in order because that is the order they are written
- * and edited in.
- */
+/** `sameBase` for the other half of the cache's key; entries compare in order, the order they
+ * are written and edited in ([03-storage.md](../../docs/reference/03-storage.md)). */
 export function sameScope(left: Scope, right: Scope): boolean {
   if (left === null || right === null) return left === right;
   if (left.length !== right.length) return false;
@@ -128,23 +111,8 @@ export function sameScope(left: Scope, right: Scope): boolean {
   });
 }
 
-/**
- * What the scope leaves of one repository's change set. A repository the task
- * is not about comes back with nothing — files and warnings both, because a
- * warning about a repository outside the task is not this task's news — one the
- * scope holds as a whole keeps every file, and one that names paths keeps those
- * and no others.
- *
- * **The names are matched as they are written, a renamed file included.** A
- * file whose name changed is at a path the scope does not name, and nothing
- * outside the scope is shown ([ADR-010](../../docs/adr/adr-010-review-task-scope.md),
- * decision 2); what the task keeps is the path it was given, which now has
- * nothing to show — decision 5, the same answer a file that stopped changing
- * gets. Matching the old name here instead would show a file under a name the
- * scope has not, and then every reader of the comments — `list`, `show`,
- * `export` — would have to resolve the rename again, from a change set that
- * stops carrying it the moment the rename is committed.
- */
+/** What the scope leaves of one repository's change set, names matched as written, a renamed file
+ * included ([02-git.md](../../docs/reference/02-git.md); the rename: 04-domain.md, "Scope"). */
 export function filterChange(scope: Scope, change: RepositoryChange): RepositoryChange {
   if (scope === null) return change;
   const entry = scopeEntry(scope, change.path);
@@ -159,19 +127,13 @@ export function filterChange(scope: Scope, change: RepositoryChange): Repository
 /** What one scan of the root came to: the cache, and every repository it saw. */
 type ReviewScan = {
   cache: DiffCache;
-  /**
-   * The path of every repository the scan found, with changes or without. A
-   * caller narrowing to one repository needs it to tell a path nothing is at
-   * from a repository that simply has nothing to show.
-   */
+  /** Every repository the walk found, changed or not: how a `--repo` nothing is at is told from
+   * one that has nothing to show. */
   found: string[];
 };
 
-/**
- * The path of every repository under the root, with changes or without. The
- * walk reads the file system and starts no git process, so it is what a command
- * checks a `--repo` against before it does anything that writes.
- */
+/** Every repository under the root, changed or not; the walk starts no git process, so a command
+ * checks a `--repo` against it before anything writes. */
 export async function findRepositories(config: Config): Promise<string[]> {
   const found = await scan(config.root, {
     roots: config.roots,
@@ -224,9 +186,8 @@ export async function scanReview(
     filterChange(scope, await readRepositoryChange(config.root, repo.path, base, { hunks: true })),
   );
   const paths = found.repositories.map((repo) => repo.path);
-  // A scope entry the walk has no repository for is named rather than dropped:
-  // the entry was checked when it was written, so what this says is that the
-  // repository has gone since ([01-scanner.md](../../docs/reference/01-scanner.md)).
+  // A scope entry with no repository is named, not dropped: it was checked when it was written,
+  // so the repository has gone since ([02-git.md](../../docs/reference/02-git.md)).
   const missing: ScanWarning[] = (scope ?? [])
     .filter((entry) => !paths.includes(entry.repo))
     .map((entry) => ({
@@ -251,21 +212,8 @@ export async function scanReview(
   };
 }
 
-/**
- * Brings `diff.json` up to date for one repository, so a comment written right
- * after an edit anchors to the line that is there now. The repository is read
- * again rather than compared against the mtimes of its `.git` and its working
- * tree: one `diff-index` on one repository costs less than walking the tree, and
- * it is right in the case a mtime comparison gets wrong — a file edited and
- * saved within the same second as the scan.
- *
- * Without a cache at all there is nothing to patch, so the whole root is
- * scanned once, which is also what the reader of the review needs next.
- *
- * The read and the write are one step under the session's lock: the watcher of
- * a running server patches the same file, and two read-modify-writes without a
- * lock overwrite each other's repositories.
- */
+/** Re-reads one repository into `diff.json` so a comment anchors to the line there now, read and
+ * write under one lock as the watcher patches it too ([02-git.md](../../docs/reference/02-git.md)). */
 export async function refreshRepository(
   config: Config,
   session: string,
@@ -279,11 +227,8 @@ export async function refreshRepository(
   );
   const full = await withLock(sessionDir(config.dataDir, session), async (held) => {
     const previous = await readDiffCache(config.dataDir, session);
-    // A cache computed against another base — or for another scope — answers a
-    // different question, so patching one repository into it would leave the
-    // review reading half of each. `review base` and a scope edit are what put
-    // it there, and one full scan repairs it — outside the lock, because it
-    // takes as long as every repository takes.
+    // A cache for another base or scope gets a full scan, not a patch, run outside the lock because
+    // it takes as long as every repository takes ([02-git.md](../../docs/reference/02-git.md)).
     if (!patchable(previous, base, scope)) return true;
     await held.assertHeld();
     await writeDiffCache(config.dataDir, session, replaceRepository(previous, change));

@@ -1,8 +1,5 @@
-/**
- * Review sessions: creating one, switching to it, listing the history, and
- * changing its base. `docs/SPEC.md` sections 4, 5, and 8; the on-disk side is
- * `src/core/storage`.
- */
+/** Review sessions: creating, switching, deleting, listing, and changing the base
+ * ([04-domain.md](../../../docs/reference/04-domain.md), "Review sessions"). */
 import type { Base, Review, Role, Scope } from "../storage/index.ts";
 import {
   clearCurrent,
@@ -25,11 +22,8 @@ import { DomainError } from "./errors.ts";
 import { assertHuman } from "./roles.ts";
 import type { SessionList, SessionSummary } from "./types.ts";
 
-/**
- * A session name is a directory name, so it stays inside what every filesystem
- * of the three delivery targets spells the same way: lowercase letters, digits,
- * dot, dash, underscore.
- */
+/** A directory name every filesystem of the three delivery targets spells the same way
+ * ([04-domain.md](../../../docs/reference/04-domain.md), "Session names"). */
 const NAME = /^[a-z0-9._-]+$/;
 
 /** Names that are a path rather than a name, whatever the character set allows. */
@@ -52,11 +46,8 @@ export function assertSessionName(name: string): void {
   }
 }
 
-/**
- * The base argument of `review new` and `review base`, shared by the CLI and
- * the API: `head`, `branch`, `branch:<name>`, and anything else is a ref
- * (`docs/SPEC.md` section 8).
- */
+/** The base argument of `review new` and `review base`, one reading for the CLI and the API
+ * ([04-domain.md](../../../docs/reference/04-domain.md), "The base argument"). */
 export function parseBaseArgument(value: string): Base {
   if (value === "") {
     throw new DomainError(
@@ -89,21 +80,13 @@ export function formatBase(base: Base): string {
 type CreateSessionOptions = {
   /** What the task is about; `null`, the default, is the whole root. */
   scope?: Scope;
-  /**
-   * Whether the new session becomes the current one. `false` leaves `current`
-   * where it is: an agent that opens a task prints its link and the human opens
-   * it when they are ready ([ADR-010](../../../docs/adr/adr-010-review-task-scope.md)).
-   */
+  /** `false` leaves `current` where it is: an agent prints the new task's link and the human opens
+   * it when ready ([ADR-010](../../../docs/adr/adr-010-review-task-scope.md)). */
   use?: boolean;
 };
 
-/**
- * Creates a session. The session directory carries both files from the start:
- * an empty `comments.json` is the session's comments, and a reader that has to
- * tell "no file yet" from "no comments" tells them apart for no reason. The
- * scope is not checked here — it is checked against the repositories the scan
- * found, which this module does not read ([scope.ts](scope.ts)).
- */
+/** Writes both files from the start; the scope is checked by the caller, against the scan this
+ * module does not read ([04-domain.md](../../../docs/reference/04-domain.md), "Review sessions"). */
 export async function createSession(
   dataDir: string,
   name: string,
@@ -112,10 +95,8 @@ export async function createSession(
   options: CreateSessionOptions = {},
 ): Promise<Review> {
   assertSessionName(name);
-  // `sessionExists` answers from the file being there, not from it parsing: a
-  // session whose `review.json` was broken by hand still exists, and
-  // overwriting it would take its comments with it. This check is for the
-  // message; the one that decides is inside the lock, in `updateSession`.
+  // For the message; the check that decides is inside the lock. A broken `review.json` still
+  // exists, and overwriting it would take its comments (03-storage.md, "Reading and writing").
   if (await sessionExists(dataDir, name)) {
     throw new DomainError("session-exists", `review session "${name}" already exists`);
   }
@@ -138,10 +119,8 @@ export async function createSession(
       },
     });
   } catch (error) {
-    // With `create` given, the only refusal `updateSession` raises about
-    // `review.json` is the one the check above could not see: another writer
-    // created the session between that check and the lock. The caller gets one
-    // code for both, because it is one answer.
+    // The only `review.json` refusal of a create: another writer made the session between the
+    // check above and the lock. One answer, one code.
     if (error instanceof StorageError && error.file === reviewPath(dataDir, name)) {
       throw new DomainError("session-exists", `review session "${name}" already exists`);
     }
@@ -234,12 +213,8 @@ async function mostRecent(dataDir: string): Promise<string | null> {
   return best?.name ?? null;
 }
 
-/**
- * The history: every session with its counters, most recently updated first.
- * A session whose comments cannot be counted is not hidden — the counters come
- * from files that may be edited by hand, and a broken one is reported by the
- * read that hits it.
- */
+/** Every session with its counters, most recently updated first; a file broken by hand is not
+ * passed over but reported by the read that hits it (04-domain.md, "Review sessions"). */
 export async function listSessions(dataDir: string): Promise<SessionList> {
   const { names, warnings } = await listSessionNames(dataDir);
   const current = await readCurrent(dataDir);
@@ -268,12 +243,8 @@ export async function listSessions(dataDir: string): Promise<SessionList> {
   return { sessions, warnings };
 }
 
-/**
- * Reads a session, turning "no such file" into the domain's own refusal. A file
- * that is there but unreadable is a different thing: the `StorageError` naming
- * the file and the field comes through untouched, because "no review session
- * ls-240372" would send the reader looking for a session that is right there.
- */
+/** "No such file" becomes `no-such-session`; an unreadable file keeps its `StorageError`, as "no
+ * review session" would send the reader after one that is right there (04-domain.md). */
 export async function readSession(dataDir: string, name: string): Promise<Review> {
   if (!(await sessionExists(dataDir, name))) {
     throw new DomainError("no-such-session", `no review session "${name}"`);
@@ -281,11 +252,8 @@ export async function readSession(dataDir: string, name: string): Promise<Review
   return readReview(dataDir, name);
 }
 
-/**
- * The session a command works on: the one it was given, else the current one.
- * Every command of `docs/SPEC.md` section 8 takes `--review` and falls back to
- * `current`, so the fallback lives here rather than in each of them.
- */
+/** The session it was given, else the current one: the fallback of every command, kept here
+ * rather than in each ([04-domain.md](../../../docs/reference/04-domain.md), "Review sessions"). */
 export async function resolveSessionName(dataDir: string, name?: string): Promise<string> {
   if (name !== undefined) {
     await readSession(dataDir, name);

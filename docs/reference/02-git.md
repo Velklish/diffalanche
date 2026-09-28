@@ -447,7 +447,8 @@ await refreshRepository(config, session, review.base, "repos/group/service-api",
   twenty-one must not pay for the other nineteen;
   `tests/scope-scan.test.ts` counts the processes rather than the seconds.
 - `filterChange(scope, change)` is what the scope leaves of one repository: a
-  repository the task is not about comes back with no files and no warnings, one
+  repository the task is not about comes back with no files and no warnings — a
+  warning about a repository outside the task is not this task's news — one
   the scope holds as a whole keeps every file, and one that names paths keeps
   those and no others. **The names are matched as they are written, a renamed
   file included**: a file whose name changed is at a path the scope does not

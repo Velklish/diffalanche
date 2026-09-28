@@ -15,10 +15,8 @@ export async function writeFileAtomic(
   content: string | Uint8Array,
   options: AtomicWriteOptions = {},
 ): Promise<void> {
-  // Same directory as the target: a rename across filesystems is a copy, and a
-  // copy is exactly the torn write this exists to prevent. The suffix is random
-  // rather than the pid: an operating system reuses pids, and a leftover from a
-  // crashed process with the same pid would fail the exclusive create.
+  // Beside the target, as a rename across filesystems is a copy; a random suffix, as a reused pid
+  // would meet a crashed writer's leftover in the exclusive create (03-storage.md, "Atomic writes").
   const temp = `${path}.tmp-${randomUUID()}`;
   try {
     const handle = await open(temp, "wx");

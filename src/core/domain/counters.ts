@@ -1,8 +1,5 @@
-/**
- * The derived state of a thread and the counters built from it: what the
- * sidebar, the header, and the thread rail show (`docs/design/HANDOFF.md`
- * sections 1.1 and 3).
- */
+/** The derived state of a thread and the counters the sidebar, the header and the thread rail
+ * show (`docs/design/HANDOFF.md` sections 1.1 and 3; 04-domain.md, "Derived state"). */
 import { byCodePoint } from "../order.ts";
 import { type Comment, SEVERITIES, type Severity } from "../storage/types.ts";
 
@@ -56,11 +53,8 @@ export function worstSeverity(comments: Comment[]): Severity | null {
   return null;
 }
 
-/**
- * The counters of the whole review, of every repository that carries comments,
- * and of every file inside them. Repositories and files are sorted by name, so
- * two calls on the same comments give the same order.
- */
+/** The counters of the review, of every repository with comments and of every file in them,
+ * sorted by name so that two calls on the same comments agree. */
 export function countReview(comments: Comment[]): ReviewCounters {
   const byRepo = new Map<string, Comment[]>();
   for (const comment of comments) {
