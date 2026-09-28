@@ -494,7 +494,7 @@ it stops. `.impeccable/config.json` turns it on for this repository and is
 committed; `.impeccable/config.local.json` records one developer's consent and is
 not.
 
-No harness manifest is committed, because a manifest has to name the path where
+No design-hook manifest is committed, because a manifest has to name the path where
 Impeccable is installed and that path differs per machine. Each developer wires
 it once:
 
@@ -568,7 +568,8 @@ Without a hook the check is manual, once, on the files a change touched:
 A session of Claude Code on the web starts in a fresh container, and
 `.claude/hooks/session-start.sh`, registered in `.claude/settings.json`, gives it
 what the gates need. It does nothing outside such a session (`CLAUDE_CODE_REMOTE`
-is not `true`), and every step warns and goes on rather than stop the session:
+is not `true`), prints to stderr only, and a step that fails warns and the next
+one runs:
 
 - the Bun every pinned CI job runs, read out of `.github/workflows/ci.yml`, from
   its GitHub release, when the container's Bun is another;
@@ -581,8 +582,10 @@ is not `true`), and every step warns and goes on rather than stop the session:
   checks for.
 
 The environment's network access must let the two downloads through: add
-`huggingface.co`, `cdn-lfs.huggingface.co` and `cas-bridge.xethub.hf.co` for the
-model, and `cdn.playwright.dev` and `playwright.download.prss.microsoft.com` for
+`huggingface.co` and the hosts it redirects a file to — `cdn-lfs.huggingface.co`
+and `cas-bridge.xethub.hf.co` when this was written, not observed from a session
+that could reach them — for the model, and `cdn.playwright.dev` and
+`playwright.download.prss.microsoft.com`, the two mirrors of Playwright 1.63, for
 the browser, to the allowed domains; GitHub and the npm registry are allowed by
 the default list.
 
@@ -593,8 +596,10 @@ and is refused without one — a rule merged into the container's own
 `~/.claude/settings.json`, never into this repository's:
 
 ```sh
+rm -rf /tmp/impeccable ~/.claude/skills/impeccable
 git clone --depth 1 --branch skill-v4.3.1 https://github.com/pbakaus/impeccable /tmp/impeccable
 mkdir -p ~/.claude/skills && cp -r /tmp/impeccable/.claude/skills/impeccable ~/.claude/skills/
+~/.claude/skills/impeccable/scripts/impeccable engine-probe >/dev/null  # fetches the binary now
 node -e '
   const fs = require("fs"), file = require("os").homedir() + "/.claude/settings.json";
   const rule = "Bash(~/.claude/skills/impeccable/scripts/impeccable:*)";
@@ -604,11 +609,12 @@ node -e '
   fs.writeFileSync(file, JSON.stringify(settings, null, 2));'
 ```
 
-What a container cannot change: it runs as root, so
-`tests/watcher.test.ts` › "keeps what it knew when `reviews/` cannot be listed",
-which takes the right to list away with `chmod`, is red there; and a container of
-a few cores is over the perf budgets on the untouched base, which is the case
-[11-perf.md](docs/reference/11-perf.md#a-red-the-machine-caused) settles.
+Two reds remain in such a container. It runs as root, so `tests/watcher.test.ts` ›
+"keeps what it knew when `reviews/` cannot be listed, and does not empty it",
+which takes the right to list away with `chmod`, is red there until DA-117.1; and
+a container of a few cores is over the perf budgets on the untouched base, which
+is the case [11-perf.md](docs/reference/11-perf.md#a-red-the-machine-caused)
+settles.
 
 ## Releases
 
