@@ -329,7 +329,7 @@ and `bun run release` refuses a version that has no section. See
   (DA-58). 706 blocks over two lines — `src/`, `tests/`, `e2e/`, `perf/`,
   `scripts/` and `.github/`, JSX and `#` comments counted — are down to 0: the
   knowledge they carried moved into the reference sections of the subsystems
-  (01–11), the section banners went, the rest became one line of why and a
+  (02–08 and 11), the section banners went, the rest became one line of why and a
   pointer, and the comments that disagreed with their code were corrected. No
   code line changed but `tests/ci-names.test.ts`, which now reads the required
   check names from [11-perf.md](docs/reference/11-perf.md#the-checks-a-pull-request-requires)

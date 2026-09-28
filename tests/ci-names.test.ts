@@ -16,9 +16,12 @@ function requiredSection(text: string): string {
   return text.slice(start, end === -1 ? undefined : end);
 }
 
-// The first column of its table, backticks stripped; the header and the rule are not names.
-function documentedNames(section: string): string[] {
-  return [...section.matchAll(/^\| `([^`]+)` \|/gm)].map((match) => match[1] ?? "");
+// The table's rows, backticks stripped; the header and the rule are not names.
+function documentedRows(section: string): { name: string; id: string }[] {
+  return [...section.matchAll(/^\| `([^`]+)` \| `([^`]+)` \|/gm)].map((match) => ({
+    name: match[1] ?? "",
+    id: match[2] ?? "",
+  }));
 }
 
 type Cell = Record<string, string>;
@@ -70,45 +73,57 @@ function cells(body: string): Cell[] {
 }
 
 function reportedNames(text: string): string[] {
-  const names: string[] = [];
+  return reported(text).map((check) => check.name);
+}
+
+function reported(text: string): { name: string; id: string }[] {
+  const checks: { name: string; id: string }[] = [];
   for (const { id, body } of jobBlocks(text)) {
     const declared = body.match(/^ {4}name:\s*(.+?)\s*$/m)?.[1];
     for (const cell of cells(body)) {
       if (!declared) {
         // No `name:`: GitHub reports the id, and a matrix job adds its cell values.
         const suffix = Object.values(cell);
-        names.push(suffix.length ? `${id} (${suffix.join(", ")})` : id);
+        checks.push({ name: suffix.length ? `${id} (${suffix.join(", ")})` : id, id });
         continue;
       }
-      names.push(
-        declared.replace(
+      checks.push({
+        name: declared.replace(
           /\$\{\{\s*matrix\.([\w-]+)\s*\}\}/g,
           (_, key: string) => cell[key] ?? `\${{ matrix.${key} }}`,
         ),
-      );
+        id,
+      });
     }
   }
-  return names;
+  return checks;
 }
 
 describe("the check-run names branch protection lists", () => {
   const section = requiredSection(perf);
-  const documented = documentedNames(section);
-  const reported = reportedNames(ci);
+  const rows = documentedRows(section);
+  const documented = rows.map((row) => row.name);
+  const reportedByWorkflow = reportedNames(ci);
 
   it("reads a list out of 11-perf.md at all", () => {
-    // Guards the guard: a reworded comment that stops matching would make every
+    // Guards the guard: a reworded section that stops matching would make every
     // assertion below vacuously true.
     expect(documented.length).toBeGreaterThanOrEqual(10);
     expect(documented).toContain("check");
   });
 
   it("names only checks the workflow actually reports", () => {
-    expect(documented.filter((name) => !reported.includes(name))).toEqual([]);
+    expect(documented.filter((name) => !reportedByWorkflow.includes(name))).toEqual([]);
   });
 
-  it("leaves out exactly the windows cells the comment declares not required", () => {
-    const undocumented = reported.filter((name) => !documented.includes(name));
+  it("gives each name the id of the job that reports it", () => {
+    const ids = new Map(reported(ci).map((check) => [check.name, check.id]));
+    expect(rows.filter((row) => ids.get(row.name) !== row.id)).toEqual([]);
+  });
+
+  it("leaves out exactly the windows cells 11-perf.md declares not required", () => {
+    expect(documented.filter((name) => name.includes("windows-latest"))).toEqual([]);
+    const undocumented = reportedByWorkflow.filter((name) => !documented.includes(name));
     expect(undocumented.every((name) => name.includes("windows-latest"))).toBe(true);
     // The paragraph wraps, so the assertion holds the half that carries the decision.
     expect(section.replace(/\s+/g, " ")).toContain("is deliberately not in the list until DA-45");

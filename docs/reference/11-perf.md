@@ -943,7 +943,7 @@ the pulse still in the page, or stopped by reduced motion — read 7.3–7.6 ms,
 of them at lower loads and one at a higher, against the final page's 8.0–8.4;
 what separates them is not known. Closing the gap to 8.3 is DA-56.5.
 
-The gate is the last of the seven `gates` of `backslop.json` — the seventh — so it runs before any task is
+The gate is the last of the eight `gates` of `backslop.json` — the eighth — so it runs before any task is
 reported, and it is the `perf` job of `.github/workflows/ci.yml`, which
 installs Chromium, generates the fixture, and runs the gate — the gate builds
 the UI itself, so the job does not; the table lands in the run summary through
@@ -1383,8 +1383,8 @@ outside the window may take to raise the quiet mark in the header, and it is
 the only ceiling the mark has. It is 2.5 times the 300 ms `docs/SPEC.md`
 section 6 gives a live update, because a strict 300 on a loaded machine would
 fail on the machine rather than on the code. 2.5 was `RUNNER_ALLOWANCE` of
-`perf/budgets.ts` when the ceiling was set; the allowance has been 2.1 since it
-was tuned to the CPU-per-frame line ([the gate](#the-gate)), and the ceiling did
+`perf/budgets.ts` when the ceiling was set; the allowance has been 2.1 since
+DA-56.4 tuned it to the CPU-per-frame line ([the gate](#the-gate)), and the ceiling did
 not move with it — whether it should is DA-58.3. The perf gate does not measure
 the mark: `BUDGETS` has no line for it, and the nearest one, `updateMs`, times
 an edit in a repository reaching the card of that file — the `diff-changed`
@@ -1404,8 +1404,9 @@ be read, and a latency with no owner in that table is printed rather than held.
 [ADR-011](../adr/adr-011-comment-length.md) as a check: it prints every comment
 block over two lines as `file:line: N lines`, then the count, and exits 1 while
 the count is not 0. It reads `src/`, `tests/`, `e2e/`, `perf/`, `scripts/` and
-`.github/`, or the paths it is given — `bun scripts/check-comments.ts src/ui`
-answers for one area. It is one of the `gates` in `backslop.json` and a step of
+`.github/`, or the paths it is given, relative to the repository root —
+`bun scripts/check-comments.ts src/ui` answers for one area, and a path that
+does not exist is an error (exit 2) rather than a clean count. It is one of the `gates` in `backslop.json` and a step of
 CI's `check` job, after the typecheck.
 
 A block is counted by its physical lines, from the first to the last:
@@ -1419,7 +1420,9 @@ A block is counted by its physical lines, from the first to the last:
 
 A trailing comment after code on the same line is not a block: the rule is about
 prose above the code. The ADR's own `awk` counted 720 blocks on 2026-09-11 and
-missed the JSX and the `#` forms; the check counted 706 on 2026-09-28 with them,
+misses the JSX and the `#` forms; on the tree DA-58 started from, 2026-09-28, it
+counted 677 and the check 706 — the 29 are the twelve of `.github/`, the seven
+of `scripts/smoke.sh` and ten JSX comments —
 and DA-58 took that to 0 — the knowledge moved into the reference sections of
 the subsystems, and what is left above the code is a line of why and a pointer.
 `tests/check-comments.test.ts` holds the counting; a three-line comment added
@@ -1432,7 +1435,7 @@ full where its subject is:
 
 | Job | What it runs | Runners | Where it is described |
 |---|---|---|---|
-| `check` | `lint`, `typecheck`, and the unit suite on Node | ubuntu | [the runtime the unit suite runs on](#the-runtime-the-unit-suite-runs-on) |
+| `check` | `lint`, `typecheck`, [`check:comments`](#the-comment-gate), the unit suite on Node, and `check:package` over the tarball | ubuntu | [the runtime the unit suite runs on](#the-runtime-the-unit-suite-runs-on) |
 | `test-bun` | the same unit suite on Bun's own runtime | ubuntu | [the runtime the unit suite runs on](#the-runtime-the-unit-suite-runs-on) |
 | `perf` | the budget table on the synthetic review | ubuntu | [the gate](#the-gate) |
 | `ui` | the Playwright UI suite, without the screenshot comparisons | ubuntu | [08-ui.md](08-ui.md#ui-tests) |
@@ -1456,7 +1459,7 @@ the CLI, or the scanner; the gates stay the fast ones.
 screenshot baselines were taken on macOS and are the only ones there are, so the
 two comparisons of `shell.spec.ts` declare the platform and skip anywhere else,
 saying so; the job runs the suite as the gate does, and everything else in it
-runs on Linux too ([08-ui.md](08-ui.md#ui-tests)). It is the sixth of the seven, placed between
+runs on Linux too ([08-ui.md](08-ui.md#ui-tests)). It is the seventh of the eight, placed between
 `bun run test:bun` and `bun run perf` so that the two browser gates are
 adjacent and a machine that has to serialise them serialises one window.
 

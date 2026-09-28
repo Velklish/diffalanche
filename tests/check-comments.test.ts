@@ -1,8 +1,8 @@
-import { mkdtempSync, writeFileSync } from "node:fs";
+import { mkdirSync, mkdtempSync, writeFileSync } from "node:fs";
 import { tmpdir } from "node:os";
 import { join } from "node:path";
 import { describe, expect, it } from "vitest";
-import { blocks, overLimit } from "../scripts/check-comments.ts";
+import { blocks, overLimit, ROOTS } from "../scripts/check-comments.ts";
 
 const lines = (text: string, kind: "slash" | "hash" = "slash") =>
   blocks(text, kind).map((block) => block.lines);
@@ -28,5 +28,23 @@ describe("the comment gate of ADR-011", () => {
     writeFileSync(join(root, "long.ts"), "export const a = 1;\n/**\n * why\n */\n");
     writeFileSync(join(root, "notes.md"), "# a\n# b\n# c\n");
     expect(overLimit(["."], root)).toEqual([{ file: "long.ts", line: 2, lines: 3 }]);
+  });
+
+  it("reads YAML and shell through their `#`, skips node_modules, and takes CRLF lines", () => {
+    const root = mkdtempSync(join(tmpdir(), "diffalanche-comments-"));
+    mkdirSync(join(root, ".github", "workflows"), { recursive: true });
+    mkdirSync(join(root, "node_modules"));
+    writeFileSync(join(root, ".github", "workflows", "ci.yml"), "# a\n# b\n# c\non: push\n");
+    writeFileSync(join(root, "run.sh"), "#!/bin/sh\n# a\n# b\necho\n");
+    writeFileSync(join(root, "node_modules", "n.ts"), "// a\n// b\n// c\n");
+    writeFileSync(join(root, "crlf.ts"), "// a\r\n// b\r\n// c\r\nconst x = 1; // d\r\n");
+    expect(overLimit(["."], root)).toEqual([
+      { file: ".github/workflows/ci.yml", line: 1, lines: 3 },
+      { file: "crlf.ts", line: 1, lines: 3 },
+    ]);
+  });
+
+  it("walks every root ADR-011 names when it is given none", () => {
+    expect(ROOTS).toEqual(["src", "tests", "e2e", "perf", "scripts", ".github"]);
   });
 });

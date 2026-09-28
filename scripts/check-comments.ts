@@ -2,10 +2,10 @@
  * ([11-perf.md](../docs/reference/11-perf.md#the-comment-gate)). */
 import { readdirSync, readFileSync, statSync } from "node:fs";
 import { extname, join, relative, resolve } from "node:path";
-import { argv, exit, stdout } from "node:process";
+import { argv, exit, stderr, stdout } from "node:process";
 import { fileURLToPath } from "node:url";
 
-const ROOTS = ["src", "tests", "e2e", "perf", "scripts", ".github"];
+export const ROOTS = ["src", "tests", "e2e", "perf", "scripts", ".github"];
 const SLASH = new Set([".ts", ".tsx", ".css"]);
 const HASH = new Set([".yml", ".yaml", ".sh"]);
 const LIMIT = 2;
@@ -71,8 +71,14 @@ export function overLimit(paths: string[], root: string): Block[] {
 if (argv[1] !== undefined && resolve(argv[1]) === fileURLToPath(import.meta.url)) {
   const root = resolve(fileURLToPath(import.meta.url), "../..");
   const paths = argv.slice(2);
+  const missing = paths.filter((path) => !statSync(resolve(root, path), { throwIfNoEntry: false }));
+  if (missing.length > 0) {
+    stderr.write(`no such path under ${root}: ${missing.join(", ")}\n`);
+    exit(2);
+  }
   const over = overLimit(paths.length === 0 ? ROOTS : paths, root);
   for (const block of over) stdout.write(`${block.file}:${block.line}: ${block.lines} lines\n`);
   stdout.write(`${over.length} comment blocks over ${LIMIT} lines\n`);
-  exit(over.length === 0 ? 0 : 1);
+  // Not `exit()`: a pipe on Node may still be draining the list when the process would end.
+  process.exitCode = over.length === 0 ? 0 : 1;
 }
