@@ -62,7 +62,6 @@ type FileCardProps = {
   id: string;
   repo: string;
   file: FileChange;
-  index: number;
 };
 
 /**
@@ -74,7 +73,7 @@ type FileCardProps = {
  * re-renders one card and not the other 299 — without that it takes thirteen
  * seconds instead of fifteen milliseconds.
  */
-export const FileCard = memo(function FileCard({ id, repo, file, index }: FileCardProps) {
+export const FileCard = memo(function FileCard({ id, repo, file }: FileCardProps) {
   const view = useStore((store) => store.diffView[id] ?? "split");
   const collapsedCard = useStore((store) => store.collapsedFiles[id] === true);
   const open = useStore((store) => store.fileCounts.get(id)?.open ?? 0);
@@ -245,13 +244,7 @@ export const FileCard = memo(function FileCard({ id, repo, file, index }: FileCa
   const busy = composerLine !== null || selFrom !== null || replyingHere;
 
   return (
-    <div
-      className="file-card"
-      data-file-index={index}
-      data-file={id}
-      data-repo={repo}
-      data-path={file.path}
-    >
+    <div className="file-card" data-file={id} data-repo={repo} data-path={file.path}>
       <div className="file-head">
         <button
           type="button"

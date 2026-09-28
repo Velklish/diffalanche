@@ -1,7 +1,7 @@
 import { type KeyboardEvent, useEffect, useMemo, useRef } from "react";
 import { byCodePoint } from "../../core/order.ts";
 import type { FileChange, RepositoryChange } from "../../core/types.ts";
-import { revealCard } from "../reveal.ts";
+import { revealCard, revealFile } from "../reveal.ts";
 import { countDraft, pathPicked, repoMark, scopeLabel } from "../scope.ts";
 import type { Connection, SidebarTab, TreeState } from "../store.ts";
 import { useStore } from "../store.ts";
@@ -308,7 +308,6 @@ function FileRow({
   );
   const count = useStore((store) => store.fileCounts.get(id));
   const picked = useStore((store) => pathPicked(store.selectDraft, repo, file.path));
-  const setCurrent = useStore((store) => store.select);
   const pickTreePath = useStore((store) => store.pickTreePath);
 
   return (
@@ -322,9 +321,7 @@ function FileRow({
           return;
         }
         // A changed file is read in its card, so choosing one from browse mode leaves it.
-        if (useStore.getState().browse) useStore.getState().closeBrowse();
-        setCurrent(repo, file.path);
-        void revealCard(`[data-file="${CSS.escape(id)}"]`);
+        void revealFile(repo, file.path);
       }}
     >
       {select ? <Tick mark={picked ? "on" : "off"} /> : null}

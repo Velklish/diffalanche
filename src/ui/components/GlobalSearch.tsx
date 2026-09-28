@@ -1,7 +1,7 @@
 import type { KeyboardEvent } from "react";
 import { useCallback, useEffect, useMemo, useRef, useState } from "react";
 import { splitLines } from "../context.ts";
-import { revealCard, revealThread } from "../reveal.ts";
+import { revealFile, revealThread } from "../reveal.ts";
 import type { PreviewLine, SearchHit } from "../search.ts";
 import { PREVIEW_LINES, preview, search, symbolHits, textHits } from "../search.ts";
 import { onTask, useStore } from "../store.ts";
@@ -70,9 +70,7 @@ function Palette() {
         store.openBrowse(hit.repo, hit.path, { line: hit.line });
         return;
       }
-      if (store.browse) store.closeBrowse();
-      store.select(hit.repo, hit.path);
-      void revealCard(`[data-file="${CSS.escape(hit.id)}"]`);
+      void revealFile(hit.repo, hit.path);
     },
     [close],
   );

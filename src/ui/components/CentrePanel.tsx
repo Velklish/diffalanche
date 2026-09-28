@@ -1,4 +1,4 @@
-import { useEffect, useLayoutEffect, useMemo } from "react";
+import { useEffect, useLayoutEffect } from "react";
 import type { RepositoryChange, ResolvedBase } from "../../core/types.ts";
 import { Composer } from "../Composer.tsx";
 import { PROBE_Y } from "../reveal.ts";
@@ -50,9 +50,7 @@ function Failure() {
 export function CentrePanel() {
   const status = useStore((store) => store.status);
   const repositories = useStore((store) => store.repositories);
-  const files = useStore((store) => store.files);
   const browse = useStore((store) => store.browse);
-  const indexById = useMemo(() => new Map(files.map((entry) => [entry.id, entry.index])), [files]);
 
   useCurrentFile(status);
   useReturnFromBrowse(browse);
@@ -91,7 +89,7 @@ export function CentrePanel() {
       <div className={browse ? "review-body away" : "review-body"}>
         <ReviewComposer />
         {repositories.map((repo) => (
-          <RepoSection key={repo.path} repo={repo} indexById={indexById} />
+          <RepoSection key={repo.path} repo={repo} />
         ))}
       </div>
     </main>
@@ -122,13 +120,7 @@ function ReviewComposer() {
   ) : null;
 }
 
-function RepoSection({
-  repo,
-  indexById,
-}: {
-  repo: RepositoryChange;
-  indexById: Map<string, number>;
-}) {
+function RepoSection({ repo }: { repo: RepositoryChange }) {
   const additions = repo.files.reduce((sum, file) => sum + file.additions, 0);
   const deletions = repo.files.reduce((sum, file) => sum + file.deletions, 0);
   const openComposer = useStore((store) => store.openComposer);
@@ -167,9 +159,7 @@ function RepoSection({
       ) : null}
       {repo.files.map((file) => {
         const id = `${repo.path}/${file.path}`;
-        return (
-          <FileCard key={id} id={id} repo={repo.path} file={file} index={indexById.get(id) ?? 0} />
-        );
+        return <FileCard key={id} id={id} repo={repo.path} file={file} />;
       })}
     </section>
   );
