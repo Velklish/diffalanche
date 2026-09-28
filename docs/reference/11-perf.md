@@ -823,8 +823,6 @@ end the gate sees was probed on the 4-core container of 2026-09-28, where the
 whole gate reads slower than on the development machine (five lines over budget
 on the untouched base), five `perf/run.ts` processes a variant, medians:
 
-| Variant | `fileJumpMs` |
-|---|---|
 | Variant | `fileJumpMs`, median | lowest–highest |
 |---|---|---|
 | Before DA-82 | 25.6 ms | 14.6–49.8 |
