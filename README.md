@@ -609,12 +609,16 @@ node -e '
   fs.writeFileSync(file, JSON.stringify(settings, null, 2));'
 ```
 
-Two reds remain in such a container. It runs as root, so `tests/watcher.test.ts` ›
-"keeps what it knew when `reviews/` cannot be listed, and does not empty it",
-which takes the right to list away with `chmod`, is red there until DA-117.1; and
-a container of a few cores is over the perf budgets on the untouched base, which
-is the case [11-perf.md](docs/reference/11-perf.md#a-red-the-machine-caused)
-settles.
+What stays red in such a container, on the base as well:
+
+- the embedding tests, until the model's hosts are allowed;
+- `tests/watcher.test.ts` › "keeps what it knew when `reviews/` cannot be
+  listed, and does not empty it", which takes the right to list away with
+  `chmod` and the container runs as root — DA-117.1;
+- two tests of `e2e/history.spec.ts`, which pass in CI — DA-116;
+- the perf budgets, which a container of a few cores is over on the untouched
+  base: the case [11-perf.md](docs/reference/11-perf.md#a-red-the-machine-caused)
+  settles.
 
 ## Releases
 
