@@ -1,8 +1,5 @@
-/**
- * `resolve` and `reopen`: the status of a thread. Only a human sets it, and the
- * refusal is the domain's — a skill is advice, and an agent that never read one
- * could still close a thread ([ADR-004](../../../docs/adr/adr-004-agent-contract.md)).
- */
+/** `resolve` and `reopen`: the status of a thread, which only a human sets; the refusal is the
+ * domain's, since a skill is advice ([ADR-004](../../../docs/adr/adr-004-agent-contract.md)). */
 
 import type { Verdict } from "../../core/domain/index.ts";
 import { reopen as reopenComment, resolve as resolveComment } from "../../core/domain/index.ts";

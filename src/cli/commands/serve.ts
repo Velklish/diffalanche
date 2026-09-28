@@ -8,12 +8,8 @@ import type { Command } from "../command.ts";
 import type { Output } from "../output.ts";
 import { VERSION } from "../version.ts";
 
-/**
- * Opens the review in the browser through the platform's own opener, detached
- * and with its output dropped: the server holds the foreground, and an opener
- * that writes to the terminal would land in the middle of the review's output.
- * A machine without one is not a failed run — the URL is printed either way.
- */
+/** Opens the review through the platform's opener, detached and silent, and a machine without
+ * one is not a failed run (06-cli.md, "Global flags"). */
 function openBrowser(url: string, io: Output): void {
   const opener =
     process.platform === "darwin"

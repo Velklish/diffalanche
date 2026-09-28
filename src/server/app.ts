@@ -55,7 +55,7 @@ type AppOptions = {
   config: Config;
   review: ReviewService;
   ui: UiAssets;
-  /** The live stream; without one the server serves no `/api/events`. */
+  /** The live stream `/api/events` serves. */
   events: EventStream;
   /** The feed the stream's `activity` frames are recorded in. */
   activity: ActivityLog;
@@ -82,16 +82,8 @@ function requestHost(url: string): string | null {
   }
 }
 
-/**
- * The review task a request is about: `?review=<name>`, and the current session
- * without it. **Every route a window uses reads it, reading and writing alike.**
- * A window opened on a task shows that task, so a comment written in it belongs
- * to that task; without this a window on one task would write into another, and
- * a finding stored where nothing reads it back is the loss product principle 5
- * forbids. `current` stays what a human typing a command by hand gets, and only
- * `review use` moves it ([ADR-010](../../docs/adr/adr-010-review-task-scope.md),
- * decision 7).
- */
+/** The task a request is about, `?review=<name>` or else `current`: every route a window uses
+ * reads it, writes too (07-server.md, "The task a request is about"; ADR-010, decision 7). */
 function named(c: Context): string | undefined {
   const name = c.req.query("review");
   return name === undefined || name === "" ? undefined : name;
@@ -107,11 +99,8 @@ export async function closeApp(app: Hono): Promise<void> {
   await services.get(app)?.close();
 }
 
-/**
- * The server of `docs/reference/07-server.md`: the review in one response, the
- * sessions, the settings, and the built UI. Every refusal comes from the domain
- * and keeps its message ([errors.ts](errors.ts)).
- */
+/** The server of `docs/reference/07-server.md`: the review, the sessions, the settings, the built
+ * UI; every refusal keeps the domain's message ([errors.ts](errors.ts)). */
 export function createApp({
   activity,
   config,
@@ -163,9 +152,8 @@ export function createApp({
   // One symbol index a server, made when a review is first read (ADR-015).
   const symbols = symbolIndexOf(config, events);
 
-  // Serialised once per change, not once per request: the review is megabytes.
-  // `?review=<name>` is the task an agent printed a link to; without it the
-  // current session, as before ([ADR-010](../../docs/adr/adr-010-review-task-scope.md)).
+  // Serialised once per change, not per request: the review is megabytes; `?review=` is the
+  // task an agent printed a link to ([ADR-010](../../docs/adr/adr-010-review-task-scope.md)).
   app.get("/api/review", async (c) => {
     const payload = await review.payload(named(c));
     // The symbol index is read in the background once a review is open, not on the first question
@@ -179,17 +167,14 @@ export function createApp({
 
   app.get("/api/sessions", async (c) => c.json(await listSessions(config.dataDir)));
 
-  // The change set of the whole root, whatever the session is about: what the
-  // scope editor offers to pick from. It is the one answer a scoped session
-  // gives about anything outside its scope, and it is a picker's list rather
-  // than a review — no patch, no hunks.
+  // The whole root against the task's base, for the scope editor: the one answer about what is
+  // outside a scope, and names only (07-server.md, "The candidates").
   app.get("/api/sessions/candidates", async (c) => c.json(await review.candidates(named(c))));
 
   app.get("/api/config", (c) => c.json<ClientConfig>({ user: config.user, port: config.port }));
 
-  // Every branch the base picker may choose from, over the whole root. Like
-  // the scan, it reads git per request: there is no cache of refs, and the
-  // picker is opened by hand rather than on every reload.
+  // Every branch the base picker offers, read from git per request: there is no cache of refs,
+  // and the picker is opened by hand rather than on every reload.
   app.get("/api/repos/branches", async (c) => c.json(await listBranches(config)));
 
   // What the UI fetches after an event names it, and the stream that names it.
@@ -228,10 +213,8 @@ export function createApp({
 
   app.get("/api/warnings", async (c) => c.json((await review.document(named(c))).warnings));
 
-  // What the feed shows before anything happens: the lines the server noticed
-  // while it has been running, oldest first, the same shape the `activity`
-  // frames of the stream carry. They live in memory and are gone with the
-  // server ([ADR-005](../../docs/adr/adr-005-live-update.md)).
+  // What the feed shows before anything happens, in the shape of the `activity` frames; held in
+  // memory only ([ADR-005](../../docs/adr/adr-005-live-update.md), 07-server.md "The live stream").
   app.get("/api/activity", (c) => c.json(activity.recent()));
 
   // Past comments like the one being written, from every session, and the severity they
@@ -242,30 +225,20 @@ export function createApp({
     return c.json(await suggestions.suggest(body));
   });
 
-  // Every repository under the root, with whether it has anything to review.
-  // This is the one route that reads git per request: it exists for the screen
-  // shown before there is a session, and there is no cache to answer it from.
+  // Every repository under the root and whether it has anything to review, read from git per
+  // request: it is for the screen shown before there is a session, with no cache to answer.
   app.get("/api/scan", async (c) => c.json(await review.summary()));
 
-  // ---------------------------------------------------------------------
-  // writing
-  // ---------------------------------------------------------------------
-  // Every write goes through the domain with the name from the configuration
-  // and `role: human`: the UI is the human, and the CLI is where an agent
-  // writes ([ADR-004](../../docs/adr/adr-004-agent-contract.md)). The watcher
-  // turns the file that changed into the events the UI listens for. A write to
-  // the comments re-reads the comments alone; a write to the review itself
-  // drops that session's document ([07-server.md](../../docs/reference/07-server.md)).
+  // Every write is signed as the configured user with `role: human`, since the CLI is where an
+  // agent writes (ADR-004); its events come from the watcher (07-server.md, "Writing").
 
   app.post("/api/comments", async (c) => {
     const body = await readBody(c);
     const session = await resolveSessionName(config.dataDir, named(c));
     const repo = nullableText(body, "repo");
     const path = nullableText(body, "path");
-    // A comment names a repository the root has; the anchor is taken from the
-    // change set as it was shown, and the repository is not read again for it.
-    // That the task's scope covers it is the domain's check, one level down
-    // ([04-domain.md](../../docs/reference/04-domain.md)).
+    // A repository the root has; the anchor comes from the change set as shown, not a new read,
+    // and the scope is the domain's check (07-server.md, "Writing").
     if (repo !== null && !(await findRepositories(config)).includes(repo)) {
       throw new RequestError(`repo ${repo} is not a repository under the root`);
     }
@@ -330,11 +303,8 @@ export function createApp({
     return comment;
   }
 
-  // A session, and a review task is one with a scope: `scope` builds it in the
-  // same write rather than leaving a moment where the task is about the whole
-  // root. `use: false` is `review new --no-use` — the task is written and
-  // `current` is left where the human's own commands put it, which is what the
-  // UI always asks for ([ADR-010](../../docs/adr/adr-010-review-task-scope.md)).
+  // A task made in one write, scope included; `use: false` is `review new --no-use`
+  // (07-server.md, "Writing"; [ADR-010](../../docs/adr/adr-010-review-task-scope.md)).
   app.post("/api/sessions", async (c) => {
     const body = await readBody(c);
     const base = parseBaseArgument(optionalText(body, "base") ?? "head");
@@ -355,11 +325,8 @@ export function createApp({
     c.json(await useSession(config.dataDir, c.req.param("name"))),
   );
 
-  // The scope is replaced whole rather than edited entry by entry: the editor
-  // of DA-55 holds the list the person sees, and one write is one state. What
-  // it removes takes its comments with it, and the consent for that is in the
-  // body: without it the answer is a 409 that names how many there are and
-  // writes nothing ([ADR-010](../../docs/adr/adr-010-review-task-scope.md)).
+  // Replaced whole, one write one state; dropping comments needs `dropComments` or it is a 409
+  // that writes nothing (07-server.md, "Writing"; ADR-010).
   app.put("/api/sessions/:name/scope", async (c) => {
     const body = await readBody(c);
     const name = c.req.param("name");
@@ -375,10 +342,8 @@ export function createApp({
   });
 
   app.post("/api/sessions/:name/close", async (c) => {
-    // Signed with the configured user and `role: human`, like every write here:
-    // the UI is the human, and only a human closes a task
-    // ([ADR-010](../../docs/adr/adr-010-review-task-scope.md)). Nothing in the
-    // request can say otherwise.
+    // Signed as the configured user with `role: human`, which nothing in the request can change:
+    // only a human closes a task ([ADR-010](../../docs/adr/adr-010-review-task-scope.md)).
     const session = await closeSession(config.dataDir, c.req.param("name"), author);
     review.invalidate(session.name);
     return c.json(session);
@@ -403,9 +368,8 @@ export function createApp({
     const body = await readBody(c);
     const name = c.req.param("name");
     const session = await setBase(config.dataDir, name, parseBaseArgument(text(body, "base")));
-    // `diff.json` records the base it was computed with, so the next reader —
-    // the UI, the CLI, or an agent — sees that it answers a different question
-    // and scans instead of trusting it.
+    // `diff.json` records the base it was computed with, so the next reader sees it answers
+    // another question and scans instead of trusting it.
     review.invalidate(name);
     return c.json(session);
   });

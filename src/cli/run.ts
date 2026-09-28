@@ -1,10 +1,5 @@
-/**
- * The commands both delivery channels expose, and the three exit codes of
- * [06-cli.md](../../docs/reference/06-cli.md): `0` for a run that worked, `1`
- * for a user error — one line on standard error — and `2` for anything the tool
- * did not expect, with the stack trace that is the only useful thing to say
- * about it.
- */
+/** The commands both delivery channels expose, and the exit codes of 06-cli.md: 0 worked,
+ * 1 a refusal in one line on stderr, 2 anything unexpected, with its stack trace. */
 import { DomainError } from "../core/domain/index.ts";
 import { GitError } from "../core/git/errors.ts";
 import { ModelError } from "../core/ml/embed/errors.ts";
@@ -138,9 +133,8 @@ async function dispatch(argv: string[], ui: UiAssets, output: Output): Promise<n
 
   const selected = select(argv);
   if (selected === undefined) {
-    // `review` is a group and not a command: on its own, or with a subcommand
-    // it does not have, it answers with what it does have rather than with
-    // "unknown command: review", which reads as if there were no such word.
+    // `review` alone, or with a subcommand it lacks, names what it has: "unknown command:
+    // review" would read as if there were no such word.
     const names = subcommands(first);
     if (names.length > 0) {
       if (argv.includes("--help") || argv.includes("-h")) {

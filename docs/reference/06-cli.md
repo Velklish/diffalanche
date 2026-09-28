@@ -170,7 +170,11 @@ answers about every task, one per request
 derived from it: without it, no command run from anywhere but the root would
 find the review. A `--root` that is not a directory that exists is exit code 1,
 and so is a `--data-dir` that names a file; a `--data-dir` that does not exist
-yet is not, because the data directory is the one place the tool creates.
+yet is not, because the data directory is the one place the tool creates. The
+root has to be there already because a typo in it would otherwise be answered
+by a review of an empty directory, and by the data directory the tool then
+created inside it; a file where either directory should be is a mistake both
+ways.
 
 Without the flag, `loadConfig` ([03-storage.md](03-storage.md)) asks the
 environment and then the user config before falling back to the root: the
@@ -186,6 +190,13 @@ into `diff.json`, watches for changes, and listens on `127.0.0.1`. It prints the
 address and the counters under it, or, on a root with no current session, the
 line that says how to make one — the server serves the screen that offers it.
 `--verbose` logs every request to stderr.
+
+`--open` goes through the platform's own opener — `open` on macOS, `cmd /c
+start` on Windows, `xdg-open` elsewhere — detached and with its output dropped:
+the server holds the foreground, and an opener writing to the terminal would
+land in the middle of the review's output. A machine without one is not a
+failed run: a line on stderr says the browser could not be opened, and the
+address is printed either way.
 
 **`--review <name>` on `serve` is the task the printed address is on.** The
 address becomes `http://127.0.0.1:<port>/?review=<name>`, the counters under it
@@ -294,7 +305,8 @@ the diff gets `# <path>: binary, listed without content` or `# <path>:
 too-large, listed without content` — the two omissions of
 [02-git.md](02-git.md). That output is for
 reading, not for `git apply`: the files of every repository are all `a/…` and
-`b/…`, so two repositories in one patch would collide.
+`b/…`, so two repositories in one patch would collide. The `#` lines announce
+each repository the way `git format-patch` puts prose above the diff it carries.
 
 The write goes through the session's lock, like every other writer of
 `diff.json`. The interleaving it is there for is the one `assertHeld` cannot
@@ -472,6 +484,22 @@ accepts and the flags it documents cannot drift apart. `src/cli/run.ts` matches
 the arguments against the command names — the longest first, so `review new` is
 found before a one-word `review` could be — and turns whatever the command
 throws into the exit code.
+
+A group is not a command: `diffalanche review` on its own, or with a subcommand
+it does not have, is exit code 1 naming the subcommands it does have, and
+`diffalanche review --help` lists them. `unknown command: review` would read as
+if there were no such word.
+
+What a command is handed is a `Context` (`src/cli/context.ts`): the
+configuration with `--root`, `--data-dir` and `--port` folded in, the session
+`--review` names or the current one, and where to write. The configuration and
+the session are functions that read on the first call and answer the same value
+on every call after: reading the configuration is a file read that can fail on a
+`config.json` edited by hand, and `diffalanche version` is what a person runs to
+find out what they have installed, so a command that needs neither must not be
+stopped by either. `--port` is read into it although only `serve` offers the
+flag, because the port is part of the configuration and `loadConfig` is the one
+place that checks it.
 
 `util.parseArgs` is Node's own and Bun ships it too, so the CLI needs no
 argument library ([ADR-002](../adr/adr-002-stack-and-delivery.md)).

@@ -1,13 +1,5 @@
-/**
- * `GET /api/repos/branches`: every branch the base picker may choose from,
- * summarised over the whole root (`docs/design/HANDOFF.md` section 5). A base
- * is one spec per session applied to every repository separately, so what the
- * picker needs is not one repository's branches but the union of them, with how
- * many repositories carry each.
- *
- * Read-only, and git through the binary, like everything else that touches a
- * reviewed repository (`docs/SPEC.md` section 11).
- */
+/** `GET /api/repos/branches`: the union of every repository's branches for the base picker, read
+ * only and through the git binary (07-server.md, "The branches"; `docs/SPEC.md` section 11). */
 import type { Config } from "../../core/config/index.ts";
 import { gitOrNull } from "../../core/git/run.ts";
 import { scan } from "../../core/index.ts";
@@ -33,14 +25,8 @@ export type BranchList = {
   warnings: ScanWarning[];
 };
 
-/**
- * One call per repository. The full ref name is what tells a local branch from
- * a remote one — `refname:short` shortens `refs/heads/feature/x` and
- * `refs/remotes/origin/main` into names that look alike — and
- * `%(symref:short)` is what tells `origin/HEAD` from a branch: only a symbolic
- * ref has one, and its target is the remote's default branch. The pointer
- * itself is not a branch and is not listed.
- */
+/** One call per repository: the full name tells local from remote, which short names blur, and
+ * `%(symref:short)` finds `origin/HEAD` and its target (07-server.md, "The branches"). */
 const FORMAT = "%(refname)\t%(refname:short)\t%(symref:short)";
 
 const HEADS = "refs/heads/";
@@ -110,11 +96,8 @@ function add(candidates: Map<string, BranchCandidate>, refs: string): void {
   }
 }
 
-/**
- * Default branches first, then the ones most repositories have, then by name.
- * The order has to be the same under Node and under Bun, so it is code points
- * and not the locale's collation.
- */
+/** Default branches first, then the ones most repositories have, then by name — by code point
+ * rather than the locale's collation, so Node and Bun agree. */
 function byPreference(left: BranchCandidate, right: BranchCandidate): number {
   if (left.default !== right.default) return left.default ? -1 : 1;
   if (left.repositories !== right.repositories) return right.repositories - left.repositories;

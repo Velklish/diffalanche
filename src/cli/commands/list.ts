@@ -46,9 +46,8 @@ export const list: Command = {
 
     const session = await context.session();
     const { dataDir } = await context.config();
-    // A `--repo` here is checked against the comments, not against the root: a
-    // repository that was renamed or removed still has everything that was ever
-    // said about it, and `list` is how it is read back.
+    // Checked against the comments, not the root: a renamed or removed repository still has all
+    // that was said about it, and `list` is how it is read back.
     if (repo !== undefined) {
       const everything = await listComments(dataDir, session);
       if (!everything.some((comment) => comment.repo === repo)) {

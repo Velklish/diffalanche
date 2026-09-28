@@ -67,13 +67,8 @@ export type CandidateRepository = {
   files: CandidateFile[];
 };
 
-/**
- * What `GET /api/sessions/candidates` answers with: the change set of the whole
- * root, whatever the scope of the session is, so the scope editor has something
- * to pick from. It carries no patch and no hunks — a picker needs the names,
- * and the diff of a whole root is megabytes
- * ([07-server.md](../../docs/reference/07-server.md)).
- */
+/** What `GET /api/sessions/candidates` answers: the whole root for the scope editor to pick
+ * from, names without patch or hunks ([07-server.md](../../docs/reference/07-server.md)). */
 export type CandidateSet = {
   root: string;
   repositories: CandidateRepository[];
@@ -81,22 +76,14 @@ export type CandidateSet = {
 };
 
 export type ReviewService = {
-  /**
-   * The document of a named session, or of the current one. Refuses with the
-   * domain's own `no-current-session` or `no-such-session` when there is none.
-   */
+  /** The document of a named session, or of the current one; refuses with the domain's own
+   * `no-current-session` or `no-such-session` when there is none. */
   document: (session?: string) => Promise<ReviewDocument>;
   /** The same document serialised: one per session, serialised once per change
    * ([07-server.md](../../docs/reference/07-server.md)). */
   payload: (session?: string) => Promise<string>;
-  /**
-   * One repository of the change set, or `null` when it has no changes. The
-   * change set is a named session's when one is named, because a window on
-   * `?review=` patches its own task and not the current one's
-   * ([ADR-010](../../docs/adr/adr-010-review-task-scope.md)); a named one is
-   * read from the working tree rather than from that task's cache, which the
-   * watcher does not keep fresh — see `freshRepository` below.
-   */
+  /** One repository of that task's change set, `null` without changes; a named task's is read
+   * from git, its cache not kept fresh (07-server.md, "The task a request is about"). */
   repository: (repo: string, session?: string) => Promise<RepositoryChange | null>;
   /** The change set a rescan of that session left. It is recorded either way, and
    * the answer says whether a document was held for it to patch. */
@@ -244,9 +231,8 @@ export function createReviewService(
           // A rescan that landed while this was building settles the change set — also one of a
           // task `current` reached meanwhile, which signals nothing (07-server.md).
           const settled = followed || watched() === session ? withAdopted(built, entry) : built;
-          // What changed while this was building is judged now, against the
-          // scope the built document carries: a repository this task is not
-          // about must not cost it its place.
+          // Judged now, against the scope the built document carries: a repository this task is
+          // not about must not cost it its place (07-server.md, "Keeping a held document honest").
           const touched = entry.signalled;
           entry.signalled = [];
           const stale = touched.some((repo) => repositoryInScope(settled.session.scope, repo));
@@ -491,11 +477,8 @@ function underRoot(root: string, repo: string): boolean {
   return step !== "" && step !== ".." && !step.startsWith(`..${sep}`) && !isAbsolute(step);
 }
 
-/**
- * Every repository under the root, with whether it has anything to review. This
- * is the one answer that reads git per request: it is what the screen before
- * the first session shows, and there is no cache to answer it from.
- */
+/** Every repository under the root, with whether it has anything to review, read from git per
+ * request: the screen before the first session has no cache to answer from. */
 async function summarise(config: Config): Promise<ScanSummary> {
   const found = await scan(config.root, {
     roots: config.roots,
@@ -522,12 +505,8 @@ async function summarise(config: Config): Promise<ScanSummary> {
   return { root: config.root, repositories, warnings: found.warnings };
 }
 
-/**
- * The change set of the whole root, the scope of the session left out of it.
- * This is what the scope editor picks from, so it reads git per request the way
- * the scan does and carries names rather than diffs: the patch of a whole root
- * is megabytes, and a picker shows paths.
- */
+/** The whole root against the task's base, its scope left out, read from git per request: names
+ * rather than diffs, since a whole root's patch is megabytes and a picker shows paths. */
 async function candidatesOf(config: Config, named?: string): Promise<CandidateSet> {
   const found = await scan(config.root, {
     roots: config.roots,
@@ -564,9 +543,8 @@ async function candidatesOf(config: Config, named?: string): Promise<CandidateSe
   };
 }
 
-/** The base of the task asked about, or of the current session. Only *no session
- * at all* falls back to HEAD: a name the data directory has not is a refusal
- * here, as it is on every other read that takes `?review=`. */
+/** The base of the task asked about, or of `current`; only *no session at all* falls back to
+ * HEAD, and a name with no session is a refusal (07-server.md, "The candidates"). */
 async function sessionBase(config: Config, named?: string): Promise<Base> {
   try {
     const session = await resolveSessionName(config.dataDir, named);

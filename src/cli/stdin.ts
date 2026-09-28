@@ -22,11 +22,8 @@ export async function confirmOnTerminal(
   }
 }
 
-/**
- * All of standard input, which is what `--body -` reads. `process.stdin` is
- * async-iterable in Node and in Bun, and the decoder is fed chunk by chunk so a
- * character split across two of them survives.
- */
+/** All of standard input, for `--body -`: `process.stdin` is async-iterable in Node and Bun, and
+ * the decoder is fed chunk by chunk so a character split across two chunks survives. */
 export async function readStandardInput(): Promise<string> {
   const decoder = new TextDecoder();
   let text = "";

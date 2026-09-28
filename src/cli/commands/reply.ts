@@ -38,9 +38,8 @@ export const reply: Command = {
       ...(confirm ? { confirmSeverity: true } : {}),
     });
     const last = comment.replies.at(-1);
-    // The first word of the line is the id a script reads back, so there is no
-    // stand-in for it: a thread that came back without the reply just written
-    // is not a case with a sensible answer.
+    // The line's first word is the id a script reads back, and a thread returned without the
+    // reply just written has no sensible stand-in for it.
     if (last === undefined) throw new Error(`${comment.id} came back without the reply`);
     const confirmed = confirm ? `, severity ${comment.severity} confirmed` : "";
     context.io.out(`${last.id} added to ${comment.id}${confirmed}\n`);

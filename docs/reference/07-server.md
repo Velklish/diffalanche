@@ -589,7 +589,10 @@ not: its list is the whole root, but the base it is read against is a task's.
 follows the tasks windows are open on rather than `current` alone
 ([05-watcher.md](05-watcher.md)). The set comes from the live streams:
 `GET /api/events?review=<name>` carries the task its window is on, and
-`EventStream.sessions()` is the distinct names of the open connections.
+`EventStream.sessions()` is the distinct names of the open connections — several
+windows on one task are one entry. It is taken from the streams and not from the
+document cache because a connection exists exactly while a window does, and a
+cache's eviction answers a question about memory.
 
 **That parameter is a registry, not a filter.** The frames stay one broadcast
 with one sequence of ids and `Last-Event-ID` is untouched; it tells the server
@@ -630,7 +633,11 @@ yet — but read against **that task's base**. The scope is ignored and the base
 not: a picker showing a change set computed against another task's base would
 offer files the task will never display, and would hide files it does. So the
 route takes `?review=` like every other read of the page, and without it answers
-for `current` as before. It is the third route that reads git per request, and it carries names
+for `current` as before. It is the one answer a scoped task gives about anything
+outside its scope. Only a root with no session at all falls back to a `head`
+base; a `?review=` naming no session is the refusal it is on every other read
+that takes the parameter. It reads git per request, as the scan and the branches
+do, and it carries names
 rather than diffs — no `patch`, no `hunks` — because a picker shows paths and
 the diff of a whole root is megabytes.
 
@@ -651,10 +658,11 @@ everywhere else.
 
 ### The scan
 
-`GET /api/scan` is the one route that reads git per request: it lists every
-repository the scan finds, with its branch, its kind, and whether it has
-anything to review, and it exists for the screen shown before there is a session
-— when there is no change set to answer from.
+`GET /api/scan` reads git per request, as the candidates and the branches do:
+it lists every repository the scan finds, with its branch, its kind, and whether
+it has anything to review against the current session's base — `head` when
+there is no session — and it exists for the screen shown before there is a
+session, when there is no change set to answer from.
 
 ```json
 {
@@ -669,7 +677,8 @@ anything to review, and it exists for the screen shown before there is a session
 
 ### The branches
 
-`GET /api/repos/branches` is the other route that reads git per request, and it
+`GET /api/repos/branches` reads git per request too — there is no cache of refs,
+and the picker is opened by hand rather than on every reload — and it
 exists for the base picker (`docs/design/HANDOFF.md` section 5). A base is one
 spec per review session applied to every repository separately
 (`docs/SPEC.md` section 3, decision 4), so what the picker needs is not one
@@ -695,9 +704,11 @@ branches, then the ones most repositories have, then the name by code point —
 the same order under Node and under Bun.
 
 One `git for-each-ref` per repository over `refs/heads` and `refs/remotes` reads
-all of it. The full ref name is what tells a local branch from a remote one, and
-`%(symref:short)` is what tells `origin/HEAD` — the pointer, which is not a
-branch and is not listed — from a branch, while naming the branch it points at.
+all of it. The full ref name is what tells a local branch from a remote one —
+`refname:short` shortens `refs/heads/feature/x` and `refs/remotes/origin/main`
+into names that look alike — and `%(symref:short)` is what tells `origin/HEAD` —
+the pointer, which is not a branch and is not listed — from a branch: only a
+symbolic ref has one, and its target is the remote's default branch.
 A repository whose refs cannot be read is a warning and not a failure; the
 review has other repositories.
 
@@ -849,7 +860,10 @@ A `comments.json` that is not JSON, a `review.json` of another schema version, a
 `current` holding a path rather than a name: all of those are the 500, with the
 file and the field the storage named. The server starts anyway — the change set
 is read at start-up as a warm-up, not as a gate, because a server that refused
-to start would leave the person with no way to see why.
+to start would leave the person with no way to see why. The warm-up builds the
+first document before the socket opens, so the first request is served from
+what is held and a rescan has a change set to replace one repository of; a root
+with no current session skips it and opens on the first-run screen.
 
 `GET /api/review` on a root with no current session is the first of those: the
 first-run screen reads that 404 and offers to create a session, while
@@ -901,12 +915,20 @@ the head arrives, and the first thing a quiet review would have written is the
 heartbeat fifteen seconds later. Nothing is missed in that window either way —
 the client is subscribed while the request is handled, before anything is
 written — but the silence is invisible, and the page has a state that says so.
+The ring is read and the client subscribed with nothing awaited between the two,
+so no frame falls into the gap or arrives out of order; and every write of one
+stream goes through one queue, so a frame never interleaves with a heartbeat on
+the wire.
 
-A comment line every fifteen seconds then keeps a silent stream open. Stopping the
+A comment line every fifteen seconds then keeps a silent stream open: anything
+between the browser and the server may drop a connection that has been silent,
+and a comment line costs nothing. Stopping the
 server ends every open stream before the socket closes, rather than leaving the
-browser to notice. Under Bun that needs `idleTimeout: 0` on the server, which is
+browser to notice — a socket that waited for an open connection to finish would
+wait for one that never does. Under Bun that needs `idleTimeout: 0` on the server, which is
 in [runtime.ts](../../src/server/runtime.ts): Bun closes a connection that has
-said nothing for ten seconds, and a stream between events is exactly that.
+said nothing for ten seconds, and a stream between events is exactly that. Node
+has no such timeout on a response it is still writing.
 
 What the UI fetches once an event names it: `GET /api/repos/:repo/diff` — the
 repository as the review document carries it, hunks dropped, 404

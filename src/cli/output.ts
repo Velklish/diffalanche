@@ -1,16 +1,10 @@
-/**
- * Where a command writes. JSON goes to `out` and nothing else does, so
- * `diffalanche list --json | jq` never has a warning mixed into it
- * ([ADR-004](../../docs/adr/adr-004-agent-contract.md)).
- */
+/** Where a command writes: JSON goes to `out` and nothing else does, so `list --json | jq`
+ * never has a warning mixed in ([ADR-004](../../docs/adr/adr-004-agent-contract.md)). */
 export type Output = {
   out: (text: string) => void;
   err: (text: string) => void;
-  /**
-   * All of standard input, for the `--body -` of `reply` and `comment`. The
-   * entry points leave it out and `src/cli/stdin.ts` answers instead; a test
-   * gives its own rather than reading the runner's own standard input.
-   */
+  /** All of standard input, for `--body -`; the entry points leave it out and `src/cli/stdin.ts`
+   * answers, a test gives its own rather than reading the runner's standard input. */
   input?: () => Promise<string>;
   /** A yes-or-no question for `review delete`, and `null` with no terminal to ask on; the entry
    * points leave it out and `src/cli/stdin.ts` asks, a test answers for itself. */
