@@ -635,3 +635,54 @@ the same run where it was before.
 
 A platform without a recursive watch cannot meet the budget at all: there the
 interval of the walk is added to every measurement.
+
+## What the unit tests hold
+
+`tests/watcher.test.ts` measures the watcher on a fixture of its own, and four of
+its helpers carry rules a reader of a red run needs.
+
+**`arm` proves a watch is delivering before anything is measured against it.** A
+watch is not live when it returns
+([What it watches, and what it ignores](#what-it-watches-and-what-it-ignores)): a
+write made before the first delivery is lost outright rather than delayed. So
+`arm` repeats the write rather than waiting longer for one — what is waited out
+is a lost write, and no ceiling brings one back — and it does so per repository,
+because each tree is its own watch. A watcher a test starts itself is not the
+suite's, so the suite's `arm` says nothing about it: the signal tests arm their
+own, and the data directory's watch is armed too, since on the native path its
+`ready` is `Promise.resolve()`, which says nothing about when the OS starts
+delivering.
+
+**The probe file's removal is waited for by its own event, never by a sleep.**
+Taking the file away changes the repository's change set back, so it produces a
+`diff-changed` of its own, and that event is the only proof it has been through
+the queue. A fixed pause there was wrong in the way `settle` exists to avoid: a
+machine slow enough to deliver the removal late handed the *next* test an event
+for the repository armed last. Measured on `main` as one red run in six — the
+first test received `repos/platform/loads-search` where it expected
+`repos/core/cargos-api`, 21 ms in, which is an event arriving early for somebody
+else rather than one arriving late.
+
+**`waitFor` does not filter by repository, on purpose.** It returns the first
+event of a type since a mark, whichever repository it is about; `changesOf` is
+the filtered one, and the difference is not an oversight to tidy up. A caller
+that expects an event of its own and receives another repository's fails on the
+assertion that follows, naming both — which is how the stray event `arm` used to
+leave behind was found: `expected 'repos/platform/loads-search' to be
+'repos/core/cargos-api'`. Given a filter, that event would have been skipped in
+silence and the test would have caught its own a moment later, green every time
+while the watcher handed out somebody else's news. The lack of a filter is what
+makes a stray event visible at all, so anything that leaks one is a defect to fix
+at its source rather than to hide in the helper.
+
+**`hide` writes a change git sees and the watch does not.** `node_modules` is out
+of the watch and no rule of these tests names it, so the file is in the change
+set the next rescan of the repository reads. That is what makes "no rescan"
+visible at all: an ignored file rescanned on its own finds the change set exactly
+as the cache has it and announces nothing either way.
+
+The latency test takes the median of three edits, the way the performance gate
+reads its own numbers: one slow run on a busy machine is not a regression
+([Budget](#budget)). Each edit writes a file of its own, because a runtime that
+coalesces the changes of one file into one event — macOS does, under Bun — would
+otherwise answer the second edit with the event of the first.

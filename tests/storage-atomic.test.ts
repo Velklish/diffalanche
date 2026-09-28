@@ -1,8 +1,5 @@
-/**
- * The crash between the temporary write and the rename. `node:fs/promises` is
- * mocked for this file alone, so the assertions read the disk through the
- * synchronous API, which the mock does not touch.
- */
+/** The crash between the temporary write and the rename. `node:fs/promises` is mocked for this
+ * file alone, so the assertions read the disk through the synchronous API it leaves alone. */
 import { mkdtempSync, readdirSync, readFileSync, rmSync } from "node:fs";
 import { tmpdir } from "node:os";
 import { join } from "node:path";

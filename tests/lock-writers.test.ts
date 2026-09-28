@@ -1,7 +1,5 @@
-/**
- * The two writers that used to work outside the session's lock
- * ([03-storage.md](../docs/reference/03-storage.md)).
- */
+/** The two writers that used to work outside the session's lock
+ * ([03-storage.md](../docs/reference/03-storage.md)). */
 import { rmSync } from "node:fs";
 import { afterAll, beforeAll, describe, expect, it } from "vitest";
 import { run } from "../src/cli/run.ts";

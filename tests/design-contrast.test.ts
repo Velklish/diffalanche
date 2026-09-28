@@ -2,37 +2,16 @@ import { readFileSync } from "node:fs";
 import { fileURLToPath } from "node:url";
 import { describe, expect, it } from "vitest";
 
-/**
- * WCAG AA over the token pairs the interface actually uses for text (DA-22.1).
- * Text below 18.66 px needs 4.5:1, and every size in the ramp of `DESIGN.md` is
- * below it: the largest type in the product is 19 px and is `--tx` on `--bg`.
- *
- * The pairs are listed rather than scraped from the stylesheet, because what a
- * colour sits *on* is a fact about the layout and not about the declaration —
- * `--tx3` on a hunk header is `--panel2`, on a file card's chip `--panel3`.
- */
+/** WCAG AA over the token pairs the interface draws text in (DA-22.1); why the pairs are listed
+ * and which grounds each has: [08-ui.md](../docs/reference/08-ui.md#what-the-unit-tests-hold). */
 
 const root = fileURLToPath(new URL("..", import.meta.url));
 
-/** What small text has to clear. Every size in the ramp is under 18.66 px. */
+/** What small text, under 18.66 px, has to clear; the ramp's one larger size is `--tx` on `--bg`. */
 const AA = 4.5;
 
-/**
- * Each text colour with the grounds it is actually drawn on. `--tx3` is
- * everywhere; a changed row takes `--addTx` / `--delTx` and the wash under
- * them, so neither `--code` nor `--ln` is ever on those. `--code` does sit on
- * the selection wash — `.diff-code-selected` sets a background and no colour —
- * and clears it at 8.02:1 dark and 8.93:1 light, so `accBg` is one of its
- * grounds. `--ln` is not on that wash at all: the gutter of a selected row
- * takes `--accTx` (`styles.css`, `.diff-gutter-selected`), because `--ln` there
- * is 4.23:1.
- *
- * The three text greys gained `accBg` with the history of tasks (DA-56): the
- * row of the task this window is on has that ground, its chips are `--tx3`, and
- * a closed one sets its name in `--tx2` — a closed task steps back by tone,
- * never by opacity, which would take its text below AA with it. `--tx3` there
- * is the tightest of the three at 4.87:1 dark.
- */
+/** Each text colour with the grounds it is drawn on; the reason for every ground and the tightest
+ * ratios: [08-ui.md](../docs/reference/08-ui.md#what-the-unit-tests-hold). */
 const PAIRS: { text: string; grounds: string[] }[] = [
   { text: "tx", grounds: ["bg", "panel", "panel2", "panel3", "accBg"] },
   { text: "tx2", grounds: ["bg", "panel", "panel2", "panel3", "accBg"] },
@@ -44,10 +23,8 @@ const PAIRS: { text: string; grounds: string[] }[] = [
   ...["crit", "warn", "nit", "q"].map((text) => ({ text, grounds: ["panel", "accBg"] })),
 ];
 
-/**
- * The two washes are translucent, so what is under them is part of the answer:
- * they are laid over a file card before the ratio is taken.
- */
+/** The washes are translucent, so what is under them is part of the answer: they are laid over
+ * a file card before the ratio is taken. */
 const WASHED: { text: string; wash: string }[] = [
   { text: "addTx", wash: "add" },
   { text: "delTx", wash: "del" },

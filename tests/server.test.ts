@@ -1,7 +1,5 @@
-/**
- * The server of DA-16: the review in one document, the sessions, the settings,
- * the scan, and the built UI, on `127.0.0.1` and nowhere else.
- */
+/** DA-16's server: the review in one document, the sessions, the settings, the scan and the
+ * built UI, on `127.0.0.1` and nowhere else. */
 import { mkdirSync, mkdtempSync, readFileSync, rmSync, writeFileSync } from "node:fs";
 import { networkInterfaces, tmpdir } from "node:os";
 import { join } from "node:path";
@@ -643,12 +641,8 @@ describe("starting the server", () => {
   }, 120_000);
 });
 
-/**
- * The change set behind the documents: which session's cache may be trusted,
- * what a switch back costs, and what a rescan announced before it was written
- * does to a document that is not there yet
- * ([07-server.md](../docs/reference/07-server.md)).
- */
+/** Which session's cache a document trusts, what a switch back costs, and what a rescan announced
+ * before its write does to a document not built yet (07-server.md, "The review document"). */
 describe("the change set a document is built from", () => {
   const MARK = "// the rescan that had not reached the file yet";
 
@@ -708,9 +702,8 @@ describe("the change set a document is built from", () => {
     // Taken while the file is still there: the rescan this stands for is handed
     // over from memory, not read back.
     const rescan = await marked(SESSION);
-    // Without a cache the build has to read every repository of the root, which
-    // is what makes the window wide enough to land a rescan inside. `rebuild`
-    // writes the file back, so the fixture repairs itself.
+    // With no cache the build reads every repository, which widens the window a rescan lands in;
+    // `rebuild` writes the file back, so the fixture repairs itself.
     rmSync(join(config.dataDir, "reviews", SESSION, "diff.json"));
     const scan = building(config);
     const service = createReviewService(scan.config, { watched: () => SESSION });
@@ -737,10 +730,8 @@ describe("the change set a document is built from", () => {
   });
 
   it("trusts the cache of the session the watcher follows, and reads no repository for it", async () => {
-    // The true side of the rule, which nothing covered: with `watched` wired the
-    // document comes out of `diff.json`, so a mark that exists only in the file
-    // reaches the screen. Without the wiring the working tree is read and the
-    // mark is nowhere.
+    // The rule's true side, uncovered before: with `watched` wired the document comes from
+    // `diff.json`, so a mark only in the file reaches the screen; unwired, the tree is read.
     const kept = (await readDiffCache(config.dataDir, SESSION)) as DiffCache;
     await writeDiffCache(config.dataDir, SESSION, await marked(SESSION));
     try {
@@ -845,10 +836,8 @@ describe("the change set a document is built from", () => {
       settled = true;
       return document;
     });
-    // A signal that lands before the build starts needs no answer: the build
-    // then reads the working tree after the change and is already right. Only a
-    // signal inside the build is the case this is about, and the assertion is
-    // what says it landed there.
+    // A signal before the build starts needs no answer, as the build reads the changed tree; only
+    // one inside the build is this case, and the assertion is what says it landed there.
     await scan.started();
     expect(settled).toBe(false);
     service.repositoryChanged(outOfScope);

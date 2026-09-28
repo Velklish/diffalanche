@@ -1,10 +1,5 @@
-/**
- * The README's CLI reference against the CLI's own `--help`. Both are written by
- * hand in different files, and the one that goes stale is the README — a reader
- * who trusts it types a flag that does not exist. `run` is called in process,
- * the way `tests/cli.test.ts` does it, so the help text under test is the text
- * the two delivery channels print.
- */
+/** The README's CLI reference against `--help`, both hand-written: a stale README has its reader
+ * type a flag that does not exist (06-cli.md, "What the unit tests hold"). */
 import { readFileSync } from "node:fs";
 import { join } from "node:path";
 import { describe, expect, it } from "vitest";
@@ -64,12 +59,8 @@ function section(title: string): string {
   return to === -1 ? rest : rest.slice(0, to);
 }
 
-/**
- * The first column of every row of the table whose header cell is `header`.
- * Splitting on a `|` that is not escaped is what keeps `[--json|--patch]` inside
- * its own cell, and stopping at the blank line is what keeps the command table
- * and the global-flag table under one heading apart.
- */
+/** Column one of the table headed `header`: split on unescaped `|` so `[--json|--patch]` stays
+ * one cell, and stop at the blank line that parts the command and global-flag tables. */
 function tableColumn(markdown: string, header: string): string[] {
   const lines = markdown.split("\n");
   const start = lines.findIndex((line) => line.startsWith(`| ${header} |`));

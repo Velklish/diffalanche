@@ -1,12 +1,5 @@
-/**
- * The scope of a review task (DA-53): what the CLI writes, what it answers
- * inside, and what it refuses. The fixture is the small synthetic review —
- * three repositories — so a scope over one of them and one file of another is
- * the case the card is written against.
- *
- * `run` is called in process, the way `tests/cli.test.ts` does it: it is what
- * both delivery channels call and what returns the exit code.
- */
+/** DA-53's task scope: what the CLI writes, answers inside and refuses, on the small synthetic
+ * review ([06-cli.md](../docs/reference/06-cli.md#what-the-unit-tests-hold)). */
 import { execFileSync } from "node:child_process";
 import { mkdtempSync, readFileSync, rmSync, writeFileSync } from "node:fs";
 import { tmpdir } from "node:os";
@@ -223,16 +216,8 @@ describe("a task with a scope", () => {
   });
 
   it("shows a file and takes a comment on it under the same name, a rename included", async () => {
-    // The one rule, seen from both sides: the scope names paths, and a path it
-    // does not name is neither shown nor written on. A renamed file is at a
-    // name the scope has not, so the task shows nothing for it — decision 5,
-    // the answer a path with no changes gets — and refuses the comment on it,
-    // which is the same answer rather than a second one.
-    //
-    // The rename is made from a file committed here rather than from one the
-    // generator wrote: a fixture file carries an edit as well, and whether git
-    // then calls the pair a rename or a delete and an addition depends on how
-    // much of it the generator rewrote. This one is a pure rename, always.
+    // A rename moves a file to a name the scope lacks: shown nothing and refused a comment, one
+    // answer (decision 5). Why the file is this test's own: 06-cli.md, "What the unit tests hold".
     const before = "scoped-before.py";
     const after = "scoped-after.py";
     const repository = join(root, PARTIAL);
@@ -273,9 +258,8 @@ describe("a task with a scope", () => {
       }).catch((error: unknown) => error);
       expect((refused as DomainError).code).toBe("out-of-scope");
 
-      // The old name is still what the task is about, and a task keeps a path
-      // that has nothing to show (decision 5), so a comment on it is taken and
-      // read back.
+      // The old name is still what the task is about, and a task keeps a path with nothing to show
+      // (decision 5), so a comment on it is taken and read back.
       const kept = await addComment(config.dataDir, "t5r", {
         repo: PARTIAL,
         path: before,
@@ -295,9 +279,8 @@ describe("a task with a scope", () => {
 
   it("gives one answer for a comment outside it, whichever command asks", async () => {
     await cli("review", "new", "t5o", "--repo", WHOLE, "--no-use");
-    // Nothing the tool offers writes a comment outside the scope; this is the
-    // `comments.json` edited by hand that `06-cli.md` names, made here through
-    // storage so the domain never sees it written.
+    // Nothing the tool offers writes outside the scope: this is 06-cli.md's hand-edited
+    // `comments.json`, made through storage so the domain never sees it written.
     await updateComments(config.dataDir, "t5o", (comments) => {
       comments.push({
         id: "c_handed",
@@ -337,10 +320,8 @@ describe("a task with a scope", () => {
   });
 
   it("refuses it in the domain as well, for every caller", async () => {
-    // The CLI checks the scope before it reads the repository again, so this is
-    // the check underneath — the one the HTTP API and anything else goes
-    // through. Without it a caller that skipped the CLI could store a comment
-    // nothing reads back.
+    // The CLI checks the scope before it rereads the repository; this is the check under it, which
+    // the HTTP API goes through too, and without it a comment is stored that nothing reads back.
     await cli("review", "new", "t5b", "--repo", WHOLE, "--no-use");
     const refused = await addComment(config.dataDir, "t5b", {
       repo: THIRD,
@@ -615,10 +596,8 @@ describe("the routes the UI reads a task through", () => {
   });
 
   it("offers the whole root, and reads it against the base of the task asked about", async () => {
-    // The scope of a task is ignored here — the editor has to offer what the
-    // task is *not* about yet — but its base is not: a picker that showed a
-    // change set computed against another task's base would offer files this
-    // task will never display (DA-77).
+    // The editor ignores the task's scope — it offers what the task is not about yet — but not its
+    // base: another task's base would offer files this task never displays (DA-77).
     const response = await app.request("/api/sessions/candidates");
     expect(response.status).toBe(200);
     const candidates = (await response.json()) as CandidateSet;
@@ -630,9 +609,8 @@ describe("the routes the UI reads a task through", () => {
     expect(first).toMatchObject({ path: expect.any(String), status: expect.any(String) });
     expect(first).not.toHaveProperty("patch");
 
-    // A second task whose base resolves to nothing. Its change set is empty and
-    // its warnings are not, and that is the difference the parameter carries:
-    // the same request without it answers for `current`, whose base is `head`.
+    // A second task whose base resolves to nothing: empty change set, warnings — what the
+    // parameter changes, since without it the request answers for `current`, whose base is `head`.
     const made = await cli("review", "new", "t-base", "--base", "no-such-ref", "--no-use");
     expect(made, made.err).toMatchObject({ code: 0 });
     const named = (await (

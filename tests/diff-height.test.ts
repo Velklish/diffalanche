@@ -11,11 +11,8 @@ import {
   SIDEBAR_WIDTH,
 } from "../src/ui/measure.ts";
 
-/**
- * The height a file card claims before its diff is mounted. It is arithmetic
- * over the patch, and the scrollbar drifts if it is wrong
- * ([ADR-008](../docs/adr/adr-008-diff-rendering-verdict.md)).
- */
+/** The height a file card claims before its diff mounts: arithmetic over the patch, and the
+ * scrollbar drifts if it is wrong ([ADR-008](../docs/adr/adr-008-diff-rendering-verdict.md)). */
 const patch = [
   "diff --git a/src/a.ts b/src/a.ts",
   "index 1111111..2222222 100644",
@@ -151,16 +148,12 @@ describe("the width a wrapped line is counted against", () => {
   });
 });
 
-/**
- * Which new-side lines a collapsed hunk takes away. The renderer trims the
- * context that leads and trails a hunk's changes, and a thread anchored to one
- * of those lines has no row to sit under while the hunk is collapsed (DA-23).
- */
+/** The new-side lines a collapsed hunk hides: the renderer trims the context around a hunk's
+ * changes, and a thread on one of them has no row to sit under while it is collapsed (DA-23). */
 describe("the lines a collapsed hunk hides", () => {
   it("hides the context before and after the changes, and nothing else", () => {
-    // The first hunk starts at new line 1: context 1, two deletions, insertion
-    // 2, context 3. The insertion is the only change, so 1 leads it and 3
-    // trails it; the insertion itself stays.
+    // First hunk from new line 1: context 1, two deletions, insertion 2, context 3 — so 1 leads
+    // the only change and 3 trails it; the insertion itself stays.
     const hidden = hiddenLines(patch, { 0: true });
 
     expect([...hidden].sort((a, b) => a - b)).toEqual([1, 3]);

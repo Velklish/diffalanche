@@ -559,3 +559,34 @@ later.
   `review use`: the last of the two to write wins.
 - Nothing writes `config.json`: it is read and never rewritten. Writing it from
   the UI is Phase 2.
+
+## What the unit tests hold
+
+`tests/storage-concurrency.test.ts` is the gate of
+[ADR-003](../adr/adr-003-on-disk-format.md): concurrent writers lose nothing.
+Twenty processes append one reply each to the same comment, and every reply has
+to be in the file. Each writer is `tests/helpers/append-reply.ts`, which appends
+a single reply through the read-modify-write helper `updateComments` and runs as
+a process of its own, so the lock is exercised the way the UI and several CLI
+processes exercise it:
+
+```sh
+node tests/helpers/append-reply.ts <dataDir> <session> <commentId> <author>
+```
+
+The test starts it with `process.execPath`, so it is Node under `bun run test`
+and Bun under `bun run test:bun`. Node runs the `.ts` file with no build step,
+which needs Node 22.18 or later, where type stripping is on by default; CI pins
+Node 22 and `engines.node` asks for 22 or later
+([06-cli.md](06-cli.md#how-a-command-is-defined)).
+
+`tests/storage-lock-race.test.ts` puts two writers on one stale lock. The
+windows it opens are narrow, and a plain race does not reach them: the writers
+pass through them together and the result looks correct. So `node:fs/promises`
+is mocked for that file and the steps are ordered with gates rather than with
+sleeps, which makes the sequence the same on a fast machine and on a loaded one.
+The assertions read the disk through the synchronous API, which the mock does
+not touch. `tests/storage-atomic.test.ts` mocks the same module to stage the
+crash between the temporary write and the rename, and
+`tests/review-reread.test.ts` orders two re-reads of a held document with the
+same kind of gate.

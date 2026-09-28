@@ -262,9 +262,8 @@ describe("reading", () => {
 
   it("discards a diff cache of a version it does not know rather than refusing it", async () => {
     await makeSession(dataDir, "one");
-    // The cache is an answer the tool wrote and can write again, so a version
-    // this build does not know is "never scanned" and not a broken file
-    // ([ADR-003](../docs/adr/adr-003-on-disk-format.md)).
+    // The cache is the tool's own answer, so an unknown version is "never scanned", not a broken
+    // file ([ADR-003](../docs/adr/adr-003-on-disk-format.md)).
     writeFileSync(
       diffCachePath(dataDir, "one"),
       JSON.stringify({ version: 99, base: { mode: "head" }, scope: null, root, repositories: [] }),
@@ -333,9 +332,8 @@ describe("updateComments", () => {
       ),
     ).rejects.toThrow(/taken over while this write was in progress/);
 
-    // Every writer of a session's files goes through `updateSession`, so this
-    // is the check that covers `createSession`, `setBase`, and every comment
-    // writer at once.
+    // Every writer of a session's files goes through `updateSession`, so this one check covers
+    // `createSession`, `setBase` and every comment writer.
     expect((await readComments(dataDir, "one")).map((one) => one.id)).toEqual(["c_aaaaaa"]);
   });
 

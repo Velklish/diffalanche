@@ -544,3 +544,28 @@ tarball, and the binaries are assets of the GitHub release with a
 `SHA256SUMS.txt` beside them — `files` in `package.json` keeps them out of the
 tarball, where 490 MB of executables for six platforms have no business being.
 See [11-perf.md](11-perf.md).
+
+## What the unit tests hold
+
+`tests/cli.test.ts` (DA-13) runs the commands on a fixture root — sessions, the
+change set, the exit codes, and the usage — and calls `run` in process rather
+than spawning the CLI: `run` is what both entry points call and what returns the
+exit code ([The two channels](#the-two-channels)). The case only a real process
+can show, two processes on one data directory, is in
+`tests/cli-comments.test.ts`, which spawns it. `tests/readme-cli.test.ts` and
+`tests/scope.test.ts` call `run` the same way, so the help text the README is
+held to is the text both delivery channels print.
+
+`tests/readme-cli.test.ts` holds the README's CLI reference to the CLI's own
+`--help`. Both are written by hand, in different files, and the one that goes
+stale is the README: a reader who trusts it types a flag that does not exist.
+
+`tests/scope.test.ts` (DA-53) is the scope of a task: what the CLI writes, what
+it answers inside, and what it refuses. Its fixture is the small synthetic
+review, three repositories, so a scope over one of them and one file of another
+is the case the task was written against. The rename that shows the one rule
+from both sides — a path the scope does not name is neither shown nor written on
+— is made from a file the test commits itself rather than one the generator
+wrote: a generated file carries an edit as well, and whether git then calls the
+pair a rename or a deletion and an addition depends on how much of it the
+generator rewrote. The test's own file is a pure rename, always.

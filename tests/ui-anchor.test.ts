@@ -3,11 +3,8 @@ import { anchorLabel } from "../src/core/domain/export.ts";
 import type { Comment } from "../src/core/storage/types.ts";
 import { composerLabel, exportAnchor, firstAddedLine } from "../src/ui/anchor.ts";
 
-/**
- * Where the composer opens and what it says it is anchored to. Both are read
- * off the patch and the nulls of `docs/SPEC.md` section 7, so they are checked
- * without a browser.
- */
+/** Where the composer opens and what it says it is anchored to, read off the patch and the nulls
+ * of `docs/SPEC.md` section 7, so checked without a browser. */
 
 const PATCH = [
   "diff --git a/src/a.ts b/src/a.ts",
@@ -88,9 +85,8 @@ describe("the anchor the export writes", () => {
   ];
 
   it("is the domain's own label, which the UI cannot import", () => {
-    // `src/core/domain/export.ts` reaches the storage barrel and the barrel
-    // reaches the Node API; the UI compiles with `"types": []`. This is what
-    // keeps the copy in `src/ui/anchor.ts` the same text.
+    // `export.ts` reaches the Node API through the storage barrel and the UI compiles with
+    // `"types": []`, so `src/ui/anchor.ts` holds a copy; this keeps the two the same text.
     for (const level of levels) {
       const comment = { ...level } as Comment;
       expect(exportAnchor(comment)).toBe(anchorLabel(comment));

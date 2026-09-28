@@ -3,12 +3,8 @@ import { parseBaseArgument } from "../src/core/domain/sessions.ts";
 import type { Base } from "../src/core/storage/types.ts";
 import { baseArgument, baseLabel, baseSummary, formatBase } from "../src/ui/base.ts";
 
-/**
- * The base of a review session in the forms the screen needs. The argument is
- * the one the domain parses, so it is checked by parsing it back: the picker
- * and the CLI have one grammar for a base (`docs/SPEC.md` section 8), and a
- * picker that wrote its own would be a second one.
- */
+/** The base in the screen's forms, checked by parsing the picker's argument back with the domain's
+ * parser: one grammar for a base (`docs/SPEC.md` section 8), not a second one in the picker. */
 
 describe("the argument the picker applies", () => {
   it("round-trips through the domain's own parser", () => {
