@@ -11,11 +11,8 @@ import { ModelError } from "./errors.ts";
 import type { EmbeddingModel, ModelFile } from "./model.ts";
 import { EMBEDDING_NATIVE } from "./model.ts";
 
-/**
- * `sources`: the runtime of `node_modules`, and the model `bun run model:fetch` puts in the
- * cache. `release`: the npm channel, which downloads both from `base`. `binary`: the files the
- * binary carries, by asset name.
- */
+/** Where the files come from: `sources` (`node_modules` and `model:fetch`), `release` (downloaded
+ * from `base`), `binary` (carried, by asset name) — 09-ml.md, "Delivery". */
 type Delivery =
   | { from: "sources" }
   | { from: "release"; base: string }
@@ -191,9 +188,8 @@ async function download(
 /** Set in the process that writes a binary's files out, so that it writes them itself. */
 const APART = "DIFFALANCHE_WRITE_OUT";
 
-/** The binary's files written out by a process of their own, `model pull --embedding`: reading
- * them touches 180 MB of the executable, and the process that loads the model after it would
- * carry that on top (09-ml.md, "Delivery"). */
+/** The binary's files written out by a child, `model pull --embedding`, so the process that loads
+ * the model never carries the 180 MB read out of the executable (09-ml.md, "Delivery"). */
 async function writeOutApart(progress: (text: string) => void): Promise<void> {
   const child = spawn(process.execPath, ["model", "pull", "--embedding"], {
     env: { ...process.env, [APART]: "1" },

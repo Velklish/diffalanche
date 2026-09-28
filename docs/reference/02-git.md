@@ -366,8 +366,9 @@ to be there — one fewer case for it to handle, and one more thing to explain.
 | `"too-large"` | a **tracked** file's patch is over `maxFileBytes` | kept: the patch was parsed, only not carried |
 | `"too-large"` | an **untracked** file is over `maxFileBytes` | 0 and 0: the file is never opened, so there is nothing to count |
 
-The limit defaults to `DEFAULT_MAX_FILE_BYTES`, 512 KiB per file, and is
-`maxFileBytes` of the reader's options. For a tracked file it caps what the
+The limit defaults to `DEFAULT_MAX_FILE_BYTES`, 512 KiB per file — far above a
+reviewable file and far below what would make the one review response heavy —
+and is `maxFileBytes` of the reader's options. For a tracked file it caps what the
 change set carries, not what git is asked for. For an untracked one it is
 checked against the file's own size before the read, which is the point: a huge
 untracked file is never loaded into memory at all. That one check is the whole
@@ -414,6 +415,27 @@ size check honest.
 A `diff --git` block the parser makes nothing of — not known to happen — is
 listed as `binary`: the file is real, git printed the header, and while the
 reason for having no content is unknown, having none is the part that is true.
+
+## Asking what git ignores
+
+`checkIgnore(cwd, paths)` in `run.ts` is the watcher's question
+([05-watcher.md](05-watcher.md)): which of a burst's paths git ignores, asked
+with `check-ignore --stdin -z` in one process for the whole list. The rules are
+git's own — `.gitignore` at every level, `.git/info/exclude`, and the user's
+ignore file — and the index is read, so a tracked file is never reported: it is
+in the diff whatever a pattern says about it. `check-ignore` writes nothing,
+which is why it is the question asked; `git status` would answer it too, and
+refreshes the index on the way (`docs/SPEC.md` section 11).
+
+Exit code 1 is the answer "none of them", not a failure. Anything else — a git
+that will not start, a repository it refuses — is `null`, and the caller does the
+work rather than keeping an answer it did not get: the watcher rescans such a
+burst.
+
+The list goes in on standard input, which is where the errors of a pipe live: a
+process that never started, or one that exited before it read everything, makes
+the write fail. That failure is caught on `stdin` and answers `null`; unhandled,
+it would be an uncaught exception in a server that has no reason to stop.
 
 ## The whole review in one call
 

@@ -1,11 +1,5 @@
-/**
- * The watcher ([ADR-005](../../../docs/adr/adr-005-live-update.md)): it watches
- * the reviewed repositories and the data directory, rescans one repository when
- * its files change, rewrites that repository's entry in `diff.json`, and puts
- * what happened on the event bus. It reads repositories and writes nothing into
- * them; the only file it writes is the change-set cache of the data directory
- * (`docs/SPEC.md` section 11).
- */
+/** The watcher ([ADR-005](../../../docs/adr/adr-005-live-update.md)): it reads repositories and
+ * writes only the data directory's change-set cache ([05-watcher.md](../../../docs/reference/05-watcher.md)). */
 import { relative } from "node:path";
 import { filterChange, patchable, replaceRepository, scanReview } from "../change-set.ts";
 import type { Config } from "../config/index.ts";
@@ -51,19 +45,12 @@ export {
 /** How long a repository stays quiet before it is rescanned. */
 const DEFAULT_DEBOUNCE_MS = 100;
 
-/**
- * How long a repository whose files never stop changing waits at most. Without
- * it a build writing into the working tree would restart the debounce for as
- * long as it runs and the review would never update.
- */
+/** The debounce's ceiling: a build that never stops writing would otherwise never be rescanned
+ * (05-watcher.md, "Events"). */
 const MAX_DEBOUNCE_MS = 1_000;
 
-/**
- * How many of git's ignore verdicts one repository keeps. A build writing
- * thousands of distinct paths would otherwise grow the cache for as long as the
- * server runs; past this the oldest answers go and are asked again if those
- * paths come back.
- */
+/** Ignore verdicts kept per repository, oldest out first, so a build writing thousands of distinct
+ * paths cannot grow the cache for as long as the server runs (05-watcher.md). */
 export const IGNORE_CACHE_LIMIT = 4_096;
 
 export type WatcherOptions = {
@@ -74,12 +61,8 @@ export type WatcherOptions = {
   activity: ActivityLog;
   debounceMs?: number;
   pollIntervalMs?: number;
-  /**
-   * `false` walks every tree instead of watching it. The default asks the
-   * runtime, which is right on a local disk; a filesystem whose notifications
-   * cannot be trusted — a network mount, or a runtime whose watch goes quiet —
-   * is what this is for.
-   */
+  /** `false` walks every tree instead of watching it: for a network mount, or a runtime whose watch
+   * goes quiet (05-watcher.md). The default asks the runtime. */
   recursive?: boolean;
   /** The change set as it now stands, with the session it belongs to, for a caller
    * that keeps it in memory ([05-watcher.md](../../../docs/reference/05-watcher.md)). */
@@ -123,11 +106,8 @@ export type Watcher = {
   close: () => Promise<void>;
 };
 
-/**
- * Starts watching. The session it works on is the current one; when `current`
- * changes underneath, the watcher follows it, so a session created from the UI
- * or by `review use` needs no restart.
- */
+/** Starts watching the current session and follows `current` as it moves, so a session made from
+ * the UI or by `review use` needs no restart (05-watcher.md, "Starting it"). */
 export async function startWatcher(options: WatcherOptions): Promise<Watcher> {
   const { activity, bus, config, scan } = options;
   const debounceMs = options.debounceMs ?? DEFAULT_DEBOUNCE_MS;
@@ -135,9 +115,8 @@ export async function startWatcher(options: WatcherOptions): Promise<Watcher> {
   const waiting = new Map<string, number>();
   const pending = new Map<string, Set<string>>();
   const watchers: TreeWatcher[] = [];
-  // Asked once: whether the watch recurses is a property of the runtime, not of
-  // a directory, and the answer decides for every tree below. A caller that
-  // already knows the answer is not asked to prove it.
+  // Asked once: whether the watch recurses is the runtime's property, not a directory's, and it
+  // decides for every tree below.
   const recursive = options.recursive ?? (await supportsRecursiveWatch(config.dataDir));
   let session = await readCurrent(config.dataDir);
   // Per session, because a window open on a task hears about that task's
@@ -164,11 +143,8 @@ export async function startWatcher(options: WatcherOptions): Promise<Watcher> {
   // nothing may be an edit the move's read took in, which no other task heard of (05-watcher.md).
   const settled = new Set<string>(scan.repositories.map((repository) => repository.path));
 
-  /**
-   * Debounce with a ceiling: a change resets the wait, but never past
-   * `MAX_DEBOUNCE_MS` after the first one, so a burst that does not end still
-   * produces a rescan.
-   */
+  /** Debounce with a ceiling: a change resets the wait, never past `MAX_DEBOUNCE_MS` after the
+   * first, so a burst that does not end still produces a rescan. */
   function schedule(key: string, run: () => void): void {
     const first = waiting.get(key) ?? Date.now();
     waiting.set(key, first);
@@ -183,12 +159,8 @@ export async function startWatcher(options: WatcherOptions): Promise<Watcher> {
     timers.set(key, timer);
   }
 
-  /**
-   * Rescans run one at a time: two of them write the same `diff.json`, and
-   * queueing them here costs less than making each wait for the session lock.
-   * A failure is reported and dropped — the queue has to stay usable, and a
-   * reporter that throws must not take it down either.
-   */
+  /** One at a time, since two rescans write the same `diff.json`; a failure is reported and dropped
+   * so the queue stays usable (05-watcher.md, "Starting it" and "Events"). */
   function enqueue(work: () => Promise<void>): void {
     queue = queue.then(async () => {
       if (closed) return;
@@ -258,10 +230,8 @@ export async function startWatcher(options: WatcherOptions): Promise<Watcher> {
       options.onRepositoryChanged?.(repo);
       return;
     }
-    // Announced from inside the rescan, before `diff.json` is written: what the
-    // person sees must not wait for a file of megabytes. A file that was
-    // touched without its content changing — a build output, a save with the
-    // same bytes — is not a change of the review and says nothing at all.
+    // Announced before `diff.json` is written, and only when the entry moved: a save with the same
+    // bytes says nothing (05-watcher.md, "The change-set cache").
     const rescanned = await rescanRepository(config, followed, repo, (outcome) => {
       options.onRescan?.(followed, outcome.cache);
       // From inside the rescan, so it says the change set moved rather than
@@ -289,14 +259,11 @@ export async function startWatcher(options: WatcherOptions): Promise<Watcher> {
     await reloadCurrent();
     const followed = followedSessions();
     await reloadComments(followed);
-    // One read of every `review.json` for the whole burst, handed to both the
-    // metadata comparison and the session listing: the listing read them all
-    // anyway, so following more sessions costs no extra read (05-watcher.md).
+    // One read of every `review.json` for the burst, handed to the metadata comparison and the
+    // listing both, so following more sessions costs no extra read (05-watcher.md).
     const listed = await readSessions(config);
-    // The listing failed, which is not an empty data directory. The followed
-    // sessions are read one by one and go through the *same* comparison, or a
-    // change that landed in this burst would never be announced at all: the next
-    // readable burst would find no difference and say nothing.
+    // A failed listing is not an empty data directory: the followed sessions still go through the
+    // same comparison, or this burst's change is never announced (05-watcher.md, "Events").
     const reviews = listed ?? (await readFollowed(config, followed));
     reloadMetadata(followed, reviews);
     for (const name of followed) served.delete(name);
@@ -354,9 +321,8 @@ export async function startWatcher(options: WatcherOptions): Promise<Watcher> {
     session = next;
     settled.clear();
     if (session === null) return;
-    // The comments of the session switched to are not news: they are the new
-    // baseline, and a file that cannot be read is the same transition as below.
-    // A session a window was already on keeps the snapshot it has.
+    // The comments of the session switched to are the new baseline, not news; a session a window
+    // was already on keeps the snapshot it has.
     if (!comments.has(session)) {
       comments.set(session, await snapshotComments(config, session, report));
     }
@@ -374,10 +340,8 @@ export async function startWatcher(options: WatcherOptions): Promise<Watcher> {
   /** Every session's status, news for any open window; a session that disappears says nothing, the
    * frame having no status for it ([05-watcher.md](../../../docs/reference/05-watcher.md)). */
   function reloadSessions(reviews: Map<string, Review | null>): void {
-    // A listing that failed never reaches here: what was known stays known,
-    // because replacing it with an empty snapshot would make every session news
-    // again on the next readable pass, and a few hundred of those would push the
-    // replay out of the stream's ring ([07-server.md](../../../docs/reference/07-server.md)).
+    // A failed listing never reaches here: what was known stays known, or every session is news
+    // again on the next readable burst (05-watcher.md, "Events").
     const next = statusesOf(reviews, sessions);
     if (sessions === null) {
       sessions = next;
@@ -390,9 +354,8 @@ export async function startWatcher(options: WatcherOptions): Promise<Watcher> {
   }
 
   async function reloadComments(followed: string[]): Promise<void> {
-    // A session that no window is on stops being read, and its snapshot goes:
-    // opening it again reads the file as the new baseline rather than replaying
-    // what is already in it.
+    // A session no window is on stops being read and its snapshot goes: opening it again reads the
+    // file as the new baseline rather than replaying it.
     for (const name of [...comments.keys()]) {
       if (followed.includes(name)) continue;
       comments.delete(name);
@@ -444,11 +407,8 @@ export async function startWatcher(options: WatcherOptions): Promise<Watcher> {
     comments.set(name, snapshotOf(list));
   }
 
-  /**
-   * `review.json` is rewritten by every comment write, because a write bumps
-   * `updatedAt`. Only a change to what the review is — its base, its title, its
-   * name — is a session change.
-   */
+  /** Every comment write bumps `updatedAt` in `review.json`; only a change to what the review is —
+   * base, title, name, scope or status — is a session change (05-watcher.md, "Events"). */
   function reloadMetadata(followed: string[], reviews: Map<string, Review | null>): void {
     for (const name of [...metadata.keys()]) {
       if (followed.includes(name)) continue;
@@ -501,14 +461,8 @@ export async function startWatcher(options: WatcherOptions): Promise<Watcher> {
       dir: config.dataDir,
       ignore: dataIgnore,
       recursive,
-      // One handler for the whole data directory rather than one per file. A
-      // whole-file write is a temporary file and a rename over the target, and
-      // a runtime is free to report any of the three names — Node reports the
-      // file, Bun reports the temporary one, and Bun under a test runner
-      // reports only the directory the change was under. So anything that is
-      // not the change-set cache or the lock means "read the three files
-      // again"; each read is compared with the last, so a read that finds
-      // nothing new says nothing.
+      // One signal for the whole directory, not a name to match: a runtime may report the target,
+      // the temporary file or only the directory (05-watcher.md, "What it watches").
       onChange: () => {
         options.onDataChanged?.();
         schedule("data", () => enqueue(reloadData));
@@ -527,9 +481,8 @@ export async function startWatcher(options: WatcherOptions): Promise<Watcher> {
 
   // Asked before any tree can have fallen back, so a tree polling now polled from the start.
   const walking = options.recursive !== false && watchers.some((watcher) => watcher.polling());
-  // Nothing is watched until every tree says it is: a change made in the
-  // moment between starting and being watched would otherwise be absorbed into
-  // the baseline of the walk and never reported.
+  // Resolved only once every tree is watched: a change made before the walk's baseline would be
+  // absorbed into it (05-watcher.md, "Starting it").
   await Promise.all(watchers.map((watcher) => watcher.ready));
   if (walking) {
     // One line for the session: a later takeover would say the same thing again.
@@ -582,27 +535,12 @@ type Rescan = {
   warningsChanged: boolean;
 };
 
-/**
- * The new change set, handed over the moment it exists and before it is
- * written. `diff.json` of a real review is megabytes, and writing it is the
- * slowest step of a rescan: an update the person is waiting for must not wait
- * for that too (`docs/SPEC.md` section 6). The file follows a moment later, and
- * a write that fails is repaired by the next rescan.
- */
+/** The new change set, handed over before it is written: writing megabytes of `diff.json` is the
+ * slowest step of a rescan (05-watcher.md, "The change-set cache"). */
 type Ready = (rescan: Rescan) => void;
 
-/**
- * Recomputes one repository and puts it in place of its entry in `diff.json`,
- * under the session's lock: the CLI writes the same directory, and a rescan
- * that read outside the lock would overwrite what it wrote. A repository left
- * without changes drops out of the cache, the way a scan leaves it out.
- *
- * Without a cache — or with one computed against another base — there is
- * nothing to patch, and a cache holding the one repository that changed would
- * be read as a review of one repository, so the whole change set is read
- * instead. The base the cache records is the session's, and a patched cache
- * keeps it.
- */
+/** One repository patched into `diff.json` under the session's lock, or the whole change set read
+ * when the cache cannot be patched (05-watcher.md, "The change-set cache"). */
 export async function rescanRepository(
   config: Config,
   session: string,
@@ -610,10 +548,8 @@ export async function rescanRepository(
   ready?: Ready,
 ): Promise<Rescan> {
   const review = await readReview(config.dataDir, session);
-  // `diff.json` is the only place the hunks live: anchor capture reads them
-  // there, while the review response of the server drops them for speed. What
-  // the task is not about comes back empty and drops out of the cache, the way
-  // a repository without changes does.
+  // With hunks: `diff.json` is the only place they live, and anchor capture reads them there
+  // (05-watcher.md, "The change-set cache").
   const change = filterChange(
     review.scope,
     await readRepositoryChange(config.root, repo, review.base, { hunks: true }),
@@ -621,11 +557,8 @@ export async function rescanRepository(
 
   const patched = await withLock(sessionDir(config.dataDir, session), async (held) => {
     const cached = await readDiffCache(config.dataDir, session);
-    // The full scan is read outside the lock: it takes as long as every
-    // repository takes, and the CLI writes the same directory meanwhile. A
-    // cache computed against another base, or for another scope, is read again
-    // for the same reason it is in the server — it answers a different
-    // question.
+    // A cache for another base or scope answers a different question; the full scan that replaces
+    // it runs outside the lock, since it takes as long as every repository takes.
     if (!patchable(cached, review.base, review.scope)) return null;
 
     const before = cached.repositories.find((one) => one.path === repo) ?? null;
@@ -666,10 +599,8 @@ async function rescanSession(
   return outcome;
 }
 
-/**
- * Whether the recomputed entry says anything the cached one did not. The patch
- * is the content, so comparing it is comparing the change itself.
- */
+/** Whether the recomputed entry says anything the cached one did not; the patch is the content,
+ * so comparing it is comparing the change itself. */
 function sameChange(before: RepositoryChange | null, after: RepositoryChange): boolean {
   if (before === null) return after.files.length === 0;
   if (before.branch !== after.branch) return false;
@@ -747,11 +678,8 @@ async function readMetadata(config: Config, session: string | null): Promise<str
   return review === null ? null : metadataOf(review);
 }
 
-/**
- * `review.json` of a session, or `null` when it cannot be read: a session named
- * by `current` that is not there yet, or a file being rewritten as it is read.
- * The next change reads it again.
- */
+/** `review.json` of a session, or `null` when it cannot be read — named by `current` before it
+ * exists, or caught mid-rewrite; the next change reads it again. */
 async function readSessionOrNull(config: Config, session: string | null): Promise<Review | null> {
   if (session === null) return null;
   try {
@@ -761,17 +689,6 @@ async function readSessionOrNull(config: Config, session: string | null): Promis
   }
 }
 
-/**
- * The status of every session in the data directory, or `null` when `reviews/`
- * itself could not be listed — which is a failed read and not an empty data
- * directory. It is read on every burst the data directory produces, one small
- * file per session; a data directory with hundreds of sessions pays for that
- * here as it already does on every `listSessions`
- * ([04-domain.md](../../../docs/reference/04-domain.md)).
- *
- * A session whose `review.json` could not be read this time keeps the status it
- * had, for the same reason: a file caught mid-write is not a task that changed.
- */
 /** Every session's `review.json` in one pass, or `null` when `reviews/` itself could
  * not be listed — a failed read, which an empty data directory is not. */
 async function readSessions(config: Config): Promise<Map<string, Review | null> | null> {
@@ -821,11 +738,8 @@ export async function snapshotSessions(
   return reviews === null ? null : statusesOf(reviews, previous);
 }
 
-/**
- * Only an agent's write is news ([ADR-005](../../../docs/adr/adr-005-live-update.md)):
- * the feed exists to show the human what the agents did, and their own comment
- * is not something they have to be told about.
- */
+/** Only an agent's write is news: the feed shows the human what the agents did
+ * ([ADR-005](../../../docs/adr/adr-005-live-update.md); 05-watcher.md, "The activity feed"). */
 function recordWrite(
   activity: ActivityLog,
   verb: "commented" | "replied",
@@ -837,11 +751,8 @@ function recordWrite(
   activity.wrote(verb, author, comment.repo, comment.path);
 }
 
-/**
- * Drops the oldest of a repository's ignore verdicts until it is inside
- * `IGNORE_CACHE_LIMIT`. A `Map` keeps insertion order, so the oldest answers
- * are its first keys, and a path dropped here is simply asked again.
- */
+/** Drops the oldest verdicts down to `IGNORE_CACHE_LIMIT`: a `Map` keeps insertion order, so they
+ * are its first keys, and a dropped path is asked again. */
 export function trimVerdicts(cache: Map<string, boolean>): void {
   for (const path of cache.keys()) {
     if (cache.size <= IGNORE_CACHE_LIMIT) break;
@@ -879,17 +790,8 @@ function nestedGitIgnore(rest: string[], kind: PathKind): boolean {
   return !(position && rest.length === 1) && !(branch && rest.length > 2);
 }
 
-/**
- * What a repository's watch reports. Inside `.git` everything is noise except
- * `HEAD`, `index`, and `info/exclude` — the first two move when the base of the
- * change set does and the third holds ignore rules — but
- * `.git` itself is not, because a runtime that reports the directory rather
- * than the file inside it (Bun does) would otherwise never say that HEAD moved;
- * `node_modules` and the `exclude` globs of the configuration are out; and so
- * is the data directory, on the one root that is a repository itself — without
- * that, writing `diff.json` would wake the watcher that wrote it. What git
- * itself ignores is left to git, once per burst, rather than guessed here.
- */
+/** What a repository's watch leaves out, and why each (05-watcher.md, "What it watches"); what
+ * git itself ignores is left to git, once per burst, rather than guessed here. */
 export function repositoryIgnore(config: Config, repository: Repository): Ignore {
   const exclude = config.exclude.map(globToRegExp);
   const inside = relative(repository.absolutePath, config.dataDir);
@@ -900,16 +802,14 @@ export function repositoryIgnore(config: Config, repository: Repository): Ignore
     if (segments.includes("node_modules")) return true;
     const git = segments.indexOf(".git");
     if (git === 0) {
-      // The directory itself is walked into, for the two files at its top and
-      // the exclude file one level down, and it is a signal in its own right
-      // when that is all a runtime reports.
+      // `.git` is walked into for `HEAD`, `index` and `info/exclude`, and is a signal of its own
+      // when the directory is all a runtime reports.
       if (segments.length === 1) return false;
       if (kind === "dir") return path !== ".git/info";
       return path !== ".git/HEAD" && path !== ".git/index" && path !== IGNORE_RULES_EXCLUDE;
     }
-    // A repository inside the repository is never scanned as one of its own
-    // ([01-scanner.md](../../../docs/reference/01-scanner.md)), so its git
-    // directory is only ever seen through this watch.
+    // A nested repository is never scanned as its own, so its git directory is seen only through
+    // this watch (05-watcher.md, "What it watches").
     if (git > 0) return nestedGitIgnore(segments.slice(git + 1), kind);
     if (dataDir !== null && (path === dataDir || path.startsWith(`${dataDir}/`))) return true;
     const name = segments.at(-1) as string;
@@ -917,24 +817,13 @@ export function repositoryIgnore(config: Config, repository: Repository): Ignore
   };
 }
 
-/**
- * What the data directory's watch reports: everything except the change-set
- * cache and `index/`, both written by the tool. The lock is in — it is not data, but
- * a runtime that coalesces the changes of one directory into a single event
- * (macOS does, and Bun reports what is left) can hand back the lock as the only
- * name for a write that changed a session's files. Every one of them is the
- * same signal anyway, since the reload reads the three files and compares them
- * with the last read.
- */
+/** The data directory's watch leaves out `diff.json` and `index/`, both the tool's own writes; the
+ * lock stays in, since it can be the only name a write is reported by (05-watcher.md). */
 export const dataIgnore: Ignore = (path) =>
   path.split("/")[0] === "index" || writtenFile(path.split("/").at(-1) as string) === "diff.json";
 
-/**
- * The file a change is about: `comments.json.tmp-<uuid>` is `comments.json`,
- * because that is what `writeFileAtomic` is in the middle of writing. Only the
- * last segment is read, so a directory whose own name holds `.tmp-` is left
- * alone.
- */
+/** `comments.json.tmp-<uuid>` is `comments.json`, mid-`writeFileAtomic`; only the last segment is
+ * read, so a directory whose own name holds `.tmp-` is left alone. */
 function writtenFile(path: string): string {
   const slash = path.lastIndexOf("/");
   const name = path.slice(slash + 1);

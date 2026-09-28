@@ -1,23 +1,16 @@
 import gitdiff, { type Change, type FileType, type Hunk as ParsedHunk } from "gitdiff-parser";
 import type { DiffLine, FileChange, FileStatus, Hunk } from "../types.ts";
 
-/**
- * A file whose patch is bigger than this is listed without content. Half a
- * megabyte is far above a reviewable file and far below what would make the one
- * review response heavy.
- */
+/** A file whose patch is bigger than this is listed without content
+ * ([02-git.md](../../../docs/reference/02-git.md), "Files listed without content"). */
 export const DEFAULT_MAX_FILE_BYTES = 512 * 1024;
 
 /** What a caller of the parser can ask for. */
 export type PatchOptions = {
   /** A file whose patch is bigger than this is listed without content. */
   maxFileBytes?: number | undefined;
-  /**
-   * Fill `hunks`. The renderer reads `patch`, so the review response leaves them
-   * out: 30 000 changed lines are far more objects as a structure than as a
-   * string, and the scrolling budget of `docs/SPEC.md` section 6 pays for it.
-   * `diff --json` and `diff.json` ask for them.
-   */
+  /** Fill `hunks`: the review response leaves them out for the scrolling budget, `diff --json`
+   * and `diff.json` ask for them (02-git.md, "Files"). */
   hunks?: boolean | undefined;
 };
 
@@ -25,16 +18,8 @@ export type PatchOptions = {
  * rather than passed in, so a caller cannot drop them by leaving an argument out. */
 type ParsedDiff = { files: FileChange[]; notes: string[] };
 
-/**
- * Splits `git diff` output into one file each and parses every patch.
- *
- * The structured shape comes from `gitdiff-parser`, the parser `react-diff-view`
- * re-exports as `parseDiff` — the same code, imported from its own package so
- * that nothing pulls React into the CLI. `docs/SPEC.md` section 11 rules out a
- * diff parser of the project's own. The raw patch of each file is kept beside
- * the hunks, because that is what the renderer reads
- * ([ADR-008](../../../docs/adr/adr-008-diff-rendering-verdict.md)).
- */
+/** Splits `git diff` output into one patch per file and parses each with `gitdiff-parser`, the
+ * raw patch kept beside the hunks for the renderer (02-git.md, "Files"). */
 export function parseDiff(raw: string, options: PatchOptions = {}): ParsedDiff {
   const maxFileBytes = options.maxFileBytes ?? DEFAULT_MAX_FILE_BYTES;
   const structured = options.hunks ?? true;
@@ -43,10 +28,8 @@ export function parseDiff(raw: string, options: PatchOptions = {}): ParsedDiff {
   return { files: mergeTypeChanges(parsed, notes), notes };
 }
 
-/**
- * The two patches git writes for a path that changed type, as one entry
- * ([02-git.md](../../../docs/reference/02-git.md)).
- */
+/** The two patches git writes for a path that changed type, as one entry
+ * ([02-git.md](../../../docs/reference/02-git.md), "The three base modes"). */
 function mergeTypeChanges(files: FileChange[], notes: string[]): FileChange[] {
   const merged: FileChange[] = [];
   for (const file of files) {
@@ -115,9 +98,8 @@ function parseFile(patch: string, maxFileBytes: number, structured: boolean): Fi
   // reads them literally and git does not always write them literally.
   const names = headerPaths(patch);
   const parsed = gitdiff.parse(patch)[0];
-  // A `diff --git` line the parser makes nothing of. The file is real — git
-  // printed the header — but why it has no content is unknown, and `binary` is
-  // the honest half of it: there is nothing to show. It is not known to happen.
+  // A header the parser makes nothing of — not known to happen — is `binary`: nothing to show is
+  // the part that is true (02-git.md, "Untracked files").
   if (!parsed) return withoutContent(names.new ?? names.old ?? "", null, "modified", "binary");
 
   // The header first: a patch with no hunks — a binary file, a staged empty one —
@@ -204,21 +186,8 @@ type PatchPaths = {
   status: FileStatus | null;
 };
 
-/**
- * The paths of a patch, as they are on disk.
- *
- * Git does not write a path literally. A name needing an escape — anything
- * outside ASCII, a quote, a control character — is written C-quoted with octal
- * escapes, and an unquoted name containing a space is padded with a tab on the
- * `---` and `+++` lines. Read literally, both come out as a different path, and
- * the path is the id a comment anchors to and the file an agent opens.
- *
- * `---` and `+++` are the best source: one path per line, unambiguous. A pure
- * rename has neither and carries `rename from` and `rename to` instead. A mode
- * change and a binary file have neither of those either, and only then does the
- * `diff --git` line have to be taken apart — where both sides are the same
- * path, which is what makes the ambiguous form readable at all.
- */
+/** The paths of a patch as they are on disk, which is not how git writes them; the sources and
+ * their order are in [02-git.md](../../../docs/reference/02-git.md), "Paths". */
 function headerPaths(patch: string): PatchPaths {
   // Everything read here is above the first hunk, and a patch is mostly hunks:
   // splitting the whole of it would be a second full pass over every file.
@@ -257,11 +226,8 @@ function sidePath(value: string): string | null {
   return withoutPrefix(tab === -1 ? value : value.slice(0, tab));
 }
 
-/**
- * `diff --git a/P b/P`, the last resort. Both sides are the same path here — a
- * rename never reaches this function — so the line is split down the middle
- * rather than at a ` b/` that the path itself could contain.
- */
+/** `diff --git a/P b/P`, the last resort: both sides are the same path here, so the line is split
+ * down the middle rather than at a ` b/` the path could contain (02-git.md, "Paths"). */
 function gitLinePaths(line: string): Omit<PatchPaths, "status"> {
   const rest = line.slice("diff --git ".length);
   if (rest.startsWith('"')) {
@@ -305,12 +271,8 @@ const ESCAPES: Record<string, number> = {
   "\\": 0x5c,
 };
 
-/**
- * Undoes `quote_c_style`, which is what git writes a path with. The octal
- * escapes are the bytes of the name, not its characters, so they are collected
- * as bytes and decoded as UTF-8 at the end. A token that is not quoted is
- * already the path.
- */
+/** Undoes git's `quote_c_style`: octal escapes are bytes of the name, collected as bytes and
+ * decoded as UTF-8 at the end (02-git.md, "Paths"). An unquoted token is already the path. */
 function unquote(value: string): string {
   if (!value.startsWith('"') || !value.endsWith('"') || value.length < 2) return value;
   const body = value.slice(1, -1);
@@ -352,12 +314,8 @@ const QUOTED: Record<number, string> = {
   92: "\\\\",
 };
 
-/**
- * Writes a path the way git would, so that the patch built for an untracked
- * file can be read back by the same rules as a real one. Git quotes a name
- * holding a control character, a quote, a backslash, `DEL`, or any byte of a
- * non-ASCII character, and leaves every other name alone.
- */
+/** Writes a path the way git would, so an untracked file's patch reads back by the same rules as a
+ * real one (02-git.md, "Untracked files"). */
 export function quotePath(path: string): string {
   const bytes = Buffer.from(path, "utf8");
   if (!bytes.some(needsQuoting)) return path;
