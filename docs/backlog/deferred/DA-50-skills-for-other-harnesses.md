@@ -1,6 +1,5 @@
 # DA-50 · Ship agent skills for Cursor and Codex as well
 
-- **Order:** 880
 - **Scope:** 10-skills (see [reference](../../reference/README.md))
 - **Created:** 2026-09-05
 - **Dependencies:** DA-29
@@ -23,6 +22,6 @@
 
 ## Deferred
 
-- **Deferred:** 2026-09-05
-- **Reason:** Depends on DA-29, which fixes the skill format and contents; the choice between a command and a README section cannot be made before the skills exist.
-- **Return condition:** DA-29 is archived; revisit together with DA-30 (README pass).
+- **Deferred:** 2026-09-29
+- **Reason:** The card's work is a decision: a `diffalanche skills install --tools …` command that renders the two skills per harness, or a README section per harness with a manual copy. That choice between a CLI contract and documentation is the owner's.
+- **Return condition:** The owner picks the command or the README section.

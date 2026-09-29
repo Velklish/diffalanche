@@ -290,10 +290,11 @@ embeds the pinned model from the user cache (09-ml.md).
 Bun is pinned to the version of the other jobs where it is the toolchain that
 builds the bundle and generates the fixture, and taken as `latest` in the `bun`
 channel, where it is what is being tested: a Bun release that breaks the tool
-shows up there. The Windows job is written and not verified — DA-45 runs it,
-fixes what it finds, and makes it required — so until then it is
-`continue-on-error` and a red one is something to read rather than a blocked
-pull request.
+shows up there. Windows runs all three channels, `node`, `bun` and `binary`
+(DA-45.5); all three passed end to end on their first run together, and none
+of the three is verified enough to require — DA-45 runs them, fixes what it finds, and
+makes them required — so until then they are `continue-on-error` and a red one
+is something to read rather than a blocked pull request.
 
 ## The runtime the unit suite runs on
 
@@ -1462,7 +1463,11 @@ behind it simply never ran, and it prints green. So every wait in `tests/`,
   a loaded machine has arrived, and a deadline tight enough to fail it tests the
   machine. An expected *absence* is a condition too: wait for something queued
   after the thing that must not happen — the next event of the same queue, a
-  frame on a second stream, a task created behind it — and then look.
+  frame on a second stream, a task created behind it — and then look. Behind
+  it only once it exists: on a tree that is walked, the write that must stay
+  silent can still be waiting for its walk, so `settle` of
+  `tests/watcher.test.ts` first waits for each tree to report a marker
+  ([05-watcher.md](05-watcher.md#what-the-unit-tests-hold)).
 - **An order, not a length.** Where nothing can be polled, a wait may lean on an
   order the platform guarantees: a macrotask queued behind another, the next
   painted frame, or a timer of the same delay set after the one it waits out —
@@ -1614,7 +1619,7 @@ full where its subject is:
 | `perf` | the budget table on the synthetic review | ubuntu | [the gate](#the-gate) |
 | `ui` | the Playwright UI suite, without the screenshot comparisons | ubuntu | [08-ui.md](08-ui.md#ui-tests) |
 | `smoke` | one review end to end through one delivery channel | ubuntu, macOS, Windows | [the job](#the-job) |
-| `e2e` | the acceptance list of specification section 10, against the binary | ubuntu, macOS | [08-ui.md](08-ui.md#the-acceptance-suite) |
+| `e2e` | the acceptance list of specification section 10, against the binary | ubuntu, macOS, Windows (not required, DA-45.6) | [08-ui.md](08-ui.md#the-acceptance-suite) |
 
 `e2e` installs Chromium and runs `bun run test:e2e`, which is the one command a
 developer runs: building the binary of the runner and generating the fixture are
@@ -1663,15 +1668,18 @@ cell. The names to list, spelled as they report:
 There is no check called `test-bun`, none called `ui`, none called `smoke` and
 none called `e2e`: a rule asking for those waits for a report that never comes,
 and every pull request sits at "Expected — waiting for status to be reported"
-instead. `smoke node on windows-latest` is deliberately not in the list until
-DA-45 has run that cell and fixed what it finds: nobody has watched it pass, so
-it is not a gate yet ([the job](#the-job)). The `pull_request` trigger stays
+instead. The Windows cells — `smoke node on windows-latest`, `smoke bun on
+windows-latest`, `smoke binary on windows-latest` and `acceptance on
+windows-latest` — are deliberately not in the list until DA-45 has run them and
+fixed what they find: the three smoke cells passed end to end for the first time
+on Velklish/diffalanche#12 (DA-45.5), which is not yet a record, and the
+acceptance cell is new with DA-45.6, so none is a gate ([the job](#the-job)). The `pull_request` trigger stays
 unfiltered — a pull request between two work branches is worth the same run, and
 what makes a check required is the rule, not the trigger.
 
 This table is the one copy of the list: `tests/ci-names.test.ts` reads both its
 columns and holds them against the names and the job ids `ci.yml` reports, and
-the paragraph above for the Windows cell, so a check renamed in the workflow and
+the paragraph above for the Windows cells, so a check renamed in the workflow and
 not here, or a row here the workflow does not report, is red in the unit suite
 (DA-58).
 

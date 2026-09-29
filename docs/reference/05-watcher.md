@@ -190,8 +190,16 @@ nobody was listening for.
 
 **Bun's own test runner is the one place where the recursive watch is not used
 here.** Under `bun run test:bun` a watch goes quiet after its first events, so
-`tests/watcher.test.ts` passes `recursive: false` there and exercises the walk
-instead; under Node the same tests exercise the watch. A server under Bun is not
+the suite's watcher in `tests/watcher.test.ts` walks there, and under Node the
+same tests exercise the watch. It passes `recursive: true` with `native:
+spiedTree`, which builds each tree itself — the walk on Bun, the watch on Node —
+and records what the tree reports ([What the unit tests
+hold](#what-the-unit-tests-hold)). So that watcher never asks
+`supportsRecursiveWatch` on Node, and on Bun it takes the path of a runtime that
+walks from the start: `fellBack` is set before any tree can fail and `onWalk`
+would be called, which means an `onFallback` given to it could never fire there.
+The default path — the probe, `recursive: false`, the takeover — is held by the
+watchers the other tests start themselves. A server under Bun is not
 affected — four consecutive edits against `bun src/cli/index.ts serve` on the
 synthetic review each produced their event — and every other test in the suite
 runs the same on both runtimes.
@@ -712,8 +720,8 @@ of a whole read (see above). The pass is cut at 10 s, a third of the lock's leas
 
 ## What the unit tests hold
 
-`tests/watcher.test.ts` measures the watcher on a fixture of its own, and four of
-its helpers carry rules a reader of a red run needs.
+`tests/watcher.test.ts` measures the watcher on a fixture of its own, and its
+helpers carry rules a reader of a red run needs.
 
 **`arm` proves a watch is delivering before anything is measured against it.** A
 watch is not live when it returns
@@ -737,6 +745,86 @@ first test received `repos/platform/loads-search` where it expected
 `repos/core/cargos-api`, 21 ms in, which is an event arriving early for somebody
 else rather than one arriving late.
 
+**`settle` proves that every write before it is through, on the watch and on the
+walk alike.** A test that expects *no* event needs the watcher to be finished
+with what the test wrote, and a sleep only guesses when that is. Rescans run in
+one queue, so an event queued behind the burst under test is the proof — but
+only once that burst exists. On the native path the order of delivery gives that
+for nothing; on the walk each tree has a timer of its own, and a write into
+another repository can be walked, debounced and rescanned before the walk of the
+repository under test has seen the write made just before it. That was the whole
+of `settle` until DA-110.2 — one write into the other repository, its event
+awaited — and it held on Node and not on Bun. In an instrumented copy it
+returned before the preceding burst of the repository under test had started its
+rescan in 4 of 5 Bun runs and 0 of 3 Node runs, and with the rules of the two
+ignore cases pointed at a directory the burst was not in, the `.gitignore` case
+still passed in 2 of 4 Bun runs and the `.git/info/exclude` case in 4 of 4. It
+now goes in three steps.
+
+1. **The trees have reported everything written before it.** `settle` writes an
+   empty `marker-N` at the root of the repository under test and of the data
+   directory, and waits until each tree has *reported* it. The suite hands every
+   tree to `startWatcher` through its `native` seam, as `spiedTree`: the same
+   `watchTree` — the watch on Node, the walk on Bun — with each path it reports
+   recorded on its way to the watcher. A walk reads the root listing before
+   anything else, so a walk that reports a file new at the root has seen every
+   write made before that file existed. Node 22 has no recursive inotify watch
+   on Linux: it emulates one in userland, a watch per path, and all of them
+   share the process's one inotify descriptor, so the events of the tree come
+   out in the order of the writes. Past that report, the tree has nothing left
+   to say about anything written earlier — except what the emulation never says
+   at all: a file replaced by a rename is reported the first time only
+   ([DA-110.3](../backlog/queue/DA-110.3-node-recursive-watch-misses-rename-replacement.md)),
+   and a marker, a new name, is not one.
+2. **A burst queued behind theirs.** `settle` writes `settle-N.ts` into the other
+   repository and waits for that repository's first `diff-changed` since the
+   write, which has to name that file and nothing else. A burst that starts after
+   every pending one ends its debounce after theirs, so its rescan is queued
+   behind them and its event proves they were decided, rescanned or dropped. An
+   event that names anything else is a burst of that repository already under
+   way, whose git may have read the new file too and left its own burst nothing
+   to announce; `settle` then writes another.
+3. **The write behind that event.** The event goes out before `diff.json` is
+   written ([The change-set cache](#the-change-set-cache)), so `settle` waits
+   until the file has `settle-N.ts`. "reads the whole change set again when
+   diff.json is gone" removes that file first thing, and while `settle` returned
+   on the event, the write behind it put `diff.json` back a moment after the
+   removal: the edit under test was patched into it, and the whole read the test
+   is about did not run on Bun — or ran for the burst of the case before it, when
+   that burst came late. The `diff-changed` naming `watched-2.ts` that the
+   same-bytes case seemed to announce on Bun was that burst: the rewrite was
+   rescanned after `settle` had returned and the next test had removed
+   `diff.json`, and a rescan with no cache to patch reads the whole change set and
+   announces it. A save with the same bytes says nothing on either runtime.
+
+The marker is not a change any test can see. The repository's
+`.git/info/exclude` carries `/marker-*` from before the watch starts, and the two
+tests that rewrite that file keep the line, so a marker is in no change set, a
+burst of markers alone is dropped as ignored, and a burst that carries a marker
+beside the path under test is decided by that path. A marker git did not ignore
+would be worse than none: a probe that is a change of its own, written into the
+repository under test and waited for by its event, lands in the burst of the
+path git ignores and makes it a burst that is rescanned — which reads exactly
+like the defect the case is there to catch.
+
+With the rules of both ignore cases pointed at `other/`, so that the ignored path
+really does wake the watcher, both cases go red at their `toEqual([])` in 4 of 4
+Bun runs and 3 of 3 Node runs; so do the two object-store cases once the watch is
+made to report `.git/objects`, and the same-bytes case once every rescan is made
+to announce, in 2 of 2 on each runtime.
+
+**`waitForChangeOf` waits for the event that names the step's own path.** Any
+event of a repository since a mark can be an earlier step's, late: in a traced
+Bun run the rescan of `again.ts`, left from an earlier test, satisfied the wait
+for a `.gitignore` write, whose own rescan then landed in the next step's window.
+So a step waits for an event naming what it wrote — `.gitignore`,
+`.git/info/exclude`, `.git/index` for `git add`, the edited file — and it runs
+alone, with a `settle` before it: a burst already under way could otherwise read
+the write in its own rescan and leave the step's burst nothing to announce. A
+cleanup that writes several paths waits with `settle` alone. This is not the
+filter `waitFor` refuses, below: the negative cases still read every event of the
+repository since their mark, and a stray event fails them.
+
 **`waitFor` does not filter by repository, on purpose.** It returns the first
 event of a type since a mark, whichever repository it is about; `changesOf` is
 the filtered one, and the difference is not an oversight to tidy up. A caller
@@ -753,7 +841,17 @@ at its source rather than to hide in the helper.
 of the watch and no rule of these tests names it, so the file is in the change
 set the next rescan of the repository reads. That is what makes "no rescan"
 visible at all: an ignored file rescanned on its own finds the change set exactly
-as the cache has it and announces nothing either way.
+as the cache has it and announces nothing either way — which is why the
+`.git/objects` case, which had none, held nothing until DA-110.2 gave it one. The
+first rescan of the repository spends the hidden change, so it is written after
+the last `settle` before the step it serves: a burst that `settle` waits out, such
+as a directory the test has just made, would announce it first. `reveal` is as
+invisible to the watch as `hide`, so a pad a rescan took in stays in `diff.json`
+until the repository's next rescan: in the nested-repository case the rescan of
+the `HEAD` write takes one in and the rescan of the cleanup's `.gitignore`
+removal clears it, and the `.git/objects` case, which lets no rescan happen,
+never has one in the cache. A case that reads the repository's entry in
+`diff.json` begins with a rescan of its own.
 
 The latency test takes the median of three edits, the way the performance gate
 reads its own numbers: one slow run on a busy machine is not a regression

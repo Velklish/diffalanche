@@ -1,6 +1,5 @@
 # DA-45 · Windows verification
 
-- **Order:** 830
 - **Scope:** 06-cli, 03-storage, 05-watcher (see [reference](../../reference/README.md))
 - **Created:** 2026-09-05
 - **Dependencies:** DA-31
@@ -41,11 +40,24 @@ storage layer's flush on Windows.
 Third evidence, Velklish/diffalanche#9, job 109246529382, 2026-09-29. With DA-45.3
 leaving the directory flush out on Windows, `smoke node on windows-latest` passes
 end to end, from `review new` through `serve`, `comment`, `reply`, `resolve` and
-`export` (`smoke: node dist/cli.js passed`). What is still not run on Windows:
+`export` (`smoke: node dist/cli.js passed`). Fourth evidence, Velklish/diffalanche#12, 2026-09-29: DA-45.5 adds the `bun`
+channel (`bun src/cli/index.ts`, Bun `latest`) and the `binary` channel (the
+Bun-compiled `diffalanche-windows-x64.exe`) to the Windows matrix, and both pass
+on their first run (`smoke: ./dist/diffalanche-windows-x64.exe passed`, job
+109258372320), with `check-git-null` green in each cell. Fifth evidence, Velklish/diffalanche#13, 2026-09-29: DA-45.6 adds
+`windows-latest` to the `e2e` matrix. Its first run stopped at the web server:
+Windows' shell read neither `rm -rf` nor `./dist/…` in `webServer.command`
+(DA-45.7). Once that command became one script, `acceptance on windows-latest`
+passed all 11 criteria of SPEC section 10 against `diffalanche-windows-x64.exe`
+(job 109261781142, `11 passed (17.9s)`).
 
-- the `bun` and `binary` channels of the smoke (the matrix has only `node` there);
-- the e2e suite;
-- a required Windows job.
+What is left:
+
+- a record of the four Windows cells passing across runs;
+- making them required. That is a branch protection rule on GitHub, the owner's
+  setting, together with the table in 11-perf ("The checks a pull request
+  requires"), `tests/ci-names.test.ts` and the `continue-on-error` in `ci.yml`,
+  all in one change.
 
 A hypothesis from DA-45.3's review, not yet seen on a runner: renaming a directory
 that another process holds handles in fails on Windows. `removeSession` and the
@@ -67,6 +79,6 @@ running server.
 
 ## Deferred
 
-- **Deferred:** 2026-09-05
-- **Reason:** Phase 3 of `docs/SPEC.md` section 10; depends on Phase 1 and Phase 2 artifacts.
-- **Return condition:** DA-32 (Phase 1 acceptance) is archived and the Phase 2 queue is under way; the cut is revisited there.
+- **Deferred:** 2026-09-29
+- **Reason:** The smoke on all three channels and the acceptance suite pass on `windows-latest` (DA-45.1 to DA-45.7). What is left is to make those cells required: a branch protection rule on GitHub, which is the owner's setting, together with 11-perf's table, `tests/ci-names.test.ts` and the `continue-on-error` in `ci.yml` in one change, once the cells have a record of passing.
+- **Return condition:** The owner decides to require the Windows cells after they have stayed green across pull requests.

@@ -727,6 +727,26 @@ and `bun run release` refuses a version that has no section. See
 
 ### Fixed
 
+- **The watcher tests' waits hold on the walk and on the watch** (DA-110.2).
+  `tests/watcher.test.ts` went red on commits that changed only docs, in the
+  Node `check` job and in the Bun unit suite. Two waits were loose. A step's
+  wait took any event of its repository since the mark, so an event left by an
+  earlier step could stand in for it and the step's own rescan landed in the
+  next one — on either runtime. And `settle`, a write into a second repository
+  and its event, proves nothing on Bun, where each tree is walked on a timer of
+  its own: in instrumented runs it returned before the burst under test had
+  been rescanned in 4 of 5, and with the rules pointed at a directory the burst
+  was not in, the `.gitignore` case still passed in 2 of 4 Bun runs and the
+  `.git/info/exclude` case in 4 of 4. Each step now waits for the event naming
+  its own path, with a `settle` before the rules write so nothing under way can
+  take that write in. `settle` waits until each tree has reported a marker git
+  ignores, then for a burst of the other repository alone, then for that
+  burst's `diff.json` write. The `.git/objects` case has a hidden change to
+  announce, and "reads the whole change set again when diff.json is gone" reads
+  it whole rather than patching a file the previous write had put back. With
+  the rules pointed elsewhere, both ignore cases now go red on Node and Bun
+  every time ([05-watcher.md](docs/reference/05-watcher.md#what-the-unit-tests-hold)).
+
 - **A durable write finishes on Windows** (DA-45.3). The directory flush after
   the rename is refused there with `EPERM` — Windows flushes only a handle
   opened for writing — which failed every durable write: the Windows smoke

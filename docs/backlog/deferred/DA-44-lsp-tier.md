@@ -1,6 +1,5 @@
 # DA-44 · LSP tier: go to definition and find references
 
-- **Order:** 820
 - **Scope:** 09-ml, 07-server, 08-ui (see [reference](../../reference/README.md))
 - **Created:** 2026-09-05
 - **Dependencies:** DA-39
@@ -24,6 +23,6 @@
 
 ## Deferred
 
-- **Deferred:** 2026-09-05
-- **Reason:** Phase 3 of `docs/SPEC.md` section 10; depends on Phase 1 and Phase 2 artifacts.
-- **Return condition:** DA-32 (Phase 1 acceptance) is archived and the Phase 2 queue is under way; the cut is revisited there.
+- **Deferred:** 2026-09-29
+- **Reason:** The UI half, a context action on an identifier that opens browse mode or lists references, needs the Impeccable context loader, `audit` and `polish`, which cannot run in the cloud session. The server half, starting a configured server per language and asking it for definitions and references, could land on its own; that split is the owner's call, since the card's Verification is the UI action.
+- **Return condition:** A session where the Impeccable launcher runs, or the owner splits the server half into a card of its own.
