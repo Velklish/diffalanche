@@ -672,6 +672,20 @@ and `bun run release` refuses a version that has no section. See
 
 ### Fixed
 
+- **The keyboard spec's `R` waits for the disk** (DA-118).
+  `e2e/keyboard.spec.ts` › "C opens the composer and R resolves the focused
+  thread" read `comments.json` as soon as the rail card turned `resolved`, which
+  the store does before its write lands, and failed a CI run of Velklish/diffalanche#3
+  that touched no UI code; it now polls the CLI's answer until it says
+  `resolved`.
+
+- **The unreadable-`reviews/` test holds as root too** (DA-117.1).
+  `tests/watcher.test.ts` › "keeps what it knew when `reviews/` cannot be listed,
+  and does not empty it" took the right to list away with `chmod`, which a root
+  process ignores, so it was red in every cloud session; it now puts a file where
+  the directory was, which fails the listing for any user, and it still fails
+  when a failed listing is answered with an empty map.
+
 - **The embedding index verdicts on a changed platform hold on a linux-x64
   runner** (DA-34). "embeds every comment again when the model, the runtime or
   the platform changed" and "says what the index is missing without the model"

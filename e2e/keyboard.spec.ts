@@ -358,7 +358,8 @@ test("C opens the composer and R resolves the focused thread", async ({ page }) 
 
   await page.keyboard.press("r");
   await expect(page.locator(`.rail-list [data-thread="${id}"]`)).toHaveClass(/resolved/);
-  expect(comments().find((comment) => comment.id === id)?.status).toBe("resolved");
+  // The card turns before the write lands (08-ui.md, "Threads"), so the disk is waited for.
+  await expect.poll(() => comments().find((comment) => comment.id === id)?.status).toBe("resolved");
 });
 
 test("a letter typed into the composer is text, not a command", async ({ page }) => {
