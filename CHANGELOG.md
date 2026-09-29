@@ -369,12 +369,27 @@ and `bun run release` refuses a version that has no section. See
   stop at the next frame — the frame on which, in two of its three jumps, the
   card still showed its spacer instead of its diff. A round added to
   `revealCard` now moves the line: on a 4-core container 69.8 ms became 100.7
-  with six rounds, against 25.6 and 31.6 before; a regression that only adds
-  frames is still out of the unpaced gate's sight (DA-82.3). The hook fails the
+  with six rounds, against 25.6 and 31.6 before; an added frame that carries no
+  work of its own was not resolved by the unpaced gate — whether it only moves
+  work earlier is an inference (DA-82.3). The hook fails the
   run when the diff does not mount within ten frames or the jump leaves another
   file current. `data-file-index` is gone from the file card, and the
   development machine's reading of the new window is DA-82.1
   ([11-perf.md](docs/reference/11-perf.md#the-gate)).
+- **What an unpaced frame costs is measured, and which added frames the perf
+  gate does not see is written down** (DA-82.3). On a 4-core container a frame
+  with something to draw cost 0.7–2.8 ms at the median with the frame-rate limit
+  off, against 16.7 at 60 Hz, and an idle one 17.6–17.7, so an added idle frame
+  is visible to the gate. The frame DA-82 added before `revealCard`'s first
+  scroll, which paints the selection, was one tick at 60 Hz, +18.7 ms, and
+  unpaced `no difference` in the comparison, while the gate itself read +14.0
+  against the frame's own 14.5 ms in five runs that cannot resolve it. That such
+  a frame only moves work earlier, and so stays outside the gate, is an
+  inference, and it stands until DA-82.4 decides whether the gate gets a
+  frame-count ceiling. The count saw
+  it — 3 frames a jump, 4 with the probe, in every run — but it is no measure for
+  the lines that wait on the server
+  ([11-perf.md](docs/reference/11-perf.md#what-a-frame-costs-unpaced-and-what-the-gate-does-not-see)).
 - **The perf gate takes about 45 s instead of about 66, and CPU per frame is
   taken with the frames unpaced** (DA-115). The harness launches Chromium with
   `--disable-frame-rate-limit`: the same 600 frames of the same step, each
@@ -685,6 +700,18 @@ and `bun run release` refuses a version that has no section. See
   process ignores, so it was red in every cloud session; it now puts a file where
   the directory was, which fails the listing for any user, and it still fails
   when a failed listing is answered with an empty map.
+
+- **`bun perf/run.ts --runs 3` finishes instead of hanging in its second or
+  third repetition** (DA-82.2). Above one repetition it measures each in a
+  process of its own, as the gate does, with `--embedding` and `--lag` carried
+  over. The stall DA-25.2 worked around without a cause has one now: under
+  `strace`, Bun closed the first browser's two DevTools pipes a second time
+  about eleven seconds after the next browser had been given the same
+  descriptor numbers, and Chromium, finding its pipe closed, exited; no call of
+  Playwright's returned after that. On a 4-core container the old loop stalled in six attempts of
+  six and the new one finished two of two
+  ([11-perf.md](docs/reference/11-perf.md#the-gate)); why Bun closes them twice
+  is DA-82.5.
 
 - **The embedding index verdicts on a changed platform hold on a linux-x64
   runner** (DA-34). "embeds every comment again when the model, the runtime or
