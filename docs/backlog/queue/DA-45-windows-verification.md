@@ -41,10 +41,15 @@ storage layer's flush on Windows.
 Third evidence, Velklish/diffalanche#9, job 109246529382, 2026-09-29. With DA-45.3
 leaving the directory flush out on Windows, `smoke node on windows-latest` passes
 end to end, from `review new` through `serve`, `comment`, `reply`, `resolve` and
-`export` (`smoke: node dist/cli.js passed`). What is still not run on Windows:
+`export` (`smoke: node dist/cli.js passed`). Fourth evidence, Velklish/diffalanche#12, 2026-09-29: DA-45.5 adds the `bun`
+channel (`bun src/cli/index.ts`, Bun `latest`) and the `binary` channel (the
+Bun-compiled `diffalanche-windows-x64.exe`) to the Windows matrix, and both pass
+on their first run (`smoke: ./dist/diffalanche-windows-x64.exe passed`, job
+109258372320), with `check-git-null` green in each cell. What is still not run
+on Windows:
 
-- the `bun` and `binary` channels of the smoke (the matrix has only `node` there);
 - the e2e suite;
+- a record of the smoke cells passing across runs, before any is required;
 - a required Windows job.
 
 A hypothesis from DA-45.3's review, not yet seen on a runner: renaming a directory

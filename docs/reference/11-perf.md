@@ -291,8 +291,8 @@ Bun is pinned to the version of the other jobs where it is the toolchain that
 builds the bundle and generates the fixture, and taken as `latest` in the `bun`
 channel, where it is what is being tested: a Bun release that breaks the tool
 shows up there. Windows runs all three channels, `node`, `bun` and `binary`
-(DA-45.5); the `node` cell has passed end to end since DA-45.3, and none of the
-three is verified enough to require — DA-45 runs them, fixes what it finds, and
+(DA-45.5); all three passed end to end on their first run together, and none
+of the three is verified enough to require — DA-45 runs them, fixes what it finds, and
 makes them required — so until then they are `continue-on-error` and a red one
 is something to read rather than a blocked pull request.
 
@@ -1666,9 +1666,9 @@ none called `e2e`: a rule asking for those waits for a report that never comes,
 and every pull request sits at "Expected — waiting for status to be reported"
 instead. The three Windows cells — `smoke node on windows-latest`, `smoke bun
 on windows-latest` and `smoke binary on windows-latest` — are deliberately not in
-the list until DA-45 has run them and fixed what they find: the node cell has
-passed since DA-45.3, the other two have not been watched yet, so none is a gate
-([the job](#the-job)). The `pull_request` trigger stays
+the list until DA-45 has run them and fixed what they find: all three passed
+end to end for the first time on Velklish/diffalanche#12 (DA-45.5), which is one
+run each and not yet a record, so none is a gate ([the job](#the-job)). The `pull_request` trigger stays
 unfiltered — a pull request between two work branches is worth the same run, and
 what makes a check required is the rule, not the trigger.
 
