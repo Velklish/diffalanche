@@ -1615,7 +1615,7 @@ full where its subject is:
 | `perf` | the budget table on the synthetic review | ubuntu | [the gate](#the-gate) |
 | `ui` | the Playwright UI suite, without the screenshot comparisons | ubuntu | [08-ui.md](08-ui.md#ui-tests) |
 | `smoke` | one review end to end through one delivery channel | ubuntu, macOS, Windows | [the job](#the-job) |
-| `e2e` | the acceptance list of specification section 10, against the binary | ubuntu, macOS | [08-ui.md](08-ui.md#the-acceptance-suite) |
+| `e2e` | the acceptance list of specification section 10, against the binary | ubuntu, macOS, Windows (not required, DA-45.6) | [08-ui.md](08-ui.md#the-acceptance-suite) |
 
 `e2e` installs Chromium and runs `bun run test:e2e`, which is the one command a
 developer runs: building the binary of the runner and generating the fixture are
@@ -1664,11 +1664,12 @@ cell. The names to list, spelled as they report:
 There is no check called `test-bun`, none called `ui`, none called `smoke` and
 none called `e2e`: a rule asking for those waits for a report that never comes,
 and every pull request sits at "Expected — waiting for status to be reported"
-instead. The three Windows cells — `smoke node on windows-latest`, `smoke bun
-on windows-latest` and `smoke binary on windows-latest` — are deliberately not in
-the list until DA-45 has run them and fixed what they find: all three passed
-end to end for the first time on Velklish/diffalanche#12 (DA-45.5), which is one
-run each and not yet a record, so none is a gate ([the job](#the-job)). The `pull_request` trigger stays
+instead. The Windows cells — `smoke node on windows-latest`, `smoke bun on
+windows-latest`, `smoke binary on windows-latest` and `acceptance on
+windows-latest` — are deliberately not in the list until DA-45 has run them and
+fixed what they find: the three smoke cells passed end to end for the first time
+on Velklish/diffalanche#12 (DA-45.5), which is not yet a record, and the
+acceptance cell is new with DA-45.6, so none is a gate ([the job](#the-job)). The `pull_request` trigger stays
 unfiltered — a pull request between two work branches is worth the same run, and
 what makes a check required is the rule, not the trigger.
 
