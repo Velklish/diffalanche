@@ -100,6 +100,31 @@ function changesOf(mark: number, repo: string): { event: WatcherEvent; at: numbe
   return since(mark, "diff-changed").filter((one) => (one.event as { repo: string }).repo === repo);
 }
 
+/** The paths the suite's trees reported, before any burst decided on them: a marker git ignores
+ * reaches no event, so `settle` reads it here (05-watcher.md, "What the unit tests hold"). */
+const reported: { dir: string; path: string }[] = [];
+
+type TreeOptions = Parameters<NonNullable<WatcherOptions["native"]>>[0];
+
+/** The suite's own trees, handed in through the `native` seam: the real watch or walk, with every
+ * path it reports kept in `reported` on its way to the watcher. */
+function spiedTree(options: TreeOptions): TreeSource {
+  const { native: _, ...rest } = options;
+  const tree = watchTree({
+    ...rest,
+    recursive: NATIVE_WATCH,
+    onChange: (path) => {
+      reported.push({ dir: options.dir, path });
+      options.onChange(path);
+    },
+  });
+  return { polling: tree.polling(), ready: tree.ready, close: tree.close };
+}
+
+/** The names `settle` marks trees with; REPO's `.git/info/exclude` always carries the rule, so a
+ * marker is in no change set and wakes no rescan that has anything to say. */
+const MARKER_RULE = "/marker-*\n";
+
 let settled = 0;
 
 /** Proves one repository's watch is delivering before anything is measured against it; why by a
@@ -108,16 +133,17 @@ async function arm(repo: string): Promise<void> {
   const deadline = performance.now() + 30_000;
   for (let attempt = 0; ; attempt += 1) {
     const mark = performance.now();
-    const file = join(root, repo, `armed-${attempt}.ts`);
+    const name = `armed-${attempt}.ts`;
+    const file = join(root, repo, name);
     await writeFile(file, `export const armed = ${attempt};\n`);
     const until = performance.now() + 2_000;
     while (performance.now() < until) {
-      if (changesOf(mark, repo).length > 0) {
+      if (named(changesOf(mark, repo), name).length > 0) {
         // The file goes again, and its removal is a change of its own: the
         // tests that follow start from a watcher with nothing in flight.
         const removed = performance.now();
         await rm(file, { force: true });
-        await waitForChangeOf(repo, removed);
+        await waitForChangeOf(repo, removed, name);
         return;
       }
       await new Promise((done) => setTimeout(done, 5));
@@ -129,22 +155,65 @@ async function arm(repo: string): Promise<void> {
 /** The settles that ran out of their deadline, told apart once the file is done (11-perf.md). */
 const overdue: { settle: number; written: number }[] = [];
 
-/** A change in another repository, waited for: rescans run in one queue, so its event proves the
- * earlier change is through — what a test expecting *no* event needs instead of a sleep. */
+/** Waits out every write made before it, to REPO, the data directory or anywhere else: what a
+ * test expecting *no* event needs instead of a sleep. Why each step: 05-watcher.md. */
 async function settle(): Promise<void> {
-  settled += 1;
-  const mark = performance.now();
-  await writeFile(join(root, OTHER_REPO, `settle-${settled}.ts`), `export const s = ${settled};\n`);
   // The deadline of `waitFor`: a queue behind a loaded machine is late, not stuck.
   const deadline = performance.now() + 20_000;
-  for (;;) {
-    if (changesOf(mark, OTHER_REPO).length > 0) return;
-    if (performance.now() > deadline) {
-      overdue.push({ settle: settled, written: mark });
-      throw new Error("the watcher never caught up");
-    }
+  settled += 1;
+  const marker = `marker-${settled}`;
+  const trees = [repoDir(REPO), config.dataDir];
+  for (const dir of trees) await writeFile(join(dir, marker), "");
+  // A tree that reports a file new at its root has walked everything else after it.
+  while (!trees.every((dir) => reported.some((one) => one.dir === dir && one.path === marker))) {
+    if (performance.now() > deadline) throw new Error(`no tree reported ${marker}`);
     await new Promise((done) => setTimeout(done, 5));
   }
+  // A burst of the other repository alone, so its debounce started after every burst above.
+  for (;;) {
+    settled += 1;
+    const file = `settle-${settled}.ts`;
+    const mark = performance.now();
+    await writeFile(join(root, OTHER_REPO, file), `export const s = ${settled};\n`);
+    // Another event first is a burst already under way, whose git may have read the file too.
+    while (changesOf(mark, OTHER_REPO).length === 0) {
+      if (performance.now() > deadline) {
+        overdue.push({ settle: settled, written: mark });
+        throw new Error("the watcher never caught up");
+      }
+      await new Promise((done) => setTimeout(done, 5));
+    }
+    const first = changesOf(mark, OTHER_REPO)[0] as { event: WatcherEvent };
+    if ((first.event as { files: string[] }).files.join("\n") !== file) continue;
+    // The event goes out before `diff.json` is written, and the next test may remove that file.
+    while (!(await cachedIn(OTHER_REPO, file))) {
+      if (performance.now() > deadline) throw new Error(`diff.json never had ${file}`);
+      await new Promise((done) => setTimeout(done, 5));
+    }
+    return;
+  }
+}
+
+/** A repository's directory as its tree was started on, which is how `reported` names it. */
+function repoDir(repo: string): string {
+  return (found.repositories.find((one) => one.path === repo) as { absolutePath: string })
+    .absolutePath;
+}
+
+/** Whether the current session's `diff.json` has a file in a repository's change set. */
+async function cachedIn(repo: string, path: string): Promise<boolean> {
+  const cache = await readDiffCache(config.dataDir, watcher.session() ?? SESSION);
+  const repository = cache?.repositories.find((one) => one.path === repo);
+  return repository?.files.some((one) => one.path === path) ?? false;
+}
+
+/** The events among these that name a path, or one the predicate accepts. */
+function named(
+  events: { event: WatcherEvent; at: number }[],
+  path: string | ((path: string) => boolean),
+): { event: WatcherEvent; at: number }[] {
+  const matches = typeof path === "string" ? (one: string) => one === path : path;
+  return events.filter((one) => (one.event as { files: string[] }).files.some(matches));
 }
 
 /** Whether an overdue settle's own file ever reached a `diff-changed`: late, or never at all. */
@@ -164,13 +233,18 @@ function reportOverdue(): void {
   }
 }
 
-/** The watched repository's own rescan, waited for: `settle` proves only that another
- * repository's change is through, not a write here the walk has not snapshotted yet. */
-async function waitForChangeOf(repo: string, mark: number, timeoutMs = 20_000): Promise<void> {
+/** The rescan of one step, by the path it wrote: any event of the repository since the mark
+ * can be an earlier step's, late (05-watcher.md, "What the unit tests hold"). */
+async function waitForChangeOf(
+  repo: string,
+  mark: number,
+  path: string | ((path: string) => boolean),
+  timeoutMs = 20_000,
+): Promise<void> {
   const deadline = performance.now() + timeoutMs;
   for (;;) {
-    if (changesOf(mark, repo).length > 0) return;
-    if (performance.now() > deadline) throw new Error(`no diff-changed for ${repo}`);
+    if (named(changesOf(mark, repo), path).length > 0) return;
+    if (performance.now() > deadline) throw new Error(`no diff-changed for ${repo} naming ${path}`);
     await new Promise((done) => setTimeout(done, 5));
   }
 }
@@ -237,6 +311,9 @@ beforeAll(async () => {
   generate({ out: root, seed: 5, profile: PROFILES.small });
   config = await loadConfig({ root });
   found = await scan(config.root, { roots: config.roots, depth: config.depth, exclude: [] });
+  // Before the watch starts, so the rule is the fixture's and not a change of any test.
+  mkdirSync(join(root, REPO, ".git", "info"), { recursive: true });
+  writeFileSync(join(root, REPO, ".git", "info", "exclude"), MARKER_RULE);
   await writeCache();
 
   OTHER_REPO = found.repositories
@@ -249,7 +326,10 @@ beforeAll(async () => {
   watcher = await startWatcher({
     config,
     scan: found,
-    ...(NATIVE_WATCH ? {} : { recursive: false, pollIntervalMs: 40 }),
+    // `recursive: true` hands every tree to `spiedTree`, which picks the watch or the walk itself.
+    recursive: true,
+    native: spiedTree,
+    ...(NATIVE_WATCH ? {} : { pollIntervalMs: 40 }),
     bus,
     activity: {
       wrote: (verb, author, repo, path) => {
@@ -361,10 +441,12 @@ describe("watcher", () => {
   it("says nothing about a change inside .git/objects", async () => {
     const dir = join(root, REPO, ".git", "objects", "ff");
     mkdirSync(dir, { recursive: true });
+    await hide("objects-pad", "module.exports = 1;\n");
     const mark = performance.now();
     writeFileSync(join(dir, "0123456789abcdef"), "not an object");
     await settle();
     expect(changesOf(mark, REPO)).toEqual([]);
+    await reveal("objects-pad");
   }, 30_000);
 
   it("says nothing about a burst git ignores, and wakes when the rules stop ignoring it", async () => {
@@ -372,10 +454,11 @@ describe("watcher", () => {
     const built = join(root, REPO, "dist", "bundle.js");
     mkdirSync(join(root, REPO, "dist"), { recursive: true });
     // The rules are a change of their own — they decide which untracked files the change set has —
-    // so this write wakes the watcher, and the burst under test must not be the one carrying it.
+    // so this write wakes the watcher, in a burst of its own, not the one under test.
+    await settle();
     const rulesMark = performance.now();
     await writeFile(gitignore, "dist/\n");
-    await waitForChangeOf(REPO, rulesMark);
+    await waitForChangeOf(REPO, rulesMark, ".gitignore");
     await settle();
 
     await hide("left-pad", "module.exports = 1;\n");
@@ -389,33 +472,29 @@ describe("watcher", () => {
     // rules drops what was cached, so git is asked about it again.
     const relaxedMark = performance.now();
     await writeFile(gitignore, "nothing-here/\n");
-    await waitForChangeOf(REPO, relaxedMark);
+    await waitForChangeOf(REPO, relaxedMark, ".gitignore");
     await settle();
 
     const watchedMark = performance.now();
     await writeFile(built, "console.log(2);\n");
-    await waitForChangeOf(REPO, watchedMark);
-    expect(
-      changesOf(watchedMark, REPO).flatMap((one) => (one.event as { files: string[] }).files),
-    ).toContain("dist/bundle.js");
+    await waitForChangeOf(REPO, watchedMark, "dist/bundle.js");
 
     await reveal("left-pad");
     await rm(join(root, REPO, "dist"), { recursive: true, force: true });
-    const cleanMark = performance.now();
     await rm(gitignore);
-    await waitForChangeOf(REPO, cleanMark);
     await settle();
   }, 60_000);
 
   it("says nothing about a path .git/info/exclude names", async () => {
     mkdirSync(join(root, REPO, ".git", "info"), { recursive: true });
     mkdirSync(join(root, REPO, "coverage"), { recursive: true });
-    // This rules write must be through before the burst under test; a hidden change gives its
-    // rescan something to announce, so there is an event to wait for, not a `settle` to hope on.
+    await settle();
+    // A hidden change gives this rules write's rescan something to announce, so there is an event
+    // to wait for; after `settle`, or the burst it waits out would spend it first.
     await hide("right-pad-rules", "module.exports = 2;\n");
     const rulesMark = performance.now();
-    await writeFile(join(root, REPO, ".git", "info", "exclude"), "coverage/\n");
-    await waitForChangeOf(REPO, rulesMark);
+    await writeFile(join(root, REPO, ".git", "info", "exclude"), `${MARKER_RULE}coverage/\n`);
+    await waitForChangeOf(REPO, rulesMark, ".git/info/exclude");
     await settle();
 
     await hide("right-pad", "module.exports = 3;\n");
@@ -428,7 +507,7 @@ describe("watcher", () => {
     await reveal("right-pad");
     await reveal("right-pad-rules");
     await rm(join(root, REPO, "coverage"), { recursive: true, force: true });
-    await writeFile(join(root, REPO, ".git", "info", "exclude"), "");
+    await writeFile(join(root, REPO, ".git", "info", "exclude"), MARKER_RULE);
     await settle();
   }, 30_000);
 
@@ -448,9 +527,10 @@ describe("watcher", () => {
     const built = join(root, REPO, "dist", "tracked.js");
     mkdirSync(join(root, REPO, "dist"), { recursive: true });
     await writeFile(built, "console.log(1);\n");
+    await settle();
     const rulesMark = performance.now();
     await writeFile(gitignore, "dist/\n");
-    await waitForChangeOf(REPO, rulesMark);
+    await waitForChangeOf(REPO, rulesMark, ".gitignore");
     await settle();
 
     // The verdict is cached now: this write is answered from it, not from git.
@@ -461,21 +541,16 @@ describe("watcher", () => {
     // watcher ask again and is its own burst, or the edit below would ride its rescan.
     const stagedMark = performance.now();
     await run("git", ["-C", join(root, REPO), "add", "-f", "dist/tracked.js"]);
-    await waitForChangeOf(REPO, stagedMark);
+    await waitForChangeOf(REPO, stagedMark, ".git/index");
     await settle();
 
     const trackedMark = performance.now();
     await writeFile(built, "console.log(3);\n");
-    await waitForChangeOf(REPO, trackedMark);
-    expect(
-      changesOf(trackedMark, REPO).flatMap((one) => (one.event as { files: string[] }).files),
-    ).toContain("dist/tracked.js");
+    await waitForChangeOf(REPO, trackedMark, "dist/tracked.js");
 
     await run("git", ["-C", join(root, REPO), "rm", "--cached", "-q", "-f", "dist/tracked.js"]);
     await rm(join(root, REPO, "dist"), { recursive: true, force: true });
-    const cleanMark = performance.now();
     await rm(gitignore);
-    await waitForChangeOf(REPO, cleanMark);
     await settle();
   }, 60_000);
 
@@ -486,7 +561,7 @@ describe("watcher", () => {
     // burst that is only a branch switch would be swallowed and the review's base go stale unseen.
     const rulesMark = performance.now();
     await writeFile(gitignore, "HEAD\n");
-    await waitForChangeOf(REPO, rulesMark);
+    await waitForChangeOf(REPO, rulesMark, ".gitignore");
     await settle();
 
     await hide("head-pad", "export const pad = 1;\n");
@@ -495,7 +570,7 @@ describe("watcher", () => {
     // The same bytes: what moves is the file's stamp, the way a branch switch
     // moves it, and no reviewed repository is changed by it.
     await writeFile(head, await readFile(head, "utf8"));
-    await waitForChangeOf(REPO, headMark);
+    await waitForChangeOf(REPO, headMark, (path) => path === ".git" || path.startsWith(".git/"));
     // Runtimes name it differently — Bun the bare `.git`, Node the file — so what is asserted is
     // that the burst was git's directory and nothing else.
     const woke = changesOf(headMark, REPO).flatMap(
@@ -505,9 +580,7 @@ describe("watcher", () => {
     expect(woke.every((path) => path === ".git" || path.startsWith(".git/"))).toBe(true);
 
     await reveal("head-pad");
-    const cleanMark = performance.now();
     await rm(gitignore);
-    await waitForChangeOf(REPO, cleanMark);
     await settle();
   }, 60_000);
 
@@ -516,18 +589,19 @@ describe("watcher", () => {
     const nested = join(root, REPO, "nested", "clone", ".git");
     mkdirSync(join(nested, "objects", "ff"), { recursive: true });
     writeFileSync(join(nested, "HEAD"), "ref: refs/heads/main\n");
+    await settle();
     // `nested/` makes this a check, not a coincidence: git calls everything under it ignored, this
     // burst included. The fixture's own `vendor/lib` is a modern submodule, never affected.
     const rulesMark = performance.now();
     await writeFile(gitignore, "nested/\n");
-    await waitForChangeOf(REPO, rulesMark);
+    await waitForChangeOf(REPO, rulesMark, ".gitignore");
     await settle();
 
     await hide("nested-pad", "module.exports = 1;\n");
 
     const headMark = performance.now();
     writeFileSync(join(nested, "HEAD"), "ref: refs/heads/other\n");
-    await waitForChangeOf(REPO, headMark);
+    await waitForChangeOf(REPO, headMark, (path) => path.startsWith("nested/clone/.git"));
     // Bun hands back the directory where Node names the file, so what is
     // asserted is that the burst was the nested git directory and nothing else.
     const woke = changesOf(headMark, REPO).flatMap(
@@ -549,14 +623,12 @@ describe("watcher", () => {
 
     await reveal("nested-pad-objects");
     await rm(join(root, REPO, "nested"), { recursive: true, force: true });
-    const cleanMark = performance.now();
     await rm(gitignore);
-    await waitForChangeOf(REPO, cleanMark);
     await settle();
   }, 60_000);
 
   it("reports every ignored path of a list", async () => {
-    await writeFile(join(root, REPO, ".git", "info", "exclude"), "target/\n");
+    await writeFile(join(root, REPO, ".git", "info", "exclude"), `${MARKER_RULE}target/\n`);
     await settle();
 
     const paths = Array.from({ length: 50 }, (_, one) => `target/chunk-${one}.js`);
@@ -575,7 +647,7 @@ describe("watcher", () => {
     const many = Array.from({ length: 5_000 }, (_, one) => `target/many-${one}.js`);
     expect((await checkIgnore(join(root, REPO), many))?.size).toBe(many.length);
 
-    await writeFile(join(root, REPO, ".git", "info", "exclude"), "");
+    await writeFile(join(root, REPO, ".git", "info", "exclude"), MARKER_RULE);
     await settle();
   }, 30_000);
 
