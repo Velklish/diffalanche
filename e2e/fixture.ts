@@ -3,11 +3,11 @@
 
 import { execFileSync } from "node:child_process";
 import { mkdirSync, writeFileSync } from "node:fs";
-import { devNull } from "node:os";
 import { dirname, join, resolve } from "node:path";
 import { argv, stdout } from "node:process";
 import { fileURLToPath } from "node:url";
 import { generate, PROFILES } from "../scripts/synth.ts";
+import { GIT_NULL } from "../src/core/git/run.ts";
 
 /** The repository with the remote. `tools` is a group the generator leaves free. */
 export const FEATURE_REPO = "repos/tools/tariff-store";
@@ -41,8 +41,8 @@ const GIT_CONFIG = [
 
 const GIT_ENV = {
   ...process.env,
-  GIT_CONFIG_GLOBAL: devNull,
-  GIT_CONFIG_SYSTEM: devNull,
+  GIT_CONFIG_GLOBAL: GIT_NULL,
+  GIT_CONFIG_SYSTEM: GIT_NULL,
   GIT_AUTHOR_NAME: GIT_USER.name,
   GIT_AUTHOR_EMAIL: GIT_USER.email,
   GIT_AUTHOR_DATE: GIT_DATE,

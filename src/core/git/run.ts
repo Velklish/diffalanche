@@ -1,9 +1,12 @@
 import { execFile, spawn } from "node:child_process";
-import { devNull } from "node:os";
 import { promisify } from "node:util";
 import { GitError, gitError } from "./errors.ts";
 
 const execFileAsync = promisify(execFile);
+
+/** Not `os.devNull`: git cannot open Windows' `\\.\nul`, and maps `/dev/null` to `nul` itself,
+ * which `scripts/check-git-null.ts` checks on the Windows runner (DA-45.1). */
+export const GIT_NULL = "/dev/null";
 
 /** One `git diff` over the synthetic review is a few megabytes. */
 const MAX_GIT_OUTPUT = 256 * 1024 * 1024;
@@ -15,8 +18,8 @@ function readOnlyEnv(): Record<string, string | undefined> {
   for (const [key, value] of Object.entries(process.env)) {
     if (!key.toUpperCase().startsWith("GIT_")) env[key] = value;
   }
-  env.GIT_CONFIG_GLOBAL = devNull;
-  env.GIT_CONFIG_SYSTEM = devNull;
+  env.GIT_CONFIG_GLOBAL = GIT_NULL;
+  env.GIT_CONFIG_SYSTEM = GIT_NULL;
   return env;
 }
 
@@ -24,7 +27,7 @@ function readOnlyEnv(): Record<string, string | undefined> {
  * itself ([ADR-012](../../../docs/adr/adr-012-git-trust-model.md)). */
 const INERT_CONFIG = [
   "core.fsmonitor=false",
-  `core.hooksPath=${devNull}`,
+  `core.hooksPath=${GIT_NULL}`,
   "core.editor=false",
   "core.sshCommand=false",
   "core.askPass=",

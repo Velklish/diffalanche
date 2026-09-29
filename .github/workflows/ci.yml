@@ -163,6 +163,9 @@ jobs:
               ;;
           esac
           scripts/smoke.sh $command
+      # A file planted where Windows resolves `/dev/null` must not reach git (DA-45.1, 02-git.md).
+      - if: always() && runner.os == 'Windows'
+        run: bun scripts/check-git-null.ts
 
   e2e:
     name: acceptance on ${{ matrix.os }}

@@ -24,6 +24,20 @@ The root is a `mktemp -d` path under the runner's temp directory, spelled the
 Windows way (`RUNNER~1`); `scripts/synth.ts` runs `git -C <path>` on it. The
 first work item is the generator on Windows, before anything in the CLI.
 
+Second evidence, Velklish/diffalanche#8, job 109234918151, 2026-09-29. With DA-45.1's
+`/dev/null`, the generator gets through, and the smoke stops at the CLI's first write:
+
+```
+smoke: review new failed
+  command    node dist/cli.js review new smoke --title 'smoke scenario' --root /tmp/tmp.JAhRYxc48R/root
+  exit code  1
+    diffalanche: C:\Users\RUNNER~1\AppData\Local\Temp\tmp.JAhRYxc48R\root\.diffalanche\reviews\smoke: durability flush failed: EPERM
+```
+
+Assumption, not checked: it is the directory flush after an atomic write (DA-90),
+and Windows refuses an `fsync` on a directory handle. The next work item is the
+storage layer's flush on Windows.
+
 ## Work to do
 
 - Run the smoke scenario and the e2e suite on a Windows runner against the Windows x64 binary; fix what fails; record the platform notes in the reference.
