@@ -118,8 +118,10 @@ jobs:
           # day: a Bun that breaks the tool shows up in this matrix.
           - { channel: bun, os: ubuntu-latest, bun: latest }
           - { channel: bun, os: macos-latest, bun: latest }
+          - { channel: bun, os: windows-latest, bun: latest }
           - { channel: binary, os: ubuntu-latest, bun: 1.3.14 }
           - { channel: binary, os: macos-latest, bun: 1.3.14 }
+          - { channel: binary, os: windows-latest, bun: 1.3.14 }
     defaults:
       run:
         # Git Bash on the Windows runner: the smoke script is POSIX shell.
