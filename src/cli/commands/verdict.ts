@@ -86,11 +86,11 @@ export const reopen: Command = {
     const session = await context.session();
     const config = await context.config();
     const given = verdict(args, text(args, "note"));
-    // The anchor is taken from `diff.json`, so the comment's repository is read again first, as
-    // `comment` does; for a role the domain refuses anyway, nothing is read.
-    if (line !== undefined && given.role === "human") {
+    // The repository is read again first, as `comment` does, so the anchor is judged against the
+    // file now and its comments have moved with it; for a role refused anyway, nothing is read.
+    if (given.role === "human") {
       const found = await getComment(config.dataDir, session, id);
-      if (found.repo !== null && found.path !== null) {
+      if (found.repo !== null && found.path !== null && found.line !== null) {
         const review = await readSession(config.dataDir, session);
         await refreshRepository(config, session, review.base, found.repo, review.scope);
       }

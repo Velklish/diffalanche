@@ -3,6 +3,7 @@ import { Hono } from "hono";
 import { csrf } from "hono/csrf";
 import { findRepositories } from "../core/change-set.ts";
 import type { Config } from "../core/config/index.ts";
+import type { FileSource } from "../core/domain/index.ts";
 import {
   addComment,
   assertScope,
@@ -290,15 +291,20 @@ export function createApp({
       session: string,
       id: string,
       given: { author: string; role: Role; note?: string },
+      options: { source: FileSource },
     ) => Promise<Comment>,
   ): Promise<Comment> {
     const body = await readBody(c);
     const note = optionalText(body, "note");
     const session = await resolveSessionName(config.dataDir, named(c));
-    const comment = await close(config.dataDir, session, id, {
-      ...author,
-      ...(note === undefined ? {} : { note }),
-    });
+    // The source lets `reopen` judge whether a line comment's anchor still reads at its line.
+    const comment = await close(
+      config.dataDir,
+      session,
+      id,
+      { ...author, ...(note === undefined ? {} : { note }) },
+      { source: fileSource(config) },
+    );
     review.invalidateComments(session);
     return comment;
   }

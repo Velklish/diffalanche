@@ -1,5 +1,9 @@
 /** `diff`: the change set of the session, rescanned and rewritten by every run that exits 0
  * ([06-cli.md](../../../docs/reference/06-cli.md)). */
+
+import { relative, sep } from "node:path";
+import { writeChangeSet } from "../../core/change-set.ts";
+import type { Config } from "../../core/config/index.ts";
 import {
   formatScope,
   list as listComments,
@@ -8,8 +12,9 @@ import {
   withAnchorWarnings,
 } from "../../core/domain/index.ts";
 import { scanReview, totalsOf } from "../../core/index.ts";
-import type { DiffCache } from "../../core/storage/index.ts";
-import { sessionDir, withLock, writeDiffCache } from "../../core/storage/index.ts";
+import type { Comment, DiffCache } from "../../core/storage/index.ts";
+import { commentsPath, StorageError, sessionDir, withLock } from "../../core/storage/index.ts";
+import type { ScanWarning } from "../../core/types.ts";
 import { flag, noExtra, text } from "../args.ts";
 import type { Command } from "../command.ts";
 import { repositoryNotFound, UsageError } from "../errors.ts";
@@ -46,6 +51,27 @@ function narrow(cache: DiffCache, repo: string | undefined): DiffCache {
     ...(cache.rootWarnings === undefined
       ? {}
       : { rootWarnings: cache.rootWarnings.filter((warning) => warning.path === repo) }),
+  };
+}
+
+/** The comments, or the refusal of a `comments.json` that cannot be read: a warning of `diff`,
+ * which has already written `diff.json` by then (06-cli.md, "The change set"). */
+async function readable(dataDir: string, session: string): Promise<Comment[] | StorageError> {
+  try {
+    return await listComments(dataDir, session);
+  } catch (error) {
+    if (error instanceof StorageError && error.file === commentsPath(dataDir, session))
+      return error;
+    throw error;
+  }
+}
+
+/** The warning for that file, its path relative to the root as every warning's is. */
+function unreadableWarning(config: Config, error: StorageError): ScanWarning {
+  const reason = error.message.slice(error.file.length + 2);
+  return {
+    path: relative(config.root, error.file).split(sep).join("/"),
+    message: `cannot be read, so no comment was re-anchored and orphans are not counted: ${reason}`,
   };
 }
 
@@ -86,15 +112,21 @@ export const diff: Command = {
     }
     // Under the session's lock, like every other writer of this file: a write
     // between the watcher's read and its write is gone without a trace.
-    await withLock(sessionDir(config.dataDir, session), async (held) => {
-      await held.assertHeld();
-      await writeDiffCache(config.dataDir, session, scanned.cache);
-    });
+    const written = await withLock(sessionDir(config.dataDir, session), (held) =>
+      writeChangeSet(config, session, held, scanned.cache),
+    );
 
     // What is printed counts the orphaned comments in; the file keeps the scan's own list.
-    const comments = await listComments(config.dataDir, session);
-    const warnings = withAnchorWarnings(scanned.cache.warnings, comments);
-    const shown = narrow({ ...scanned.cache, warnings }, repo);
+    const comments = written.unreadable === null ? await readable(config.dataDir, session) : null;
+    const unreadable = written.unreadable ?? (comments instanceof StorageError ? comments : null);
+    const counted = Array.isArray(comments) ? comments : [];
+    const warnings = withAnchorWarnings(scanned.cache.warnings, counted);
+    const narrowed = narrow({ ...scanned.cache, warnings }, repo);
+    // About the session rather than a repository, so no `--repo` narrows it away.
+    const shown =
+      unreadable === null
+        ? narrowed
+        : { ...narrowed, warnings: [...narrowed.warnings, unreadableWarning(config, unreadable)] };
 
     if (asJson) {
       json(context.io, shown);

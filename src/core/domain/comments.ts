@@ -20,8 +20,8 @@ import {
   updateSession,
 } from "../storage/index.ts";
 import type { RepositoryChange } from "../types.ts";
-import { captureAnchor, captureFromFile } from "./anchors.ts";
-import { isUnanswered } from "./counters.ts";
+import { captureAnchor, captureFromFile, linesOf, locate } from "./anchors.ts";
+import { isOpen, isUnanswered } from "./counters.ts";
 import { DomainError } from "./errors.ts";
 import type { Actor } from "./roles.ts";
 import { assertHuman } from "./roles.ts";
@@ -342,8 +342,8 @@ export async function resolve(
   });
 }
 
-/** With `line`, the anchor is taken again there before the thread opens; an orphaned comment is
- * refused without one, since reopening it where it was would put it back on the wrong line. */
+/** With `line`, the anchor is taken again there before the thread opens; without one, a line
+ * comment opens only where its anchor still reads (04-domain.md, "Re-anchoring"). */
 export async function reopen(
   dataDir: string,
   session: string,
@@ -357,13 +357,19 @@ export async function reopen(
     verdict.line === undefined
       ? null
       : await replace(dataDir, session, id, verdict, options.source);
+  // Read before the lock, as the anchor of a new comment is: a file read is no writer's business.
+  const holds = placed === null ? await anchorHolds(dataDir, session, id, options.source) : true;
   return updateSession(dataDir, session, ({ review, comments }) => {
     const comment = find(comments, id, review.scope);
-    if (placed === null && comment.status === "orphaned") {
+    if (placed === null && (comment.status === "orphaned" || !holds)) {
       throw new DomainError(
         "anchor-orphaned",
-        `${comment.id} lost its anchor when the code changed; reopen it with --line naming ` +
-          "the line it belongs to now. Nothing was written",
+        comment.status === "orphaned"
+          ? `${comment.id} lost its anchor when the code changed; reopen it with --line naming ` +
+              "the line it belongs to now. Nothing was written"
+          : `${comment.id} is not on the line it was left on any more: line ${comment.line} of ` +
+              `${comment.path} reads otherwise now; reopen it with --line naming the line it ` +
+              "belongs to. Nothing was written",
       );
     }
     if (placed !== null) {
@@ -413,6 +419,35 @@ async function replace(
   return { line, endLine, anchor };
 }
 
+/** Whether a line comment's anchor still reads at its line — a resolved thread was not moved
+ * when its line went, and was orphaned perhaps before that; `true` with nothing to read it by. */
+async function anchorHolds(
+  dataDir: string,
+  session: string,
+  id: string,
+  source: FileSource | undefined,
+): Promise<boolean> {
+  // One not found yet may be found inside the lock, a scope widened meanwhile: that find decides.
+  const comment = await get(dataDir, session, id).catch((error: unknown) => {
+    if (error instanceof DomainError && error.code === "no-such-comment") return null;
+    throw error;
+  });
+  if (comment === null) return true;
+  const { repo, path, line, anchor } = comment;
+  if (source === undefined || repo === null || path === null || line === null || anchor === null) {
+    return true;
+  }
+  const side = comment.side ?? "new";
+  const cache = await readDiffCache(dataDir, session);
+  const repository = cache?.repositories.find((one) => one.path === repo);
+  const file = repository?.files.find((one) => one.path === path) ?? null;
+  const sha = repository?.base?.sha;
+  const rev = side === "new" ? "worktree" : sha === undefined ? null : { sha };
+  if (rev === null) return true;
+  const text = await source(repo, side === "old" ? (file?.oldPath ?? path) : path, rev);
+  return text !== null && locate(anchor, linesOf(text), line) === line;
+}
+
 export async function get(dataDir: string, session: string, id: string): Promise<Comment> {
   await assertSession(dataDir, session);
   const scope = await sessionScope(dataDir, session);
@@ -431,7 +466,9 @@ export async function list(
   const status = filter.status ?? "all";
   return comments.filter((comment) => {
     if (!commentInScope(scope, comment)) return false;
-    if (status !== "all" && comment.status !== status) return false;
+    // `open` is every open finding, orphaned ones too; `orphaned` is those alone.
+    if (status === "open" && !isOpen(comment)) return false;
+    if (status !== "all" && status !== "open" && comment.status !== status) return false;
     if (filter.repo !== undefined && comment.repo !== filter.repo) return false;
     if (filter.severity !== undefined && comment.severity !== filter.severity) return false;
     if (filter.unanswered === true && !isUnanswered(comment)) return false;

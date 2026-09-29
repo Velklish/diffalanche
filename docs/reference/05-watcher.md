@@ -587,60 +587,49 @@ keeps the base it records.
 
 ## Re-anchoring
 
-A rescan that changed a repository's entry is followed by a pass of
-`reanchorRepository` ([04-domain.md](04-domain.md#re-anchoring)) over that
-repository's line comments, handed the entry as the cache had it before the
-patch and the entry now. The entry before is taken inside the rescan's lock,
-from the same read of `diff.json` the patch starts from; it is handed over only
-when that cache answers the session's base and scope — a cache for another
-question says nothing about where the comments' lines were, and then no pass
-runs. A cache without `rootWarnings` still answers it, so its full rescan is
-followed by a pass as a patch is.
+A rescan re-anchors as every writer of `diff.json` does
+([04-domain.md](04-domain.md#re-anchoring)): its write goes through
+`writeChangeSet`, which writes the file and then, **in the same hold of the
+session's lock**, places the comments of every repository whose entry the write
+replaced. The patch of one repository hands over the entry it read inside that
+hold as the one it replaces; the full rescan — no cache, or one for another
+base or scope, and the whole read a server start or a move of `current` makes —
+reads the file it is about to replace at the moment of the write. Nothing the
+watcher remembers is involved: `comment`, `diff` and a server's first read of a
+task each move the comments of what they rewrite, so a rescan that finds
+`diff.json` already equal to the working tree has nothing left to move, and is
+right to move nothing.
 
-**The entry before is the watcher's own memory first**, and `diff.json` only
-when it has none. `comment` and `diff` rewrite the cache from the working tree
-too ([06-cli.md](06-cli.md)), and an agent that edits a file and runs `diff
---json` inside the debounce leaves a rescan that finds `diff.json` already equal
-to the working tree: judged by the file, nothing changed, and the comments on
-that file would never move. So the watcher keeps each repository's entry as it
-last handed it over — from every rescan, and from the whole read a server start
-or a move of `current` makes — and a rescan whose entry differs from that memory
-is followed by a pass whether or not it rewrote the file. The memory is the
-current session's alone, dropped for another session when `current` moves and
-for this one when its base or scope changes, since then it describes lines
-against another question; it holds the entries with their hunks, about the size
-of `diff.json` itself.
+**What waits, and what does not.** The rescan hands its change set over and
+sends `diff-changed` and `warnings` before it writes, as before
+([The change-set cache](#the-change-set-cache)), so the update the person sees
+does not wait for the pass. What does wait is everything behind the session's
+lock and behind the rescan queue: the pass runs inside the rescan's hold, so the
+next rescan — of this repository or another, since rescans run one at a time —
+starts only after it, and so does any writer of that session's files, the UI
+writing a comment or a CLI replying. The pass yields to the event loop between
+comments, so a request, a frame or a timer is answered while it runs; the
+scoring of one comment against its file is synchronous and is not broken up. A
+comment whose line is in place — the common case after an edit elsewhere in its
+file — costs one read of the file and no blame.
 
-**The pass runs after the rescan, in a chain of its own**, not in the queue of
-rescans: it starts once the change set has been handed over, `diff-changed`
-sent, and `diff.json` written, so the update after an edit carries none of its
-cost, and a rescan of the next edit never waits behind blame. A pass waiting for
-its turn takes the next rescan's entry as its `after` and keeps its own
-`before`: a burst of edits to one repository costs one pass that spans all of
-them, not one per edit. `close` waits for the chain after the rescans, so
-nothing is written once it resolves.
+The pass writes `comments.json` only when a comment moved, took a new context,
+or was orphaned — a change of the anchor's hunk header alone is not written —
+and that write is a burst of the data directory like any other and comes back
+as events. A thread whose path, side or lines changed is `comment-status`, as a
+status change is — a window re-reads the thread, which is where the line is — and
+so is one that became `orphaned`. The count of orphaned comments per repository
+is kept from the same read of `comments.json` the events are, and when it changes
+for the current session a `warnings` frame goes out with the change set's
+warnings and those of the orphans together, the change set's taken from the last
+rescan or, before any, from `diff.json`. Every `warnings` frame carries both, so a
+window that replaces its list with the frame's keeps the orphans'
+([04-domain.md](04-domain.md#re-anchoring)).
 
-What moved while no watcher followed the session is caught up the same way: the
-whole read of a session — the server's first, and the one `current` moving to a
-session makes — hands every repository it found moved to a pass, with the
-`diff.json` it replaced as `before`, when that file answers the session's base
-and scope.
-
-The pass writes `comments.json` only when a comment moved, took a new anchor, or
-was orphaned; that write is a burst of the data directory like any other and
-comes back as events. A thread whose side or lines changed is `comment-status`,
-as a status change is — a window re-reads the thread, which is where the line
-is — and so is one that became `orphaned`. The count of orphaned comments per
-repository is kept from the same read of `comments.json` the events are, and
-when it changes for the current session a `warnings` frame goes out with the
-change set's warnings and those of the orphans together, the change set's taken
-from the last rescan or, before any, from `diff.json`. Every `warnings` frame
-carries both, so a window that replaces its list with the frame's keeps the
-orphans' ([04-domain.md](04-domain.md#re-anchoring)).
-
-A `comments.json` that cannot be read fails the pass without a word: the
-comment events report it, once, on the way into the broken state
-([Events](#events)), and a pass per rescan would say it again each time.
+A `comments.json` that cannot be read leaves every comment where it is, and the
+rescan writes `diff.json` all the same: the comment events report the file, once,
+on the way into the broken state ([Events](#events)), and a rescan that failed on
+it would say it again on each.
 
 ## The activity feed
 
@@ -694,17 +683,19 @@ the same run where it was before.
 A platform without a recursive watch cannot meet the budget at all: there the
 interval of the walk is added to every measurement.
 
-**Re-anchoring adds work behind that path, not on it**
-([Re-anchoring](#re-anchoring)): after every rescan that changed an entry, one
-read of `review.json` and of `comments.json`; for each changed file that carries
-a line comment, one read of the file — `ls-files` and the file itself, or two
-`cat-file` for the old side — and, when a comment's line is one the base has,
-one `git blame` with its `config --list`, each shared by every comment on the
-file; the edit-distance scoring of the file's lines in memory; and one write of
-`comments.json` when anything moved, which the data directory's watch then
-reads back as a burst. None of it is measured: it runs
-beside the next rescan rather than before it, so what it can cost the budget is
-the CPU it takes from a rescan of another edit on the same machine.
+**Re-anchoring adds work after the update, not before it**
+([Re-anchoring](#re-anchoring)): after every rescan that changed an entry, in
+the rescan's hold of the session's lock, one read of `review.json` and of
+`comments.json`; for each changed file that carries a line comment, one read of
+the file — `ls-files` and the file itself, or two `cat-file` for the old side —
+and, only for a comment not in place, a read of its base (two `cat-file`) and,
+when its line is one the base has, one `git blame` with its `config --list`,
+each shared by every comment on the file; the edit-distance scoring of the
+file's lines in memory; and one write of `comments.json` when anything moved,
+which the data directory's watch then reads back as a burst. None of it is
+measured (DA-42.3). The update after an edit does not wait for it; a second
+edit's rescan, and any other writer of the session, does.
+
 
 ## What the unit tests hold
 
@@ -762,5 +753,7 @@ steps against a repository of its own, and one watcher on that repository, with
 the walk and a 40 ms interval under both runtimes, that has to move one comment
 by the five lines an edit put above it, orphan the one whose line the edit
 rewrote, send `comment-status` for both, and end on a `warnings` frame naming
-the one orphan. The fixture is its own, twenty lines of one file, so the line
-each comment must land on can be read off the test.
+the one orphan, and a second watcher that finds the comments already moved when
+a CLI refresh rewrote `diff.json` inside its debounce. The fixture is its own,
+twenty lines of one file, so the line each comment must land on can be read off
+the test; the cases that move HEAD, the index or the stash get a root each.

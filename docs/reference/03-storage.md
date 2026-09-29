@@ -315,6 +315,15 @@ The lock options go through as well, which is how the lease is tested: a change
 that outruns `staleMs` and has the lock taken from it is refused and writes
 nothing.
 
+**`held` joins a hold the caller already has** instead of taking the lock: the
+lock is not reentrant, and a writer inside `withLock` that called
+`updateSession` would wait on itself for a whole lease. Re-anchoring is the one
+caller — its comment write happens inside the hold of the `diff.json` write it
+follows, so no other writer's pass can come between the two
+([04-domain.md](04-domain.md#re-anchoring)). Everything else about the write is
+the same: the existence checks, `updatedAt`, and `assertHeld` before the files
+are written.
+
 ## Config
 
 `src/core/config` turns `config.json` and the command-line flags into one

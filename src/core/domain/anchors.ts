@@ -172,6 +172,8 @@ export function captureFromFile(
 export const LINE_SIMILARITY = 0.6;
 export const MATCH_SCORE = 0.7;
 export const MATCH_MARGIN = 0.1;
+/** How well the lines around a blame landing must agree with the anchor's before it is taken. */
+export const BLAME_CONTEXT = 0.5;
 /** How much of a candidate's score is its own line; the rest is the six lines around it. */
 const LINE_WEIGHT = 0.7;
 
@@ -216,7 +218,7 @@ export function similarity(left: string, right: string, floor = 0): number {
 }
 
 /** How well the lines around `index` agree with the anchor's context, 1 with none to compare. */
-function contextScore(anchor: Anchor, lines: readonly string[], index: number): number {
+export function contextScore(anchor: Anchor, lines: readonly string[], index: number): number {
   const expected = [
     ...anchor.before.map((text, at) => ({ text, at: index - anchor.before.length + at })),
     ...anchor.after.map((text, at) => ({ text, at: index + 1 + at })),
@@ -231,7 +233,7 @@ function contextScore(anchor: Anchor, lines: readonly string[], index: number): 
 }
 
 /** Whether the anchored line and its context are exactly where the comment already is. */
-function inPlace(anchor: Anchor, lines: readonly string[], line: number): boolean {
+export function inPlace(anchor: Anchor, lines: readonly string[], line: number): boolean {
   const index = line - 1;
   if (lines[index] !== anchor.lineContent) return false;
   const before = anchor.before.every(
@@ -242,12 +244,19 @@ function inPlace(anchor: Anchor, lines: readonly string[], line: number): boolea
 
 /** The fuzzy step: the line the anchor now matches, or `null` when none clears the thresholds or
  * two come within the margin of each other — a comment never moves to a guess. */
-export function locate(anchor: Anchor, lines: readonly string[], line: number): number | null {
+export function locate(
+  anchor: Anchor,
+  lines: readonly string[],
+  line: number,
+  within: [number, number] = [1, lines.length],
+): number | null {
   if (inPlace(anchor, lines, line)) return line;
   let best = -1;
   let bestScore = -1;
   let runnerUp = -1;
-  for (const [index, text] of lines.entries()) {
+  const [first, last] = within;
+  for (let index = Math.max(0, first - 1); index < Math.min(lines.length, last); index += 1) {
+    const text = lines[index] as string;
     const own = similarity(anchor.lineContent, text, LINE_SIMILARITY);
     if (own < LINE_SIMILARITY) continue;
     const score = LINE_WEIGHT * own + (1 - LINE_WEIGHT) * contextScore(anchor, lines, index);
@@ -273,6 +282,61 @@ export function baseLineOf(file: FileChange | null, line: number): number | null
     for (const one of hunk.lines) if (one.newLine === line) return one.oldLine;
   }
   return otherSideLine(file, "new", line);
+}
+
+/** The new side of a file as a change set describes it: its base with the hunks laid over, the
+ * lines the comments on it were placed on; `null` when the entry carries no lines. */
+export function newSideOf(
+  file: FileChange | null,
+  base: readonly string[] | null,
+): string[] | null {
+  if (file === null) return base === null ? null : [...base];
+  if (file.omitted !== null) return null;
+  if (file.status === "deleted") return [];
+  if (file.status === "added") {
+    return file.hunks.flatMap((hunk) =>
+      hunk.lines.filter((one) => one.newLine !== null).map((one) => one.content),
+    );
+  }
+  if (base === null) return null;
+  const lines: string[] = [];
+  let next = 1;
+  for (const hunk of file.hunks) {
+    const range = hunkRange(hunk.header);
+    if (range === null) return null;
+    const [start, count] = range.old;
+    // A count of zero sits after line `start`, so that line is still the base's own.
+    const upTo = count === 0 ? start : start - 1;
+    lines.push(...base.slice(next - 1, upTo));
+    lines.push(...hunk.lines.filter((one) => one.newLine !== null).map((one) => one.content));
+    next = count === 0 ? start + 1 : start + count;
+  }
+  lines.push(...base.slice(next - 1));
+  return lines;
+}
+
+/** The window an anchor keeps around a line, read off a list of lines: line, and three each way. */
+export function windowOf(lines: readonly string[], line: number): Anchor | null {
+  const index = line - 1;
+  const found = lines[index];
+  if (found === undefined) return null;
+  return {
+    lineContent: found,
+    hunk: "",
+    before: lines.slice(Math.max(0, index - CONTEXT), index),
+    after: lines.slice(index + 1, index + 1 + CONTEXT),
+  };
+}
+
+/** Whether two anchors keep the same text; `hunk` is left out, since it moves with any edit above. */
+export function sameText(left: Anchor, right: Anchor): boolean {
+  return (
+    left.lineContent === right.lineContent &&
+    left.before.join("\n") === right.before.join("\n") &&
+    left.after.join("\n") === right.after.join("\n") &&
+    left.before.length === right.before.length &&
+    left.after.length === right.after.length
+  );
 }
 
 /** A file's text as line numbers count it: a final newline ends the last line. */

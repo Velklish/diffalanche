@@ -82,6 +82,7 @@ Fields you act on:
 | `path`, `line`, `endLine`, `side` | `null` down to the level the comment was written at: a comment with `repo` and no `path` is about the whole repository, one with no `repo` about the whole review |
 | `anchor.lineContent` | the line as it was when the comment was written — compare it with the file before you edit |
 | `anchor.before`, `anchor.after` | three lines of context each way, from the side the comment is on |
+| `status` | `open`, or `orphaned`: still open, but the tool lost its line after the code changed, so `line` and `anchor` are where it was — find the code by `anchor.lineContent` |
 | `severity` | `critical`, `warning`, `nit`, `question` — the order you work in |
 | `severitySource` | who chose `severity`: `manual` the writer; `auto` the tool, from similar past comments, waiting for an agent to agree; `confirmed:<author>` an agent already did |
 | `role` | `human` or `agent`; `--unanswered` means the last message is `human` |
@@ -184,7 +185,7 @@ diffalanche: only a human may resolve a comment; this call came with role "agent
 ```
 
 Exit code 1, nothing changed — with the default role and with an explicit
-`--role agent` alike. `reopen` is the same, and so are `review close` and
+`--role agent` alike. `reopen` is the same, `reopen --line` included, and so are `review close` and
 `review reopen`, which mark the whole task:
 
 ```

@@ -19,7 +19,7 @@ a caller reads; the message is what a person reads.
 | `invalid-anchor` | anchor levels that do not add up: a line without a file, a range that runs backwards |
 | `role-not-human` | `resolve` or `reopen` from anything but a human |
 | `line-not-in-diff` | a line anchor on a line neither the change set nor, when a source is given, the file itself has — past its end, or on a side that cannot be read |
-| `anchor-orphaned` | `reopen` of an orphaned comment that names no line to put it on |
+| `anchor-orphaned` | `reopen` without a line of an orphaned comment, or of a line comment whose anchor no longer reads at its line |
 | `invalid-scope` | a scope that does not add up: a repository the root has not, a repository named twice, a path that is not one inside its repository, an edit a scope cannot express |
 | `out-of-scope` | a comment on something the review task is not about |
 | `scope-has-comments` | narrowing the scope would delete comments and nothing consented to that; the error carries their ids |
@@ -324,7 +324,7 @@ the session ([Scope](#scope)), filtered by:
 
 | Filter | Values |
 |---|---|
-| `status` | `open`, `resolved`, `orphaned`, `all` — the domain's default is `all`; the CLI picks its own |
+| `status` | `open` (orphaned ones included), `resolved`, `orphaned`, `all` — the domain's default is `all`; the CLI picks its own |
 | `repo` | a repository path |
 | `severity` | one severity |
 | `unanswered` | `true` keeps only unanswered threads, `false` drops them |
@@ -420,44 +420,67 @@ was a false statement about the file, and it named no side to retry on.
 ### Re-anchoring
 
 ```ts
-reanchorRepository(dataDir, session, move, sources): Promise<Reanchored>
+reanchorRepositories(dataDir, session, moves, sources, held?): Promise<Reanchored>
 anchorWarnings(comments): ScanWarning[]
 withAnchorWarnings(warnings, comments): ScanWarning[]
 ```
 
 After code edits a line comment stays on its line (`docs/SPEC.md` section 5,
-Phase 3; DA-42). `reanchorRepository` takes one repository's **move** — its
-entry of the change set before a rescan and after it, `null` for no changes —
-and places again every line comment the move can have shifted: a `new`-side
-comment on a file whose entry changed, came or went, and every comment of the
-repository, either side, once its resolved base moved. An `old`-side comment
-under an unchanged base is left alone: the base's text did not change. Who
-calls it and when is the watcher's ([05-watcher.md](05-watcher.md)); the domain
-reads no git itself and is handed `sources` — the file source anchor capture
-uses, and a blame source (`blameFrom` of [02-git.md](02-git.md#blame)).
+Phase 3; DA-42). A **move** is one repository's entry of the change set as
+`diff.json` had it and as a write replaces it, `null` for no changes. The
+comments of a session are anchored against the entries `diff.json` holds, so
+**whoever replaces an entry moves the comments**: every writer of `diff.json` —
+the watcher's rescan, the server's first read of a task, `diff`, `comment`,
+`reopen --line`, anything that calls `refreshRepository` — writes through
+`writeChangeSet` of `src/core/change-set.ts`
+([02-git.md](02-git.md#patching-one-repository)), which reads the entries it is
+about to replace, writes the file, and runs the pass over every repository whose
+entry changed, **in the same hold of the session's lock**. The hold is what
+keeps two writers' passes in the order of their writes, across processes: a
+pass run after the lock is let go could meet a second writer's pass that
+already took this one's `after` for its `before`. It is also what makes a pass
+cost the next writer its wait ([05-watcher.md](05-watcher.md#re-anchoring)).
+With no `diff.json` before the write there is nothing to say where the lines
+were, and the first scan of a session moves nothing.
 
-Each comment goes through two steps, and the first one that answers wins:
+A pass places a `new`-side comment on a file whose entry changed, came or went,
+and every comment of the repository once its resolved base moved. An `old`-side
+comment is placed only when both entries name a base and the two differ: an
+entry of `null` — no changes, before or after — or a base that did not resolve
+names no sha, and without both there is nothing to say the base's text moved.
+A base mode or a scope changed with `review base` or a scope edit is no reason
+of its own to skip: each entry carries the sha it was read against, and the
+steps below read each side by its own. An orphaned comment is not placed at all.
 
-1. **Blame.** A line the base has is followed through git's own history: the
-   comment's line is taken back to its base line through the change set it was
-   on (a `new`-side line in a hunk by its `oldLine`, one outside every hunk by
-   the shift of the hunks above it; an inserted line has no base line and skips
-   this step), and blame of the file now says where git traces that base line
-   to. The answer is taken **only when the line it lands on reads exactly as
-   the anchor's `lineContent`**: a change set a rescan behind the file, or a
-   comment written against a stale `diff.json`, maps to the wrong base line,
-   and the check turns that into a fall-through instead of a move.
-2. **The text.** Every line of the file now is scored against the anchor:
+Each comment goes through three steps, and the first one that answers wins:
+
+1. **In place.** The anchored line and its three lines each way read exactly
+   where the comment is: it stays, and nothing else is asked. This comes first so
+   that blame, answering about a history the comment may not have been placed
+   on, cannot move a comment that is right onto a copy of its line — `}` closes
+   two functions of the test's file, and a comment on the first stays on it.
+2. **Blame.** A line the base has is followed through git's own history
+   (`blameFrom`, [02-git.md](02-git.md#blame)), and only when the tree the move
+   starts from is the tree the comment was put on: that tree — the base with the
+   entry's hunks laid over it (`newSideOf`), or the base itself for the old side
+   — must read the anchor's seven lines exactly at the comment's line. A comment
+   written from a `diff.json` older than its file fails that and skips blame. The
+   comment's line is taken back to a base line through the entry (a line in a
+   hunk by its `oldLine`, one outside every hunk by the shift of the hunks above
+   it; an inserted line has none and skips the step), and blame says where that
+   line is now. The landing is taken only when it reads exactly as the anchor's
+   `lineContent` and the mean similarity of the six lines around it to the
+   anchor's is at least **0.5** (`BLAME_CONTEXT`): an ignore-revs file, or a
+   block moved with `-M`, can attribute a line to a place the comment never was,
+   and the two checks make that a fall-through to the text rather than a move.
+3. **The text.** Every line of the file now is scored against the anchor:
    `similarity` is one less the edit distance over the longer line, with
    indentation and runs of spaces collapsed; a line under **0.6**
    (`LINE_SIMILARITY`) is not a candidate however well its context agrees, and a
    candidate scores `0.7 × its own similarity + 0.3 × the mean similarity of the
    three lines before and after it` against the anchor's `before` and `after`. The
    best candidate is taken when it scores at least **0.7** (`MATCH_SCORE`) and
-   no other comes within **0.1** (`MATCH_MARGIN`) of it. A comment whose line
-   and context are exactly where it already is stays there before any of this
-   is scored, so a file that holds the same seven lines twice does not orphan
-   the comment on the copy it was written on.
+   no other comes within **0.1** (`MATCH_MARGIN`) of it.
 
 The thresholds were set by the cases `tests/reanchor.test.ts` holds, one test
 each: a line with one token changed (`total(items)` to `sum(items)`, 0.81)
@@ -474,31 +497,70 @@ always found); two copies of the whole window are refused; and one copy with its
 context and one without are told apart by the context. A closing `  }` whose
 neighbours were all rewritten is the case blame is for: its text is on a dozen
 lines, the context of none agrees, and only blame knows which it is — the test
-with blame answering nothing orphans it.
+with blame answering nothing orphans it. `BLAME_CONTEXT` sits under what that
+case scores and over what a blame told to land on another function's `}`
+scores; the test with such a blame keeps the comment where the text puts it.
 
-A comment found moves: `line` becomes the line found, `endLine` keeps its
-distance from `line` (cut at the file's end), and the anchor is **captured
-again** there — from the change set after the move when it carries that line
-as the file reads it, otherwise from the file — so the next pass matches
-against the context the line has now. A comment found where it already was,
-with the same anchor, is not written at all.
+**A renamed file carries its comments.** When the entry after names the
+comment's file by another path — `git mv`, which git's diff reports as a rename —
+the comment's `path` becomes the new one and its line is placed in that file.
+Blame of a path HEAD does not have is git's refusal, so a rename not yet
+committed is placed by the text. A plain `mv` is not a rename to git: the old
+path is a deleted tracked file and the new one an untracked addition, the two
+never paired, so the comment is orphaned as on a deleted file. Following it
+would be rename detection of the tool's own (DA-42.5).
+
+**When the file cannot be read.** The comment is orphaned only when the change
+set after the write says the file is deleted, or when the file reads and none of
+the steps finds the line. A file that does not read while the change set still
+lists it — too large, binary — or that is absent without the change set saying
+so — an added file stashed away, a save caught between the rename and the
+write — is left as it is for this pass, and the next write that sees it places
+it. An added file that is deleted from disk looks the same as one stashed, so
+its comments stay where they are until a human resolves them. On the old side,
+a file the new base does not have is orphaned, and one it lists without content
+is left.
+
+**A range** keeps its length when the lines of the range, as the tree it was put
+on had them, read the same at the new start; one that did not move keeps its end
+while nothing known of it says otherwise. Otherwise its last line is placed on
+its own, by the same three steps, anchored on that tree's window around it and
+searched between the new start and as far as the file's growth could have pushed
+it — a line inserted inside a range grows it. When the end cannot be placed, the
+range is narrowed to the longest run from its start that still reads the same,
+and to the start line alone when that is all. Without the tree, what the anchor
+itself kept — the line and up to three after it — is all that says what the range
+read, so a longer range whose tree is unknown is narrowed to what that proves.
+
+A comment found moves: `path` and `line` are the place found, `endLine` as
+above, and the anchor is **captured again** there — from the change set after
+the move when it carries that line as the file reads it, otherwise from the file
+— so the next pass matches against the context the line has now. **Nothing is
+written when nothing but the anchor's `hunk` would change**: an edit elsewhere in
+the hunk moves its header and not the comment, and a write for it would bump
+`updatedAt` and wake every window for nothing. A pass that places nothing
+writes nothing at all.
 
 **A comment not found is `orphaned` and keeps everything else**: its `line`,
 `endLine` and `anchor` stay what they were, so the lost text is still there to
-show and to match a human's choice against. A file that is gone is not found.
-Only an **open** comment becomes orphaned: a resolved thread whose line is gone
-stays resolved where it was, because its place is history and its status is a
-human's verdict. **An orphaned comment is never placed again by a pass** — not
-even when its text comes back — and returns to `open` only through `reopen`
-with a `line`, which captures the anchor at that line the way `addComment`
-does and refuses a comment that is not on a line (`invalid-anchor`). Without a
-line, `reopen` of an orphaned comment is `anchor-orphaned` and writes nothing:
-opening it where it was would put the thread back on the wrong line in silence.
+show and to match a human's choice against. Only an **open** comment becomes
+orphaned. Two things are what the tool does today and **wait for the owner**
+(DA-42.4), and neither is a requirement of `docs/SPEC.md`: an orphaned comment
+is never placed again by a pass, even when its text comes back where it was; and
+a resolved thread whose line is gone stays resolved where it was.
 
-The placements are worked out outside the lock and written in one locked
-write. A comment whose side, lines, status or anchor changed between the read
-and the write — a human's `reopen --line`, a hand edit — keeps that write, and
-the pass leaves it out.
+**Only a human puts a comment back on a line** (`docs/SPEC.md` section 3,
+decision 8). `reopen` with a `line` captures the anchor at that line the way
+`addComment` does, and refuses a comment that is not on a line
+(`invalid-anchor`). **`reopen` without a line opens a line comment only where its
+anchor still reads**: an orphaned comment is `anchor-orphaned`, and so is a
+resolved one whose stored line and context are not found at its line by the text
+step — a thread that was orphaned and then resolved, or one resolved and then
+left behind by an edit, since a pass does not move a resolved thread it cannot
+place. The check reads the file through the caller's source; the CLI and the
+server both pass one, and the CLI reads the repository again first, so the
+comment has already moved with the pass when it is judged. Either refusal
+writes nothing.
 
 `anchorWarnings(comments)` is one warning per repository holding orphaned
 comments, shaped as a scan's warnings are: `{ path: <repo>, message: "2
@@ -516,8 +578,8 @@ reads, and with a `reopen` that no scan follows.
 shipped skills: a skill is advice, and an agent that never read it could still
 close a thread. `resolve` sets `resolvedAt` and `resolvedBy` from the caller;
 `reopen` clears both. `reopen` with a `line` also moves a line comment there
-first ([Re-anchoring](#re-anchoring)), and an orphaned comment is refused a
-reopen without one. A `note` on either is written into the thread as a reply
+first ([Re-anchoring](#re-anchoring)); without one, a line comment whose anchor
+no longer reads at its line — an orphaned one always — is refused. A `note` on either is written into the thread as a reply
 first — the on-disk format has no other place for it, and a status change with
 an unexplained reason is worse than one with a message.
 
@@ -548,20 +610,24 @@ to agree with.
 
 | Name | Meaning |
 |---|---|
+| `open` | `isOpen`: status `open` or `orphaned` |
 | `unanswered` | an **open** comment whose last message is from a human: no agent has answered |
 | `awaiting` | an **open** comment whose last message is from an agent: nobody has verified it |
 
+**An orphaned comment is open** wherever `docs/SPEC.md` counts or lists open
+comments (section 3, decision 8): it is a finding nobody has closed whose line
+was lost, not one that went away. So it is in the counters' `open`, in
+`unanswered` and `awaiting`, in the severity a scope is painted with, in the
+default `list` and `list --unanswered`, and in the default export, where its
+line says `· orphaned`; its own `status` is how a reader tells it apart.
+
 The last message of a thread is its last reply, or the comment itself when
-there are none. A resolved thread is neither, and neither is an orphaned one:
-it is not open, and an agent asked for what it has not answered is not handed
-a comment whose line nobody can find.
+there are none. A resolved thread is neither.
 
 `countReview(comments)` gives the counters of the whole review, of every
 repository that carries comments, and of every file inside them: `total`,
-`open`, `resolved`, `unanswered`, `awaiting`, and `severity`. `resolved` is
-counted, not taken as `total` less `open`: an orphaned comment is neither, so
-`total` is their sum plus the orphaned ones, and the UI's count of those is
-DA-43's. `severity` is the worst
+`open`, `resolved`, `unanswered`, `awaiting`, and `severity`. How many of the
+open ones are orphaned has no counter of its own yet (DA-42.2). `severity` is the worst
 severity **among the open comments** of that scope, `null` when none is open. A
 critical finding a human has already closed does not keep the file red.
 Repositories and files come sorted by name, by code point, so two calls on the
@@ -629,15 +695,12 @@ reader can paste back into `review base`.
 - The third step of re-anchoring, a model's proposal a human confirms, and the
   orphaned card of the UI (DA-43). Until then an orphaned comment is placed
   again only by `reopen --line`.
-- Re-anchoring runs while a server watches. An edit made with no server running
-  is caught up when a server next reads the session whole — at its start, or
-  when `current` moves to it — and only against a `diff.json` for the same base
-  and scope; a CLI command never re-anchors, and a `comment` or `diff` run after
-  such an edit and before the server starts rewrites `diff.json` to the edited
-  tree, after which nothing says the lines moved and the comments stay where
-  they were (DA-42.1).
+- An edit made while nothing rewrites `diff.json` — no server running, and no
+  `diff` or `comment` since — moves no comment until something does; then the
+  write that replaces the entry places them against the tree it replaced.
 - A comment written against a `diff.json` older than its file anchors to text
-  the file may not have had; blame's check turns that into the text step rather
-  than a wrong move, and the text step decides.
+  the file may not have had; the check that the tree before is the tree the
+  comment was put on turns that into the text step rather than a wrong move.
+- A plain `mv` is not followed (DA-42.5).
 - Nothing re-reads `diff.json` while a comment is being written: the anchor is
   taken from the cache as it stood, so a scan that runs in between is not seen.

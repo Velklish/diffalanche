@@ -1,12 +1,21 @@
 /** DA-42: comments stay on their lines after code edits, by blame and then by their text, and a
  * comment whose place is gone is `orphaned` and kept (`docs/SPEC.md` section 5, Phase 3). */
 import { execFileSync } from "node:child_process";
-import { mkdirSync, mkdtempSync, readFileSync, rmSync, writeFileSync } from "node:fs";
+import {
+  mkdirSync,
+  mkdtempSync,
+  readFileSync,
+  renameSync,
+  rmSync,
+  utimesSync,
+  writeFileSync,
+} from "node:fs";
 import { devNull, tmpdir } from "node:os";
 import { join } from "node:path";
 import { afterAll, beforeAll, beforeEach, describe, expect, it } from "vitest";
 import { run } from "../src/cli/run.ts";
 import {
+  anchorSources,
   filterChange,
   refreshRepository,
   replaceRepository,
@@ -20,6 +29,7 @@ import {
   MATCH_MARGIN,
   MATCH_SCORE,
   similarity,
+  windowOf,
 } from "../src/core/domain/anchors.ts";
 import type { AnchorSources } from "../src/core/domain/index.ts";
 import {
@@ -28,6 +38,7 @@ import {
   countReview,
   createSession,
   DomainError,
+  exportMarkdown,
   list,
   reanchorRepository,
   reopen,
@@ -43,17 +54,15 @@ import {
   dataDirOf,
   readComments,
   readDiffCache,
+  readReview,
+  updateComments,
   writeDiffCache,
 } from "../src/core/storage/index.ts";
 import { parseComments, toJson } from "../src/core/storage/schema.ts";
 import type { WatcherEvent } from "../src/core/watcher/index.ts";
-import {
-  anchorSources,
-  createActivityLog,
-  createEventBus,
-  startWatcher,
-} from "../src/core/watcher/index.ts";
+import { createActivityLog, createEventBus, startWatcher } from "../src/core/watcher/index.ts";
 import type { UiAssets } from "../src/server/assets.ts";
+import { comment as fixtureComment } from "./helpers/session.ts";
 
 const REPO = "repos/group/calc";
 const FILE = "src/calc.ts";
@@ -176,6 +185,64 @@ async function stored(id: string): Promise<Comment> {
   const found = (await readComments(dataDir, session)).find((one) => one.id === id);
   if (found === undefined) throw new Error(`no comment ${id}`);
   return found;
+}
+
+function commitAll(dir: string, message: string): void {
+  git(dir, ["-c", "user.email=f@example.com", "-c", "user.name=f", "commit", "-qam", message]);
+}
+
+type Isolated = {
+  root: string;
+  dir: string;
+  dataDir: string;
+  config: Config;
+  write: (lines: string[], path?: string) => void;
+  commentOn: (line: number, path?: string) => Promise<Comment>;
+  /** What `comment`, `diff` and a rescan all do: the repository read again, the pass after it. */
+  refresh: () => ReturnType<typeof refreshRepository>;
+  stored: (id: string) => Promise<Comment>;
+  cleanup: () => void;
+};
+
+/** A root of its own, for a test that moves HEAD, the index or the stash, which the shared
+ * repository's other tests stand on. The session `iso` is scanned on `WORKTREE`. */
+async function isolatedRoot(): Promise<Isolated> {
+  const at = mkdtempSync(join(tmpdir(), "diffalanche-reanchor-iso-"));
+  mkdirSync(join(at, ".diffalanche"), { recursive: true });
+  writeFileSync(join(at, ".diffalanche", "config.json"), toJson({ roots: ["repos"], depth: 2 }));
+  const dir = join(at, REPO);
+  mkdirSync(join(dir, "src"), { recursive: true });
+  writeFileSync(join(dir, FILE), `${BASE.join("\n")}\n`);
+  git(dir, ["init", "-q", "-b", "main"]);
+  git(dir, ["add", "-A"]);
+  commitAll(dir, "base");
+  writeFileSync(join(dir, FILE), `${WORKTREE.join("\n")}\n`);
+  const data = dataDirOf(at);
+  const own = await loadConfig({ root: at });
+  await createSession(data, "iso", { mode: "head" });
+  await writeDiffCache(data, "iso", (await scanReview(own, { mode: "head" })).cache);
+  const stored = async (id: string) => {
+    const found = (await readComments(data, "iso")).find((one) => one.id === id);
+    if (found === undefined) throw new Error(`no comment ${id}`);
+    return found;
+  };
+  return {
+    root: at,
+    dir,
+    dataDir: data,
+    config: own,
+    write: (lines, path = FILE) => writeFileSync(join(dir, path), `${lines.join("\n")}\n`),
+    commentOn: (line, path = FILE) =>
+      addComment(
+        data,
+        "iso",
+        { repo: REPO, path, line, severity: "warning", body: `line ${line}`, ...HUMAN },
+        { source: fileSourceAt(at) },
+      ),
+    refresh: () => refreshRepository(own, "iso", { mode: "head" }, REPO, null),
+    stored,
+    cleanup: () => rmSync(at, { recursive: true, force: true }),
+  };
 }
 
 beforeAll(async () => {
@@ -512,10 +579,9 @@ describe("blame", () => {
     ]);
   });
 
-  it("reads the working tree against the base and writes nothing to the repository", async () => {
+  it("reads the working tree against the base", async () => {
     write([...HEADER, ...WORKTREE]);
     const dir = join(root, REPO);
-    const index = readFileSync(join(dir, ".git", "index"));
     const head = git(dir, ["rev-parse", "HEAD"]).trim();
     const lines = await blameFrom(dir, FILE, head, "worktree");
     expect(lines?.get(1)).toBe(6);
@@ -523,7 +589,45 @@ describe("blame", () => {
     expect(lines?.get(14)).toBe(24);
     // What the header and `discount` added is nobody's in the base.
     expect([...(lines?.values() ?? [])]).not.toContain(1);
-    expect(readFileSync(join(dir, ".git", "index")).equals(index)).toBe(true);
+  });
+
+  it("writes nothing to the index, even with a stat-dirty file a refresh would rewrite", async () => {
+    // A repository of its own, as 02-git.md says a guard must be built: a tracked file whose
+    // content is unchanged and whose mtime is old, so git would re-stat it and write.
+    const iso = await isolatedRoot();
+    try {
+      writeFileSync(join(iso.dir, "same.txt"), "unchanged\n");
+      git(iso.dir, ["add", "same.txt"]);
+      commitAll(iso.dir, "same");
+      const old = new Date("2020-01-01T00:00:00Z");
+      utimesSync(join(iso.dir, "same.txt"), old, old);
+      utimesSync(join(iso.dir, FILE), old, old);
+      // `diff-files` compares the stat and reads nothing into the index: it proves the setup.
+      expect(() => git(iso.dir, ["diff-files", "--quiet"])).toThrow();
+      const index = readFileSync(join(iso.dir, ".git", "index"));
+      const head = git(iso.dir, ["rev-parse", "HEAD"]).trim();
+      expect(await blameFrom(iso.dir, FILE, head, "worktree")).not.toBeNull();
+      expect(readFileSync(join(iso.dir, ".git", "index")).equals(index)).toBe(true);
+    } finally {
+      iso.cleanup();
+    }
+  });
+
+  it("has no answer when blame refuses, and the pass goes on by the text", async () => {
+    const iso = await isolatedRoot();
+    try {
+      const added = await iso.commentOn(4);
+      // A missing ignore-revs file makes every blame exit 128.
+      git(iso.dir, ["config", "blame.ignoreRevsFile", "no-such-file"]);
+      const head = git(iso.dir, ["rev-parse", "HEAD"]).trim();
+      expect(await blameFrom(iso.dir, FILE, head, "worktree")).toBeNull();
+      iso.write([...HEADER, ...WORKTREE]);
+      const outcome = await iso.refresh();
+      expect(outcome.moved).toEqual([added.id]);
+      expect(await iso.stored(added.id)).toMatchObject({ line: 9, status: "open" });
+    } finally {
+      iso.cleanup();
+    }
   });
 
   it("annotates the working tree when commits sit between the base and HEAD", async () => {
@@ -599,10 +703,27 @@ describe("the orphaned status", () => {
     expect(parseComments("comments.json", text).comments[0]?.status).toBe("orphaned");
   });
 
-  it("is neither open nor resolved in the counters, nor unanswered", async () => {
+  it("counts as open, unanswered and in the severity paint, and is not resolved", async () => {
     await orphan();
     const counters = countReview(await list(dataDir, session)).counters;
-    expect(counters).toMatchObject({ total: 1, open: 0, resolved: 0, unanswered: 0 });
+    expect(counters).toMatchObject({
+      total: 1,
+      open: 1,
+      resolved: 0,
+      unanswered: 1,
+      awaiting: 0,
+      severity: "warning",
+    });
+  });
+
+  it("is in the export of the open comments, marked", async () => {
+    const added = await orphan();
+    const listed = await list(dataDir, session, { status: "open" });
+    expect(listed.map((one) => one.id)).toEqual([added.id]);
+    const review = await readReview(dataDir, session);
+    const text = exportMarkdown(review, listed);
+    expect(text).toContain("1 open comment");
+    expect(text).toContain(`- **warning** · \`${FILE}:15\` · orphaned`);
   });
 
   it("is one warning per repository, counted", () => {
@@ -680,13 +801,18 @@ describe("the CLI", () => {
     return added;
   }
 
-  it("lists orphaned comments by their status, and not among the open ones", async () => {
+  it("lists orphaned comments among the open and unanswered ones, and alone by their status", async () => {
     const added = await orphan();
     const open = await commentOn(4);
     const orphaned = JSON.parse((await invoke(["list", "--status", "orphaned", "--json"])).out);
     expect(orphaned.map((one: Comment) => one.id)).toEqual([added.id]);
     const listed = JSON.parse((await invoke(["list", "--json"])).out);
-    expect(listed.map((one: Comment) => one.id)).toEqual([open.id]);
+    expect(listed.map((one: Comment) => [one.id, one.status])).toEqual([
+      [added.id, "orphaned"],
+      [open.id, "open"],
+    ]);
+    const unanswered = JSON.parse((await invoke(["list", "--unanswered", "--json"])).out);
+    expect(unanswered.map((one: Comment) => one.id)).toEqual([added.id, open.id]);
   });
 
   it("says in the warnings of diff how many comments lost their anchor", async () => {
@@ -716,6 +842,256 @@ describe("the CLI", () => {
     const refused = await invoke(["reopen", added.id, "--line", "16"]);
     expect(refused.code).toBe(1);
     expect((await stored(added.id)).status).toBe("orphaned");
+  });
+});
+
+/** A line comment put on disk as a writer would, its anchor read off `lines` at `line`. */
+async function placedOn(lines: string[], line: number): Promise<string> {
+  const anchor = windowOf(lines, line);
+  if (anchor === null) throw new Error(`no line ${line}`);
+  const id = `c_t${line}x${sessions}`;
+  await updateComments(dataDir, session, (comments) => {
+    comments.push(
+      fixtureComment(id, { repo: REPO, path: FILE, line, anchor: { ...anchor, hunk: "@@" } }),
+    );
+  });
+  return id;
+}
+
+describe("what a pass trusts", () => {
+  it("keeps a comment in place rather than following blame onto a copy of its line", async () => {
+    // `}` closes `total` at 7 and `average` at 12; five lines go on top, and the comment is put
+    // on the new tree's 12 — `total`'s — while diff.json still describes the tree before.
+    const tree = [...HEADER, ...WORKTREE];
+    write(tree);
+    const id = await placedOn(tree, 12);
+    const outcome = await edit(tree);
+    expect(outcome.moved).toEqual([]);
+    expect(await stored(id)).toMatchObject({ line: 12, status: "open" });
+  });
+
+  it("asks blame nothing when the tree it maps from is not the one the comment was put on", async () => {
+    // The same stale diff.json, and one more line on top: blame from that tree would land on
+    // `average`'s brace; the text finds `total`'s one line down.
+    const tree = [...HEADER, ...WORKTREE];
+    write(tree);
+    const id = await placedOn(tree, 12);
+    await edit(["// one more", ...tree]);
+    expect(await stored(id)).toMatchObject({ line: 13, status: "open" });
+  });
+
+  it("does not take a blame landing whose context disagrees with the anchor", async () => {
+    const brace = await commentOn(7);
+    // What an ignore-revs file can make blame say: `total`'s brace is `average`'s now.
+    const lying: AnchorSources = { ...sources, blame: async () => new Map([[7, 17]]) };
+    await edit([...HEADER, ...WORKTREE], lying);
+    expect(await stored(brace.id)).toMatchObject({ line: 12, status: "open" });
+  });
+});
+
+describe("a file that changed its name or went away", () => {
+  it("carries a comment into the file a `git mv` renamed", async () => {
+    const iso = await isolatedRoot();
+    try {
+      const added = await iso.commentOn(15);
+      git(iso.dir, ["mv", FILE, "src/money.ts"]);
+      // A rename that changed lines too, which the parser used to read as a modified new file.
+      const seen = await readRepositoryChange(iso.root, REPO, { mode: "head" }, { hunks: true });
+      expect(seen.files.map((one) => [one.path, one.status, one.oldPath])).toEqual([
+        ["src/money.ts", "renamed", FILE],
+      ]);
+      const outcome = await iso.refresh();
+      expect(outcome.moved).toEqual([added.id]);
+      expect(await iso.stored(added.id)).toMatchObject({
+        path: "src/money.ts",
+        line: 15,
+        status: "open",
+      });
+    } finally {
+      iso.cleanup();
+    }
+  });
+
+  it("reads a plain mv as git does, a deletion and an untracked file, and orphans the comment", async () => {
+    const iso = await isolatedRoot();
+    try {
+      const added = await iso.commentOn(15);
+      renameSync(join(iso.dir, FILE), join(iso.dir, "src/money.ts"));
+      const change = await readRepositoryChange(iso.root, REPO, { mode: "head" }, { hunks: true });
+      expect(change.files.map((one) => [one.path, one.status, one.oldPath])).toEqual([
+        [FILE, "deleted", null],
+        ["src/money.ts", "added", null],
+      ]);
+      const outcome = await iso.refresh();
+      expect(outcome.orphaned).toEqual([added.id]);
+    } finally {
+      iso.cleanup();
+    }
+  });
+
+  it("leaves a comment alone while its added file is stashed, and finds it there after the pop", async () => {
+    const iso = await isolatedRoot();
+    try {
+      iso.write(
+        ["export const a = 1;", "export const b = 2;", "export const c = 3;"],
+        "src/extra.ts",
+      );
+      await iso.refresh();
+      const added = await iso.commentOn(2, "src/extra.ts");
+      // A tracked file stashed back to its base reads, without the line: that one is orphaned,
+      // and stays so after the pop — DA-42.4's first question.
+      const tracked = await iso.commentOn(15);
+      git(iso.dir, ["add", "src/extra.ts"]);
+      git(iso.dir, ["-c", "user.email=f@example.com", "-c", "user.name=f", "stash", "-q"]);
+      await iso.refresh();
+      expect(await iso.stored(added.id)).toMatchObject({ line: 2, status: "open" });
+      expect((await iso.stored(tracked.id)).status).toBe("orphaned");
+      git(iso.dir, ["stash", "pop", "-q"]);
+      await iso.refresh();
+      expect(await iso.stored(added.id)).toMatchObject({ line: 2, status: "open" });
+      expect((await iso.stored(tracked.id)).status).toBe("orphaned");
+    } finally {
+      iso.cleanup();
+    }
+  });
+
+  it("leaves a comment alone when its file cannot be read though the change set lists it", async () => {
+    const added = await commentOn(15);
+    const unread: AnchorSources = {
+      ...sources,
+      source: async (repo, path, rev) =>
+        rev === "worktree" ? null : sources.source(repo, path, rev),
+    };
+    const outcome = await edit([...HEADER, ...WORKTREE], unread);
+    expect(outcome).toEqual({ moved: [], orphaned: [] });
+    expect(await stored(added.id)).toMatchObject({ line: 15, status: "open" });
+  });
+});
+
+describe("what a pass writes", () => {
+  it("writes nothing, and leaves updatedAt, when only the hunk header of an anchor moved", async () => {
+    await commentOn(15);
+    const file = join(dataDir, "reviews", session, "comments.json");
+    const bytes = readFileSync(file, "utf8");
+    const updated = (await readReview(dataDir, session)).updatedAt;
+    // Line 10 is outside the comment's window and inside its hunk, whose header now starts higher.
+    const edited = WORKTREE.map((line, at) => (at === 9 ? "  if (!items.length) return 0;" : line));
+    const outcome = await edit(edited);
+    expect(outcome).toEqual({ moved: [], orphaned: [] });
+    expect(readFileSync(file, "utf8")).toBe(bytes);
+    expect((await readReview(dataDir, session)).updatedAt).toBe(updated);
+  });
+
+  it("grows a range when a line is inserted inside it", async () => {
+    const range = await commentOn(14, { endLine: 17 });
+    const grown = [...WORKTREE.slice(0, 15), "  // the rate is a fraction", ...WORKTREE.slice(15)];
+    await edit(grown);
+    expect(await stored(range.id)).toMatchObject({ line: 14, endLine: 18, status: "open" });
+  });
+
+  it("narrows a range to what still reads the same when its end is gone", async () => {
+    const range = await commentOn(14, { endLine: 17 });
+    const cut = [...WORKTREE.slice(0, 15), "  return 0;", ...WORKTREE.slice(17)];
+    await edit(cut);
+    expect(await stored(range.id)).toMatchObject({ line: 14, endLine: 15, status: "open" });
+  });
+
+  it("leaves an old-side comment alone when the entry after names no base", async () => {
+    const old = await commentOn(10, { side: "old" });
+    const cached = await readDiffCache(dataDir, session);
+    const before = cached?.repositories.find((one) => one.path === REPO) ?? null;
+    write(BASE);
+    const outcome = await reanchorRepository(
+      dataDir,
+      session,
+      { repo: REPO, before, after: null },
+      sources,
+    );
+    expect(outcome).toEqual({ moved: [], orphaned: [] });
+    expect(await stored(old.id)).toMatchObject({ line: 10, side: "old", status: "open" });
+  });
+});
+
+describe("the writers of diff.json", () => {
+  it("moves the comments when `diff` rewrites the change set with no server running", async () => {
+    const added = await commentOn(15);
+    write([...HEADER, ...WORKTREE]);
+    const printed = await run(["diff", "--root", root, "--review", session], noUi, {
+      out: () => {},
+      err: () => {},
+    });
+    expect(printed).toBe(0);
+    expect(await stored(added.id)).toMatchObject({ line: 20, status: "open" });
+  });
+
+  it("moves the comments when `comment` reads the repository again before it writes", async () => {
+    const added = await commentOn(15);
+    write([...HEADER, ...WORKTREE]);
+    const code = await run(
+      [
+        ...["comment", "--repo", REPO, "--path", FILE, "--line", "4", "--severity", "nit"],
+        ...["--body", "another", "--root", root, "--review", session],
+      ],
+      noUi,
+      { out: () => {}, err: () => {} },
+    );
+    expect(code).toBe(0);
+    expect(await stored(added.id)).toMatchObject({ line: 20, status: "open" });
+  });
+
+  it("writes diff.json and exits 0 with a warning when comments.json cannot be read", async () => {
+    await commentOn(15);
+    const file = join(dataDir, "reviews", session, "comments.json");
+    writeFileSync(file, "{ not json");
+    write([...HEADER, ...WORKTREE]);
+    let err = "";
+    const code = await run(["diff", "--root", root, "--review", session], noUi, {
+      out: () => {},
+      err: (text) => {
+        err += text;
+      },
+    });
+    expect(code).toBe(0);
+    expect(err).toContain("comments.json: cannot be read, so no comment was re-anchored");
+    const cache = await readDiffCache(dataDir, session);
+    const lines = cache?.repositories[0]?.files[0]?.hunks[0]?.lines.map((one) => one.content);
+    expect(lines).toContain("// Prices are in cents.");
+    expect(readFileSync(file, "utf8")).toBe("{ not json");
+  });
+});
+
+describe("reopening", () => {
+  async function orphan(): Promise<Comment> {
+    const added = await commentOn(15);
+    const rewritten = WORKTREE.map((line, at) =>
+      at === 14 ? '  throw new Error("discounts are not supported");' : line,
+    );
+    await edit(rewritten);
+    return added;
+  }
+
+  it("needs a line for a comment that was orphaned and then resolved", async () => {
+    const added = await orphan();
+    await resolve(dataDir, session, added.id, HUMAN);
+    const refusal = reopen(dataDir, session, added.id, HUMAN, { source: fileSourceAt(root) });
+    await expect(refusal).rejects.toMatchObject({ code: "anchor-orphaned" });
+    expect((await stored(added.id)).status).toBe("resolved");
+  });
+
+  it("needs a line for a resolved comment whose line is gone, and none for one in place", async () => {
+    const gone = await commentOn(15);
+    const kept = await commentOn(4);
+    await resolve(dataDir, session, gone.id, HUMAN);
+    await resolve(dataDir, session, kept.id, HUMAN);
+    await edit(WORKTREE.map((line, at) => (at === 14 ? "  throw new Error();" : line)));
+    const options = { source: fileSourceAt(root) };
+    await expect(reopen(dataDir, session, gone.id, HUMAN, options)).rejects.toMatchObject({
+      code: "anchor-orphaned",
+    });
+    expect(await reopen(dataDir, session, kept.id, HUMAN, options)).toMatchObject({
+      status: "open",
+      line: 4,
+    });
   });
 });
 
@@ -767,7 +1143,7 @@ describe("the watcher", () => {
     });
   }, 60_000);
 
-  it("re-anchors an edit a CLI command wrote into diff.json before the rescan came", async () => {
+  it("finds the comments moved when a CLI command rewrote diff.json before the rescan came", async () => {
     const moving = await commentOn(15);
     await useSession(dataDir, session);
     const found = await scan(root, { roots: config.roots, depth: config.depth, exclude: [] });

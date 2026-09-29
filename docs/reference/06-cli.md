@@ -425,29 +425,51 @@ the label after the severity the way the UI marks the thread: `warning (auto)`,
 `list --unanswered` is the open threads whose last message is from a human: what
 an agent has not answered yet. A reply from an agent takes a thread out of it.
 
-**`list --status orphaned`** is the line comments re-anchoring could not place
-after the code changed ([04-domain.md](04-domain.md#re-anchoring)): each keeps
-the `line` and the `anchor` it had, so `show` prints the text that was lost. An
-orphaned comment is not `open`, so the default `list` and `--unanswered` leave
-it out: an agent asked what to fix is not handed a finding whose line nobody
-can find. `export --status all` carries it.
+**An orphaned comment is an open one** (`docs/SPEC.md` section 3, decision 8):
+the line comments re-anchoring could not place after the code changed
+([04-domain.md](04-domain.md#re-anchoring)) are in the default `list`, in
+`--unanswered` while no agent has answered them, and in the default `export`,
+where the line says `· orphaned`. Each keeps the `line` and the `anchor` it had,
+so `show` prints the text that was lost, and its `status` says `orphaned` in
+`list --json`: an agent finds the code by that text, not by the line number.
+**`list --status orphaned`** is those alone; `--status open` is every open one,
+orphaned ones included.
 
 **`reopen --line <n> [--end-line <m>]`** is how a human puts a comment back on a
-line: the comment's repository is read again, as `comment` reads it, the anchor
-is captured at `<n>` on the comment's own side from the change set or the file,
-and the thread opens there — `c_7f3k2q is open again on repos/group/alpha/file.txt:6`.
-An orphaned comment reopened without `--line` is exit code 1 with
-`anchor-orphaned`, naming the flag, and nothing is written; opening it where it
-was would put it back on the line it lost. `--line` on a comment above a line —
-a file, a repository, the review — is exit code 1 with `invalid-anchor`, and
+line: the anchor is captured at `<n>` on the comment's own side from the change
+set or the file, and the thread opens there — `c_7f3k2q is open again on
+repos/group/alpha/file.txt:6`. **`reopen` of a line comment reads its repository
+again first**, as `comment` does, with or without `--line`: the rewrite of
+`diff.json` moves every comment of what changed, so the thread is judged where it
+is now. **Without `--line`, a line comment opens only where its anchor still
+reads**: an orphaned comment is exit code 1 with `anchor-orphaned`, naming the
+flag, and so is a resolved one whose line and context are not found at its line
+any more — orphaned and then resolved, or resolved and then left behind by an
+edit. Nothing is written by either. `--line` on a comment above a line — a file,
+a repository, the review — is exit code 1 with `invalid-anchor`, and
 `--end-line` without `--line` is a usage error. With a role other than `human`
 nothing is read, not even the repository: the refusal is the domain's, as for
 every `reopen`.
 
+**Every command that rewrites `diff.json` moves the comments.** `diff`,
+`comment` and `reopen` write the change set through `writeChangeSet`
+([02-git.md](02-git.md#writing-the-change-set)), which places the comments of
+every repository whose entry it replaced before the command goes on, so an edit
+made with no server running is followed by the next command that reads the
+repository — not by a server that starts later against a `diff.json` a command
+already rewrote.
+
 `diff` counts the orphaned comments into its warnings — `warning:
 repos/group/alpha: 2 comments lost their anchor` on standard error, the same
 entry in `--json`'s `warnings` — and writes `diff.json` with the scan's own list,
-which is what the file is a cache of.
+which is what the file is a cache of. **A `comments.json` that cannot be read is a
+warning of `diff`, not its failure**: the change set is written, no comment is
+moved, and the warning names the file relative to the root —
+`warning: .diffalanche/reviews/alpha/comments.json: cannot be read, so no comment
+was re-anchored and orphans are not counted: …` — on standard error, or in
+`--json`'s `warnings`, where `--repo` does not narrow it away. Exit code 0: the
+command did what it is for, and the other commands that read that file still
+refuse it by name.
 
 `list`, `show`, and `export` answer inside the scope of the session they run
 against, and so do `reply`, `resolve`, and `reopen`: a comment outside it is not

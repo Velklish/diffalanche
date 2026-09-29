@@ -306,14 +306,17 @@ before. `review scope` prints one; `review scope set` replaces it, `review scope
 add` and `review scope remove` change it, and a replacement or removal that
 would delete comments needs `--drop-comments`.
 
-While `serve` runs, a line comment follows its line when the code around it is
-edited: by `git blame` where the line is one the base has, then by its stored
-text and context. An open comment whose line cannot be found that way — the
-line rewritten past recognition, two equally good places, the file gone — is
-marked `orphaned` and keeps its old place and text; `diff` and the UI warn
-`N comments lost their anchor` for its repository, `list --status orphaned`
-lists them, and `reopen <id> --role human --line <n>` puts one back on the line
-a human chooses. Nothing moves an orphaned comment on its own.
+A line comment follows its line when the code around it is edited, whenever
+the change set is read again — by `serve` as files change, and by `diff`,
+`comment` and `reopen` without a server: it stays when its line and context are
+where it is, then moves by `git blame` where the line is one the base has, then
+by its stored text and context. An open comment whose line cannot be found that
+way — the line rewritten past recognition, two equally good places, the file
+deleted — is marked `orphaned` and keeps its old place and text. It is still an
+open comment: `list` and `list --unanswered` return it with its `status`, `diff`
+and the UI warn `N comments lost their anchor` for its repository, `list --status
+orphaned` lists those alone, and `reopen <id> --role human --line <n>` puts one
+back on the line a human chooses.
 
 Comments are signed `--author agent` and `--role agent` unless told otherwise,
 and only `--role human` may `resolve` or `reopen` a thread, or `review close` or

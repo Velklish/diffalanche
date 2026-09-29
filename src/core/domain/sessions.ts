@@ -18,6 +18,7 @@ import {
   updateSession,
   writeCurrent,
 } from "../storage/index.ts";
+import { isOpen } from "./counters.ts";
 import { DomainError } from "./errors.ts";
 import { assertHuman } from "./roles.ts";
 import type { SessionList, SessionSummary } from "./types.ts";
@@ -233,7 +234,7 @@ export async function listSessions(dataDir: string): Promise<SessionList> {
       createdAt: review.createdAt,
       updatedAt: review.updatedAt,
       current: name === current,
-      open: comments.filter((comment) => comment.status === "open").length,
+      open: comments.filter(isOpen).length,
       resolved: comments.filter((comment) => comment.status === "resolved").length,
       repositories: diff === null ? null : diff.repositories.length,
     });

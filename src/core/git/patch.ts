@@ -207,6 +207,8 @@ function headerPaths(patch: string): PatchPaths {
     else if (line.startsWith("new file mode ")) status = "added";
     else if (line.startsWith("deleted file mode ")) status = "deleted";
   }
+  // The parser types a rename that also changed lines as `modify`: the header is what says it.
+  if (status === null && from !== undefined && to !== undefined) status = "renamed";
   if (old !== undefined || renamed !== undefined) {
     return { old: old ?? null, new: renamed ?? null, status };
   }

@@ -108,10 +108,10 @@ reader runs today are the table of `docs/reference/02-git.md`.
 |---|---|---|
 | `core.fsmonitor` | yes — `diff`, `ls-files`, `check-ignore` | `-c core.fsmonitor=false` |
 | `diff.external` | yes — `diff` | `--no-ext-diff`, and `-c diff.external=` |
-| `diff.<driver>.textconv` | yes — `diff` | `--no-textconv`, and the enumerated pin |
+| `diff.<driver>.textconv` | yes — `diff`, `blame` | `--no-textconv`, and the enumerated pin |
 | `diff.<driver>.command` | yes — `diff`, as the path's external diff driver | `--no-ext-diff`, and the enumerated pin |
-| `filter.<driver>.clean` | yes — `diff` reads the working tree through it | the enumerated pin |
-| `filter.<driver>.process` | yes — `diff`, and it is tried before `.clean`; this is git-lfs's path | the enumerated pin |
+| `filter.<driver>.clean` | yes — `diff` and `blame` read the working tree through it | the enumerated pin |
+| `filter.<driver>.process` | yes — `diff` and `blame`, and it is tried before `.clean`; this is git-lfs's path | the enumerated pin |
 | `filter.<driver>.smudge` | no — only commands that write a working tree | the enumerated pin |
 | `filter.<driver>.required` | it decides what an emptied filter costs: skipped, or fatal | the enumerated pin |
 | `merge.<driver>.driver` | no — the reader never merges | the enumerated pin |

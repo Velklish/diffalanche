@@ -8,6 +8,7 @@ import {
   sameBase,
   sameScope,
   scanReview,
+  writeChangeSet,
 } from "../core/change-set.ts";
 import type { Config } from "../core/config/index.ts";
 import {
@@ -20,13 +21,7 @@ import {
 } from "../core/domain/index.ts";
 import { readRepositoryChange, scan } from "../core/index.ts";
 import type { Base, DiffCache, Review } from "../core/storage/index.ts";
-import {
-  readDiffCache,
-  readReview,
-  sessionDir,
-  withLock,
-  writeDiffCache,
-} from "../core/storage/index.ts";
+import { readDiffCache, readReview, sessionDir, withLock } from "../core/storage/index.ts";
 import type {
   FileChange,
   FileStatus,
@@ -446,14 +441,13 @@ async function changeSet(
   return rebuild(config, session, review);
 }
 
-/** Reads every repository of the scope and writes `diff.json`; the hunks stay in the
- * file, where anchor capture is the one reader that needs them. */
+/** Reads every repository of the scope and writes `diff.json`, re-anchoring what it moved; the
+ * hunks stay in the file, where anchor capture is the one reader that needs them. */
 async function rebuild(config: Config, session: string, review: Review): Promise<DiffCache> {
   const { cache } = await scanReview(config, review.base, review.scope);
-  await withLock(sessionDir(config.dataDir, session), async (held) => {
-    await held.assertHeld();
-    await writeDiffCache(config.dataDir, session, cache);
-  });
+  await withLock(sessionDir(config.dataDir, session), (held) =>
+    writeChangeSet(config, session, held, cache),
+  );
   return cache;
 }
 

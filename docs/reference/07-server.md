@@ -255,7 +255,10 @@ set is the watcher, and the watcher rescans one session — the current one
 session the watcher follows and reads the working tree for every other one. The
 cost of opening a task is its scope's repositories rather than the root's, and
 the read is written back, so anchor capture reads a file that says what the
-screen says ([04-domain.md](04-domain.md)).
+screen says ([04-domain.md](04-domain.md)). The write goes through
+`writeChangeSet` as every writer's does, so it moves the task's comments with
+the entries it replaces before the document reads them
+([04-domain.md](04-domain.md#re-anchoring)).
 
 **Nor is the followed session's cache fresh when the server starts.** The
 exemption holds while the server runs, because only then is the watcher
@@ -849,7 +852,7 @@ Every refusal is the domain's own code and message
 |---|---|
 | `no-current-session`, `no-such-session`, `no-such-comment` | 404 |
 | `scope-has-comments` | 409, with `count` and `comments` beside the message |
-| every other `DomainError` | 400 — `anchor-orphaned` among them: `POST /api/comments/:id/reopen` takes no line yet, so an orphaned comment cannot be reopened from the page until DA-43 |
+| every other `DomainError` | 400 — `anchor-orphaned` among them: `POST /api/comments/:id/reopen` takes no line yet, and reads the file to see that a line comment's anchor still reads at its line, so an orphaned comment, or a resolved one left behind by an edit, cannot be reopened from the page until DA-43 |
 | a file of the data directory that cannot be read | 500, `error: "storage"` |
 | the embedding model is not in the user cache, is being put in place, or does not run on this platform; its process could not load it or ended | 503, `error: "model"` |
 

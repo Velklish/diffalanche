@@ -22,7 +22,7 @@ export type LockOptions = {
 
 /** A body that outlives `staleMs` can lose the lock, so a writing body calls `assertHeld` right
  * before the write and is refused rather than overwriting somebody else's work. */
-type Lock = {
+export type Lock = {
   assertHeld: () => Promise<void>;
 };
 

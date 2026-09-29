@@ -6,7 +6,7 @@ import { mkdir, readdir, readFile, rename, rm, stat } from "node:fs/promises";
 import { resolve } from "node:path";
 import { writeFileAtomic } from "./atomic.ts";
 import { NoSuchSessionError, StorageError } from "./errors.ts";
-import type { LockOptions } from "./lock.ts";
+import type { Lock, LockOptions } from "./lock.ts";
 import { withLock } from "./lock.ts";
 import { parseComments, parseDiffCache, parseReview, toJson } from "./schema.ts";
 import type { Comment, DiffCache, Review, SessionListing } from "./types.ts";
@@ -14,6 +14,7 @@ import { SCHEMA_VERSION } from "./types.ts";
 
 export { NoSuchSessionError, StorageError } from "./errors.ts";
 
+export type { Lock } from "./lock.ts";
 export { withLock } from "./lock.ts";
 
 export type {
@@ -275,6 +276,9 @@ type SessionDraft = {
 type UpdateSessionOptions = LockOptions & {
   /** The metadata to start from when the session is being created. */
   create?: Review;
+  /** The session's lock, already held by the caller: the write joins that hold rather than
+   * waiting on itself (re-anchoring writes inside the hold of the `diff.json` it follows). */
+  held?: Lock;
 };
 
 /** The one write path of a session's files: read, changed and written under its lock, with
@@ -285,7 +289,7 @@ export async function updateSession<T>(
   change: (draft: SessionDraft) => T | Promise<T>,
   options: UpdateSessionOptions = {},
 ): Promise<T> {
-  const { create, ...lock } = options;
+  const { create, held: holding, ...lock } = options;
   const path = reviewPath(dataDir, name);
   // Before the lock, so a mistyped name does not leave an empty session
   // directory behind that every later listing warns about.
@@ -295,46 +299,44 @@ export async function updateSession<T>(
 
   // A writer of a session that is there makes no directory: one deleted meanwhile stays deleted.
   if (create !== undefined) await ensureSessionDir(dataDir, name);
-  return withLock(
-    sessionDir(dataDir, name),
-    async (held) => {
-      // Inside the lock, so two writers cannot both pass it.
-      const exists = await sessionExists(dataDir, name);
-      if (exists && create !== undefined) {
-        throw new StorageError(path, null, "review session already exists");
-      }
-      if (!exists && create === undefined) {
-        throw new NoSuchSessionError(path);
-      }
+  const write = async (held: Lock): Promise<T> => {
+    // Inside the lock, so two writers cannot both pass it.
+    const exists = await sessionExists(dataDir, name);
+    if (exists && create !== undefined) {
+      throw new StorageError(path, null, "review session already exists");
+    }
+    if (!exists && create === undefined) {
+      throw new NoSuchSessionError(path);
+    }
 
-      let comments: Comment[] | null = null;
-      let touched = false;
-      const draft: SessionDraft = {
-        review: exists || create === undefined ? await readReview(dataDir, name) : create,
-        get comments(): Comment[] {
-          touched = true;
-          comments ??= [];
-          return comments;
-        },
-        set comments(next: Comment[]) {
-          touched = true;
-          comments = next;
-        },
-      };
-      if (exists) comments = await readComments(dataDir, name);
+    let comments: Comment[] | null = null;
+    let touched = false;
+    const draft: SessionDraft = {
+      review: exists || create === undefined ? await readReview(dataDir, name) : create,
+      get comments(): Comment[] {
+        touched = true;
+        comments ??= [];
+        return comments;
+      },
+      set comments(next: Comment[]) {
+        touched = true;
+        comments = next;
+      },
+    };
+    if (exists) comments = await readComments(dataDir, name);
 
-      const result = await change(draft);
-      // Every write to a session's files bumps `updatedAt`; a session being
-      // created already carries the instant it was created at.
-      if (exists) draft.review.updatedAt = timestamp();
-      // `change` is the caller's code and may take longer than the lock lease.
-      await held.assertHeld();
-      await writeReview(dataDir, name, draft.review);
-      if (touched || !exists) await writeComments(dataDir, name, comments ?? []);
-      return result;
-    },
-    lock,
-  );
+    const result = await change(draft);
+    // Every write to a session's files bumps `updatedAt`; a session being
+    // created already carries the instant it was created at.
+    if (exists) draft.review.updatedAt = timestamp();
+    // `change` is the caller's code and may take longer than the lock lease.
+    await held.assertHeld();
+    await writeReview(dataDir, name, draft.review);
+    if (touched || !exists) await writeComments(dataDir, name, comments ?? []);
+    return result;
+  };
+  if (holding !== undefined) return write(holding);
+  return withLock(sessionDir(dataDir, name), write, lock);
 }
 
 /** `updateSession` with only the comments in view; the domain's writers take the whole draft, as

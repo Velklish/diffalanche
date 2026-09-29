@@ -158,7 +158,7 @@ diffalanche list
 diffalanche list --severity critical
 ```
 
-`list` with no flags is the open comments of the session, one line each: id,
+`list` with no flags is the open comments of the session — orphaned ones, whose line was lost after an edit, among them — one line each: id,
 severity, status, anchor, author, and body. Read it back and tell the human how
 many findings you opened and at what severity, so they know what they are
 walking into. `--severity` narrows it to one of the four.
