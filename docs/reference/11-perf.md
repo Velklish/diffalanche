@@ -290,10 +290,11 @@ embeds the pinned model from the user cache (09-ml.md).
 Bun is pinned to the version of the other jobs where it is the toolchain that
 builds the bundle and generates the fixture, and taken as `latest` in the `bun`
 channel, where it is what is being tested: a Bun release that breaks the tool
-shows up there. The Windows job is written and not verified — DA-45 runs it,
-fixes what it finds, and makes it required — so until then it is
-`continue-on-error` and a red one is something to read rather than a blocked
-pull request.
+shows up there. Windows runs all three channels, `node`, `bun` and `binary`
+(DA-45.5); the `node` cell has passed end to end since DA-45.3, and none of the
+three is verified enough to require — DA-45 runs them, fixes what it finds, and
+makes them required — so until then they are `continue-on-error` and a red one
+is something to read rather than a blocked pull request.
 
 ## The runtime the unit suite runs on
 
@@ -1663,9 +1664,11 @@ cell. The names to list, spelled as they report:
 There is no check called `test-bun`, none called `ui`, none called `smoke` and
 none called `e2e`: a rule asking for those waits for a report that never comes,
 and every pull request sits at "Expected — waiting for status to be reported"
-instead. `smoke node on windows-latest` is deliberately not in the list until
-DA-45 has run that cell and fixed what it finds: nobody has watched it pass, so
-it is not a gate yet ([the job](#the-job)). The `pull_request` trigger stays
+instead. The three Windows cells — `smoke node on windows-latest`, `smoke bun
+on windows-latest` and `smoke binary on windows-latest` — are deliberately not in
+the list until DA-45 has run them and fixed what they find: the node cell has
+passed since DA-45.3, the other two have not been watched yet, so none is a gate
+([the job](#the-job)). The `pull_request` trigger stays
 unfiltered — a pull request between two work branches is worth the same run, and
 what makes a check required is the rule, not the trigger.
 
