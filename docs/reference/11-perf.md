@@ -804,6 +804,44 @@ generator writes. The reset does not flatter the number: `1193ab3` gave 244 ms
 reset and 286 ms unreset, and `updateMs` is measured after the document is
 built, so the first scan is not inside the window it times.
 
+**What inside DA-55 carries it: the harness's own switch back, and a read of git
+it brought on** (DA-56.6). The harness switches to `perf-scratch` and back to the
+generated session before it measures the update, and since DA-55 the menu's
+switch moves the window's address rather than `current`: the page comes back on
+`?review=synth`, not on a bare address. Every fetch a `diff-changed` frame then
+makes carries the name, and `repository(repo, session)` read a named task's
+repository from git — four processes then, five now, on top of the watcher's rescan of the
+same repository — even when the name was the session the watcher had just
+rescanned and handed over. DA-55.2 looked at `repository(repo, undefined)` and
+found it unchanged, which it was; the update line had stopped taking that path.
+The fix answers a name equal to `watched()` from the held document
+([07-server.md](07-server.md#the-task-a-request-is-about)). Measured on the
+4-core container of 2026-09-29 with `perf/compare.ts`'s loop and table, nine a
+side, ABBA, the old trees on `DIFFALANCHE_DATA_DIR=.diffalanche` and a fixture
+of their own generator's:
+
+| base | branch | update, medians | difference | resolves | load, one minute |
+|---|---|---|---|---|---|
+| `4be4936` | `1079222` | 255 → 336 ms | **+81 ms** | ±78 | 1.4–2.2 |
+| `1079222` | `1079222` + the condition | 337 → 260 ms | **−77 ms** | ±75 | 0.6–2.1 |
+| `4be4936` | `1079222` + the condition | 259 → 279 ms | +20 ms | ±37, no difference | 1.9–2.2 |
+| `4be4936` | `60c832d`, the tip | 267 → 324 ms | +57 ms | ±53 | 1.9–2.6 |
+| `60c832d` | the tip + the fix, by `bun perf/compare.ts` | 345 → 293 ms | **−52 ms** | ±44 | 1.8–3.2 |
+| `60c832d` | the same, again | 322 → 297 ms | −25 ms | ±34, no difference | 2.0–2.8 |
+| `60c832d` | the same, thirteen a side | 336 → 293 ms | **−43 ms** | ±34 | 0.7–3.1 |
+| `4be4936` | the tip + the fix | 267 → 292 ms | +25 ms | ±24 | 1.9–2.4 |
+| `4be4936` | the same, again | 267 → 326 ms | +59 ms | ±52 | 1.4–2.0 |
+
+So the condition accounts for 77 of the step's 81 ms on `1079222`, and what is
+left there is inside what nine a side resolves. On the tip it is a difference by
+two runs of three, 43–52 ms. Against `4be4936` the fixed tip is still `worse`
+twice, by 25 and 59 ms: the two sides are 151 commits apart and run different
+harnesses, and which later commit that is — if it is one — is DA-56.11, not
+this step. These are the container's numbers, not
+the M1 Pro's: a budget verdict is not evidence on a machine the untouched base is
+over budget on ([A red the machine caused](#a-red-the-machine-caused)), and the
+reading on a quiet development machine is DA-56.9.
+
 CPU per frame over the same nine points is 8.5 to 9.1 with no trend, which says
 there is no scroll regression in this range — the line is simply above 8.3
 everywhere, which is DA-56.4.

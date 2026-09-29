@@ -698,6 +698,18 @@ describe("the change set a document is built from", () => {
     expect(change?.files[0]?.patch).toContain(MARK);
   });
 
+  it("answers a window named on the followed task from the rescan, not from git", async () => {
+    // A task switched back to by name is `?review=<current>`: the mark is only in what the rescan
+    // handed over, so a read of the tree would not have it (DA-56.6).
+    const service = createReviewService(config, { watched: () => SESSION });
+    await service.document(SESSION);
+    const rescan = await marked(SESSION);
+    expect(service.adopt(SESSION, rescan)).toBe(true);
+
+    const change = await service.repository(firstFile(rescan).repo, SESSION);
+    expect(change?.files[0]?.patch).toContain(MARK);
+  });
+
   it("takes a rescan that landed while the document was still being built", async () => {
     // Taken while the file is still there: the rescan this stands for is handed
     // over from memory, not read back.
