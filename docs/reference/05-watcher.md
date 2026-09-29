@@ -1047,7 +1047,10 @@ after an `arm` that repeats a write until one is heard.
   delivers them in one loop. Then a file at the root; everything before it is
   reported by then. Node must have named all 5000, and Bun, which names one
   change per read, at least one. The heap must grow by less than 200 MB on
-  both. Against `aefc358`'s `tree.ts` it grew by 1.4 GB, red on both runtimes.
+  both. Against `aefc358`'s `tree.ts` it grew by 1.4 GB on Node and by about
+  550 MB on Bun, red on both runtimes; on Bun, which names fewer changes per
+  read, that is about 2.7 times the bound, so the case guards Node more than
+  Bun.
 - **A directory it may not read** runs a helper in a process of its own over a
   tree with a mode-000 directory, and expects a write beside it heard, no walk
   and no `onFallback`. The helper also lists that directory itself and reports

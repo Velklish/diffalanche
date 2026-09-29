@@ -343,7 +343,7 @@ function perDirectory(options: TreeWatcherOptions, onFailure: () => void): TreeS
 
   try {
     // The root is taken now, so a runtime that refuses it walks from the start.
-    if (!take("")) return null;
+    if (take("") !== "taken") return null;
   } catch {
     return null;
   }
