@@ -1,0 +1,11 @@
+# DA-82.2 · Result
+
+**Closed 2026-09-29.** Completed. `bun perf/run.ts --runs N` with N above 1 now measures each repetition in a process of its own, as the gate already did (`inOneProcess`, `repetitionArgs` and `measureOnce` with `lag` in `perf/harness.ts`), and carries `--embedding` and `--lag` to every child. The call the gate and `perf/compare.ts` make is unchanged, and a test pins it. The step that waited is named. With the laps printed as they were taken, the old in-process loop stalled in 6 of 6 attempts in run 2 or 3, during the scroll or the cold switch, 10–13 s after that browser launched. `strace -f` showed Bun close the first browser's DevTools pipe descriptors a second time after the second browser had been given the same numbers. Chromium then exited with `Connection terminated while reading from pipe`, and no Playwright call returned after that. That Bun never tells Playwright is an inference. Why Bun closes them twice is DA-82.5 (minor). That the product is not on this path holds only as far as DA-82.5's assumption does: only a child with more than three stdio entries is hit.
+
+**Verification.** On the 4-core cloud container, `bun perf/run.ts --runs 3` exited 0 twice with three rows each, and `--runs 2 --lag` exited 0 (load 0.4–2.9). `tests/perf.test.ts` and the new `tests/perf-run.test.ts` mock `node:child_process` and pass on Node and on Bun. They check the gate's exact argv, run.ts's routing for `--runs 3`, and `--lag` carried to each child. Mutation probes, reverted afterwards:
+- `inOneProcess` changed to `runs >= 1`, which restores the old routing: the routing test and the `--lag` test turned red, in about 0.1 s, with no Chromium started and nothing written outside the tree;
+- an extra flag added to `repetitionArgs`: the argv test turned red.
+
+Gates and CI as in DA-82.3's result. Review: the three rounds of DA-82.3's result also covered this task. Its findings were the `inOneProcess` JSDoc, the gate paragraph, inferences to mark, the argv test, and the routing fixture, which as root had been created under `/nonexistent`. All were fixed.
+
+**Documentation in the same pass.** `docs/reference/11-perf.md` (the `--runs` row, "Why a second browser in one process stalls", the gate's DA-25.2 paragraph); `CHANGELOG.md`, Fixed.

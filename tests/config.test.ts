@@ -1,5 +1,5 @@
 import { mkdirSync, mkdtempSync, rmSync, writeFileSync } from "node:fs";
-import { devNull, tmpdir, userInfo } from "node:os";
+import { tmpdir, userInfo } from "node:os";
 import { dirname, join, resolve } from "node:path";
 import { afterEach, beforeEach, describe, expect, it } from "vitest";
 import {
@@ -9,6 +9,7 @@ import {
   loadConfig,
   userConfigPath,
 } from "../src/core/config/index.ts";
+import { GIT_NULL } from "../src/core/git/run.ts";
 import { dataDirOf, StorageError } from "../src/core/storage/index.ts";
 
 let root: string;
@@ -29,7 +30,7 @@ function writeConfig(value: unknown): void {
 /** Points git at a configuration of the test's own, so the developer's is out of the way. */
 function gitIdentity(name: string | null): void {
   if (name === null) {
-    process.env.GIT_CONFIG_GLOBAL = devNull;
+    process.env.GIT_CONFIG_GLOBAL = GIT_NULL;
     return;
   }
   const file = join(root, "gitconfig");
@@ -44,7 +45,7 @@ beforeEach(() => {
   savedSystem = process.env.GIT_CONFIG_SYSTEM;
   savedConfigHome = process.env.XDG_CONFIG_HOME;
   savedDataDirEnv = process.env.DIFFALANCHE_DATA_DIR;
-  process.env.GIT_CONFIG_SYSTEM = devNull;
+  process.env.GIT_CONFIG_SYSTEM = GIT_NULL;
   process.env.XDG_CONFIG_HOME = configHome;
   delete process.env.DIFFALANCHE_DATA_DIR;
   gitIdentity(null);

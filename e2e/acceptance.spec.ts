@@ -1,8 +1,8 @@
 import { execFileSync } from "node:child_process";
-import { devNull } from "node:os";
 import { join } from "node:path";
 import type { Page } from "@playwright/test";
 import { expect, test } from "@playwright/test";
+import { GIT_NULL } from "../src/core/git/run.ts";
 import { BINARY, FIXTURE, ROOT, SESSION } from "./binary.ts";
 import {
   FEATURE_BRANCH,
@@ -28,7 +28,7 @@ function cli(...args: string[]): string {
  * `status.showUntrackedFiles` cannot change what a test sees. */
 function git(repo: string, ...args: string[]): string {
   return execFileSync("git", ["-C", join(ROOT, FIXTURE, repo), ...args], {
-    env: { ...process.env, GIT_CONFIG_GLOBAL: devNull, GIT_CONFIG_SYSTEM: devNull },
+    env: { ...process.env, GIT_CONFIG_GLOBAL: GIT_NULL, GIT_CONFIG_SYSTEM: GIT_NULL },
     encoding: "utf-8",
   });
 }

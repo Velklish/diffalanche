@@ -1,6 +1,5 @@
 # DA-49 · Insights screen
 
-- **Order:** 870
 - **Scope:** 08-ui (see [reference](../../reference/README.md))
 - **Created:** 2026-09-05
 - **Dependencies:** DA-48
@@ -24,6 +23,6 @@
 
 ## Deferred
 
-- **Deferred:** 2026-09-05
-- **Reason:** Phase 4 of `docs/SPEC.md` section 10; depends on the embedding index and the model runtime from Phase 2.
-- **Return condition:** DA-32 (Phase 1 acceptance) is archived and the Phase 2 queue is under way; the cut is revisited there.
+- **Deferred:** 2026-09-29
+- **Reason:** Depends on DA-48, which is deferred, and is a UI screen whose change needs the Impeccable context loader, which cannot run in the cloud session.
+- **Return condition:** DA-48 is archived, and a session where the Impeccable launcher runs.

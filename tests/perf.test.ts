@@ -19,7 +19,14 @@ import {
 } from "../perf/budgets.ts";
 import { assertErasable, fixtureDrift } from "../perf/fixture.ts";
 import type { Measurement } from "../perf/harness.ts";
-import { BROWSER_ARGS, parseArgs, SCRATCH_SESSION, twoSessions } from "../perf/harness.ts";
+import {
+  BROWSER_ARGS,
+  inOneProcess,
+  parseArgs,
+  repetitionArgs,
+  SCRATCH_SESSION,
+  twoSessions,
+} from "../perf/harness.ts";
 import type { Load } from "../perf/load.ts";
 import {
   afterRed,
@@ -78,6 +85,22 @@ describe("perf arguments", () => {
     expect(parseArgs(["--embedding", "main"]).lag).toEqual({ embedding: "main" });
     expect(parseArgs(["--embedding", "child"]).lag).toEqual({ embedding: "child" });
     expect(() => parseArgs(["--embedding", "gpu"])).toThrow(/--embedding takes main or child/);
+  });
+
+  it("measures more than one repetition one process each, so no process launches a second browser", () => {
+    expect(inOneProcess(1, 1)).toBe(true);
+    expect(inOneProcess(2, 1)).toBe(false);
+    expect(inOneProcess(3, 1)).toBe(false);
+    expect(inOneProcess(1, 2)).toBe(false);
+  });
+
+  it("hands each repetition's process the fixture, the variant, one run and the load it was asked for", () => {
+    for (const lag of [null, { embedding: null }, { embedding: "main" as const }]) {
+      const argv = repetitionArgs("/tmp/fx", "default", lag);
+      expect(argv[0]).toBe("perf/run.ts");
+      const parsed = parseArgs(argv.slice(1), 5);
+      expect(parsed).toEqual({ fixture: "/tmp/fx", variants: ["default"], runs: 1, lag });
+    }
   });
 
   it("launches Chromium with the frame-rate limit off, so the scroll is not paced at 60 Hz", () => {

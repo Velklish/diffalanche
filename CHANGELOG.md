@@ -409,12 +409,27 @@ and `bun run release` refuses a version that has no section. See
   stop at the next frame — the frame on which, in two of its three jumps, the
   card still showed its spacer instead of its diff. A round added to
   `revealCard` now moves the line: on a 4-core container 69.8 ms became 100.7
-  with six rounds, against 25.6 and 31.6 before; a regression that only adds
-  frames is still out of the unpaced gate's sight (DA-82.3). The hook fails the
+  with six rounds, against 25.6 and 31.6 before; an added frame that carries no
+  work of its own was not resolved by the unpaced gate — whether it only moves
+  work earlier is an inference (DA-82.3). The hook fails the
   run when the diff does not mount within ten frames or the jump leaves another
   file current. `data-file-index` is gone from the file card, and the
   development machine's reading of the new window is DA-82.1
   ([11-perf.md](docs/reference/11-perf.md#the-gate)).
+- **What an unpaced frame costs is measured, and which added frames the perf
+  gate does not see is written down** (DA-82.3). On a 4-core container a frame
+  with something to draw cost 0.7–2.8 ms at the median with the frame-rate limit
+  off, against 16.7 at 60 Hz, and an idle one 17.6–17.7, so an added idle frame
+  is visible to the gate. The frame DA-82 added before `revealCard`'s first
+  scroll, which paints the selection, was one tick at 60 Hz, +18.7 ms, and
+  unpaced `no difference` in the comparison, while the gate itself read +14.0
+  against the frame's own 14.5 ms in five runs that cannot resolve it. That such
+  a frame only moves work earlier, and so stays outside the gate, is an
+  inference, and it stands until DA-82.4 decides whether the gate gets a
+  frame-count ceiling. The count saw
+  it — 3 frames a jump, 4 with the probe, in every run — but it is no measure for
+  the lines that wait on the server
+  ([11-perf.md](docs/reference/11-perf.md#what-a-frame-costs-unpaced-and-what-the-gate-does-not-see)).
 - **The perf gate takes about 45 s instead of about 66, and CPU per frame is
   taken with the frames unpaced** (DA-115). The harness launches Chromium with
   `--disable-frame-rate-limit`: the same 600 frames of the same step, each
@@ -712,6 +727,45 @@ and `bun run release` refuses a version that has no section. See
 
 ### Fixed
 
+- **A durable write finishes on Windows** (DA-45.3). The directory flush after
+  the rename is refused there with `EPERM` — Windows flushes only a handle
+  opened for writing — which failed every durable write: the Windows smoke
+  stopped at `review new` with `durability flush failed: EPERM`. On Windows the
+  directory entry is now not flushed; the file's own flush and the rename stand,
+  so a power cut can bring back the previous file but never a torn one
+  ([03-storage.md](docs/reference/03-storage.md)).
+
+- **git's configuration is pinned to `/dev/null`, not `os.devNull`** (DA-45.1).
+  On Windows `os.devNull` is `\\.\nul`, which git refuses with `unable to access
+  '//./nul'`, so the Windows smoke never got past the generator's first `git init`,
+  and the reader's own git processes set the same path. One constant, `GIT_NULL`
+  in `src/core/git/run.ts`, now serves the reader's environment and hooks pin, the
+  generator and the fixtures, and a step of the Windows smoke job,
+  `scripts/check-git-null.ts`, fails if a file planted at `\dev\null` or any
+  configuration outside the repository reaches the reader's git
+  ([02-git.md](docs/reference/02-git.md)).
+
+- **A live update in a window on the current task by name no longer reads git
+  again** (DA-56.6). Since DA-55, switching tasks in the sessions menu puts
+  `?review=<name>` in the address, so a reader who switches away and back — and
+  the perf harness, which does exactly that before it measures — lands on
+  `?review=<current>`, and every `diff-changed` fetch read that repository from
+  git although the watcher had just rescanned it and patched the held document.
+  `GET /api/repos/:repo/diff?review=<name>` now reads git only for a task other
+  than the one the watcher rescans. That read was the step DA-56.3 located in `1079222`: on
+  a 4-core container, nine a side, the step measured +81 ms at the median, the
+  condition alone took back 77 of it, and on the tip `bun perf/compare.ts` called
+  the fix better by 52 and 43 ms in two runs of three
+  ([11-perf.md](docs/reference/11-perf.md#the-gate), [07-server.md](docs/reference/07-server.md#the-task-a-request-is-about)).
+
+- **The ring walk of `all files` asserts the row it focused, not a re-resolved first**
+  (DA-54.6). `focusByKey` of `e2e/focus.spec.ts` asked `.first()` again after
+  focusing it, and a repository's tree landing in between put its rows above
+  the focused one, so the assertion watched a row nobody had focused — the red
+  of one gates chain in three under load. It now holds the element it
+  focused and asserts that element is `document.activeElement`. The page was not at fault: the row keeps
+  the focus and is not remounted ([08-ui.md](docs/reference/08-ui.md#a-focused-row-in-a-list-still-arriving)).
+
 - **The keyboard spec's `R` waits for the disk** (DA-118).
   `e2e/keyboard.spec.ts` › "C opens the composer and R resolves the focused
   thread" read `comments.json` as soon as the rail card turned `resolved`, which
@@ -725,6 +779,18 @@ and `bun run release` refuses a version that has no section. See
   process ignores, so it was red in every cloud session; it now puts a file where
   the directory was, which fails the listing for any user, and it still fails
   when a failed listing is answered with an empty map.
+
+- **`bun perf/run.ts --runs 3` finishes instead of hanging in its second or
+  third repetition** (DA-82.2). Above one repetition it measures each in a
+  process of its own, as the gate does, with `--embedding` and `--lag` carried
+  over. The stall DA-25.2 worked around without a cause has one now: under
+  `strace`, Bun closed the first browser's two DevTools pipes a second time
+  about eleven seconds after the next browser had been given the same
+  descriptor numbers, and Chromium, finding its pipe closed, exited; no call of
+  Playwright's returned after that. On a 4-core container the old loop stalled in six attempts of
+  six and the new one finished two of two
+  ([11-perf.md](docs/reference/11-perf.md#the-gate)); why Bun closes them twice
+  is DA-82.5.
 
 - **The embedding index verdicts on a changed platform hold on a linux-x64
   runner** (DA-34). "embeds every comment again when the model, the runtime or

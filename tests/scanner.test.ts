@@ -13,6 +13,7 @@ import { tmpdir } from "node:os";
 import { join } from "node:path";
 import { afterAll, beforeAll, describe, expect, it } from "vitest";
 import { generate, PROFILES } from "../scripts/synth.ts";
+import { GIT_NULL } from "../src/core/git/run.ts";
 import { scan } from "../src/core/index.ts";
 import type { ScanResult } from "../src/core/types.ts";
 
@@ -24,8 +25,8 @@ function git(cwd: string, args: string[]): string {
     encoding: "utf8",
     env: {
       ...process.env,
-      GIT_CONFIG_GLOBAL: "/dev/null",
-      GIT_CONFIG_SYSTEM: "/dev/null",
+      GIT_CONFIG_GLOBAL: GIT_NULL,
+      GIT_CONFIG_SYSTEM: GIT_NULL,
       GIT_AUTHOR_NAME: "synth",
       GIT_AUTHOR_EMAIL: "synth@example.invalid",
       GIT_COMMITTER_NAME: "synth",

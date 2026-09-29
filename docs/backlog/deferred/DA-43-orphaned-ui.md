@@ -1,6 +1,5 @@
 # DA-43 · Orphaned comments in the UI with model proposal
 
-- **Order:** 810
 - **Scope:** 08-ui, 09-ml (see [reference](../../reference/README.md))
 - **Created:** 2026-09-05
 - **Dependencies:** DA-36, DA-42
@@ -25,6 +24,6 @@
 
 ## Deferred
 
-- **Deferred:** 2026-09-05
-- **Reason:** Phase 3 of `docs/SPEC.md` section 10; depends on Phase 1 and Phase 2 artifacts.
-- **Return condition:** DA-32 (Phase 1 acceptance) is archived and the Phase 2 queue is under way; the cut is revisited there.
+- **Deferred:** 2026-09-29
+- **Reason:** A UI surface (the orphaned thread, the model's proposal) whose change AGENTS.md starts with the Impeccable context loader and closes with its `audit` and `polish`, which cannot run in the cloud session; it also depends on DA-42, not yet merged.
+- **Return condition:** DA-42 is archived, and a session where `~/.claude/skills/impeccable/scripts/impeccable` runs.

@@ -32,13 +32,13 @@ Timeout:  5000ms
 The step is the first `focusByKey` after `all files` is pressed and the first unchanged row
 has appeared:
 
-<!-- quote:../../../e2e/focus.spec.ts -->
+```ts
 async function focusByKey(page: Page, selector: string): Promise<void> {
   await page.keyboard.press("F2");
   await page.locator(selector).first().focus();
   await expect(page.locator(selector).first()).toBeFocused();
 }
-<!-- /quote -->
+```
 
 The suite had started after its load precondition waited 35 s — `quiet after 35 s: load
 averages 19.87 and 15.27 … 2.48 and 1.91 per core` — so it ran at the ceiling.

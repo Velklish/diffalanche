@@ -12,10 +12,18 @@ Neither the repository it reads nor the environment it was started in
 
 - **The environment is built rather than inherited.** `readOnlyEnv` in
   `src/core/git/run.ts` copies `process.env` without a single `GIT_*` key and
-  puts back `GIT_CONFIG_GLOBAL` and `GIT_CONFIG_SYSTEM` at the null device. A
-  parent that exports `GIT_DIR`, `GIT_WORK_TREE`, `GIT_INDEX_FILE` or
-  `GIT_CONFIG_COUNT` — a git hook, `git rebase --exec`, an agent shell — changes
-  nothing about what is read, and `cwd` alone says which repository that is.
+  puts back `GIT_CONFIG_GLOBAL` and `GIT_CONFIG_SYSTEM` at the null device,
+  spelled `/dev/null` on every platform (`GIT_NULL`). Node's `os.devNull` is
+  `\\.\nul` on Windows, which git refuses with `unable to access '//./nul'`
+  (DA-45.1). Git for Windows reads `/dev/null` as `nul` rather than as a
+  `\dev\null` a local user could create on the drive: `scripts/check-git-null.ts`,
+  a step of the Windows smoke job, plants a configuration file at `\dev\null` on
+  the drive of the process and on the drive of git's `cwd`, and fails if the
+  reader's git reads it or any configuration file outside the repository. On
+  git 2.55.0.windows.5 it read neither. A parent that exports `GIT_DIR`,
+  `GIT_WORK_TREE`, `GIT_INDEX_FILE` or `GIT_CONFIG_COUNT` — a git hook,
+  `git rebase --exec`, an agent shell — changes nothing about what is read, and
+  `cwd` alone says which repository that is.
   `resolveUser` in `src/core/config/index.ts` is the deliberate exception: it
   reads the developer's own `user.name` and does not go through this module.
 - **Configuration that names a program is pinned, not read.** Every call carries

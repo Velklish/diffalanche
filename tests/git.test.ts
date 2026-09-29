@@ -17,6 +17,7 @@ import { join } from "node:path";
 import { afterAll, beforeAll, describe, expect, it } from "vitest";
 import { captureAnchor } from "../src/core/domain/anchors.ts";
 import { gitError } from "../src/core/git/errors.ts";
+import { GIT_NULL } from "../src/core/git/run.ts";
 import { parseDiff, readRepositoryChange, scan } from "../src/core/index.ts";
 import type { RepositoryChange } from "../src/core/types.ts";
 
@@ -43,8 +44,8 @@ function git(cwd: string, args: string[]): string {
     encoding: "utf8",
     env: {
       ...process.env,
-      GIT_CONFIG_GLOBAL: "/dev/null",
-      GIT_CONFIG_SYSTEM: "/dev/null",
+      GIT_CONFIG_GLOBAL: GIT_NULL,
+      GIT_CONFIG_SYSTEM: GIT_NULL,
       GIT_AUTHOR_NAME: "fixture",
       GIT_AUTHOR_EMAIL: "fixture@example.invalid",
       GIT_COMMITTER_NAME: "fixture",

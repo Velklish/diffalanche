@@ -2,8 +2,9 @@
  * per repository, by a git with its own identity and no machine config: the same on any laptop. */
 import { execFileSync } from "node:child_process";
 import { mkdirSync, mkdtempSync, writeFileSync } from "node:fs";
-import { devNull, tmpdir } from "node:os";
+import { tmpdir } from "node:os";
 import { join } from "node:path";
+import { GIT_NULL } from "../../src/core/git/run.ts";
 
 /** The repositories of the fixture, by their path relative to the root. */
 export const REPOS = ["repos/group/alpha", "repos/group/beta"] as const;
@@ -18,7 +19,7 @@ function git(cwd: string, args: string[]): void {
   execFileSync("git", args, {
     cwd,
     stdio: "ignore",
-    env: { ...process.env, GIT_CONFIG_GLOBAL: devNull, GIT_CONFIG_SYSTEM: devNull },
+    env: { ...process.env, GIT_CONFIG_GLOBAL: GIT_NULL, GIT_CONFIG_SYSTEM: GIT_NULL },
   });
 }
 
