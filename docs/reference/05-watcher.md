@@ -189,8 +189,16 @@ nobody was listening for.
 
 **Bun's own test runner is the one place where the recursive watch is not used
 here.** Under `bun run test:bun` a watch goes quiet after its first events, so
-`tests/watcher.test.ts` passes `recursive: false` there and exercises the walk
-instead; under Node the same tests exercise the watch. A server under Bun is not
+the suite's watcher in `tests/watcher.test.ts` walks there, and under Node the
+same tests exercise the watch. It passes `recursive: true` with `native:
+spiedTree`, which builds each tree itself — the walk on Bun, the watch on Node —
+and records what the tree reports ([What the unit tests
+hold](#what-the-unit-tests-hold)). So that watcher never asks
+`supportsRecursiveWatch` on Node, and on Bun it takes the path of a runtime that
+walks from the start: `fellBack` is set before any tree can fail and `onWalk`
+would be called, which means an `onFallback` given to it could never fire there.
+The default path — the probe, `recursive: false`, the takeover — is held by the
+watchers the other tests start themselves. A server under Bun is not
 affected — four consecutive edits against `bun src/cli/index.ts serve` on the
 synthetic review each produced their event — and every other test in the suite
 runs the same on both runtimes.
@@ -686,9 +694,14 @@ now goes in three steps.
    `watchTree` — the watch on Node, the walk on Bun — with each path it reports
    recorded on its way to the watcher. A walk reads the root listing before
    anything else, so a walk that reports a file new at the root has seen every
-   write made before that file existed; the native watch on Linux delivers from
-   one inotify queue for every watch of the process, in the order of the writes. Past that report, the tree has nothing left to say about
-   anything written earlier.
+   write made before that file existed. Node 22 has no recursive inotify watch
+   on Linux: it emulates one in userland, a watch per path, and all of them
+   share the process's one inotify descriptor, so the events of the tree come
+   out in the order of the writes. Past that report, the tree has nothing left
+   to say about anything written earlier — except what the emulation never says
+   at all: a file replaced by a rename is reported the first time only
+   ([DA-110.3](../backlog/triage/DA-110.3-node-recursive-watch-misses-rename-replacement.md)),
+   and a marker, a new name, is not one.
 2. **A burst queued behind theirs.** `settle` writes `settle-N.ts` into the other
    repository and waits for that repository's first `diff-changed` since the
    write, which has to name that file and nothing else. A burst that starts after
@@ -758,7 +771,13 @@ as the cache has it and announces nothing either way — which is why the
 `.git/objects` case, which had none, held nothing until DA-110.2 gave it one. The
 first rescan of the repository spends the hidden change, so it is written after
 the last `settle` before the step it serves: a burst that `settle` waits out, such
-as a directory the test has just made, would announce it first.
+as a directory the test has just made, would announce it first. `reveal` is as
+invisible to the watch as `hide`, so a pad a rescan took in stays in `diff.json`
+until the repository's next rescan: in the nested-repository case the rescan of
+the `HEAD` write takes one in and the rescan of the cleanup's `.gitignore`
+removal clears it, and the `.git/objects` case, which lets no rescan happen,
+never has one in the cache. A case that reads the repository's entry in
+`diff.json` begins with a rescan of its own.
 
 The latency test takes the median of three edits, the way the performance gate
 reads its own numbers: one slow run on a busy machine is not a regression
