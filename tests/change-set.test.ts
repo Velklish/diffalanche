@@ -1,6 +1,6 @@
 import { execFileSync } from "node:child_process";
 import { appendFileSync, existsSync, mkdtempSync, rmSync, writeFileSync } from "node:fs";
-import { devNull, tmpdir } from "node:os";
+import { tmpdir } from "node:os";
 import { join } from "node:path";
 import { afterAll, beforeAll, describe, expect, it } from "vitest";
 import { generate, PROFILES } from "../scripts/synth.ts";
@@ -14,6 +14,7 @@ import {
 } from "../src/core/change-set.ts";
 import type { Config } from "../src/core/config/index.ts";
 import { loadConfig } from "../src/core/config/index.ts";
+import { GIT_NULL } from "../src/core/git/run.ts";
 import { parseDiff, scan } from "../src/core/index.ts";
 import { byCodePoint } from "../src/core/order.ts";
 import type { DiffCache } from "../src/core/storage/index.ts";
@@ -234,7 +235,7 @@ describe("patching one repository into the cache", () => {
     execFileSync("git", ["worktree", "add", "-q", "--detach", `../alpha-worktree`, "HEAD"], {
       cwd: join(fixture, ALPHA),
       stdio: "ignore",
-      env: { ...process.env, GIT_CONFIG_GLOBAL: devNull, GIT_CONFIG_SYSTEM: devNull },
+      env: { ...process.env, GIT_CONFIG_GLOBAL: GIT_NULL, GIT_CONFIG_SYSTEM: GIT_NULL },
     });
     appendFileSync(join(fixture, WORKTREE, "file.txt"), "edited in the worktree\n");
     expect(await cli("review", "new", SESSION)).toBe(0);

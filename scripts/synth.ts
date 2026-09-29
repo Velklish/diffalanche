@@ -11,10 +11,10 @@ import {
   statSync,
   writeFileSync,
 } from "node:fs";
-import { devNull } from "node:os";
 import { dirname, join, resolve } from "node:path";
 import { argv, exit, stderr, stdout } from "node:process";
 import { fileURLToPath } from "node:url";
+import { GIT_NULL } from "../src/core/git/run.ts";
 
 export interface Profile {
   /** Repositories that carry changes. The sibling worktree is not one of them. */
@@ -281,8 +281,8 @@ const GIT_CONFIG = [
 
 const GIT_ENV = {
   ...process.env,
-  GIT_CONFIG_GLOBAL: devNull,
-  GIT_CONFIG_SYSTEM: devNull,
+  GIT_CONFIG_GLOBAL: GIT_NULL,
+  GIT_CONFIG_SYSTEM: GIT_NULL,
   GIT_AUTHOR_NAME: GIT_USER.name,
   GIT_AUTHOR_EMAIL: GIT_USER.email,
   GIT_AUTHOR_DATE: GIT_DATE,

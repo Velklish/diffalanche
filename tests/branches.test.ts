@@ -2,11 +2,12 @@
  * repositories carry each ([07-server.md](../docs/reference/07-server.md#the-branches)). */
 import { execFileSync } from "node:child_process";
 import { mkdtempSync, rmSync } from "node:fs";
-import { devNull, tmpdir } from "node:os";
+import { tmpdir } from "node:os";
 import { join } from "node:path";
 import { afterAll, beforeAll, describe, expect, it } from "vitest";
 import type { Config } from "../src/core/config/index.ts";
 import { loadConfig } from "../src/core/config/index.ts";
+import { GIT_NULL } from "../src/core/git/run.ts";
 import type { BranchList } from "../src/server/routes/branches.ts";
 import { listBranches } from "../src/server/routes/branches.ts";
 import { makeRoot, REPOS } from "./helpers/fixture-root.ts";
@@ -19,7 +20,7 @@ function git(cwd: string, args: string[]): void {
   execFileSync("git", args, {
     cwd,
     stdio: "ignore",
-    env: { ...process.env, GIT_CONFIG_GLOBAL: devNull, GIT_CONFIG_SYSTEM: devNull },
+    env: { ...process.env, GIT_CONFIG_GLOBAL: GIT_NULL, GIT_CONFIG_SYSTEM: GIT_NULL },
   });
 }
 

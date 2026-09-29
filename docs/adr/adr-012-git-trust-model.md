@@ -75,8 +75,9 @@ environment diffalanche was started in configures nothing at all.**
 
 1. `readOnlyEnv()` builds the child environment from `process.env` with **every
    `GIT_*` key dropped**, then puts back the two the reader sets itself:
-   `GIT_CONFIG_GLOBAL` and `GIT_CONFIG_SYSTEM`, both at the platform's null
-   device. Nothing a parent exports reaches git, so `cwd` is the only thing that
+   `GIT_CONFIG_GLOBAL` and `GIT_CONFIG_SYSTEM`, both at the null device, as
+   git spells it on every platform (`/dev/null`; 02-git.md says why not
+   `os.devNull`). Nothing a parent exports reaches git, so `cwd` is the only thing that
    says which repository is being read.
 2. Every git process the module starts carries `--no-pager` and a fixed list of
    `-c` pins, `INERT_CONFIG` in `src/core/git/run.ts`, one per configuration key

@@ -687,6 +687,14 @@ and `bun run release` refuses a version that has no section. See
 
 ### Fixed
 
+- **git's configuration is pinned to `/dev/null`, not `os.devNull`** (DA-45.1).
+  On Windows `os.devNull` is `\\.\nul`, which git refuses with `unable to access
+  '//./nul'`, so the Windows smoke never got past the generator's first `git init`,
+  and the reader's own git processes set the same path (not yet run on Windows). One
+  constant, `GIT_NULL` in `src/core/git/run.ts`, now serves the reader's
+  environment and hooks pin, the generator and the fixtures
+  ([02-git.md](docs/reference/02-git.md)).
+
 - **The ring walk of `all files` asserts the row it focused, not a re-resolved first**
   (DA-54.6). `focusByKey` of `e2e/focus.spec.ts` asked `.first()` again after
   focusing it, and a repository's tree landing in between put its rows above

@@ -12,7 +12,10 @@ Neither the repository it reads nor the environment it was started in
 
 - **The environment is built rather than inherited.** `readOnlyEnv` in
   `src/core/git/run.ts` copies `process.env` without a single `GIT_*` key and
-  puts back `GIT_CONFIG_GLOBAL` and `GIT_CONFIG_SYSTEM` at the null device. A
+  puts back `GIT_CONFIG_GLOBAL` and `GIT_CONFIG_SYSTEM` at the null device,
+  spelled `/dev/null` on every platform (`GIT_NULL`): Git for Windows maps that
+  spelling to `nul` itself, and refuses Node's `os.devNull`, `\\.\nul`, with
+  `unable to access '//./nul'` (DA-45.1). A
   parent that exports `GIT_DIR`, `GIT_WORK_TREE`, `GIT_INDEX_FILE` or
   `GIT_CONFIG_COUNT` — a git hook, `git rebase --exec`, an agent shell — changes
   nothing about what is read, and `cwd` alone says which repository that is.
