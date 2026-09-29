@@ -1,6 +1,5 @@
 # DA-45 · Windows verification
 
-- **Order:** 830
 - **Scope:** 06-cli, 03-storage, 05-watcher (see [reference](../../reference/README.md))
 - **Created:** 2026-09-05
 - **Dependencies:** DA-31
@@ -80,6 +79,6 @@ running server.
 
 ## Deferred
 
-- **Deferred:** 2026-09-05
-- **Reason:** Phase 3 of `docs/SPEC.md` section 10; depends on Phase 1 and Phase 2 artifacts.
-- **Return condition:** DA-32 (Phase 1 acceptance) is archived and the Phase 2 queue is under way; the cut is revisited there.
+- **Deferred:** 2026-09-29
+- **Reason:** The smoke on all three channels and the acceptance suite pass on `windows-latest` (DA-45.1 to DA-45.7). What is left is to make those cells required: a branch protection rule on GitHub, which is the owner's setting, together with 11-perf's table, `tests/ci-names.test.ts` and the `continue-on-error` in `ci.yml` in one change, once the cells have a record of passing.
+- **Return condition:** The owner decides to require the Windows cells after they have stayed green across pull requests.
