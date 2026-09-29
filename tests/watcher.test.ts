@@ -577,6 +577,7 @@ describe("watcher", () => {
       ["add", "-f", "dist/two.js"],
       ["rm", "--cached", "-q", "dist/one.js", "dist/two.js"],
     ];
+    const first = performance.now();
     for (const move of moves) {
       const mark = performance.now();
       await git(...move);
@@ -589,12 +590,31 @@ describe("watcher", () => {
       await waitForChangeOf(REPO, mark, ".git/HEAD");
       await settle();
     }
+    // A lock is named as the file it moved: gone by the time a reader of `files` looks for it.
+    expect(named(changesOf(first, REPO), (path) => path.endsWith(".lock"))).toEqual([]);
 
     await git("update-ref", "-d", "refs/heads/da-110-3");
     await rm(join(root, REPO, "dist"), { recursive: true, force: true });
     await rm(gitignore);
     await settle();
   }, 120_000);
+
+  it("says nothing about a git status that takes the index lock and moves nothing", async () => {
+    const git = (...args: string[]) => run("git", ["-C", join(root, REPO), ...args]);
+    // Twice first: a status after recent writes refreshes the index for real, which is a move.
+    await git("status", "--porcelain");
+    await git("status", "--porcelain");
+    await settle();
+    await hide("status-pad", "export const pad = 1;\n");
+
+    const mark = performance.now();
+    await git("status", "--porcelain");
+    await settle();
+    expect(changesOf(mark, REPO)).toEqual([]);
+
+    await reveal("status-pad");
+    await settle();
+  }, 60_000);
 
   it("wakes for a burst inside .git whatever the rules say about it", async () => {
     const gitignore = join(root, REPO, ".gitignore");

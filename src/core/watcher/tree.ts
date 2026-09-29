@@ -114,18 +114,29 @@ function native(options: TreeWatcherOptions, onFailure: () => void): TreeSource 
   }
 }
 
-/** A path that went away between being named and being watched or listed: not a failure. */
-function gone(error: unknown): boolean {
+/** A directory this tree does not watch and is not failed by: gone between being named and being
+ * watched, or not the server's to read, which the walk skips too (05-watcher.md). */
+function skipped(error: unknown): boolean {
   const code = (error as NodeJS.ErrnoException).code;
-  return code === "ENOENT" || code === "ENOTDIR";
+  return code === "ENOENT" || code === "ENOTDIR" || code === "EACCES" || code === "EPERM";
+}
+
+/** Inode and birth, since ext4 hands a freed inode to the next `mkdir` at once; `null` when gone. */
+async function identity(path: string): Promise<string | null> {
+  try {
+    const info = await stat(path, { bigint: true });
+    return `${info.ino}:${info.birthtimeNs}`;
+  } catch {
+    return null;
+  }
 }
 
 /** One non-recursive watch per directory the ignore rules let in, taken by the tree itself: a
  * directory's inode outlives every rename into it (05-watcher.md, "One watch per directory…"). */
 function perDirectory(options: TreeWatcherOptions, onFailure: () => void): TreeSource | null {
   const watches = new Map<string, FSWatcher>();
-  // What each watch is on: a directory removed and made again under its name is another inode.
-  const inodes = new Map<string, number>();
+  // Which directory each watch is on: one removed and made again under its name is another.
+  const identities = new Map<string, string>();
   // A directory relisted while its last listing still runs is listed once more after it.
   const listing = new Map<string, boolean>();
   let closed = false;
@@ -151,12 +162,12 @@ function perDirectory(options: TreeWatcherOptions, onFailure: () => void): TreeS
       if (path === relative || path.startsWith(`${relative}/`)) {
         watcher.close();
         watches.delete(path);
-        inodes.delete(path);
+        identities.delete(path);
       }
     }
   };
 
-  /** `false` when the directory is gone; any other refusal — `ENOSPC`, `EMFILE` — throws. */
+  /** `false` for a directory it skips; any other refusal — `ENOSPC`, `EMFILE` — throws. */
   const take = (relative: string): boolean => {
     if (closed || watches.has(relative)) return true;
     let watcher: FSWatcher;
@@ -164,10 +175,10 @@ function perDirectory(options: TreeWatcherOptions, onFailure: () => void): TreeS
       watcher = watch(
         join(options.dir, relative),
         { persistent: false, encoding: "utf8" },
-        (_event, name) => onEvent(relative, name),
+        (event, name) => onEvent(relative, event, name),
       );
     } catch (error) {
-      if (gone(error)) return false;
+      if (skipped(error)) return false;
       throw error;
     }
     watches.set(relative, watcher);
@@ -185,22 +196,20 @@ function perDirectory(options: TreeWatcherOptions, onFailure: () => void): TreeS
   /** Watches a directory and every one below it; one found after the start reports its files,
    * since they may have been written before its watch existed. */
   async function arm(relative: string, fresh: boolean): Promise<void> {
-    if (!take(relative)) return;
+    // Read before the watch is taken: a replacement in between is then seen as one later.
+    const id = await identity(join(options.dir, relative));
+    if (id === null || closed || !take(relative)) return;
+    identities.set(relative, id);
     let entries: Dirent[];
     try {
-      const [info, listed] = await Promise.all([
-        stat(join(options.dir, relative)),
-        readdir(join(options.dir, relative), { withFileTypes: true }),
-      ]);
-      inodes.set(relative, info.ino);
-      entries = listed;
+      entries = await readdir(join(options.dir, relative), { withFileTypes: true });
     } catch {
       forget(relative);
       return;
     }
     const below: Promise<void>[] = [];
     for (const entry of entries) {
-      if (closed) return;
+      if (closed) break;
       const path = within(relative, entry.name);
       if (entry.isDirectory()) {
         if (!watches.has(path) && !options.ignore(path, "dir")) below.push(arm(path, fresh));
@@ -211,14 +220,21 @@ function perDirectory(options: TreeWatcherOptions, onFailure: () => void): TreeS
     await Promise.all(below);
   }
 
-  /** Finds the directories that came and went: by listing rather than by the event's name, which
-   * Bun drops when several changes share one read (05-watcher.md). */
+  /** A watched directory that is gone, or another under its name, is watched again from scratch. */
+  async function recheck(path: string): Promise<void> {
+    const id = await identity(join(options.dir, path));
+    if (closed || !watches.has(path) || id === identities.get(path)) return;
+    forget(path);
+    if (id !== null) await arm(path, true);
+  }
+
+  /** Finds the directories that came, went or were replaced: by listing and by identity rather
+   * than by the event's name, which Bun drops when several changes share one read (05-watcher.md). */
   async function relist(relative: string): Promise<void> {
     if (listing.has(relative)) {
       listing.set(relative, true);
       return;
     }
-    listing.set(relative, false);
     try {
       do {
         listing.set(relative, false);
@@ -230,12 +246,16 @@ function perDirectory(options: TreeWatcherOptions, onFailure: () => void): TreeS
           return;
         }
         const present = new Set<string>();
+        const checks: Promise<void>[] = [];
         for (const entry of entries) {
-          if (closed || !entry.isDirectory()) continue;
+          if (closed) break;
+          if (!entry.isDirectory()) continue;
           const path = within(relative, entry.name);
           present.add(path);
-          if (!watches.has(path) && !options.ignore(path, "dir")) await arm(path, true);
+          if (options.ignore(path, "dir")) continue;
+          checks.push(watches.has(path) ? recheck(path) : arm(path, true));
         }
+        await Promise.all(checks);
         for (const path of [...watches.keys()]) {
           const parent = path.slice(0, Math.max(0, path.lastIndexOf("/")));
           if (path !== relative && parent === relative && !present.has(path)) forget(path);
@@ -248,23 +268,17 @@ function perDirectory(options: TreeWatcherOptions, onFailure: () => void): TreeS
     }
   }
 
-  /** A watched directory an event names may be gone, or another one under the same name. */
-  async function recheck(path: string): Promise<void> {
-    const ino = await stat(join(options.dir, path)).then(
-      (info) => info.ino,
-      () => null,
-    );
-    if (closed || ino === inodes.get(path) || !inodes.has(path)) return;
-    forget(path);
-    if (ino !== null) await arm(path, true);
-  }
-
-  function onEvent(relative: string, name: string | null): void {
+  function onEvent(relative: string, event: string, name: string | null): void {
     if (closed) return;
     if (name !== null && name !== "") {
-      const path = within(relative, String(name).split("\\").join("/"));
+      const path = within(relative, String(name));
       if (!options.ignore(path, "file")) options.onChange(path);
-      if (watches.has(path)) void recheck(path).catch(() => fail());
+      // A rename naming a watched directory made or removed that name: its watch is renewed
+      // whatever the identity says, which a filesystem without a birth time cannot tell.
+      if (event === "rename" && watches.has(path)) {
+        forget(path);
+        void arm(path, true).catch(() => fail());
+      }
     }
     void relist(relative);
   }

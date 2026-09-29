@@ -1,6 +1,7 @@
 /** The watcher ([ADR-005](../../../docs/adr/adr-005-live-update.md)): it reads repositories and
  * writes only the data directory's change-set cache ([05-watcher.md](../../../docs/reference/05-watcher.md)). */
-import { relative } from "node:path";
+import { stat } from "node:fs/promises";
+import { join, relative } from "node:path";
 import { filterChange, patchable, replaceRepository, scanReview } from "../change-set.ts";
 import type { Config } from "../config/index.ts";
 import { commentInScope, repositoryInScope } from "../domain/scope.ts";
@@ -188,6 +189,31 @@ export async function startWatcher(options: WatcherOptions): Promise<Watcher> {
     }
   }
 
+  /** The stamp of `.git/index` and `.git/HEAD` of each repository, as the last burst naming them
+   * found it: what tells a lock git renamed over its file from one it let go (05-watcher.md). */
+  const gitStamps = new Map<string, string>();
+
+  /** A lock stands for its file when that file moved, and is dropped when it did not. */
+  async function settleLocks(repository: Repository, paths: string[]): Promise<string[]> {
+    const touched = [...GIT_LOCKS].filter(([lock, file]) =>
+      paths.some((p) => p === lock || p === file),
+    );
+    const moved = new Set<string>();
+    for (const [, file] of touched) {
+      const key = `${repository.path}\0${file}`;
+      const now = await fileStamp(join(repository.absolutePath, file));
+      if (gitStamps.get(key) !== now) moved.add(file);
+      gitStamps.set(key, now);
+    }
+    const kept = new Set<string>();
+    for (const path of paths) {
+      const file = GIT_LOCKS.get(path);
+      if (file === undefined) kept.add(path);
+      else if (moved.has(file)) kept.add(file);
+    }
+    return [...kept].sort(byCodePoint);
+  }
+
   /** What git said about a repository's paths, kept between bursts (05-watcher.md). */
   const ignoredPaths = new Map<string, Map<string, boolean>>();
 
@@ -214,8 +240,11 @@ export async function startWatcher(options: WatcherOptions): Promise<Watcher> {
 
   async function rescan(repository: Repository): Promise<void> {
     const repo = repository.path;
-    const files = [...(pending.get(repo) ?? [])].sort(byCodePoint);
+    const named = [...(pending.get(repo) ?? [])];
     pending.delete(repo);
+    const files = await settleLocks(repository, named);
+    // A burst of locks alone whose files did not move is a `git status` refreshing nothing.
+    if (named.length > 0 && files.length === 0) return;
     // A build writing where git ignores forces a rescan a second that finds nothing; asking git
     // first costs one process where a rescan costs five (05-watcher.md).
     if (await burstIsIgnored(repository, files)) return;
@@ -430,6 +459,16 @@ export async function startWatcher(options: WatcherOptions): Promise<Watcher> {
       bus.emit({ type: "session-changed", name });
     }
   }
+
+  // Before any tree is watched, so a lock that comes later is measured against the files as they were.
+  await Promise.all(
+    scan.repositories.flatMap((repository) =>
+      [...GIT_LOCKS.values()].map(async (file) => {
+        const stamp = await fileStamp(join(repository.absolutePath, file));
+        gitStamps.set(`${repository.path}\0${file}`, stamp);
+      }),
+    ),
+  );
 
   for (const repository of scan.repositories) {
     const ignore = repositoryIgnore(config, repository);
@@ -763,8 +802,24 @@ export function trimVerdicts(cache: Map<string, boolean>): void {
 /** The repository-local exclude file, whose rules are git's as much as a `.gitignore`'s. */
 const IGNORE_RULES_EXCLUDE = ".git/info/exclude";
 
-/** The two files of `.git` that move the change set, and the locks git renames over them. */
-const KEPT_IN_GIT_DIR = new Set([".git/HEAD", ".git/HEAD.lock", ".git/index", ".git/index.lock"]);
+/** The locks git renames over the two files of `.git` that move the change set. */
+const GIT_LOCKS = new Map([
+  [".git/HEAD.lock", ".git/HEAD"],
+  [".git/index.lock", ".git/index"],
+]);
+
+/** The two files of `.git` that move the change set, and their locks. */
+const KEPT_IN_GIT_DIR = new Set([...GIT_LOCKS.keys(), ...GIT_LOCKS.values()]);
+
+/** A file's inode, size and times, or `-` when it is not there; a rename over it moves the lot. */
+async function fileStamp(path: string): Promise<string> {
+  try {
+    const info = await stat(path, { bigint: true });
+    return `${info.ino}:${info.size}:${info.mtimeNs}:${info.ctimeNs}`;
+  } catch {
+    return "-";
+  }
+}
 
 /** Whether a burst's names make git's answers stale, and so a change in itself (05-watcher.md). */
 export function dropsVerdicts(paths: string[], cache: Map<string, boolean>): boolean {
