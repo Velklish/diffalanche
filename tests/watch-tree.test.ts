@@ -37,6 +37,9 @@ vi.mock("node:fs", async (importOriginal) => {
 
 const LINUX = process.platform === "linux";
 
+/** Whether every change is reported by name: Node's watch does, Bun's names one per read. */
+const NATIVE_NAMES = process.env.DIFFALANCHE_TEST_RUNTIME !== "bun";
+
 type Tree = { tree: TreeWatcher; heard: string[]; fellBack: () => number };
 
 function start(dir: string, ignore: Ignore = () => false, pollIntervalMs = 250): Tree {
@@ -118,6 +121,38 @@ describe("a directory that comes, goes and comes back", () => {
         expect(after.indexOf(`n${round}/deep/f.ts`)).toBeGreaterThanOrEqual(0);
         expect(after.indexOf(`n${round}/deep/f.ts`)).toBeLessThan(after.indexOf(`marker-${round}`));
       }
+    } finally {
+      tree.tree.close();
+      rmSync(dir, { recursive: true, force: true });
+    }
+  });
+
+  // An event once copied every piece of work under way: 5000 names took 13 s and 1.4 GB (aefc358).
+  it("reports a burst of thousands of names in one directory in linear time and memory", async () => {
+    const dir = mkdtempSync(join(tmpdir(), "diffalanche-tree-burst-"));
+    mkdirSync(join(dir, "out"));
+    const tree = start(dir);
+    try {
+      await arm(tree, dir);
+      const count = 5_000;
+      const heapBefore = process.memoryUsage().heapUsed;
+      let heapPeak = heapBefore;
+      const sampling = setInterval(() => {
+        heapPeak = Math.max(heapPeak, process.memoryUsage().heapUsed);
+      }, 20);
+      const from = tree.heard.length;
+      // Written while this process waits, so the kernel queues every event and they come in one loop.
+      const writer = `const fs = require("fs"); for (let i = 0; i < ${count}; i++) fs.writeFileSync(${JSON.stringify(join(dir, "out"))} + "/f" + i, "");`;
+      execFileSync(process.execPath, ["-e", writer]);
+      // Reported in the order of the writes, so the marker comes after every name of the burst.
+      await write(tree, dir, "marker-after-burst");
+      clearInterval(sampling);
+      const names = new Set(tree.heard.slice(from).filter((path) => path.startsWith("out/")));
+      // Bun names one change per read of the descriptor, so only Node names every file.
+      if (NATIVE_NAMES) expect(names.size).toBe(count);
+      else expect(names.size).toBeGreaterThan(0);
+      // Linear: the names themselves are well under a megabyte; the quadratic copy was 1.4 GB.
+      expect(heapPeak - heapBefore).toBeLessThan(200 * 1024 * 1024);
     } finally {
       tree.tree.close();
       rmSync(dir, { recursive: true, force: true });
@@ -230,8 +265,11 @@ describe("a directory the watch may not read", () => {
     async (context) => {
       needsTypeScript(context);
       const root = process.getuid?.() === 0;
-      if (root && !hasSetpriv())
-        context.skip("running as root without setpriv to drop capabilities");
+      if (root && !dropsCapabilities()) {
+        context.skip(
+          "running as root, and setpriv cannot drop the capabilities that read anything",
+        );
+      }
       const dir = mkdtempSync(join(tmpdir(), "diffalanche-tree-unreadable-"));
       mkdirSync(join(dir, "src"));
       mkdirSync(join(dir, "volume", "data"), { recursive: true });
@@ -242,7 +280,14 @@ describe("a directory the watch may not read", () => {
         const { stdout } = root
           ? await run("setpriv", [...drop, ...command])
           : await run(command[0] as string, command.slice(1));
-        const seen = JSON.parse(stdout) as { polling: boolean; fellBack: number; heard: string[] };
+        const seen = JSON.parse(stdout) as {
+          polling: boolean;
+          fellBack: number;
+          heard: string[];
+          refused: string | null;
+        };
+        // The case is only a case if the process that watched could not read the directory.
+        expect(seen.refused).toBe("EACCES");
         expect(seen.heard.some((path) => path.startsWith("src/a-"))).toBe(true);
         expect(seen.polling).toBe(false);
         expect(seen.fellBack).toBe(0);
@@ -254,12 +299,22 @@ describe("a directory the watch may not read", () => {
   );
 });
 
-function hasSetpriv(): boolean {
+/** Whether `setpriv` here leaves root unable to list a mode-000 directory: missing, or refused by
+ * the container, it cannot. */
+function dropsCapabilities(): boolean {
+  const probe = mkdtempSync(join(tmpdir(), "diffalanche-setpriv-"));
+  chmodSync(probe, 0o000);
   try {
-    execFileSync("setpriv", ["--version"], { stdio: "ignore" });
-    return true;
-  } catch {
+    execFileSync("setpriv", ["--inh-caps=-all", "--bounding-set=-all", "ls", probe], {
+      stdio: "ignore",
+    });
     return false;
+  } catch (error) {
+    // `ls` refused is exit status 2; a missing or refused `setpriv` is another failure.
+    return (error as { status?: number }).status === 2;
+  } finally {
+    chmodSync(probe, 0o755);
+    rmSync(probe, { recursive: true, force: true });
   }
 }
 

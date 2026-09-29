@@ -1,6 +1,6 @@
 /** A tree over a directory with one it may not read, in a process of its own so it can run without
  * root's capabilities (05-watcher.md, "What the unit tests hold"); prints what it saw as JSON. */
-import { writeFile } from "node:fs/promises";
+import { readdir, writeFile } from "node:fs/promises";
 import { join } from "node:path";
 import { watchTree } from "../../src/core/watcher/tree.ts";
 
@@ -27,5 +27,12 @@ for (let attempt = 0; !heard.some((path) => path.startsWith("src/a-")); attempt 
 }
 // Past the first delivery, so a takeover that was coming has come.
 await new Promise((done) => setTimeout(done, 300));
-process.stdout.write(`${JSON.stringify({ polling: tree.polling(), fellBack, heard })}\n`);
+// What this process meets at the directory: the case holds only if it really may not read it.
+let refused: string | null = null;
+try {
+  await readdir(join(dir, "volume"));
+} catch (error) {
+  refused = (error as NodeJS.ErrnoException).code ?? String(error);
+}
+process.stdout.write(`${JSON.stringify({ polling: tree.polling(), fellBack, heard, refused })}\n`);
 tree.close();

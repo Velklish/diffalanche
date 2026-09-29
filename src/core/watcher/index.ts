@@ -193,17 +193,22 @@ export async function startWatcher(options: WatcherOptions): Promise<Watcher> {
    * found it: what tells a lock git renamed over its file from one it let go (05-watcher.md). */
   const gitStamps = new Map<string, string>();
 
-  /** A lock stands for its file when that file moved, and is dropped when it did not. */
-  async function settleLocks(repository: Repository, paths: string[]): Promise<string[]> {
+  /** A lock stands for its file when that file moved, and is dropped when it did not; the stamps
+   * read are kept by `commit`, once the burst is through, so a failed rescan is not forgotten. */
+  async function settleLocks(
+    repository: Repository,
+    paths: string[],
+  ): Promise<{ files: string[]; commit: () => void }> {
     const touched = [...GIT_LOCKS].filter(([lock, file]) =>
       paths.some((p) => p === lock || p === file),
     );
     const moved = new Set<string>();
+    const read = new Map<string, string>();
     for (const [, file] of touched) {
       const key = `${repository.path}\0${file}`;
       const now = await fileStamp(join(repository.absolutePath, file));
       if (gitStamps.get(key) !== now) moved.add(file);
-      gitStamps.set(key, now);
+      read.set(key, now);
     }
     const kept = new Set<string>();
     for (const path of paths) {
@@ -211,7 +216,10 @@ export async function startWatcher(options: WatcherOptions): Promise<Watcher> {
       if (file === undefined) kept.add(path);
       else if (moved.has(file)) kept.add(file);
     }
-    return [...kept].sort(byCodePoint);
+    const commit = (): void => {
+      for (const [key, stamp] of read) gitStamps.set(key, stamp);
+    };
+    return { files: [...kept].sort(byCodePoint), commit };
   }
 
   /** What git said about a repository's paths, kept between bursts (05-watcher.md). */
@@ -242,9 +250,16 @@ export async function startWatcher(options: WatcherOptions): Promise<Watcher> {
     const repo = repository.path;
     const named = [...(pending.get(repo) ?? [])];
     pending.delete(repo);
-    const files = await settleLocks(repository, named);
+    const { files, commit } = await settleLocks(repository, named);
     // A burst of locks alone whose files did not move is a `git status` refreshing nothing.
     if (named.length > 0 && files.length === 0) return;
+    // A rescan that throws keeps the old stamps: the next lock of the same move is a change again.
+    await rescanBurst(repository, files);
+    commit();
+  }
+
+  async function rescanBurst(repository: Repository, files: string[]): Promise<void> {
+    const repo = repository.path;
     // A build writing where git ignores forces a rescan a second that finds nothing; asking git
     // first costs one process where a rescan costs five (05-watcher.md).
     if (await burstIsIgnored(repository, files)) return;
