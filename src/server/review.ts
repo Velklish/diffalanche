@@ -16,6 +16,7 @@ import {
   list,
   repositoryInScope,
   resolveSessionName,
+  withAnchorWarnings,
 } from "../core/domain/index.ts";
 import { readRepositoryChange, scan } from "../core/index.ts";
 import type { Base, DiffCache, Review } from "../core/storage/index.ts";
@@ -257,7 +258,9 @@ export function createReviewService(
       // Taken before the name is read from disk: a write that lands while it is
       // being read must not pass for one this read covers.
       const asked = writes;
-      return documentOf(await resolveSessionName(config.dataDir, session), asked);
+      return withOrphans(
+        await documentOf(await resolveSessionName(config.dataDir, session), asked),
+      );
     },
     payload: async (session) => {
       const asked = writes;
@@ -267,8 +270,10 @@ export function createReviewService(
       const entry = sessions.get(name);
       // A document an invalidation kept out of the cache is serialised for the
       // request that asked and not kept.
-      if (entry === undefined || entry.document !== document) return JSON.stringify(document);
-      entry.payload ??= JSON.stringify(document);
+      if (entry === undefined || entry.document !== document) {
+        return JSON.stringify(withOrphans(document));
+      }
+      entry.payload ??= JSON.stringify(withOrphans(document));
       return entry.payload;
     },
     repository: async (repo, session) => {
@@ -369,6 +374,13 @@ function trim(sessions: Map<string, Held>): void {
     if (sessions.size <= DOCUMENT_CACHE_LIMIT) break;
     if (entry.pending === null) sessions.delete(name);
   }
+}
+
+/** The document as served, its orphaned comments counted into the warnings: added on the way out,
+ * so what is held keeps the change set's own list, which a rescan replaces (07-server.md). */
+function withOrphans(document: ReviewDocument): ReviewDocument {
+  const warnings = withAnchorWarnings(document.warnings, document.comments);
+  return warnings.length === document.warnings.length ? document : { ...document, warnings };
 }
 
 /** Whether two reads of a small file say the same thing: what keeps a held document's bytes. */

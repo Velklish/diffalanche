@@ -257,12 +257,12 @@ flags, and `tests/readme-cli.test.ts` fails if the two ever disagree.
 | `review reopen [<name>] --role human [--author <name>]` | open a closed review session again; `--role human` is required |
 | `review delete <name> --role human [--yes]` | delete a review session with its comments; `--role human` is required, and without `--yes` it asks on the terminal and refuses when there is none |
 | `diff [--repo <path>] [--json] [--patch]` | the change set of the review session; rewrites `diff.json` |
-| `list [--status <open\|resolved\|all>] [--repo <path>] [--severity <critical\|warning\|nit\|question>] [--unanswered] [--json]` | the comments of the review session |
+| `list [--status <open\|resolved\|orphaned\|all>] [--repo <path>] [--severity <critical\|warning\|nit\|question>] [--unanswered] [--json]` | the comments of the review session; `orphaned` are those whose line was not found after the code changed |
 | `show <id> [--json]` | one comment with its thread and its anchor |
 | `reply <id> --body <text\|-> [--author <name>] [--role <human\|agent>] [--confirm-severity]` | reply in a thread; `--confirm-severity` agrees with a severity the model chose, and the thread then reads `labelled by <author>` |
 | `comment [--repo <path>] [--path <path>] [--line <n>] [--end-line <n>] [--side <new\|old>] --severity <critical\|warning\|nit\|question> --body <text\|-> [--author <name>] [--role <human\|agent>]` | open a comment on a line, a file, a repository, or the review |
 | `resolve <id> --role human [--note <text>] [--author <name>]` | close a thread; `--role human` is required |
-| `reopen <id> --role human [--note <text>] [--author <name>]` | open a thread again; `--role human` is required |
+| `reopen <id> --role human [--line <n>] [--end-line <n>] [--note <text>] [--author <name>]` | open a thread again; `--role human` is required; `--line` puts a line comment on the line it belongs to now, and an orphaned one needs it |
 | `export [--status <open\|all>] [--format <md\|json>]` | the review as markdown grouped by repository |
 | `suggest [--json] --body <text>` | past comments like this one from every review session, and the severity they vote for; one the model chose and nobody confirmed does not vote |
 | `index rebuild` | embed every comment of every review session again and write the embedding index |
@@ -305,6 +305,15 @@ session without a scope is the whole root, which is what every session was
 before. `review scope` prints one; `review scope set` replaces it, `review scope
 add` and `review scope remove` change it, and a replacement or removal that
 would delete comments needs `--drop-comments`.
+
+While `serve` runs, a line comment follows its line when the code around it is
+edited: by `git blame` where the line is one the base has, then by its stored
+text and context. An open comment whose line cannot be found that way — the
+line rewritten past recognition, two equally good places, the file gone — is
+marked `orphaned` and keeps its old place and text; `diff` and the UI warn
+`N comments lost their anchor` for its repository, `list --status orphaned`
+lists them, and `reopen <id> --role human --line <n>` puts one back on the line
+a human chooses. Nothing moves an orphaned comment on its own.
 
 Comments are signed `--author agent` and `--role agent` unless told otherwise,
 and only `--role human` may `resolve` or `reopen` a thread, or `review close` or

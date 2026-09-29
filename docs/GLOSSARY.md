@@ -31,7 +31,7 @@ The “Term” column gives the spelling for prose; EN is the name in code and E
 | reply | `reply` | A message inside a thread, with author and role. | SPEC.md §7 |
 | anchor | `anchor` | Where a comment attaches: review, repository, file, line, or line range. Line anchors keep the line text and context. | SPEC.md §3.6, §7 |
 | severity | `severity` | `critical`, `warning`, `nit`, or `question`. | SPEC.md §3.7 |
-| status | `status` | `open` or `resolved`; Phase 3 adds `orphaned`. Only a human sets `resolved`. | SPEC.md §3.8 |
+| status | `status` | `open`, `resolved`, or `orphaned` (Phase 3). Only a human sets `resolved`, and only a human returns an orphaned comment to `open`. | SPEC.md §3.8, §7 |
 | role | `role` | Who wrote a message: `human` or `agent`. | SPEC.md §3.8 |
 | author | `author` | The name on a message: `config.user` from the UI, `--author` from the CLI. | SPEC.md §8 |
 | unanswered | `--unanswered` | An open comment whose last message is from a human: an agent has not replied yet. | SPEC.md §8 |
@@ -46,6 +46,7 @@ The “Term” column gives the spelling for prose; EN is the name in code and E
 | synthetic review | `synth` | The deterministic fixture of 21 repositories, 300 files, 30 000 diff lines, and 200 comments used by the performance gate. | SPEC.md §6 |
 | smoke matrix | `smoke` | One CLI scenario run on every delivery channel and every runtime: the npm bundle on Node, the sources on Bun, and the compiled binary. | ADR-006, scripts/smoke.sh, reference/11-perf.md |
 | orphaned | `orphaned` | A comment whose anchor cannot be found after code edits; kept, marked, re-anchored by hand or by a model proposal. Phase 3. | SPEC.md §3.8, HANDOFF.md §3 |
+| re-anchoring | `reanchorRepository` | Placing a line comment again after the code under it changed: by blame where the base has the line, then by its stored text and context against a similarity threshold; a comment with no single place found becomes `orphaned`. Phase 3. | SPEC.md §5, reference/04-domain.md |
 | embedding index | `index` | A vector for every comment of every review session, with its session, id, severity, anchor and text, in `index/index.bin` of the data directory. A cache: the tool writes it, and brings it up to date before it reads it. | SPEC.md §7, §8, reference/09-ml.md |
 | suggestion | `suggest` | A similar past comment proposed while typing, retrieved from the embedding index. Phase 2. | SPEC.md §5, §8 |
 | surface brief | `brief` | One document per screen for design work: visitor mode, the job on that screen, its constraints, and what is still undecided there. Lives in `.impeccable/surfaces/`. | .impeccable/surfaces/, reference/08-ui.md |

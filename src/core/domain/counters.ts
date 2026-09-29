@@ -37,7 +37,8 @@ function countComments(comments: Comment[]): Counters {
   return {
     total: comments.length,
     open: open.length,
-    resolved: comments.length - open.length,
+    // Counted, not taken as the rest: an orphaned comment is neither open nor resolved.
+    resolved: comments.filter((comment) => comment.status === "resolved").length,
     unanswered: comments.filter(isUnanswered).length,
     awaiting: comments.filter(isAwaiting).length,
     severity: worstSeverity(open),

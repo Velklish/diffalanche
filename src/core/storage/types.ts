@@ -14,7 +14,8 @@ export const READABLE_VERSIONS: readonly number[] = [1, SCHEMA_VERSION];
 export type Base = BaseSpec;
 
 export type Severity = "critical" | "warning" | "nit" | "question";
-export type CommentStatus = "open" | "resolved";
+/** `orphaned`: re-anchoring found no unique place for an open line comment, which keeps its old one. */
+export type CommentStatus = "open" | "resolved" | "orphaned";
 export type Role = "human" | "agent";
 export type Side = "new" | "old";
 
@@ -35,7 +36,7 @@ export type Scope = ScopeEntry[] | null;
 /** The one list the schema and the CLI both check against: two lists drift once one gains a
  * word. `SEVERITIES` is worst first (`docs/SPEC.md` section 3, decision 7). */
 export const SEVERITIES: readonly Severity[] = ["critical", "warning", "nit", "question"];
-export const COMMENT_STATUSES: readonly CommentStatus[] = ["open", "resolved"];
+export const COMMENT_STATUSES: readonly CommentStatus[] = ["open", "resolved", "orphaned"];
 export const REVIEW_STATUSES: readonly ReviewStatus[] = ["open", "closed"];
 export const ROLES: readonly Role[] = ["human", "agent"];
 export const SIDES: readonly Side[] = ["new", "old"];

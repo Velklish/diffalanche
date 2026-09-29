@@ -619,6 +619,37 @@ found", as for `check-ignore`.
 `tests/search-text.test.ts` holds `.git/index` and `HEAD` byte for byte across a
 search.
 
+## Blame
+
+`blameFrom(cwd, path, boundary, at)` in `src/core/git/blame.ts` is the first
+step of re-anchoring ([04-domain.md](04-domain.md#re-anchoring)): which lines of
+`path` at `at` — the working tree, or a commit — git traces back to the commit
+`boundary` unchanged, as a map from the boundary's line number to the line's
+number now. It runs `git blame --porcelain -M --no-textconv ^<boundary> [<sha>]
+-- <path>` with the repository's driver keys emptied, as the diff does
+([What the reader trusts](#what-the-reader-trusts)).
+
+**`^<boundary>` with no positive revision is what annotates the working
+tree.** `<boundary>..` reads as `<boundary>..HEAD` and annotates HEAD, which
+leaves out every edit not yet committed — the edits re-anchoring exists for.
+Measured on git 2.43 before it was written: with the base at HEAD both forms
+agree, and with one commit on top of the base, `<boundary>..` annotated HEAD's
+six lines and none of the three the working tree added, while `^<boundary>`
+annotated the working tree's nine.
+Lines git attributes to the boundary are the ones kept; `0000…` (not committed
+yet) and any commit after the boundary are left out, and so is a content line,
+which porcelain starts with a tab and the record pattern never matches.
+
+A path the history does not have — an untracked file, one renamed and not yet
+committed — and a boundary that is not a commit are git's non-zero exit, and
+the answer is `null`, which the caller reads as "no answer" rather than as a
+file whose every line is new. `-M` follows a block moved inside the file, past
+git's own threshold of twenty alphanumeric characters; a single short line
+moved is new to blame and is left to the text step.
+
+`git blame` of the working tree reads the index and writes nothing:
+`tests/reanchor.test.ts` holds `.git/index` byte for byte across one.
+
 ## What it does not do yet
 
 - The whole diff of a repository is read into memory as one string before it is

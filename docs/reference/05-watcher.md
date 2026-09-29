@@ -5,8 +5,9 @@ reviewed repositories and the data directory, rescans one repository when its
 files change, rewrites that repository's entry in `diff.json`, and puts what
 happened on an event bus other parts of the process listen to
 ([ADR-005](../adr/adr-005-live-update.md)). It reads repositories and writes
-nothing into them; the only file it writes is the change-set cache of the data
-directory.
+nothing into them; what it writes is in the data directory — the change-set
+cache, and `comments.json` when re-anchoring moved or orphaned a comment
+([Re-anchoring](#re-anchoring)).
 
 ## Starting it
 
@@ -315,11 +316,11 @@ the same, because the CLI writes the same directory.
 | `diff-changed` | `{ repo, files }` | a repository was rescanned and its entry is not what it was; `files` are the paths that woke the watcher, not the files of the new change set, and it is **empty** when what woke it was the walk taking over a dead watch, or the read of a session `current` moved to — neither names a path |
 | `comment-added` | `{ session, id }` | a comment appeared in the `comments.json` of a followed session |
 | `reply-added` | `{ session, id, commentId }` | a reply appeared in a thread; `id` is the reply |
-| `comment-status` | `{ session, id }` | a comment was resolved or reopened |
+| `comment-status` | `{ session, id }` | a comment was resolved, reopened or orphaned, or re-anchoring moved it to other lines |
 | `session-changed` | `{ name }` | the base, title, name, scope or status of a **followed** session changed |
 | `current-changed` | `{ name }` | the `current` pointer moved to this session |
 | `sessions-changed` | `{ name, status }` | a review task appeared in the data directory, or a task's status changed — whichever session it is |
-| `warnings` | `{ list }` | the warnings of the change set are not what they were |
+| `warnings` | `{ list }` | the warnings of the current session's change set are not what they were, or the count of its orphaned comments changed; `list` carries both ([Re-anchoring](#re-anchoring)) |
 
 The bus is in-process: the server's live stream is one listener and the activity
 feed is built from the same events. A listener is called in the order it
@@ -584,6 +585,63 @@ outside the session lock, which is taken only for the write: it takes as long as
 every repository takes, and the CLI writes the same directory meanwhile. A patched cache
 keeps the base it records.
 
+## Re-anchoring
+
+A rescan that changed a repository's entry is followed by a pass of
+`reanchorRepository` ([04-domain.md](04-domain.md#re-anchoring)) over that
+repository's line comments, handed the entry as the cache had it before the
+patch and the entry now. The entry before is taken inside the rescan's lock,
+from the same read of `diff.json` the patch starts from; it is handed over only
+when that cache answers the session's base and scope — a cache for another
+question says nothing about where the comments' lines were, and then no pass
+runs. A cache without `rootWarnings` still answers it, so its full rescan is
+followed by a pass as a patch is.
+
+**The entry before is the watcher's own memory first**, and `diff.json` only
+when it has none. `comment` and `diff` rewrite the cache from the working tree
+too ([06-cli.md](06-cli.md)), and an agent that edits a file and runs `diff
+--json` inside the debounce leaves a rescan that finds `diff.json` already equal
+to the working tree: judged by the file, nothing changed, and the comments on
+that file would never move. So the watcher keeps each repository's entry as it
+last handed it over — from every rescan, and from the whole read a server start
+or a move of `current` makes — and a rescan whose entry differs from that memory
+is followed by a pass whether or not it rewrote the file. The memory is the
+current session's alone, dropped for another session when `current` moves and
+for this one when its base or scope changes, since then it describes lines
+against another question; it holds the entries with their hunks, about the size
+of `diff.json` itself.
+
+**The pass runs after the rescan, in a chain of its own**, not in the queue of
+rescans: it starts once the change set has been handed over, `diff-changed`
+sent, and `diff.json` written, so the update after an edit carries none of its
+cost, and a rescan of the next edit never waits behind blame. A pass waiting for
+its turn takes the next rescan's entry as its `after` and keeps its own
+`before`: a burst of edits to one repository costs one pass that spans all of
+them, not one per edit. `close` waits for the chain after the rescans, so
+nothing is written once it resolves.
+
+What moved while no watcher followed the session is caught up the same way: the
+whole read of a session — the server's first, and the one `current` moving to a
+session makes — hands every repository it found moved to a pass, with the
+`diff.json` it replaced as `before`, when that file answers the session's base
+and scope.
+
+The pass writes `comments.json` only when a comment moved, took a new anchor, or
+was orphaned; that write is a burst of the data directory like any other and
+comes back as events. A thread whose side or lines changed is `comment-status`,
+as a status change is — a window re-reads the thread, which is where the line
+is — and so is one that became `orphaned`. The count of orphaned comments per
+repository is kept from the same read of `comments.json` the events are, and
+when it changes for the current session a `warnings` frame goes out with the
+change set's warnings and those of the orphans together, the change set's taken
+from the last rescan or, before any, from `diff.json`. Every `warnings` frame
+carries both, so a window that replaces its list with the frame's keeps the
+orphans' ([04-domain.md](04-domain.md#re-anchoring)).
+
+A `comments.json` that cannot be read fails the pass without a word: the
+comment events report it, once, on the way into the broken state
+([Events](#events)), and a pass per rescan would say it again each time.
+
 ## The activity feed
 
 The feed is derived from the events and lives in memory, capped at the last 200
@@ -636,6 +694,18 @@ the same run where it was before.
 A platform without a recursive watch cannot meet the budget at all: there the
 interval of the walk is added to every measurement.
 
+**Re-anchoring adds work behind that path, not on it**
+([Re-anchoring](#re-anchoring)): after every rescan that changed an entry, one
+read of `review.json` and of `comments.json`; for each changed file that carries
+a line comment, one read of the file — `ls-files` and the file itself, or two
+`cat-file` for the old side — and, when a comment's line is one the base has,
+one `git blame` with its `config --list`, each shared by every comment on the
+file; the edit-distance scoring of the file's lines in memory; and one write of
+`comments.json` when anything moved, which the data directory's watch then
+reads back as a burst. None of it is measured: it runs
+beside the next rescan rather than before it, so what it can cost the budget is
+the CPU it takes from a rescan of another edit on the same machine.
+
 ## What the unit tests hold
 
 `tests/watcher.test.ts` measures the watcher on a fixture of its own, and four of
@@ -686,3 +756,11 @@ reads its own numbers: one slow run on a busy machine is not a regression
 ([Budget](#budget)). Each edit writes a file of its own, because a runtime that
 coalesces the changes of one file into one event — macOS does, under Bun — would
 otherwise answer the second edit with the event of the first.
+
+Re-anchoring is held by `tests/reanchor.test.ts` rather than here: the domain's
+steps against a repository of its own, and one watcher on that repository, with
+the walk and a 40 ms interval under both runtimes, that has to move one comment
+by the five lines an edit put above it, orphan the one whose line the edit
+rewrote, send `comment-status` for both, and end on a `warnings` frame naming
+the one orphan. The fixture is its own, twenty lines of one file, so the line
+each comment must land on can be read off the test.

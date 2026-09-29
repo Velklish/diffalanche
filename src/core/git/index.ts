@@ -15,6 +15,7 @@ import {
   untrackedFiles,
 } from "./run.ts";
 
+export { blameFrom } from "./blame.ts";
 export { parseDiff } from "./patch.ts";
 export { checkIgnore } from "./run.ts";
 

@@ -23,12 +23,12 @@ written yet. Of the `model` group, `model status` and `model pull --embedding` e
 | `diffalanche review reopen [<name>] --role human [--author <name>]` | opens it again |
 | `diffalanche review delete <name> --role human [--yes]` | deletes the session with its comments, and moves `current` when it named it |
 | `diffalanche diff [--repo <path>] [--json\|--patch]` | the change set of the session; rewrites `diff.json` |
-| `diffalanche list [--status <open\|resolved\|all>] [--repo <path>] [--severity <s>] [--unanswered] [--json]` | the comments of the session; default status `open` |
+| `diffalanche list [--status <open\|resolved\|orphaned\|all>] [--repo <path>] [--severity <s>] [--unanswered] [--json]` | the comments of the session; default status `open` |
 | `diffalanche show <id> [--json]` | one comment with its thread and its anchor |
 | `diffalanche reply <id> --body <text\|-> [--author] [--role] [--confirm-severity]` | a message in a thread; `-` reads standard input; `--confirm-severity` agrees with a severity the model chose |
 | `diffalanche comment [--repo <path>] [--path <p>] [--line <n>] [--end-line <n>] [--side <new\|old>] --severity <s> --body <text\|-> [--author] [--role]` | a new comment, anchor filled from the change set |
 | `diffalanche resolve <id> --role human [--note <text>] [--author]` | close a thread |
-| `diffalanche reopen <id> --role human [--note <text>] [--author]` | open it again |
+| `diffalanche reopen <id> --role human [--line <n>] [--end-line <n>] [--note <text>] [--author]` | open it again; `--line` puts a line comment on that line first, and an orphaned one needs it |
 | `diffalanche export [--status <open\|all>] [--format <md\|json>]` | the review as markdown grouped by repository |
 | `diffalanche suggest [--json] --body <text>` | the five past comments nearest the text across every review session, with their sources, and the severity they vote for, which a severity the model chose and nobody confirmed takes no part in; see [09-ml.md](09-ml.md#suggestions) |
 | `diffalanche index rebuild` | embeds every comment of every review session again and writes the index; see [09-ml.md](09-ml.md#index-rebuild-and-index-status) |
@@ -424,6 +424,30 @@ the label after the severity the way the UI marks the thread: `warning (auto)`,
 
 `list --unanswered` is the open threads whose last message is from a human: what
 an agent has not answered yet. A reply from an agent takes a thread out of it.
+
+**`list --status orphaned`** is the line comments re-anchoring could not place
+after the code changed ([04-domain.md](04-domain.md#re-anchoring)): each keeps
+the `line` and the `anchor` it had, so `show` prints the text that was lost. An
+orphaned comment is not `open`, so the default `list` and `--unanswered` leave
+it out: an agent asked what to fix is not handed a finding whose line nobody
+can find. `export --status all` carries it.
+
+**`reopen --line <n> [--end-line <m>]`** is how a human puts a comment back on a
+line: the comment's repository is read again, as `comment` reads it, the anchor
+is captured at `<n>` on the comment's own side from the change set or the file,
+and the thread opens there — `c_7f3k2q is open again on repos/group/alpha/file.txt:6`.
+An orphaned comment reopened without `--line` is exit code 1 with
+`anchor-orphaned`, naming the flag, and nothing is written; opening it where it
+was would put it back on the line it lost. `--line` on a comment above a line —
+a file, a repository, the review — is exit code 1 with `invalid-anchor`, and
+`--end-line` without `--line` is a usage error. With a role other than `human`
+nothing is read, not even the repository: the refusal is the domain's, as for
+every `reopen`.
+
+`diff` counts the orphaned comments into its warnings — `warning:
+repos/group/alpha: 2 comments lost their anchor` on standard error, the same
+entry in `--json`'s `warnings` — and writes `diff.json` with the scan's own list,
+which is what the file is a cache of.
 
 `list`, `show`, and `export` answer inside the scope of the session they run
 against, and so do `reply`, `resolve`, and `reopen`: a comment outside it is not

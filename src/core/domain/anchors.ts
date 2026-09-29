@@ -166,3 +166,118 @@ export function captureFromFile(
       : `@@ -${start},${count} +${other},${count} @@`;
   return { lineContent: found, hunk, before, after };
 }
+
+/** The re-anchoring cut-offs; the cases they were set by are in `tests/reanchor.test.ts` and
+ * [04-domain.md](../../../docs/reference/04-domain.md), "Re-anchoring". */
+export const LINE_SIMILARITY = 0.6;
+export const MATCH_SCORE = 0.7;
+export const MATCH_MARGIN = 0.1;
+/** How much of a candidate's score is its own line; the rest is the six lines around it. */
+const LINE_WEIGHT = 0.7;
+
+/** Indentation and runs of spaces say nothing about which line it is. */
+function normalise(text: string): string {
+  return text.trim().replace(/\s+/g, " ");
+}
+
+/** Edit distance, or any number above `limit` once no alignment can stay within it. */
+function distance(left: string, right: string, limit: number): number {
+  let previous = Array.from({ length: right.length + 1 }, (_, at) => at);
+  for (let i = 1; i <= left.length; i += 1) {
+    const row = [i];
+    let lowest = i;
+    for (let j = 1; j <= right.length; j += 1) {
+      const cost = left[i - 1] === right[j - 1] ? 0 : 1;
+      const value = Math.min(
+        (previous[j] as number) + 1,
+        (row[j - 1] as number) + 1,
+        (previous[j - 1] as number) + cost,
+      );
+      row.push(value);
+      if (value < lowest) lowest = value;
+    }
+    if (lowest > limit) return limit + 1;
+    previous = row;
+  }
+  return previous[right.length] as number;
+}
+
+/** 1 less the edit distance over the longer line, whitespace collapsed; anything under `floor`
+ * answers 0 without being worked out, since the caller drops it anyway. */
+export function similarity(left: string, right: string, floor = 0): number {
+  const a = normalise(left);
+  const b = normalise(right);
+  if (a === b) return 1;
+  const longest = Math.max(a.length, b.length);
+  const limit = Math.floor((1 - floor) * longest);
+  if (Math.abs(a.length - b.length) > limit) return 0;
+  const edits = distance(a, b, limit);
+  return edits > limit ? 0 : 1 - edits / longest;
+}
+
+/** How well the lines around `index` agree with the anchor's context, 1 with none to compare. */
+function contextScore(anchor: Anchor, lines: readonly string[], index: number): number {
+  const expected = [
+    ...anchor.before.map((text, at) => ({ text, at: index - anchor.before.length + at })),
+    ...anchor.after.map((text, at) => ({ text, at: index + 1 + at })),
+  ];
+  if (expected.length === 0) return 1;
+  let sum = 0;
+  for (const { text, at } of expected) {
+    const found = lines[at];
+    if (found !== undefined) sum += similarity(text, found);
+  }
+  return sum / expected.length;
+}
+
+/** Whether the anchored line and its context are exactly where the comment already is. */
+function inPlace(anchor: Anchor, lines: readonly string[], line: number): boolean {
+  const index = line - 1;
+  if (lines[index] !== anchor.lineContent) return false;
+  const before = anchor.before.every(
+    (text, at) => lines[index - anchor.before.length + at] === text,
+  );
+  return before && anchor.after.every((text, at) => lines[index + 1 + at] === text);
+}
+
+/** The fuzzy step: the line the anchor now matches, or `null` when none clears the thresholds or
+ * two come within the margin of each other — a comment never moves to a guess. */
+export function locate(anchor: Anchor, lines: readonly string[], line: number): number | null {
+  if (inPlace(anchor, lines, line)) return line;
+  let best = -1;
+  let bestScore = -1;
+  let runnerUp = -1;
+  for (const [index, text] of lines.entries()) {
+    const own = similarity(anchor.lineContent, text, LINE_SIMILARITY);
+    if (own < LINE_SIMILARITY) continue;
+    const score = LINE_WEIGHT * own + (1 - LINE_WEIGHT) * contextScore(anchor, lines, index);
+    if (score > bestScore) {
+      runnerUp = bestScore;
+      bestScore = score;
+      best = index;
+    } else if (score > runnerUp) {
+      runnerUp = score;
+    }
+  }
+  if (best === -1 || bestScore < MATCH_SCORE) return null;
+  if (runnerUp > bestScore - MATCH_MARGIN) return null;
+  return best + 1;
+}
+
+/** Where a new-side line of a change set sits at its base: `null` for a line the base never had,
+ * and the line itself for a file the change set does not list. */
+export function baseLineOf(file: FileChange | null, line: number): number | null {
+  if (file === null) return line;
+  if (file.omitted !== null || file.status === "added") return null;
+  for (const hunk of file.hunks) {
+    for (const one of hunk.lines) if (one.newLine === line) return one.oldLine;
+  }
+  return otherSideLine(file, "new", line);
+}
+
+/** A file's text as line numbers count it: a final newline ends the last line. */
+export function linesOf(text: string): string[] {
+  const lines = text.split("\n");
+  if (lines.at(-1) === "") lines.pop();
+  return lines;
+}

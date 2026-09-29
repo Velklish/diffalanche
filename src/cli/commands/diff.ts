@@ -1,6 +1,12 @@
 /** `diff`: the change set of the session, rescanned and rewritten by every run that exits 0
  * ([06-cli.md](../../../docs/reference/06-cli.md)). */
-import { formatScope, readSession, repositoryInScope } from "../../core/domain/index.ts";
+import {
+  formatScope,
+  list as listComments,
+  readSession,
+  repositoryInScope,
+  withAnchorWarnings,
+} from "../../core/domain/index.ts";
 import { scanReview, totalsOf } from "../../core/index.ts";
 import type { DiffCache } from "../../core/storage/index.ts";
 import { sessionDir, withLock, writeDiffCache } from "../../core/storage/index.ts";
@@ -85,7 +91,10 @@ export const diff: Command = {
       await writeDiffCache(config.dataDir, session, scanned.cache);
     });
 
-    const shown = narrow(scanned.cache, repo);
+    // What is printed counts the orphaned comments in; the file keeps the scan's own list.
+    const comments = await listComments(config.dataDir, session);
+    const warnings = withAnchorWarnings(scanned.cache.warnings, comments);
+    const shown = narrow({ ...scanned.cache, warnings }, repo);
 
     if (asJson) {
       json(context.io, shown);

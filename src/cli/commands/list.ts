@@ -8,7 +8,7 @@ import { firstLine, SEVERITIES, where } from "../comments.ts";
 import { UsageError } from "../errors.ts";
 import { json, table } from "../output.ts";
 
-const STATUSES = ["open", "resolved", "all"] as const;
+const STATUSES = ["open", "resolved", "orphaned", "all"] as const;
 
 export const list: Command = {
   spec: {
@@ -17,7 +17,7 @@ export const list: Command = {
     options: {
       status: {
         type: "string",
-        value: "<open|resolved|all>",
+        value: "<open|resolved|orphaned|all>",
         about: "which comments; default: open",
       },
       repo: { type: "string", value: "<path>", about: "only this repository" },

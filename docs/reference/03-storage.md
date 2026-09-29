@@ -540,6 +540,18 @@ would have lost the whole session to that build, which is worse. The case
 closes itself once every build that touches the data directory is this one or
 later.
 
+**`status: "orphaned"` did not raise it either** (DA-42), and its price is the
+other way round. It is a new value of a field every build reads, not a new
+field, so there is nothing for an earlier build to drop: its strict parse
+refuses the value, naming `comments[<n>].status`, and that build cannot read
+that session's `comments.json` at all while the file holds an orphaned comment.
+Nothing is lost — the refusal writes nothing, and the file stays as this build
+wrote it — and it holds for that one session only, until a `reopen --line` of
+this build or later puts the comment back to `open`. A raised version would
+have had that build refuse every `comments.json` and `review.json` a newer build
+wrote, orphans or none: the whole data directory instead of one session, which
+is what DA-36 declined for the same reason.
+
 ## What it does not do yet
 
 - Migrating a file in place. Nothing walks the data directory to raise its

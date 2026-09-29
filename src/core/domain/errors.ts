@@ -19,6 +19,8 @@ export type DomainErrorCode =
   | "role-not-human"
   /** A line anchor on a line the change set does not have. */
   | "line-not-in-diff"
+  /** `reopen` of an orphaned comment that names no line to put it on. */
+  | "anchor-orphaned"
   /** A scope that does not add up: a repository the root has not, a path outside its repository. */
   | "invalid-scope"
   /** A comment on something the review task is not about ([ADR-010](../../../docs/adr/adr-010-review-task-scope.md)). */

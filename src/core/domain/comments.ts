@@ -71,9 +71,17 @@ export type Verdict = Actor & {
   note?: string;
 };
 
+/** A reopen that may also put a line comment on the line it belongs to now: the one way an
+ * orphaned comment goes back to `open` (04-domain.md, "Re-anchoring"). */
+export type Reopening = Verdict & {
+  line?: number;
+  /** The last line of a range; without it the comment is on `line` alone. */
+  endLine?: number | null;
+};
+
 export type CommentFilter = {
   /** Default `all`; the CLI picks its own default. */
-  status?: "open" | "resolved" | "all";
+  status?: "open" | "resolved" | "orphaned" | "all";
   repo?: string;
   severity?: Severity;
   /** Only threads whose last message is from a human. */
@@ -334,16 +342,35 @@ export async function resolve(
   });
 }
 
+/** With `line`, the anchor is taken again there before the thread opens; an orphaned comment is
+ * refused without one, since reopening it where it was would put it back on the wrong line. */
 export async function reopen(
   dataDir: string,
   session: string,
   id: string,
-  verdict: Verdict,
+  verdict: Reopening,
+  options: AddOptions = {},
 ): Promise<Comment> {
   await assertSession(dataDir, session);
   assertHuman(verdict, "reopen a comment");
+  const placed =
+    verdict.line === undefined
+      ? null
+      : await replace(dataDir, session, id, verdict, options.source);
   return updateSession(dataDir, session, ({ review, comments }) => {
     const comment = find(comments, id, review.scope);
+    if (placed === null && comment.status === "orphaned") {
+      throw new DomainError(
+        "anchor-orphaned",
+        `${comment.id} lost its anchor when the code changed; reopen it with --line naming ` +
+          "the line it belongs to now. Nothing was written",
+      );
+    }
+    if (placed !== null) {
+      comment.line = placed.line;
+      comment.endLine = placed.endLine;
+      comment.anchor = placed.anchor;
+    }
     if (verdict.note !== undefined) {
       comment.replies.push({
         id: nextReplyId(comment.replies),
@@ -358,6 +385,32 @@ export async function reopen(
     comment.resolvedBy = null;
     return comment;
   });
+}
+
+/** The new place of a line comment a human names, its anchor captured as `addComment` takes one;
+ * a comment above a line has no line to move (04-domain.md, "Re-anchoring"). */
+async function replace(
+  dataDir: string,
+  session: string,
+  id: string,
+  verdict: Reopening,
+  source?: FileSource,
+): Promise<{ line: number; endLine: number | null; anchor: Anchor }> {
+  const comment = await get(dataDir, session, id);
+  const line = verdict.line as number;
+  const endLine = verdict.endLine ?? null;
+  if (comment.repo === null || comment.path === null || comment.line === null) {
+    throw new DomainError(
+      "invalid-anchor",
+      `${comment.id} is on ${anchorName(comment.repo, comment.path)}, not on a line, so there ` +
+        "is no line to move it to",
+    );
+  }
+  assertAnchorLevels({ repo: comment.repo, path: comment.path, line, endLine });
+  const side = comment.side ?? "new";
+  const repositories = await changeSet(dataDir, session);
+  const anchor = await anchorOf(repositories, comment.repo, comment.path, side, line, source);
+  return { line, endLine, anchor };
 }
 
 export async function get(dataDir: string, session: string, id: string): Promise<Comment> {

@@ -503,7 +503,11 @@ the directories that could not be read and the bases that did not resolve
 the warnings of the walk, which covers the whole root, plus those of reading the
 repositories of the task — a repository the task is not about is not read, so it
 has nothing to say — plus one naming a scope entry the walk found no repository
-for.
+for. On top of those, one per repository holding orphaned comments, `N comments
+lost their anchor` ([04-domain.md](04-domain.md#re-anchoring)), added to the
+document as it is served rather than to what is held: the held document keeps
+the change set's own list, which a rescan's hand-over replaces whole, and the
+count moves with `comments.json`, which every comment write already re-reads.
 
 `?review=<name>` answers with the document of that session instead of the
 current one: the address `review new --no-use` prints, so a window can open a
@@ -845,7 +849,7 @@ Every refusal is the domain's own code and message
 |---|---|
 | `no-current-session`, `no-such-session`, `no-such-comment` | 404 |
 | `scope-has-comments` | 409, with `count` and `comments` beside the message |
-| every other `DomainError` | 400 |
+| every other `DomainError` | 400 — `anchor-orphaned` among them: `POST /api/comments/:id/reopen` takes no line yet, so an orphaned comment cannot be reopened from the page until DA-43 |
 | a file of the data directory that cannot be read | 500, `error: "storage"` |
 | the embedding model is not in the user cache, is being put in place, or does not run on this platform; its process could not load it or ended | 503, `error: "model"` |
 
@@ -884,11 +888,11 @@ browser fetches what an event names rather than being sent it.
 | `diff-changed` | `{ type, repo, files }` — `files` are the paths that woke the watcher |
 | `comment-added` | `{ type, session, id }` — `session` is the task the thread belongs to |
 | `reply-added` | `{ type, session, id, commentId }` — `id` is the reply |
-| `comment-status` | `{ type, session, id }` |
+| `comment-status` | `{ type, session, id }` — the thread's status changed, or re-anchoring moved it |
 | `session-changed` | `{ type, name }` — the base, title, name, scope or status of a followed session changed |
 | `current-changed` | `{ type, name }` — the `current` pointer moved to this session |
 | `sessions-changed` | `{ type, name, status }` — a review task appeared, or a task's status changed |
-| `warnings` | `{ type, list }` |
+| `warnings` | `{ type, list }` — the change set's warnings with the orphaned comments' |
 | `activity` | `{ id, verb, author, repo, path, at }` — one line of the feed |
 | `reload` | `{ type, reason }` — read the review again; see below |
 
