@@ -261,6 +261,8 @@ export async function startWatcher(options: WatcherOptions): Promise<Watcher> {
     // found: it compared with a cache the move's read wrote, not with what others hold.
     if (!rescanned.changed && !settled.has(repo)) options.onRepositoryChanged?.(repo);
     settled.add(repo);
+    // The kept entry makes the next rescan try again; the fault is said once for this one.
+    if (rescanned.failure !== undefined) report(rescanned.failure);
   }
 
   /** The tasks followed: the current one, and the ones windows are open on. */
@@ -298,7 +300,7 @@ export async function startWatcher(options: WatcherOptions): Promise<Watcher> {
     // Without a cache the first document reads the working tree itself, and a read here would be a second.
     const before = await readDiffCache(config.dataDir, name);
     if (before === null) return moved;
-    await rescanSession(config, name, review, ({ cache }) => {
+    const whole = await rescanSession(config, name, review, ({ cache }) => {
       options.onRescan?.(name, cache);
       moved.scan = cache.warnings;
       const paths = new Set([...before.repositories, ...cache.repositories].map((one) => one.path));
@@ -310,6 +312,7 @@ export async function startWatcher(options: WatcherOptions): Promise<Watcher> {
       }
       if (!sameWarnings(before.warnings, cache.warnings)) moved.warnings = cache.warnings;
     });
+    if (whole.failure !== undefined) report(whole.failure);
     return moved;
   }
 
@@ -570,6 +573,8 @@ type Rescan = {
   changed: boolean;
   /** Whether the warnings of the change set are not what they were. */
   warningsChanged: boolean;
+  /** Why the comments were not moved, the entry being kept for the next writer to try again. */
+  failure?: unknown;
 };
 
 /** The new change set, handed over before it is written: writing megabytes of `diff.json` is the
@@ -611,8 +616,8 @@ export async function rescanRepository(
     };
     ready?.(outcome);
     // The comments move in this hold, after the frames: the next writer waits for them.
-    await writeChangeSet(config, session, held, cache, cached);
-    return outcome;
+    const written = await writeChangeSet(config, session, held, cache, cached);
+    return written.failure === null ? outcome : { ...outcome, failure: written.failure };
   });
   if (patched !== null) return patched;
   return rescanSession(config, session, review, ready);
@@ -629,10 +634,10 @@ async function rescanSession(
   const { cache } = await scanReview(config, review.base, review.scope);
   const outcome: Rescan = { cache, changed: true, warningsChanged: true };
   ready?.(outcome);
-  await withLock(sessionDir(config.dataDir, session), (held) =>
+  const written = await withLock(sessionDir(config.dataDir, session), (held) =>
     writeChangeSet(config, session, held, cache),
   );
-  return outcome;
+  return written.failure === null ? outcome : { ...outcome, failure: written.failure };
 }
 
 function sameWarnings(before: ScanWarning[], after: ScanWarning[]): boolean {

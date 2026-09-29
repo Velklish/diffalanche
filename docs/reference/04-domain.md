@@ -19,7 +19,6 @@ a caller reads; the message is what a person reads.
 | `invalid-anchor` | anchor levels that do not add up: a line without a file, a range that runs backwards |
 | `role-not-human` | `resolve` or `reopen` from anything but a human |
 | `line-not-in-diff` | a line anchor on a line neither the change set nor, when a source is given, the file itself has — past its end, or on a side that cannot be read |
-| `anchor-orphaned` | `reopen` without a line of an orphaned comment, or of a line comment whose anchor no longer reads at its line |
 | `invalid-scope` | a scope that does not add up: a repository the root has not, a repository named twice, a path that is not one inside its repository, an edit a scope cannot express |
 | `out-of-scope` | a comment on something the review task is not about |
 | `scope-has-comments` | narrowing the scope would delete comments and nothing consented to that; the error carries their ids |
@@ -420,7 +419,7 @@ was a false statement about the file, and it named no side to retry on.
 ### Re-anchoring
 
 ```ts
-reanchorRepositories(dataDir, session, moves, sources, held?): Promise<Reanchored>
+reanchorRepositories(dataDir, session, moves, sources, { held?, deadline? }): Promise<Pass>
 anchorWarnings(comments): ScanWarning[]
 withAnchorWarnings(warnings, comments): ScanWarning[]
 ```
@@ -431,17 +430,35 @@ Phase 3; DA-42). A **move** is one repository's entry of the change set as
 comments of a session are anchored against the entries `diff.json` holds, so
 **whoever replaces an entry moves the comments**: every writer of `diff.json` —
 the watcher's rescan, the server's first read of a task, `diff`, `comment`,
-`reopen --line`, anything that calls `refreshRepository` — writes through
+`reopen`, anything that calls `refreshRepository` — writes through
 `writeChangeSet` of `src/core/change-set.ts`
-([02-git.md](02-git.md#patching-one-repository)), which reads the entries it is
-about to replace, writes the file, and runs the pass over every repository whose
-entry changed, **in the same hold of the session's lock**. The hold is what
-keeps two writers' passes in the order of their writes, across processes: a
-pass run after the lock is let go could meet a second writer's pass that
-already took this one's `after` for its `before`. It is also what makes a pass
-cost the next writer its wait ([05-watcher.md](05-watcher.md#re-anchoring)).
-With no `diff.json` before the write there is nothing to say where the lines
-were, and the first scan of a session moves nothing.
+([02-git.md](02-git.md#writing-the-change-set)), which reads the entries it is
+about to replace, **runs the pass against the new change set in memory and
+writes the moved comments first, and only then writes `diff.json`**, all in the
+same hold of the session's lock. The hold is what keeps two writers' passes in
+the order of their writes, across processes: a pass run after the lock is let go
+could meet a second writer's pass that already took this one's `after` for its
+`before`. It is also what makes a pass cost the next writer its wait
+([05-watcher.md](05-watcher.md#re-anchoring)). With no `diff.json` before the
+write there is nothing to say where the lines were, and the first scan of a
+session moves nothing.
+
+**A pass that does not finish loses nothing.** For every repository whose
+comments it did not all place — the pass failed on a git fault, `comments.json`
+could not be read, or it ran out of time — the writer puts that repository's
+**old entry** into the `diff.json` it writes, instead of the new one. The file
+then still describes the tree those comments are on, and the next writer, whose
+`before` it is, moves them. The comments of a repository are written only when
+all of them were placed: half a repository is not written, and the next pass
+starts it over. The pass has **10 s** of the hold (`PASS_BUDGET_MS`, a third of
+the lock's 30 s lease, which is not renewed): past it no comment is started, the
+repositories not reached are left the same way, and the lease is never at risk
+of being taken over mid-pass. The rescan, `diff`, and the server read their
+repositories outside the hold, so the 10 s is all the pass and the two writes
+share it with. The cost of a repository left is a stale entry until the next
+write: a rescan finds it different from the working tree and announces
+`diff-changed` again, and `diff` warns
+([06-cli.md](06-cli.md#comments)).
 
 A pass places a `new`-side comment on a file whose entry changed, came or went,
 and every comment of the repository once its resolved base moved. An `old`-side
@@ -549,18 +566,23 @@ orphaned. Two things are what the tool does today and **wait for the owner**
 is never placed again by a pass, even when its text comes back where it was; and
 a resolved thread whose line is gone stays resolved where it was.
 
-**Only a human puts a comment back on a line** (`docs/SPEC.md` section 3,
-decision 8). `reopen` with a `line` captures the anchor at that line the way
-`addComment` does, and refuses a comment that is not on a line
-(`invalid-anchor`). **`reopen` without a line opens a line comment only where its
-anchor still reads**: an orphaned comment is `anchor-orphaned`, and so is a
-resolved one whose stored line and context are not found at its line by the text
-step — a thread that was orphaned and then resolved, or one resolved and then
-left behind by an edit, since a pass does not move a resolved thread it cannot
-place. The check reads the file through the caller's source; the CLI and the
-server both pass one, and the CLI reads the repository again first, so the
-comment has already moved with the pass when it is judged. Either refusal
-writes nothing.
+**How an orphaned comment comes back is pending the owner** (DA-42.4); what the
+tool does today is this. `reopen` is a human's (`docs/SPEC.md` section 3,
+decision 8), and **any human `reopen` of a line comment reads its repository
+again first** — the CLI's with or without `--line`, and the server's route,
+which does it for a task the watcher does not follow too — so the rewrite of
+`diff.json` has moved the comments before the one reopened is judged.
+`reopen` with a `line` captures the anchor at that line the way `addComment`
+does, opens the comment there, and refuses a comment that is not on a line
+(`invalid-anchor`). **`reopen` without a line reopens a line comment as `open`
+where its anchor still reads at its line, and as `orphaned` where it does not**
+— kept, counted as open, waiting for a `reopen` with a line: an orphaned comment
+whose text is not back, a thread orphaned and then resolved, or one resolved and
+then left behind by an edit, since a pass does not move a resolved thread it
+cannot place. "Reads" is the text step's answer at the stored line. The check
+reads the file through the caller's source, which the CLI and the server both
+pass; without one — a caller of the domain alone — nothing new is known, and an
+orphaned comment stays orphaned while any other opens.
 
 `anchorWarnings(comments)` is one warning per repository holding orphaned
 comments, shaped as a scan's warnings are: `{ path: <repo>, message: "2
@@ -579,7 +601,7 @@ shipped skills: a skill is advice, and an agent that never read it could still
 close a thread. `resolve` sets `resolvedAt` and `resolvedBy` from the caller;
 `reopen` clears both. `reopen` with a `line` also moves a line comment there
 first ([Re-anchoring](#re-anchoring)); without one, a line comment whose anchor
-no longer reads at its line — an orphaned one always — is refused. A `note` on either is written into the thread as a reply
+no longer reads at its line reopens as `orphaned`. A `note` on either is written into the thread as a reply
 first — the on-disk format has no other place for it, and a status change with
 an unexplained reason is worse than one with a message.
 

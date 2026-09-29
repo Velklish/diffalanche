@@ -589,9 +589,10 @@ keeps the base it records.
 
 A rescan re-anchors as every writer of `diff.json` does
 ([04-domain.md](04-domain.md#re-anchoring)): its write goes through
-`writeChangeSet`, which writes the file and then, **in the same hold of the
-session's lock**, places the comments of every repository whose entry the write
-replaced. The patch of one repository hands over the entry it read inside that
+`writeChangeSet`, which, **in the same hold of the session's lock**, places the
+comments of every repository whose entry the write replaces, writes those it
+moved, and then writes the file — with the old entry kept for a repository whose
+comments it did not all place. The patch of one repository hands over the entry it read inside that
 hold as the one it replaces; the full rescan — no cache, or one for another
 base or scope, and the whole read a server start or a move of `current` makes —
 reads the file it is about to replace at the moment of the write. Nothing the
@@ -600,10 +601,16 @@ task each move the comments of what they rewrite, so a rescan that finds
 `diff.json` already equal to the working tree has nothing left to move, and is
 right to move nothing.
 
-**What waits, and what does not.** The rescan hands its change set over and
-sends `diff-changed` and `warnings` before it writes, as before
+**What waits, and what does not.** The patch of one repository hands its change
+set over and sends `diff-changed` and `warnings` before it writes, as before
 ([The change-set cache](#the-change-set-cache)), so the update the person sees
-does not wait for the pass. What does wait is everything behind the session's
+after an edit does not wait for the pass. **The whole read does not do that**: on
+a server start and on a move of `current`, `announce` sends its `diff-changed`
+frames after `readWhole` returns, which is after the pass in the read's hold, so
+the first frames of a task switched to — and a document asked for meanwhile,
+waiting on the lock for `diff.json` — wait for it. Sending them first would mean
+following the session before its read is written, which the switch is ordered
+against ([Starting it](#starting-it)); the cost is left to DA-42.3. What does wait is everything behind the session's
 lock and behind the rescan queue: the pass runs inside the rescan's hold, so the
 next rescan — of this repository or another, since rescans run one at a time —
 starts only after it, and so does any writer of that session's files, the UI
@@ -627,9 +634,14 @@ window that replaces its list with the frame's keeps the orphans'
 ([04-domain.md](04-domain.md#re-anchoring)).
 
 A `comments.json` that cannot be read leaves every comment where it is, and the
-rescan writes `diff.json` all the same: the comment events report the file, once,
-on the way into the broken state ([Events](#events)), and a rescan that failed on
-it would say it again on each.
+rescan writes `diff.json` all the same, with the old entry of what changed kept:
+the comment events report the file, once, on the way into the broken state
+([Events](#events)), and a rescan that failed on it would say it again on each.
+Once the file is repaired, the next rescan finds that entry different from the
+working tree, moves the comments, and writes the new one. Any other fault of the
+pass — a git that did not start, say — keeps the entry the same way and goes to
+`onError` once per rescan; a pass that ran out of its 10 s share of the lease
+keeps the rest quietly ([04-domain.md](04-domain.md#re-anchoring)).
 
 ## The activity feed
 
@@ -694,7 +706,8 @@ each shared by every comment on the file; the edit-distance scoring of the
 file's lines in memory; and one write of `comments.json` when anything moved,
 which the data directory's watch then reads back as a burst. None of it is
 measured (DA-42.3). The update after an edit does not wait for it; a second
-edit's rescan, and any other writer of the session, does.
+edit's rescan, and any other writer of the session, does, and so do the frames
+of a whole read (see above). The pass is cut at 10 s, a third of the lock's lease.
 
 
 ## What the unit tests hold

@@ -1,7 +1,7 @@
 import type { Context } from "hono";
 import { Hono } from "hono";
 import { csrf } from "hono/csrf";
-import { findRepositories } from "../core/change-set.ts";
+import { findRepositories, refreshRepository } from "../core/change-set.ts";
 import type { Config } from "../core/config/index.ts";
 import type { FileSource } from "../core/domain/index.ts";
 import {
@@ -279,8 +279,17 @@ export function createApp({
   );
 
   app.post("/api/comments/:id/reopen", async (c) =>
-    c.json(await verdict(c, c.req.param("id"), reopen)),
+    c.json(await verdict(c, c.req.param("id"), reopen, true)),
   );
+
+  /** The repository of a line comment read into its task's `diff.json` again; nothing for one
+   * above a line, and nothing for an id the reopen will refuse by itself. */
+  async function refreshFor(session: string, id: string): Promise<void> {
+    const found = await getComment(config.dataDir, session, id).catch(() => null);
+    if (found === null || found.repo === null || found.path === null || found.line === null) return;
+    const task = await readSession(config.dataDir, session);
+    await refreshRepository(config, session, task.base, found.repo, task.scope);
+  }
 
   /** `resolve` and `reopen` differ only in which of them is called. */
   async function verdict(
@@ -293,10 +302,14 @@ export function createApp({
       given: { author: string; role: Role; note?: string },
       options: { source: FileSource },
     ) => Promise<Comment>,
+    refresh = false,
   ): Promise<Comment> {
     const body = await readBody(c);
     const note = optionalText(body, "note");
     const session = await resolveSessionName(config.dataDir, named(c));
+    // A reopen reads the repository again first, as the CLI's does, a task nobody rescans too:
+    // the comments move with the rewrite, and the thread is judged where it is now.
+    if (refresh) await refreshFor(session, id);
     // The source lets `reopen` judge whether a line comment's anchor still reads at its line.
     const comment = await close(
       config.dataDir,

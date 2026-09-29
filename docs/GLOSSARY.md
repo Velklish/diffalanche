@@ -31,7 +31,7 @@ The “Term” column gives the spelling for prose; EN is the name in code and E
 | reply | `reply` | A message inside a thread, with author and role. | SPEC.md §7 |
 | anchor | `anchor` | Where a comment attaches: review, repository, file, line, or line range. Line anchors keep the line text and context. | SPEC.md §3.6, §7 |
 | severity | `severity` | `critical`, `warning`, `nit`, or `question`. | SPEC.md §3.7 |
-| status | `status` | `open`, `resolved`, or `orphaned` (Phase 3). An orphaned comment is still open wherever open comments are counted or listed. Only a human sets `resolved`, and only a human returns an orphaned comment to `open`. | SPEC.md §3.8, §7 |
+| status | `status` | `open`, `resolved`, or `orphaned` (Phase 3). An orphaned comment is kept, and is still open wherever open comments are counted or listed. Only a human sets `resolved`. | SPEC.md §3.8, §7 |
 | role | `role` | Who wrote a message: `human` or `agent`. | SPEC.md §3.8 |
 | author | `author` | The name on a message: `config.user` from the UI, `--author` from the CLI. | SPEC.md §8 |
 | unanswered | `--unanswered` | An open comment whose last message is from a human: an agent has not replied yet. | SPEC.md §8 |

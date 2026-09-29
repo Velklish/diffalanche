@@ -852,7 +852,7 @@ Every refusal is the domain's own code and message
 |---|---|
 | `no-current-session`, `no-such-session`, `no-such-comment` | 404 |
 | `scope-has-comments` | 409, with `count` and `comments` beside the message |
-| every other `DomainError` | 400 — `anchor-orphaned` among them: `POST /api/comments/:id/reopen` takes no line yet, and reads the file to see that a line comment's anchor still reads at its line, so an orphaned comment, or a resolved one left behind by an edit, cannot be reopened from the page until DA-43 |
+| every other `DomainError` | 400 |
 | a file of the data directory that cannot be read | 500, `error: "storage"` |
 | the embedding model is not in the user cache, is being put in place, or does not run on this platform; its process could not load it or ended | 503, `error: "model"` |
 
@@ -964,7 +964,7 @@ either, which is why only a human ever resolves a thread through this server.
 | `POST /api/comments` | `repo`, `path`, `line`, `endLine`, `side`, `severity`, `severitySource`, `body` | 201 and the comment |
 | `POST /api/comments/:id/replies` | `body` | 201 and the thread |
 | `POST /api/comments/:id/resolve` | `note` | the thread, `resolvedBy` the configured user |
-| `POST /api/comments/:id/reopen` | `note` | the thread, open again |
+| `POST /api/comments/:id/reopen` | `note` | the thread, open again — `orphaned` when its anchor no longer reads at its line |
 | `POST /api/sessions` | `name`, `base`, `title`, `scope`, `use` | 201 and `review.json` |
 | `POST /api/sessions/:name/use` | — | `review.json` of the session now current |
 | `PUT /api/sessions/:name/base` | `base` | `review.json` with the new base |
@@ -999,6 +999,15 @@ string the CLI takes — `head`, `branch`, `branch:<name>`, or a ref — read by
 domain's own parser, so the two interfaces have one grammar for it. A `note` on
 `resolve` or `reopen` is written into the thread as a reply before the status
 changes.
+
+**`reopen` of a line comment reads its repository again first**, as the CLI's
+does — for the task the request names, the watcher's or not — so the rewrite of
+`diff.json` moves the task's comments before the one reopened is judged, and the
+file is read to see whether its anchor still reads at its line. Where it does the
+thread comes back `open`; where it does not it comes back `orphaned`, kept and
+counted as open, and the answer's `status` says which
+([04-domain.md](04-domain.md#re-anchoring)). The route takes no line yet, so an
+orphaned thread is put back on a line from the CLI alone (DA-42.2).
 
 Changing the base of a session leaves its `diff.json` where it is and makes it
 stale on purpose: the cache records the base it was computed with, so the next

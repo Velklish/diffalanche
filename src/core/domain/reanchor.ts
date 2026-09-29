@@ -203,7 +203,7 @@ async function place(
 
   // With no entry before, the tree placed on was its base, whose sha only the entry after names.
   const boundary = side === "new" ? (oldSha ?? newSha) : oldSha;
-  const basePath = side === "new" ? (before?.oldPath ?? comment.path) : comment.path;
+  const basePath = before?.oldPath ?? comment.path;
   let tree: Promise<string[] | null> | undefined;
   const readTree = async (): Promise<string[] | null> => {
     if (boundary === null) return null;
@@ -296,16 +296,26 @@ function remembered(sources: AnchorSources): AnchorSources {
   };
 }
 
+/** What a pass over several moves did: the comments, and the repositories it placed every comment
+ * of — the others ran out of time, and their writer keeps the entries it would have replaced. */
+type Pass = Reanchored & { done: string[] };
+
+type PassOptions = {
+  held?: Lock;
+  /** When the pass stops starting comments (`Date.now()`): a repository it did not finish is left. */
+  deadline?: number;
+};
+
 /** Places every line comment the moves can have shifted and writes only what changed, inside the
- * hold of the `diff.json` write the moves came from (04-domain.md, "Re-anchoring"). */
+ * hold of the `diff.json` write the moves are for (04-domain.md, "Re-anchoring"). */
 export async function reanchorRepositories(
   dataDir: string,
   session: string,
   moves: readonly RepositoryMove[],
   sources: AnchorSources,
-  held?: Lock,
-): Promise<Reanchored> {
-  const outcome: Reanchored = { moved: [], orphaned: [] };
+  options: PassOptions = {},
+): Promise<Pass> {
+  const outcome: Pass = { moved: [], orphaned: [], done: [] };
   if (moves.length === 0) return outcome;
   const { scope } = await readReview(dataDir, session);
   const comments = (await readComments(dataDir, session)).filter((comment) =>
@@ -313,15 +323,26 @@ export async function reanchorRepositories(
   );
   const placements: Placement[] = [];
   const once = remembered(sources);
+  const deadline = options.deadline ?? Number.POSITIVE_INFINITY;
   for (const move of moves) {
     const changed = changedPaths(move);
+    const found: Placement[] = [];
+    let finished = true;
     for (const comment of comments) {
       if (!placeable(comment, move, changed)) continue;
+      if (Date.now() >= deadline) {
+        finished = false;
+        break;
+      }
       const placement = await place(comment as Placeable, move, once);
-      if (placement !== null) placements.push(placement);
+      if (placement !== null) found.push(placement);
       // The scoring is synchronous: between comments the process answers whatever is waiting.
       await yieldToEvents();
     }
+    // Half a repository is not written: its writer keeps that entry, and the next one starts over.
+    if (!finished) continue;
+    placements.push(...found);
+    outcome.done.push(move.repo);
   }
   // A context that only its hunk header moved in is not written, and `updatedAt` stays.
   if (placements.length === 0) return outcome;
@@ -346,7 +367,7 @@ export async function reanchorRepositories(
       }
       return outcome;
     },
-    held === undefined ? {} : { held },
+    options.held === undefined ? {} : { held: options.held },
   );
 }
 
@@ -356,7 +377,7 @@ export async function reanchorRepository(
   session: string,
   move: RepositoryMove,
   sources: AnchorSources,
-  held?: Lock,
 ): Promise<Reanchored> {
-  return reanchorRepositories(dataDir, session, [move], sources, held);
+  const { moved, orphaned } = await reanchorRepositories(dataDir, session, [move], sources);
+  return { moved, orphaned };
 }

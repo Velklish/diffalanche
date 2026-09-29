@@ -441,11 +441,12 @@ set or the file, and the thread opens there — `c_7f3k2q is open again on
 repos/group/alpha/file.txt:6`. **`reopen` of a line comment reads its repository
 again first**, as `comment` does, with or without `--line`: the rewrite of
 `diff.json` moves every comment of what changed, so the thread is judged where it
-is now. **Without `--line`, a line comment opens only where its anchor still
-reads**: an orphaned comment is exit code 1 with `anchor-orphaned`, naming the
-flag, and so is a resolved one whose line and context are not found at its line
-any more — orphaned and then resolved, or resolved and then left behind by an
-edit. Nothing is written by either. `--line` on a comment above a line — a file,
+is now. **Without `--line`, a line comment opens as `open` where its anchor still
+reads at its line, and as `orphaned` where it does not** — an orphaned comment
+whose text is not back, or a resolved one orphaned before, or left behind by an
+edit — and the line says so, exit code 0: `c_7f3k2q is open again, orphaned:
+line 15 does not read as it did; name its line with --line`. How an orphaned
+comment comes back is pending the owner (DA-42.4). `--line` on a comment above a line — a file,
 a repository, the review — is exit code 1 with `invalid-anchor`, and
 `--end-line` without `--line` is a usage error. With a role other than `human`
 nothing is read, not even the repository: the refusal is the domain's, as for
@@ -469,7 +470,13 @@ moved, and the warning names the file relative to the root —
 was re-anchored and orphans are not counted: …` — on standard error, or in
 `--json`'s `warnings`, where `--repo` does not narrow it away. Exit code 0: the
 command did what it is for, and the other commands that read that file still
-refuse it by name.
+refuse it by name. **The entries of what changed stay as they were in
+`diff.json`**, since they are still the tree the comments are on
+([04-domain.md](04-domain.md#re-anchoring)): the `diff` run after the file is
+repaired moves them. A pass that failed on a fault of git, or ran out of its
+share of the lock's lease, keeps its repositories' entries the same way, and
+each is a warning on that repository — `warning: repos/group/alpha: re-anchoring
+its comments failed: …; the next command that reads it tries again`.
 
 `list`, `show`, and `export` answer inside the scope of the session they run
 against, and so do `reply`, `resolve`, and `reopen`: a comment outside it is not

@@ -19,7 +19,10 @@ and `bun run release` refuses a version that has no section. See
   `orphaned`** (DA-42). Every writer of `diff.json` — the watcher's rescan, the
   server's first read of a task, `diff`, `comment`, `reopen` — places the line
   comments of each repository whose entry it replaced, in the same hold of the
-  session's lock and after the update's frames: a comment whose line and context
+  session's lock — after a rescan's frames, before those of a task switched to
+  — and before it writes `diff.json`: a repository whose comments it could not
+  all place, on a fault, an unreadable `comments.json` or its 10 s share of the
+  lease, keeps its old entry, and the next writer moves them. A comment whose line and context
   are where it is stays; then `git blame ^<base>` of the working tree, asked only
   when the tree the move starts from is the one the comment was put on and taken
   only on the anchored text with a context that agrees; then the stored text
@@ -33,8 +36,13 @@ and `bun run release` refuses a version that has no section. See
   the next pass. An orphaned comment is still open: it is in the counters, the
   severity paint, the default `list`, `list --unanswered` and the default export
   (marked `· orphaned`), and `list --status orphaned` lists them alone. `reopen
-  <id> --role human --line <n> [--end-line <m>]` puts one back on a line;
-  without `--line`, a line comment opens only where its anchor still reads.
+  <id> --role human --line <n> [--end-line <m>]` puts one back on a line.
+  **`reopen` without `--line`, from the CLI or the page, reads the repository
+  again and reopens a line comment as `open` where its anchor still reads at its
+  line, and as `orphaned` where it does not** — a resolved thread left behind by
+  an edit comes back open and orphaned rather than being refused. The page counts
+  orphaned threads as open too: the thread rail's tabs, the severity paint of a
+  file, the reading order of `J`/`K`, and the export's count.
   `diff`, the review document and the live `warnings` frame carry `N comments
   lost their anchor` per repository, and `diff` warns and exits 0 when
   `comments.json` cannot be read. A change of an anchor's hunk header alone is

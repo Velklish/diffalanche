@@ -75,6 +75,24 @@ function unreadableWarning(config: Config, error: StorageError): ScanWarning {
   };
 }
 
+/** A repository whose comments the write could not place, its entry kept for the next writer; an
+ * unreadable `comments.json` has its own warning above (06-cli.md, "Comments"). */
+function pendingWarnings(written: {
+  pending: string[];
+  failure: unknown;
+  unreadable: StorageError | null;
+}): ScanWarning[] {
+  if (written.unreadable !== null) return [];
+  const why =
+    written.failure === null
+      ? "ran out of time"
+      : `failed: ${written.failure instanceof Error ? written.failure.message : String(written.failure)}`;
+  return written.pending.map((path) => ({
+    path,
+    message: `re-anchoring its comments ${why}; the next command that reads it tries again`,
+  }));
+}
+
 export const diff: Command = {
   spec: {
     name: "diff",
@@ -120,7 +138,10 @@ export const diff: Command = {
     const comments = written.unreadable === null ? await readable(config.dataDir, session) : null;
     const unreadable = written.unreadable ?? (comments instanceof StorageError ? comments : null);
     const counted = Array.isArray(comments) ? comments : [];
-    const warnings = withAnchorWarnings(scanned.cache.warnings, counted);
+    const warnings = withAnchorWarnings(
+      [...scanned.cache.warnings, ...pendingWarnings(written)],
+      counted,
+    );
     const narrowed = narrow({ ...scanned.cache, warnings }, repo);
     // About the session rather than a repository, so no `--repo` narrows it away.
     const shown =

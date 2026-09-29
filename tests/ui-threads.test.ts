@@ -61,6 +61,33 @@ describe("a write on a thread", () => {
     expect(useStore.getState().busy).toEqual({});
   });
 
+  it("holds a reopen the server answered as orphaned as an open thread, orphaned", async () => {
+    useStore.setState({ user: "kim.p", busy: {}, toast: null, replyId: null, replyText: "" });
+    useStore.setState(withComments([comment({ status: "resolved", resolvedBy: "kim.p" })]));
+    const orphaned = comment({ status: "orphaned" });
+    answers(orphaned);
+
+    await useStore.getState().setStatus("c_one", "open");
+
+    expect(useStore.getState().comments).toEqual([orphaned]);
+    expect(useStore.getState().counters.counters.open).toBe(1);
+    expect(useStore.getState().fileCounts.get("repos/a/src/a.ts")?.open).toBe(1);
+  });
+
+  it("steps through an orphaned thread as an open one, and past a resolved one", () => {
+    useStore.setState({ focusId: null });
+    useStore.setState(
+      withComments([
+        comment({ id: "c_lost", status: "orphaned", line: 10 }),
+        comment({ id: "c_done", status: "resolved", line: 20 }),
+        comment({ id: "c_here", line: 30 }),
+      ]),
+    );
+    expect(useStore.getState().stepThread(1)).toBe("c_lost");
+    expect(useStore.getState().stepThread(1)).toBe("c_here");
+    expect(useStore.getState().stepThread(1)).toBe("c_lost");
+  });
+
   it("puts the threads back and says why when the server refuses", async () => {
     const before = withOneThread();
     answers({ error: "no-such-comment", message: 'no comment "c_one"' }, 404);

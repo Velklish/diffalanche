@@ -102,9 +102,14 @@ export const reopen: Command = {
       { ...given, ...(line === undefined ? {} : { line, endLine: endLine ?? null }) },
       { source: fileSourceAt(config.root) },
     );
+    // An anchor that no longer reads leaves the thread open and orphaned, and the line says so.
+    const lost =
+      comment.status === "orphaned"
+        ? `, orphaned: line ${comment.line} does not read as it did; name its line with --line`
+        : "";
     context.io.out(
       line === undefined
-        ? `${comment.id} is open again\n`
+        ? `${comment.id} is open again${lost}\n`
         : `${comment.id} is open again on ${where(comment)}\n`,
     );
     return 0;

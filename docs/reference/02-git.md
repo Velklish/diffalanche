@@ -563,14 +563,18 @@ two copies had drifted: the CLI's dropped a warning the watcher's kept (DA-80).
 `writeChangeSet(config, session, held, next, previous?)` is **the one write of
 `diff.json`**, inside a hold of the session's lock the caller already has: the
 watcher's patch and its full rescan, the server's first read of a task,
-`refreshRepository` in both its branches — `comment` and `reopen --line` — and
-`diff` all write through it. It writes the file and then, in the same hold,
-re-anchors the comments of every repository whose entry it replaced, `previous`
-being the cache the caller read in that hold or, when it passes none, the file
-as it stands at the moment of the write ([04-domain.md](04-domain.md#re-anchoring)).
-A `comments.json` that cannot be read leaves the comments where they are and
-the write stands: the answer says which file it was, and `diff` prints it as a
-warning ([06-cli.md](06-cli.md)).
+`refreshRepository` in both its branches — `comment`, `reopen`, and the server's
+reopen route — and `diff` all write through it. In that hold it re-anchors,
+against `next` in memory, the comments of every repository whose entry changed —
+`previous` being the cache the caller read in that hold or, when it passes none,
+the file as it stands — writes the comments it moved, and then writes the file
+([04-domain.md](04-domain.md#re-anchoring)). A repository whose comments were not
+all placed — `comments.json` unreadable, a fault in the pass, the pass's 10 s
+share of the lease spent — gets its old entry back in the file it writes, and
+the answer names it (`pending`) with the fault (`failure`, `unreadable`): the
+next writer's `before` is then still the tree those comments are on. The
+watcher reports the fault through `onError`, `diff` prints it as a warning
+([06-cli.md](06-cli.md)), and `comment` and `reopen` go on.
 
 ## Browsing a repository
 

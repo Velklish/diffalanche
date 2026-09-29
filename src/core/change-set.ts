@@ -282,41 +282,83 @@ export function anchorSources(root: string): AnchorSources {
   };
 }
 
-/** What a write of `diff.json` did to the comments: the pass, or the `comments.json` that could
- * not be read, which leaves every comment where it was (04-domain.md, "Re-anchoring"). */
-type ChangeSetWrite = Reanchored & { unreadable: StorageError | null };
+/** How long a pass may run inside the hold, a third of the lock's 30 s lease: past it no comment is
+ * started, and the rest is the next writer's (04-domain.md, "Re-anchoring"). */
+const PASS_BUDGET_MS = 10_000;
 
-/** Writes `diff.json` in the caller's hold of the session's lock, then re-anchors in the same hold
- * the comments of every repository whose entry it replaced: the one path every writer takes. */
+/** What a write of `diff.json` did to the comments. `pending` are the repositories whose entry was
+ * kept as it was, so the next writer places their comments; `failure` is why, when a fault was. */
+type ChangeSetWrite = Reanchored & {
+  unreadable: StorageError | null;
+  failure: unknown;
+  pending: string[];
+};
+
+type WriteOptions = {
+  /** A test's own reads; the root's files and history otherwise. */
+  sources?: AnchorSources;
+  budgetMs?: number;
+};
+
+/** `cache` with one repository's entry put back as it was, `null` being no entry. */
+function keepEntry(cache: DiffCache, repo: string, entry: RepositoryChange | null): DiffCache {
+  if (cache.rootWarnings === undefined) return cache;
+  const change = entry ?? { path: repo, branch: "", base: null, files: [], warnings: [] };
+  return replaceRepository({ ...cache, rootWarnings: cache.rootWarnings }, change);
+}
+
+/** The one write of `diff.json`, in the caller's hold of the session's lock: the pass runs against
+ * `next` first, and a repository it did not finish keeps its old entry, so the moves are not lost. */
 export async function writeChangeSet(
   config: Config,
   session: string,
   held: Lock,
   next: DiffCache,
   previous?: DiffCache | null,
+  options: WriteOptions = {},
 ): Promise<ChangeSetWrite> {
   const was = previous === undefined ? await readDiffCache(config.dataDir, session) : previous;
-  await held.assertHeld();
-  await writeDiffCache(config.dataDir, session, next);
-  // Nothing written before says where the lines were, so the first scan moves nothing.
-  if (was === null) return { moved: [], orphaned: [], unreadable: null };
-  const paths = new Set([...was.repositories, ...next.repositories].map((one) => one.path));
+  const result: ChangeSetWrite = {
+    moved: [],
+    orphaned: [],
+    unreadable: null,
+    failure: null,
+    pending: [],
+  };
+  const paths = new Set(
+    [...(was?.repositories ?? []), ...next.repositories].map((one) => one.path),
+  );
   const moves: RepositoryMove[] = [];
   for (const repo of [...paths].sort(byCodePoint)) {
-    const before = was.repositories.find((one) => one.path === repo) ?? null;
+    const before = was?.repositories.find((one) => one.path === repo) ?? null;
     const after = next.repositories.find((one) => one.path === repo) ?? null;
-    if (!sameEntry(before, after)) moves.push({ repo, before, after });
+    if (was !== null && !sameEntry(before, after)) moves.push({ repo, before, after });
   }
+  let done: string[] = [];
   try {
-    const sources = anchorSources(config.root);
-    const done = await reanchorRepositories(config.dataDir, session, moves, sources, held);
-    return { ...done, unreadable: null };
+    const sources = options.sources ?? anchorSources(config.root);
+    const deadline = Date.now() + (options.budgetMs ?? PASS_BUDGET_MS);
+    const pass = await reanchorRepositories(config.dataDir, session, moves, sources, {
+      held,
+      deadline,
+    });
+    ({ done } = pass);
+    result.moved = pass.moved;
+    result.orphaned = pass.orphaned;
   } catch (error) {
-    // The comments' own file is theirs to report; `diff.json` is written all the same.
+    // The comments' own file is theirs to report; any other fault is the caller's.
     const file = commentsPath(config.dataDir, session);
-    if (error instanceof StorageError && error.file === file) {
-      return { moved: [], orphaned: [], unreadable: error };
-    }
-    throw error;
+    if (error instanceof StorageError && error.file === file) result.unreadable = error;
+    else result.failure = error;
   }
+  // What the pass did not finish still reads, in the file, as the tree its comments are on.
+  let written = next;
+  for (const move of moves) {
+    if (done.includes(move.repo)) continue;
+    written = keepEntry(written, move.repo, move.before);
+    result.pending.push(move.repo);
+  }
+  await held.assertHeld();
+  await writeDiffCache(config.dataDir, session, written);
+  return result;
 }

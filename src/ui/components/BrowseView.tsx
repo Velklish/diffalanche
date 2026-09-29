@@ -1,6 +1,6 @@
 import type { MouseEvent, ReactNode } from "react";
 import { Fragment, memo, useEffect, useMemo } from "react";
-import { worstSeverity } from "../../core/domain/counters.ts";
+import { isOpen, worstSeverity } from "../../core/domain/counters.ts";
 import { Composer } from "../Composer.tsx";
 import { splitLines } from "../context.ts";
 import { useStore } from "../store.ts";
@@ -262,9 +262,7 @@ const PlainBlock = memo(function PlainBlock({
         const selected = from !== null && to !== null && number >= from && number <= to;
         const here = byLine.get(number);
         const worst =
-          here === undefined
-            ? null
-            : (worstSeverity(here.filter((one) => one.status === "open")) ?? here[0]?.severity);
+          here === undefined ? null : (worstSeverity(here.filter(isOpen)) ?? here[0]?.severity);
         const marked = worst === null || worst === undefined ? "" : ` marked ${worst}`;
         return (
           <Fragment key={number}>

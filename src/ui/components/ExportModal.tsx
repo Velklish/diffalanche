@@ -1,3 +1,4 @@
+import { isOpen } from "../../core/domain/counters.ts";
 import { byCodePoint } from "../../core/order.ts";
 import { exportAnchor } from "../anchor.ts";
 import { formatBase } from "../base.ts";
@@ -64,7 +65,7 @@ function Raw() {
 function Rendered() {
   const comments = useStore((store) => store.exportComments);
   const session = useStore((store) => store.session);
-  const open = comments.filter((comment) => comment.status === "open").length;
+  const open = comments.filter(isOpen).length;
 
   return (
     <div className="export-rendered">

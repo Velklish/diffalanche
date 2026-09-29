@@ -343,7 +343,7 @@ export async function resolve(
 }
 
 /** With `line`, the anchor is taken again there before the thread opens; without one, a line
- * comment opens only where its anchor still reads (04-domain.md, "Re-anchoring"). */
+ * comment whose anchor no longer reads at its line opens as `orphaned` (04-domain.md). */
 export async function reopen(
   dataDir: string,
   session: string,
@@ -361,17 +361,6 @@ export async function reopen(
   const holds = placed === null ? await anchorHolds(dataDir, session, id, options.source) : true;
   return updateSession(dataDir, session, ({ review, comments }) => {
     const comment = find(comments, id, review.scope);
-    if (placed === null && (comment.status === "orphaned" || !holds)) {
-      throw new DomainError(
-        "anchor-orphaned",
-        comment.status === "orphaned"
-          ? `${comment.id} lost its anchor when the code changed; reopen it with --line naming ` +
-              "the line it belongs to now. Nothing was written"
-          : `${comment.id} is not on the line it was left on any more: line ${comment.line} of ` +
-              `${comment.path} reads otherwise now; reopen it with --line naming the line it ` +
-              "belongs to. Nothing was written",
-      );
-    }
     if (placed !== null) {
       comment.line = placed.line;
       comment.endLine = placed.endLine;
@@ -386,7 +375,10 @@ export async function reopen(
         createdAt: timestamp(),
       });
     }
-    comment.status = "open";
+    // Open again as the finding it is, but not on a line it no longer reads at: that one waits.
+    // Nothing to read the file by says nothing new: an orphaned comment stays orphaned then.
+    const lost = holds === null ? comment.status === "orphaned" : !holds;
+    comment.status = lost ? "orphaned" : "open";
     comment.resolvedAt = null;
     comment.resolvedBy = null;
     return comment;
@@ -419,14 +411,14 @@ async function replace(
   return { line, endLine, anchor };
 }
 
-/** Whether a line comment's anchor still reads at its line — a resolved thread was not moved
- * when its line went, and was orphaned perhaps before that; `true` with nothing to read it by. */
+/** Whether a line comment's anchor still reads at its line — a resolved thread is not moved when
+ * its line goes — or `null` with nothing to read it by; `true` for any other comment. */
 async function anchorHolds(
   dataDir: string,
   session: string,
   id: string,
   source: FileSource | undefined,
-): Promise<boolean> {
+): Promise<boolean | null> {
   // One not found yet may be found inside the lock, a scope widened meanwhile: that find decides.
   const comment = await get(dataDir, session, id).catch((error: unknown) => {
     if (error instanceof DomainError && error.code === "no-such-comment") return null;
@@ -434,16 +426,15 @@ async function anchorHolds(
   });
   if (comment === null) return true;
   const { repo, path, line, anchor } = comment;
-  if (source === undefined || repo === null || path === null || line === null || anchor === null) {
-    return true;
-  }
+  if (repo === null || path === null || line === null || anchor === null) return true;
+  if (source === undefined) return null;
   const side = comment.side ?? "new";
   const cache = await readDiffCache(dataDir, session);
   const repository = cache?.repositories.find((one) => one.path === repo);
   const file = repository?.files.find((one) => one.path === path) ?? null;
   const sha = repository?.base?.sha;
   const rev = side === "new" ? "worktree" : sha === undefined ? null : { sha };
-  if (rev === null) return true;
+  if (rev === null) return null;
   const text = await source(repo, side === "old" ? (file?.oldPath ?? path) : path, rev);
   return text !== null && locate(anchor, linesOf(text), line) === line;
 }

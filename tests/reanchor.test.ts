@@ -20,6 +20,7 @@ import {
   refreshRepository,
   replaceRepository,
   scanReview,
+  writeChangeSet,
 } from "../src/core/change-set.ts";
 import type { Config } from "../src/core/config/index.ts";
 import { loadConfig } from "../src/core/config/index.ts";
@@ -47,6 +48,7 @@ import {
 } from "../src/core/domain/index.ts";
 import { parseBlame } from "../src/core/git/blame.ts";
 import { fileSourceAt } from "../src/core/git/browse.ts";
+import { GitError } from "../src/core/git/errors.ts";
 import { blameFrom, readRepositoryChange } from "../src/core/git/index.ts";
 import { scan } from "../src/core/index.ts";
 import type { Anchor, Comment } from "../src/core/storage/index.ts";
@@ -55,13 +57,18 @@ import {
   readComments,
   readDiffCache,
   readReview,
+  sessionDir,
   updateComments,
+  withLock,
   writeDiffCache,
 } from "../src/core/storage/index.ts";
 import { parseComments, toJson } from "../src/core/storage/schema.ts";
 import type { WatcherEvent } from "../src/core/watcher/index.ts";
 import { createActivityLog, createEventBus, startWatcher } from "../src/core/watcher/index.ts";
+import { createApp } from "../src/server/app.ts";
 import type { UiAssets } from "../src/server/assets.ts";
+import { createEventStream } from "../src/server/events.ts";
+import { createReviewService } from "../src/server/review.ts";
 import { comment as fixtureComment } from "./helpers/session.ts";
 
 const REPO = "repos/group/calc";
@@ -736,12 +743,14 @@ describe("the orphaned status", () => {
     ]);
   });
 
-  it("is refused a reopen that names no line, and nothing is written", async () => {
+  it("stays orphaned through a reopen that names no line, with or without a file to read", async () => {
     const added = await orphan();
-    await expect(reopen(dataDir, session, added.id, HUMAN)).rejects.toMatchObject({
-      code: "anchor-orphaned",
+    expect(await reopen(dataDir, session, added.id, HUMAN)).toMatchObject({ status: "orphaned" });
+    const options = { source: fileSourceAt(root) };
+    expect(await reopen(dataDir, session, added.id, HUMAN, options)).toMatchObject({
+      status: "orphaned",
+      line: 15,
     });
-    expect((await stored(added.id)).status).toBe("orphaned");
   });
 
   it("goes back to open on the line a human names, with the anchor taken there", async () => {
@@ -826,11 +835,14 @@ describe("the CLI", () => {
     expect((await readDiffCache(dataDir, session))?.warnings).toEqual([]);
   });
 
-  it("reopens an orphaned comment only with --line, and on that line", async () => {
+  it("keeps an orphaned comment orphaned without --line, and opens it on the line --line names", async () => {
     const added = await orphan();
-    const refused = await invoke(["reopen", added.id, "--role", "human"]);
-    expect(refused.code).toBe(1);
-    expect(refused.err).toContain("--line");
+    const plain = await invoke(["reopen", added.id, "--role", "human"]);
+    expect(plain.code).toBe(0);
+    expect(plain.out).toBe(
+      `${added.id} is open again, orphaned: line 15 does not read as it did; name its line with --line\n`,
+    );
+    expect((await stored(added.id)).status).toBe("orphaned");
     const reopened = await invoke(["reopen", added.id, "--role", "human", "--line", "16"]);
     expect(reopened.code).toBe(0);
     expect(reopened.out).toBe(`${added.id} is open again on ${REPO}/${FILE}:16\n`);
@@ -1020,6 +1032,50 @@ describe("what a pass writes", () => {
     expect(await stored(range.id)).toMatchObject({ line: 14, endLine: 15, status: "open" });
   });
 
+  it("reads an old-side comment's tree under the name the base had the file by", async () => {
+    // A renamed file whose base moved: the tree is the old base's `calc.ts`, and blame from it is
+    // what tells two copies of the window apart; read under the new name, it is never asked.
+    const window = ["a", "b", "c", "d", "e", "f", "g"];
+    const [oldSha, newSha] = ["a".repeat(40), "b".repeat(40)];
+    const renamed = {
+      path: "src/money.ts",
+      oldPath: FILE,
+      status: "renamed" as const,
+      additions: 0,
+      deletions: 0,
+      patch: "",
+      hunks: [],
+      omitted: null,
+    };
+    const entry = (sha: string) => ({
+      path: REPO,
+      branch: "main",
+      base: { mode: "head" as const, ref: "HEAD", sha },
+      files: [renamed],
+      warnings: [],
+    });
+    const id = `c_oldside${sessions}`;
+    const anchor = { ...(windowOf(window, 4) as Anchor), hunk: "@@" };
+    await updateComments(dataDir, session, (comments) => {
+      comments.push(
+        fixtureComment(id, { repo: REPO, path: "src/money.ts", side: "old", line: 4, anchor }),
+      );
+    });
+    const texts = new Map([
+      [oldSha, `${window.join("\n")}\n`],
+      [newSha, `${["new", ...window, ...window].join("\n")}\n`],
+    ]);
+    const spied: AnchorSources = {
+      source: async (_repo, path, rev) =>
+        path === FILE && rev !== "worktree" ? (texts.get(rev.sha) ?? null) : null,
+      blame: async (_repo, path, boundary) =>
+        path === FILE && boundary === oldSha ? new Map([[4, 12]]) : null,
+    };
+    const move = { repo: REPO, before: entry(oldSha), after: entry(newSha) };
+    await reanchorRepository(dataDir, session, move, spied);
+    expect(await stored(id)).toMatchObject({ line: 12, status: "open" });
+  });
+
   it("leaves an old-side comment alone when the entry after names no base", async () => {
     const old = await commentOn(10, { side: "old" });
     const cached = await readDiffCache(dataDir, session);
@@ -1063,9 +1119,10 @@ describe("the writers of diff.json", () => {
     expect(await stored(added.id)).toMatchObject({ line: 20, status: "open" });
   });
 
-  it("writes diff.json and exits 0 with a warning when comments.json cannot be read", async () => {
-    await commentOn(15);
+  it("exits 0 with a warning when comments.json cannot be read, and the next run moves them", async () => {
+    const added = await commentOn(15);
     const file = join(dataDir, "reviews", session, "comments.json");
+    const kept = readFileSync(file, "utf8");
     writeFileSync(file, "{ not json");
     write([...HEADER, ...WORKTREE]);
     let err = "";
@@ -1077,12 +1134,62 @@ describe("the writers of diff.json", () => {
     });
     expect(code).toBe(0);
     expect(err).toContain("comments.json: cannot be read, so no comment was re-anchored");
-    const cache = await readDiffCache(dataDir, session);
-    const lines = cache?.repositories[0]?.files[0]?.hunks[0]?.lines.map((one) => one.content);
-    expect(lines).toContain("// Prices are in cents.");
     expect(readFileSync(file, "utf8")).toBe("{ not json");
+    // The entry is still the tree the comments are on, so the moves are not lost.
+    expect(await cachedTopLine()).toBe(WORKTREE[0]);
+    writeFileSync(file, kept);
+    await run(["diff", "--root", root, "--review", session], noUi, {
+      out: () => {},
+      err: () => {},
+    });
+    expect(await stored(added.id)).toMatchObject({ line: 20, status: "open" });
+    expect(await cachedTopLine()).toBe(HEADER[0]);
+  });
+
+  it("keeps the entry and says why when the pass fails, and the next writer moves the comments", async () => {
+    const added = await commentOn(15);
+    write([...HEADER, ...WORKTREE]);
+    const failing: AnchorSources = {
+      ...sources,
+      source: async () => {
+        throw new GitError("not-started", "git could not be started", null, "");
+      },
+    };
+    const written = await rewrite({ sources: failing });
+    expect(written.failure).toBeInstanceOf(GitError);
+    expect(written.pending).toEqual([REPO]);
+    expect(await cachedTopLine()).toBe(WORKTREE[0]);
+    expect((await stored(added.id)).line).toBe(15);
+    await rewrite();
+    expect(await stored(added.id)).toMatchObject({ line: 20, status: "open" });
+  });
+
+  it("leaves a repository to the next writer when the pass runs out of its share of the lease", async () => {
+    const added = await commentOn(15);
+    write([...HEADER, ...WORKTREE]);
+    const written = await rewrite({ budgetMs: 0 });
+    expect(written).toMatchObject({ failure: null, pending: [REPO], moved: [] });
+    expect(await cachedTopLine()).toBe(WORKTREE[0]);
+    await rewrite();
+    expect(await stored(added.id)).toMatchObject({ line: 20, status: "open" });
   });
 });
+
+/** The first line the cached entry of the calc file's first hunk carries on the new side. */
+async function cachedTopLine(): Promise<string | undefined> {
+  const cache = await readDiffCache(dataDir, session);
+  const hunks = cache?.repositories.find((one) => one.path === REPO)?.files[0]?.hunks ?? [];
+  const numbered = hunks.flatMap((hunk) => hunk.lines).filter((one) => one.newLine === 1);
+  return numbered[0]?.content ?? WORKTREE[0];
+}
+
+/** A writer's rewrite of the change set, as `diff` does it, with a test's own options. */
+async function rewrite(options: Parameters<typeof writeChangeSet>[5] = {}) {
+  const { cache } = await scanReview(config, { mode: "head" });
+  return withLock(sessionDir(dataDir, session), (held) =>
+    writeChangeSet(config, session, held, cache, undefined, options),
+  );
+}
 
 describe("reopening", () => {
   async function orphan(): Promise<Comment> {
@@ -1094,28 +1201,57 @@ describe("reopening", () => {
     return added;
   }
 
-  it("needs a line for a comment that was orphaned and then resolved", async () => {
+  it("opens a comment that was orphaned and then resolved as orphaned again", async () => {
     const added = await orphan();
     await resolve(dataDir, session, added.id, HUMAN);
-    const refusal = reopen(dataDir, session, added.id, HUMAN, { source: fileSourceAt(root) });
-    await expect(refusal).rejects.toMatchObject({ code: "anchor-orphaned" });
-    expect((await stored(added.id)).status).toBe("resolved");
+    const reopened = await reopen(dataDir, session, added.id, HUMAN, {
+      source: fileSourceAt(root),
+    });
+    expect(reopened).toMatchObject({ status: "orphaned", line: 15, resolvedBy: null });
   });
 
-  it("needs a line for a resolved comment whose line is gone, and none for one in place", async () => {
+  it("opens a resolved comment whose line is gone as orphaned, and one in place as open", async () => {
     const gone = await commentOn(15);
     const kept = await commentOn(4);
     await resolve(dataDir, session, gone.id, HUMAN);
     await resolve(dataDir, session, kept.id, HUMAN);
     await edit(WORKTREE.map((line, at) => (at === 14 ? "  throw new Error();" : line)));
     const options = { source: fileSourceAt(root) };
-    await expect(reopen(dataDir, session, gone.id, HUMAN, options)).rejects.toMatchObject({
-      code: "anchor-orphaned",
+    expect(await reopen(dataDir, session, gone.id, HUMAN, options)).toMatchObject({
+      status: "orphaned",
+      line: 15,
     });
     expect(await reopen(dataDir, session, kept.id, HUMAN, options)).toMatchObject({
       status: "open",
       line: 4,
     });
+  });
+
+  it("does both from the page's route, which reads the repository first as the CLI does", async () => {
+    const gone = await commentOn(15);
+    const kept = await commentOn(4);
+    await resolve(dataDir, session, gone.id, HUMAN);
+    await resolve(dataDir, session, kept.id, HUMAN);
+    // The edit is on disk only: the route's own read of the repository is what finds it.
+    write([...HEADER, ...WORKTREE.map((line, at) => (at === 14 ? "  throw new Error();" : line))]);
+    const app = createApp({
+      activity: createActivityLog(),
+      config,
+      events: createEventStream(),
+      review: createReviewService(config),
+      ui: noUi,
+    });
+    const reopen = async (id: string) =>
+      (await (
+        await app.request(`/api/comments/${id}/reopen?review=${session}`, {
+          method: "POST",
+          headers: { "content-type": "application/json" },
+          body: "{}",
+        })
+      ).json()) as Comment;
+    expect(await reopen(gone.id)).toMatchObject({ status: "orphaned", line: 15 });
+    // The resolved comment in place moved with the refresh, five lines down, and opens there.
+    expect(await reopen(kept.id)).toMatchObject({ status: "open", line: 9 });
   });
 });
 
