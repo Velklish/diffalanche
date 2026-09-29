@@ -1,5 +1,6 @@
 # DA-110.2 · watcher.test.ts' .git/info/exclude case can meet the rules write's own late rescan
 
+- **Order:** 890
 - **Scope:** 05-watcher
 - **Created:** 2026-09-29
 - **Parent:** DA-110

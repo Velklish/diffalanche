@@ -700,7 +700,7 @@ now goes in three steps.
    out in the order of the writes. Past that report, the tree has nothing left
    to say about anything written earlier — except what the emulation never says
    at all: a file replaced by a rename is reported the first time only
-   ([DA-110.3](../backlog/triage/DA-110.3-node-recursive-watch-misses-rename-replacement.md)),
+   ([DA-110.3](../backlog/queue/DA-110.3-node-recursive-watch-misses-rename-replacement.md)),
    and a marker, a new name, is not one.
 2. **A burst queued behind theirs.** `settle` writes `settle-N.ts` into the other
    repository and waits for that repository's first `diff-changed` since the
