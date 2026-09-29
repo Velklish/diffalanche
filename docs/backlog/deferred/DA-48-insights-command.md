@@ -1,6 +1,5 @@
 # DA-48 · insights command: recurring findings
 
-- **Order:** 860
 - **Scope:** 09-ml, 06-cli (see [reference](../../reference/README.md))
 - **Created:** 2026-09-05
 - **Dependencies:** DA-34, DA-46
@@ -24,6 +23,6 @@
 
 ## Deferred
 
-- **Deferred:** 2026-09-05
-- **Reason:** Phase 4 of `docs/SPEC.md` section 10; depends on the embedding index and the model runtime from Phase 2.
-- **Return condition:** DA-32 (Phase 1 acceptance) is archived and the Phase 2 queue is under way; the cut is revisited there.
+- **Deferred:** 2026-09-29
+- **Reason:** Depends on DA-46, which is deferred.
+- **Return condition:** DA-46 is archived.
