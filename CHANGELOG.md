@@ -687,6 +687,14 @@ and `bun run release` refuses a version that has no section. See
 
 ### Fixed
 
+- **The ring walk of `all files` asserts the row that took the focus**
+  (DA-54.6). `focusByKey` of `e2e/focus.spec.ts` asked `.first()` again after
+  focusing it, and a repository's tree landing in between put its rows above
+  the focused one, so the assertion watched a row nobody had focused — the red
+  of one gates chain in three under load. It now asserts that the focused
+  element is one the selector names. The page was not at fault: the row keeps
+  the focus and is not remounted ([08-ui.md](docs/reference/08-ui.md#a-focused-row-in-a-list-still-arriving)).
+
 - **The keyboard spec's `R` waits for the disk** (DA-118).
   `e2e/keyboard.spec.ts` › "C opens the composer and R resolves the focused
   thread" read `comments.json` as soon as the rail card turned `resolved`, which

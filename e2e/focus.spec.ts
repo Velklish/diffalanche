@@ -136,7 +136,9 @@ async function open(page: Page, theme: "dark" | "light", path = "/") {
 async function focusByKey(page: Page, selector: string): Promise<void> {
   await page.keyboard.press("F2");
   await page.locator(selector).first().focus();
-  await expect(page.locator(selector).first()).toBeFocused();
+  // The focused one, not `.first()` again: a list still arriving puts another first (08-ui.md,
+  // "A focused row in a list still arriving").
+  await expect(page.locator(selector).and(page.locator(":focus"))).toBeFocused();
 }
 
 /** The control that opens an overlay, focused and pressed as the keyboard would. */
