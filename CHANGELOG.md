@@ -727,6 +727,48 @@ and `bun run release` refuses a version that has no section. See
 
 ### Fixed
 
+- **A file replaced by rename is heard every time on Linux** (DA-110.3). Node
+  22 emulates `recursive: true` on Linux with one watch per path, each on the
+  inode it found. git renames `index.lock` and `HEAD.lock` over `.git/index` and
+  `.git/HEAD`, and `writeFileAtomic` does the same to every file of the data
+  directory, so each of those was heard the first time only. Against `node
+  src/cli/index.ts serve`, three `git add -f` produced one `diff-changed`, and
+  four moves of `HEAD` produced one; a bare recursive watch heard one of three
+  `updateComments` from another process. On Linux the tree now takes one
+  non-recursive watch per directory itself — the directory's inode outlives
+  every rename into it — and prunes `node_modules` and git's bookkeeping from
+  the watches, where the emulation watched every file in them. Both runtimes
+  take it, and the runtime probe asks the same watch. Bun names a rename by its
+  source, `.git/HEAD.lock` or an editor's temporary file, and the repository's
+  rules dropped those names: four moves of `HEAD` against `bun … serve`
+  produced no event. The rules now keep git's two locks and every file of
+  `.git/info`. Both servers now announce every index move, `HEAD` move and
+  reply in the same runs
+  ([05-watcher.md](docs/reference/05-watcher.md#one-watch-per-directory-on-linux)).
+  - **A directory removed and made again is watched again.** Examples are
+    `rm -rf dist && mkdir dist`, `mv tmp dist`, and a `git checkout` between
+    branches that differ in `src/gen`. ext4 gives the new directory the freed
+    inode at once, so a directory is known by its inode and, where the birth
+    time is real, by that too, compared on every listing; a `rename` naming it
+    renews its watch. Without `statx`, libuv reports the change time as the
+    birth time, so a birth time counts only once one has differed from its
+    change time, and inodes alone decide until then. That leaves a directory
+    missed only when its inode is reused and neither a rename event nor a
+    listing tells it apart.
+  - **A directory the server may not read is left out**, as the walk leaves it
+    out. Before, it sent the whole tree to the walk.
+  - **The tree reports in the order of the writes.** A new directory's files
+    come out of a listing, and a name now waits for the listings and arms
+    already under way in the tree when its event came. So a report still means
+    everything written before it has been reported, which the watcher suite's
+    `settle` relies on. Each piece of work is tracked once, so a burst of 5000
+    files costs 12 MB, not the 1.4 GB of a copy per event.
+  - **A lock counts only when its file moved.** A `git status` that refreshes
+    nothing costs no rescan, and `diff-changed` names `.git/index` or
+    `.git/HEAD`, never the lock, so the symbol index no longer reads the
+    repository whole for it. The file's stamp is kept once the rescan is
+    through, so a rescan that fails does not turn the next lock into nothing.
+
 - **The watcher tests' waits hold on the walk and on the watch** (DA-110.2).
   `tests/watcher.test.ts` went red on commits that changed only docs, in the
   Node `check` job and in the Bun unit suite. Two waits were loose. A step's
