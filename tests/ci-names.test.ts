@@ -126,6 +126,6 @@ describe("the check-run names branch protection lists", () => {
     const undocumented = reportedByWorkflow.filter((name) => !documented.includes(name));
     expect(undocumented.every((name) => name.includes("windows-latest"))).toBe(true);
     // The paragraph wraps, so the assertion holds the half that carries the decision.
-    expect(section.replace(/\s+/g, " ")).toContain("is deliberately not in the list until DA-45");
+    expect(section.replace(/\s+/g, " ")).toContain("are deliberately not in the list until DA-45");
   });
 });
