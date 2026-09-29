@@ -12,6 +12,7 @@ import { generate, PROFILES } from "../scripts/synth.ts";
 import type { Config } from "../src/core/config/index.ts";
 import { loadConfig } from "../src/core/config/index.ts";
 import { list, readSession } from "../src/core/domain/index.ts";
+import { GIT_NULL } from "../src/core/git/run.ts";
 import { readRepositoryChange } from "../src/core/index.ts";
 import type { Comment, Review } from "../src/core/storage/index.ts";
 import { readCurrent, readDiffCache } from "../src/core/storage/index.ts";
@@ -456,8 +457,8 @@ describe("a repository path that leaves the root", () => {
       cwd,
       env: {
         ...process.env,
-        GIT_CONFIG_GLOBAL: "/dev/null",
-        GIT_CONFIG_SYSTEM: "/dev/null",
+        GIT_CONFIG_GLOBAL: GIT_NULL,
+        GIT_CONFIG_SYSTEM: GIT_NULL,
         GIT_AUTHOR_NAME: "fixture",
         GIT_AUTHOR_EMAIL: "fixture@example.invalid",
         GIT_COMMITTER_NAME: "fixture",

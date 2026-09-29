@@ -13,10 +13,13 @@ Neither the repository it reads nor the environment it was started in
 - **The environment is built rather than inherited.** `readOnlyEnv` in
   `src/core/git/run.ts` copies `process.env` without a single `GIT_*` key and
   puts back `GIT_CONFIG_GLOBAL` and `GIT_CONFIG_SYSTEM` at the null device,
-  spelled `/dev/null` on every platform (`GIT_NULL`): Git for Windows maps that
-  spelling to `nul` itself, and refuses Node's `os.devNull`, `\\.\nul`, with
-  `unable to access '//./nul'` (DA-45.1). A
-  parent that exports `GIT_DIR`, `GIT_WORK_TREE`, `GIT_INDEX_FILE` or
+  spelled `/dev/null` on every platform (`GIT_NULL`). Node's `os.devNull` is
+  `\\.\nul` on Windows, which git refuses with `unable to access '//./nul'`
+  (DA-45.1). That Git for Windows maps `/dev/null` to `nul` in its own `open`,
+  rather than reading a `\dev\null` a local user could create on the drive, is
+  an assumption that `scripts/check-git-null.ts` checks on the Windows runner:
+  it plants a configuration file there and fails if the reader's git reads it,
+  or if the `core.hooksPath` pin makes git warn. A parent that exports `GIT_DIR`, `GIT_WORK_TREE`, `GIT_INDEX_FILE` or
   `GIT_CONFIG_COUNT` — a git hook, `git rebase --exec`, an agent shell — changes
   nothing about what is read, and `cwd` alone says which repository that is.
   `resolveUser` in `src/core/config/index.ts` is the deliberate exception: it
