@@ -369,20 +369,22 @@ and `bun run release` refuses a version that has no section. See
   stop at the next frame — the frame on which, in two of its three jumps, the
   card still showed its spacer instead of its diff. A round added to
   `revealCard` now moves the line: on a 4-core container 69.8 ms became 100.7
-  with six rounds, against 25.6 and 31.6 before; a regression that only adds
-  frames is still out of the unpaced gate's sight (DA-82.3). The hook fails the
+  with six rounds, against 25.6 and 31.6 before; an added frame that only moves
+  work earlier is still out of the unpaced gate's sight (DA-82.3). The hook fails the
   run when the diff does not mount within ten frames or the jump leaves another
   file current. `data-file-index` is gone from the file card, and the
   development machine's reading of the new window is DA-82.1
   ([11-perf.md](docs/reference/11-perf.md#the-gate)).
-- **What an unpaced frame costs is measured, and a regression that only adds
-  frames is outside the perf gate by decision** (DA-82.3). On a 4-core container
-  a frame with something to draw cost 0.7–2.8 ms at the median with the
-  frame-rate limit off, against 16.7 at 60 Hz, and an idle one 17.6–17.7: the
-  frame DA-82 added before `revealCard`'s first scroll was one tick at 60 Hz,
-  +18.7 ms, and `no difference` unpaced. A frame count saw it — 3 frames a jump,
-  4 with the probe, in every run — but it is no measure for the lines that wait
-  on the server, and a ceiling on it is a budget row, DA-82.4
+- **What an unpaced frame costs is measured, and which added frames the perf
+  gate does not see is written down** (DA-82.3). On a 4-core container a frame
+  with something to draw cost 0.7–2.8 ms at the median with the frame-rate limit
+  off, against 16.7 at 60 Hz, and an idle one 17.6–17.7, so an added idle frame
+  is visible to the gate. The frame DA-82 added before `revealCard`'s first
+  scroll, which paints the selection, was one tick at 60 Hz, +18.7 ms, and
+  `no difference` unpaced: a frame that only moves work earlier is outside the
+  gate until DA-82.4 decides whether it gets a frame-count ceiling. The count saw
+  it — 3 frames a jump, 4 with the probe, in every run — but it is no measure for
+  the lines that wait on the server
   ([11-perf.md](docs/reference/11-perf.md#what-a-frame-costs-unpaced-and-what-the-gate-does-not-see)).
 - **The perf gate takes about 45 s instead of about 66, and CPU per frame is
   taken with the frames unpaced** (DA-115). The harness launches Chromium with

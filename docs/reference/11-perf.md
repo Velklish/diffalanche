@@ -401,8 +401,9 @@ soon as the one before it is done instead of on a 60 Hz tick, and the pass takes
 what its 600 frames cost — about 5 s on an M1 Pro — rather than 600 × 16.7 ms.
 The same holds for every other line, since each ends at `afterPaint`, the next
 frame the browser draws: without the limit that frame comes when the work is
-done, not at the next tick — when the frame has something to draw; one with
-nothing to draw is not free, and a frame the work only adds is close to it
+done, not at the next tick. That holds for a frame that has something to draw,
+which costs about its work; a frame with nothing to draw still comes about
+17.7 ms after the last one
 ([below](#what-a-frame-costs-unpaced-and-what-the-gate-does-not-see), DA-82.3).
 The flag is `BROWSER_ARGS` in `perf/harness.ts`, and
 `tests/perf.test.ts` › "launches Chromium with the frame-rate limit off, so the
@@ -885,10 +886,10 @@ on the untouched base), five `perf/run.ts` processes a variant, medians:
 So a regression inside `revealCard` that costs work — another round — moves the
 line now and did not before. A frame added before the first scroll moved neither
 window beyond its spread, +6.4 and −1.7 ms: with the frame-rate limit off, a
-frame that has something to draw costs what drawing it costs, so a regression
-that only adds frames is out of the gate's sight — measured, and why the gate
-leaves it there, in **What a frame costs unpaced, and what the gate does not
-see**, below (DA-82.3). The hook also fails the run when the diff has not mounted within ten
+frame that has something to draw costs about its work, so a regression that adds
+a frame carrying work the page would have done anyway is out of the gate's sight,
+while an added idle frame is not — measured in **What a frame costs unpaced,
+and what the gate does not see**, below (DA-82.3). The hook also fails the run when the diff has not mounted within ten
 frames, or when the store's current file after the jump is not the file jumped
 to. The resolution tables below, of DA-110 and DA-115, and the `jumps` step of
 the wall-per-step table measured the window before DA-82; since DA-82 that step
@@ -1098,49 +1099,61 @@ to the middle file, two processes each way:
 or two beyond its work — where the reader's 60 Hz display charges up to 16.7 ms
 for it. **A frame with nothing to draw is not free**: without the limit Chromium
 still spaces such frames about 17.7 ms apart, a little slower than 60 Hz. Why it
-does is not measured. An added idle frame is therefore the one frame-only
-regression the unpaced gate reads at full price.
+does is not measured. An added idle frame is therefore visible to the unpaced
+gate, at about the price the reader pays for it.
 
-The frame DA-82 probed is the other kind. With an `await afterPaint()` before
-the first `scrollIntoView` of `revealCard`, the added frame paints the
-selection that `revealFile`'s store write renders, and a timer around it inside
-the page read 9.0–27.9 ms, 14.5 at the median over 15 jumps. The jump as a whole
-did not grow by that much, because the frame paints work the first scroll's
-frame would otherwise have painted; what it adds is the frame itself:
+The frame DA-82 probed is an `await afterPaint()` before the first
+`scrollIntoView` of `revealCard`, and it is not idle: it comes after
+`revealFile`'s store write, whose render has the tree's selection to paint. A
+timer around it inside the page read 9.0–27.9 ms, 14.5 at the median over 15
+jumps — above every painted frame of the first table, and a range that takes in
+the idle band's 16.8–17.9 ms. What the jump as a whole read with it:
 
-| Reading, the same machine | The page as it ships | With the added frame |
-|---|---|---|
-| `bun perf/compare.ts`, nine a side, unpaced, load 1.9–2.5 | 70.7 ms | 66.5 ms: −4.2 against ±12.5, `no difference` |
-| `bun run perf`, five runs, unpaced, load 0.2–3.0 and 0.9–1.6 | 59.2 ms (49.3–72.5) | 73.2 ms (63.0–82.9) |
-| Median of three jumps, five processes, unpaced, load 0.7–2.3 | 65.4 ms (55.0–71.4) | 71.1 ms (47.2–77.9), four processes |
-| The same at 60 Hz, the flag taken out for the probe, load 1.4–2.1 | 76.2 ms (72.3–82.7) | 94.9 ms (85.7–107.9) |
-| Frames the jump spans, counted | 3 in 30 of 30 | 4 in 42 of 42 |
+| Reading, the same machine | The page as it ships | With the added frame | Difference |
+|---|---|---|---|
+| `bun perf/compare.ts`, nine a side, unpaced, load 1.9–2.5 | 70.7 ms | 66.5 ms | −4.2 against ±12.5, `no difference` |
+| `bun run perf`, five runs, unpaced, load 0.2–3.0 and 0.9–1.6 | 59.2 ms (49.3–72.5) | 73.2 ms (63.0–82.9) | +14.0, not resolved by five runs |
+| Median of three jumps, five processes, unpaced, load 0.7–2.3 | 65.4 ms (55.0–71.4) | 71.1 ms (47.2–77.9), four processes | +5.7, inside both spreads |
+| The same at 60 Hz, the flag taken out for the probe, load 1.4–2.1 | 76.2 ms (72.3–82.7) | 94.9 ms (85.7–107.9) | +18.7, the spreads apart |
+| Frames the jump spans, counted | 3 in 30 of 30 | 4 in 42 of 42 | +1 |
 
-At 60 Hz the added frame is one tick, +18.7 ms, and the two spreads do not
-overlap; unpaced it is inside the spread, and the comparison, which is what
-resolves a difference ([below](#what-the-gate-resolves-and-comparing-two-trees)),
-calls it none. Both of the gate's medians are over the 50 ms budget on that
-container, whose untouched base is red on six lines, so the gate's own verdict
-could not change there. Two of the 34 probed processes failed instead: one on the
-hook's own check that the jump leaves the file current, and one whose error was
-not kept. That check catching a frame before the scroll is a property of this
-probe, not a verdict of the gate.
+Unpaced, the three readings of the jump run from −4.2 to +14.0 ms, and the one
+built to resolve a difference ([below](#what-the-gate-resolves-and-comparing-two-trees))
+calls it none; the gate's own +14.0 is about the frame's 14.5 ms, from five runs
+that cannot tell that from noise. At 60 Hz the added frame is one tick. That the
+frame costs the jump less than its own 14.5 ms unpaced because it paints work
+the first scroll's frame would otherwise have painted is an inference from these
+readings, not a measurement. Both of the gate's medians are over the 50 ms
+budget on that container, whose untouched base is red on six lines, so the
+gate's own verdict could not change there. Two of the 34 probed processes failed
+instead: one on the hook's own check that the jump leaves the file current, and
+one whose error was not kept. That check catching a frame before the scroll is a
+property of this probe, not a verdict of the gate.
 
-**So a regression that only adds frames with something to draw is outside the
-gate's `ms` lines, and it stays outside by decision** (DA-82.3). The frame-rate
-limit is off so the scroll takes what its frames cost, DA-115's decision, and
-the price is that every other line charges an added frame its work rather than
-the reader's tick. Counting the frames a line spans would see it: a
+**What the gate sees of an added frame, then, is what the frame costs unpaced:**
+
+- an added idle frame is visible, at about 17.6 ms;
+- a frame that only moves work the page does anyway earlier is not visible —
+  the probe above, as far as the inference holds;
+- a frame that carries work of its own is seen as that work: another round of
+  `revealCard` is a `scrollIntoView` and a layout, and `ROUNDS` 3 → 6 took the
+  jump from 69.8 to 100.7 ms;
+- on the reader's 60 Hz display every added frame costs up to one 16.7 ms tick,
+  whichever kind it is.
+
+**The second kind stays outside the gate's `ms` lines until DA-82.4 is decided.**
+The frame-rate limit is off so the scroll takes what its frames cost, DA-115's
+decision, and the price is that the other lines charge an added frame its work
+rather than the reader's tick. Counting the frames a line spans would see it: a
 `requestAnimationFrame` counter installed from the harness side read 3 frames
 for every jump and 1 for every composer opening in the runs above. But the
 count is only a measure where the window is the page's own work: the session
 switch read 6 to 62 frames, since the counter keeps frames coming while the
 page waits for the server, and the update and the first render wait the same
 way. A ceiling on the jump's and the composer's frames is a new row of the
-budget table, and whether the gate gets one is DA-82.4. Until then a change
-that adds an `await afterPaint()`, a `requestAnimationFrame` or a round to a
-measured path is read by the frames it adds, times 8.3 ms at the 120 fps of
-`docs/SPEC.md` section 6, and not by the gate.
+budget table, and whether the gate gets one is the owner's call, DA-82.4. Until
+then a change that adds a frame to a measured path is read by the frames it
+adds as well as by the gate.
 
 ### What the gate resolves, and comparing two trees
 
