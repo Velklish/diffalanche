@@ -3,7 +3,16 @@
 import { loadConfig } from "../src/core/config/index.ts";
 import { startEmbedding } from "./embedding.ts";
 import type { Measurement } from "./harness.ts";
-import { lap, measure, parseArgs, printLaps, VARIANTS, withServer } from "./harness.ts";
+import {
+  inOneProcess,
+  lap,
+  measure,
+  measureOnce,
+  parseArgs,
+  printLaps,
+  VARIANTS,
+  withServer,
+} from "./harness.ts";
 
 async function main(): Promise<void> {
   lap("start");
@@ -15,15 +24,27 @@ async function main(): Promise<void> {
   if (chosen.length === 0) throw new Error(`unknown variant: ${options.variants.join(", ")}`);
 
   const results: Measurement[] = [];
+  if (!inOneProcess(options.runs, chosen.length)) {
+    // A second browser in this process would lose its pipe to Bun (DA-82.2): one process each.
+    for (const variant of chosen) {
+      for (let run = 0; run < options.runs; run += 1) {
+        const measurement = measureOnce(options.fixture, variant.name, process.cwd(), options.lag);
+        results.push(measurement);
+        const label = `${variant.name} run ${run + 1}/${options.runs}`;
+        process.stderr.write(`${label}: ${JSON.stringify(measurement)}\n`);
+      }
+    }
+    process.stdout.write(`${JSON.stringify(results, null, 2)}\n`);
+    return;
+  }
+
   await withServer(options.fixture, async (baseUrl, sessions) => {
     const { dataDir } = await loadConfig({ root: options.fixture });
     const load = options.lag === null ? null : await startEmbedding(dataDir, options.lag.embedding);
     for (const variant of chosen) {
-      for (let run = 0; run < options.runs; run += 1) {
-        const measurement = await measure(baseUrl, variant, options.fixture, sessions);
-        results.push(measurement);
-        process.stderr.write(`${variant.name} run ${run + 1}: ${JSON.stringify(measurement)}\n`);
-      }
+      const measurement = await measure(baseUrl, variant, options.fixture, sessions);
+      results.push(measurement);
+      process.stderr.write(`${variant.name} run 1: ${JSON.stringify(measurement)}\n`);
     }
     if (load !== null) process.stderr.write(`event loop: ${JSON.stringify(await load.stop())}\n`);
   });

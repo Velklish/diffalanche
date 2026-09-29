@@ -695,6 +695,18 @@ and `bun run release` refuses a version that has no section. See
   the directory was, which fails the listing for any user, and it still fails
   when a failed listing is answered with an empty map.
 
+- **`bun perf/run.ts --runs 3` finishes instead of hanging in its second or
+  third repetition** (DA-82.2). Above one repetition it measures each in a
+  process of its own, as the gate does, with `--embedding` and `--lag` carried
+  over. The stall DA-25.2 worked around without a cause has one now: under
+  `strace`, Bun closed the first browser's two DevTools pipes a second time
+  about eleven seconds after the next browser had been given the same
+  descriptor numbers, and Chromium, finding its pipe closed, exited, unnoticed
+  by Playwright. On a 4-core container the old loop stalled in six attempts of
+  six and the new one finished two of two
+  ([11-perf.md](docs/reference/11-perf.md#the-gate)); why Bun closes them twice
+  is DA-82.5.
+
 - **The embedding index verdicts on a changed platform hold on a linux-x64
   runner** (DA-34). "embeds every comment again when the model, the runtime or
   the platform changed" and "says what the index is missing without the model"

@@ -271,25 +271,39 @@ async function taskDuration(cdp: { send: (method: "Performance.getMetrics") => P
   return metric.value;
 }
 
-/** One repetition is one `perf/run.ts` process in the tree it measures: a second browser in one
- * process stalls on Bun (DA-25.2, 11-perf.md "The gate"); the environment is passed, not assigned. */
-export function measureOnce(fixture: string, variant: string, cwd = process.cwd()): Measurement {
-  const stdout = execFileSync(
-    "bun",
-    ["perf/run.ts", "--fixture", fixture, "--variant", variant, "--runs", "1"],
-    {
-      cwd,
-      stdio: ["ignore", "pipe", "inherit"],
-      encoding: "utf8",
-      env: { ...process.env, ...fixtureEnv() },
-    },
-  );
+/** One repetition is one `perf/run.ts` process in the tree it measures: Bun closes a closed browser's
+ * pipes again once the next browser holds their numbers (DA-82.2, 11-perf.md "The gate"). */
+export function measureOnce(
+  fixture: string,
+  variant: string,
+  cwd = process.cwd(),
+  lag: Options["lag"] = null,
+): Measurement {
+  // The environment is passed, not assigned: Bun hands a child the env the process started with.
+  const stdout = execFileSync("bun", repetitionArgs(fixture, variant, lag), {
+    cwd,
+    stdio: ["ignore", "pipe", "inherit"],
+    encoding: "utf8",
+    env: { ...process.env, ...fixtureEnv() },
+  });
   const results = JSON.parse(stdout) as Measurement[];
   const measurement = results[0];
   if (results.length !== 1 || measurement === undefined) {
     throw new Error(`perf/run.ts printed ${results.length} measurements, one was expected`);
   }
   return measurement;
+}
+
+/** The command line of one repetition's process, with `--embedding` or `--lag` carried over. */
+export function repetitionArgs(fixture: string, variant: string, lag: Options["lag"]): string[] {
+  const load =
+    lag === null ? [] : lag.embedding === null ? ["--lag"] : ["--embedding", lag.embedding];
+  return ["perf/run.ts", "--fixture", fixture, "--variant", variant, "--runs", "1", ...load];
+}
+
+/** Whether `perf/run.ts` measures in its own process: one browser a process (DA-82.2). */
+export function inOneProcess(runs: number, variants: number): boolean {
+  return runs * variants <= 1;
 }
 
 export function median(values: number[]): number {

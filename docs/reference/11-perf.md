@@ -364,12 +364,14 @@ bun perf/run.ts --runs 3
 |---|---|
 | `--fixture <dir>` | Root of a synthetic review made by `bun run synth`. Default `.perf/fixture` |
 | `--variant <name>` | Measure only this variant; repeatable. Default: all of them. There is one, `default` |
-| `--runs <n>` | Repetitions per variant: a whole number of at least 1, anything else is an error. Default 1 for `perf/run.ts`, 5 for the gate, 9 a side for `perf/compare.ts` |
+| `--runs <n>` | Repetitions per variant: a whole number of at least 1, anything else is an error. Default 1 for `perf/run.ts`, 5 for the gate, 9 a side for `perf/compare.ts`. Above 1, `perf/run.ts` measures each repetition in a process of its own, with its own server and browser, as the gate does ([why](#the-gate), DA-82.2) |
 | `--embedding <main\|child>` | `perf/run.ts` only: rebuild the embedding index in a loop inside the server's process while the page is measured — the model on the server's own thread or in the process the server runs it in — and print on stderr how long each run took and how late a 5 ms timer fired ([09-ml.md](09-ml.md#in-a-process-of-its-own)) |
 | `--lag` | `perf/run.ts` only: the timer of `--embedding` with no model, the baseline to hold it against |
 
 The numbers come out as JSON on stdout, one object per run, with progress on
-stderr.
+stderr. `--embedding` and `--lag` go to each repetition's process, so each
+prints its own `event loop:` line, and a session's first switch is cold in
+every repetition, as it is in the gate's.
 
 | Field | What it is |
 |---|---|
@@ -496,8 +498,41 @@ with its own server and browser, the number read back from its stdout. The
 second browser one process launches after a whole measurement stalls on Bun:
 the page never reports ready, or a later step never returns, and Playwright's
 own timeouts do not fire, while a process that measures once and exits
-completes every time. The cause is not found; the shape that works is what the
-gate runs.
+completes every time. **The cause is Bun closing a pipe it already closed**
+(DA-82.2), below; one browser a process is the shape that avoids it, and
+`perf/run.ts --runs <n>` takes that shape too.
+
+**Why a second browser in one process stalls.** Found on the 4-core cloud
+container of 2026-09-29 (Chromium 141 headless shell, Bun 1.3.14, one-minute
+load 0.1–3.2 on 4 cores), where the one-process loop that `perf/run.ts --runs 3`
+ran before DA-82.2 stalled in each of the six attempts of the day, in the second
+browser or the third, in whichever step was under way — the scroll, the cold
+switch — 10 to 13 s after that browser was launched:
+
+- a probe every ten seconds found the server answering in 90–116 ms throughout
+  and the page answering a DevTools call, until one tick where the browser's
+  processes were gone and the call was never answered;
+- Playwright's own log (`DEBUG=pw:browser`) has Chromium say `Connection
+  terminated while reading from pipe` and exit with code 0: its end of the
+  DevTools pipe was closed by the harness's process, and it left as it is
+  meant to;
+- `strace -f` of the harness's process shows why. Playwright talks to Chromium
+  over two extra pipes, a child's descriptors 3 and 4; in the parent the first
+  browser's were descriptors 20 and 22, Bun closed them when that browser
+  closed, the second browser was given the same two numbers, and eleven seconds
+  later Bun's main thread closed 20 and 22 again — the second browser's pipes,
+  with nothing in the harness asking for it;
+- Bun never reports the closed pipe to Playwright, so no `disconnected` fires,
+  every pending call waits for ever, and the process sits at 0 % CPU.
+
+What makes Bun close them a second time is not found: a forced garbage
+collection after each measurement let two of three runs finish, and keeping the
+closed browser reachable let neither of two, so it is not the browser object's
+own collection that does it. A process
+with one browser is never hurt by it, because nothing is left to take the old
+numbers but the exit. The server and the CLI give no child process more than
+the three standard descriptors, so the product is not on the path this trace
+followed.
 It prints one row per budget line and exits 1 when the **median** of any line is
 over its ceiling. Two slow runs do not fail the build; three do. Five and not
 three since DA-110, below.
@@ -994,7 +1029,7 @@ regenerates the fixture takes about 6 s more.
 whatever the frame costs. Everything the harness sets up per process — `start`,
 `server`, `sessions`, `launch`, `page`, the two closes — comes to about 0.8 s a
 repetition, 4 s a run, and the build to 0.4 s, so the other two candidates of
-DA-115 — one process for all five repetitions, which waits on DA-25.2's stall,
+DA-115 — one process for all five repetitions, which DA-82.2 found Bun breaks,
 and skipping a build that is already current — would save a few seconds between
 them, and neither was taken.
 
