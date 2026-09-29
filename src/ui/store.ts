@@ -1,7 +1,7 @@
 /** The store of the review workspace: the slices of the handoff's "State Management", plus
  * `review`, which holds what the server sends (08-ui.md, "Store"). */
 import { create } from "zustand";
-import { countReview } from "../core/domain/counters.ts";
+import { countReview, isOpen } from "../core/domain/counters.ts";
 import { byCodePoint } from "../core/order.ts";
 import type { FileChange, RepositoryChange } from "../core/types.ts";
 import { firstAddedLine } from "./anchor.ts";
@@ -1550,7 +1550,7 @@ function readingOrder(store: Store): Comment[] {
     comment.line ?? -1,
   ];
   return store.comments
-    .filter((comment) => comment.status === "open")
+    .filter(isOpen)
     .map((comment) => ({ comment, at: place(comment) }))
     .sort(
       (a, b) =>
@@ -2034,7 +2034,10 @@ export async function refusal(response: Response): Promise<Refusal> {
  * open is read from the threads this page holds (08-ui.md, "The confirmation"). */
 function asQuestion(store: Store, scope: Scope, ids: string[]): ScopeConfirm {
   const held = new Map(store.comments.map((comment) => [comment.id, comment]));
-  const open = ids.filter((id) => held.get(id)?.status === "open").length;
+  const open = ids.filter((id) => {
+    const one = held.get(id);
+    return one !== undefined && isOpen(one);
+  }).length;
   return {
     scope,
     question: confirmQuestion(removedFrom(store.session?.scope ?? null, scope), ids.length, open),

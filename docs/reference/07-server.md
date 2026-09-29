@@ -255,7 +255,10 @@ set is the watcher, and the watcher rescans one session — the current one
 session the watcher follows and reads the working tree for every other one. The
 cost of opening a task is its scope's repositories rather than the root's, and
 the read is written back, so anchor capture reads a file that says what the
-screen says ([04-domain.md](04-domain.md)).
+screen says ([04-domain.md](04-domain.md)). The write goes through
+`writeChangeSet` as every writer's does, so it moves the task's comments with
+the entries it replaces before the document reads them
+([04-domain.md](04-domain.md#re-anchoring)).
 
 **Nor is the followed session's cache fresh when the server starts.** The
 exemption holds while the server runs, because only then is the watcher
@@ -503,7 +506,11 @@ the directories that could not be read and the bases that did not resolve
 the warnings of the walk, which covers the whole root, plus those of reading the
 repositories of the task — a repository the task is not about is not read, so it
 has nothing to say — plus one naming a scope entry the walk found no repository
-for.
+for. On top of those, one per repository holding orphaned comments, `N comments
+lost their anchor` ([04-domain.md](04-domain.md#re-anchoring)), added to the
+document as it is served rather than to what is held: the held document keeps
+the change set's own list, which a rescan's hand-over replaces whole, and the
+count moves with `comments.json`, which every comment write already re-reads.
 
 `?review=<name>` answers with the document of that session instead of the
 current one: the address `review new --no-use` prints, so a window can open a
@@ -907,11 +914,11 @@ browser fetches what an event names rather than being sent it.
 | `diff-changed` | `{ type, repo, files }` — `files` are the paths that woke the watcher |
 | `comment-added` | `{ type, session, id }` — `session` is the task the thread belongs to |
 | `reply-added` | `{ type, session, id, commentId }` — `id` is the reply |
-| `comment-status` | `{ type, session, id }` |
+| `comment-status` | `{ type, session, id }` — the thread's status changed, or re-anchoring moved it |
 | `session-changed` | `{ type, name }` — the base, title, name, scope or status of a followed session changed |
 | `current-changed` | `{ type, name }` — the `current` pointer moved to this session |
 | `sessions-changed` | `{ type, name, status }` — a review task appeared, or a task's status changed |
-| `warnings` | `{ type, list }` |
+| `warnings` | `{ type, list }` — the change set's warnings with the orphaned comments' |
 | `activity` | `{ id, verb, author, repo, path, at }` — one line of the feed |
 | `reload` | `{ type, reason }` — read the review again; see below |
 
@@ -980,7 +987,7 @@ either, which is why only a human ever resolves a thread through this server.
 | `POST /api/comments` | `repo`, `path`, `line`, `endLine`, `side`, `severity`, `severitySource`, `body` | 201 and the comment |
 | `POST /api/comments/:id/replies` | `body` | 201 and the thread |
 | `POST /api/comments/:id/resolve` | `note` | the thread, `resolvedBy` the configured user |
-| `POST /api/comments/:id/reopen` | `note` | the thread, open again |
+| `POST /api/comments/:id/reopen` | `note` | the thread, open again — `orphaned` when its anchor no longer reads at its line |
 | `POST /api/sessions` | `name`, `base`, `title`, `scope`, `use` | 201 and `review.json` |
 | `POST /api/sessions/:name/use` | — | `review.json` of the session now current |
 | `PUT /api/sessions/:name/base` | `base` | `review.json` with the new base |
@@ -1015,6 +1022,15 @@ string the CLI takes — `head`, `branch`, `branch:<name>`, or a ref — read by
 domain's own parser, so the two interfaces have one grammar for it. A `note` on
 `resolve` or `reopen` is written into the thread as a reply before the status
 changes.
+
+**`reopen` of a line comment reads its repository again first**, as the CLI's
+does — for the task the request names, the watcher's or not — so the rewrite of
+`diff.json` moves the task's comments before the one reopened is judged, and the
+file is read to see whether its anchor still reads at its line. Where it does the
+thread comes back `open`; where it does not it comes back `orphaned`, kept and
+counted as open, and the answer's `status` says which
+([04-domain.md](04-domain.md#re-anchoring)). The route takes no line yet, so an
+orphaned thread is put back on a line from the CLI alone (DA-42.2).
 
 Changing the base of a session leaves its `diff.json` where it is and makes it
 stale on purpose: the cache records the base it was computed with, so the next

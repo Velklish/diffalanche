@@ -8,14 +8,20 @@ function lastMessageRole(comment: Comment): Comment["role"] {
   return comment.replies.at(-1)?.role ?? comment.role;
 }
 
+/** Open in every sense `docs/SPEC.md` counts one: an orphaned comment is a finding nobody has
+ * closed, whose line was lost, and its own `status` tells it apart (04-domain.md). */
+export function isOpen(comment: Pick<Comment, "status">): boolean {
+  return comment.status === "open" || comment.status === "orphaned";
+}
+
 /** An open comment whose last message is from a human: no agent has answered it. */
 export function isUnanswered(comment: Comment): boolean {
-  return comment.status === "open" && lastMessageRole(comment) === "human";
+  return isOpen(comment) && lastMessageRole(comment) === "human";
 }
 
 /** An open comment whose last message is from an agent: nobody has verified it. */
 export function isAwaiting(comment: Comment): boolean {
-  return comment.status === "open" && lastMessageRole(comment) === "agent";
+  return isOpen(comment) && lastMessageRole(comment) === "agent";
 }
 
 export type Counters = {
@@ -33,7 +39,7 @@ type RepositoryCounters = { repo: string; counters: Counters; files: FileCounter
 export type ReviewCounters = { counters: Counters; repositories: RepositoryCounters[] };
 
 function countComments(comments: Comment[]): Counters {
-  const open = comments.filter((comment) => comment.status === "open");
+  const open = comments.filter(isOpen);
   return {
     total: comments.length,
     open: open.length,

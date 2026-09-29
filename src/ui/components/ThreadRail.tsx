@@ -1,5 +1,5 @@
 import { useEffect, useMemo } from "react";
-import { isAwaiting, isUnanswered } from "../../core/domain/counters.ts";
+import { isAwaiting, isOpen, isUnanswered } from "../../core/domain/counters.ts";
 import { revealThread } from "../reveal.ts";
 import type { RailScope } from "../store.ts";
 import { useStore } from "../store.ts";
@@ -116,7 +116,7 @@ function Tab({
 
 /** How many of a set are still open; the tabs count those, not every thread. */
 function open(comments: Comment[]): number {
-  return comments.filter((comment) => comment.status === "open").length;
+  return comments.filter(isOpen).length;
 }
 
 /** The focused card, brought into the rail's own scroll: focused from the diff, it can be a long

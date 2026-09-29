@@ -15,6 +15,46 @@ and `bun run release` refuses a version that has no section. See
 
 ### Added
 
+- **Comments stay on their lines after code edits, and a lost one is
+  `orphaned`** (DA-42). Every writer of `diff.json` — the watcher's rescan, the
+  server's first read of a task, `diff`, `comment`, `reopen` — places the line
+  comments of each repository whose entry it replaced, in the same hold of the
+  session's lock — after a rescan's frames, before those of a task switched to
+  — and before it writes `diff.json`: a repository whose comments it could not
+  all place, on a fault, an unreadable `comments.json` or its 10 s share of the
+  lease, keeps its old entry, and the next writer moves them. A comment whose line and context
+  are where it is stays; then `git blame ^<base>` of the working tree, asked only
+  when the tree the move starts from is the one the comment was put on and taken
+  only on the anchored text with a context that agrees; then the stored text
+  and context — a line under 0.6 similar is no candidate, the best must score
+  0.7 with no rival within 0.1. A comment found moves, into the new path of a
+  file git reports renamed, and takes the anchor of its new place; a range keeps
+  its length where its lines still read the same, grows or is narrowed where
+  they do not. An open comment not found — or on a file the change set says is
+  deleted — is `status: "orphaned"` and keeps its old `line` and `anchor`; a
+  file that only cannot be read now, or an added one stashed away, is left for
+  the next pass. An orphaned comment is still open: it is in the counters, the
+  severity paint, the default `list`, `list --unanswered` and the default export
+  (marked `· orphaned`), and `list --status orphaned` lists them alone. `reopen
+  <id> --role human --line <n> [--end-line <m>]` puts one back on a line.
+  **`reopen` without `--line`, from the CLI or the page, reads the repository
+  again and reopens a line comment as `open` where its anchor still reads at its
+  line, and as `orphaned` where it does not** — a resolved thread left behind by
+  an edit comes back open and orphaned rather than being refused. The page counts
+  orphaned threads as open too: the thread rail's tabs, the severity paint of a
+  file, the reading order of `J`/`K`, and the export's count.
+  `diff`, the review document and the live `warnings` frame carry `N comments
+  lost their anchor` per repository, and `diff` warns and exits 0 when
+  `comments.json` cannot be read. A change of an anchor's hunk header alone is
+  not written. A thread that moved is a `comment-status` frame. A rename that
+  also changed lines is now read as `renamed` with its `oldPath`, not as a
+  modified file under its new name. The new value did not raise the schema
+  version; what an earlier build does with it is in
+  [03-storage.md](docs/reference/03-storage.md#schema-versions). Whether an
+  orphaned comment returns on its own, and whether a resolved one can be
+  orphaned, wait for the owner (DA-42.4); the model's proposal and the orphaned
+  card of the UI are DA-43.
+
 - **A cloud session sets itself up** (DA-117). `.claude/hooks/session-start.sh`,
   registered in `.claude/settings.json`, runs only in Claude Code on the web: the
   Bun the pinned CI jobs run, `bun install --frozen-lockfile`, the Playwright

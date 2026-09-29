@@ -1,14 +1,20 @@
 /** One scan of the review in the shape `diff.json` stores, hunks included for anchor capture;
  * everything that reads a whole review goes through it ([02-git.md](../../docs/reference/02-git.md)). */
+import { join } from "node:path";
 import type { Config } from "./config/index.ts";
+import type { AnchorSources, Reanchored, RepositoryMove } from "./domain/reanchor.ts";
+import { reanchorRepositories } from "./domain/reanchor.ts";
 import { pathInScope, repositoryInScope, scopeEntry } from "./domain/scope.ts";
-import { readRepositoryChange } from "./git/index.ts";
+import { fileSourceAt } from "./git/browse.ts";
+import { blameFrom, readRepositoryChange } from "./git/index.ts";
 import { byCodePoint } from "./order.ts";
 import { scan } from "./scanner/index.ts";
-import type { DiffCache, Scope } from "./storage/index.ts";
+import type { DiffCache, Lock, Scope } from "./storage/index.ts";
 import {
+  commentsPath,
   readDiffCache,
   SCHEMA_VERSION,
+  StorageError,
   sessionDir,
   withLock,
   writeDiffCache,
@@ -220,25 +226,139 @@ export async function refreshRepository(
   base: BaseSpec,
   repo: string,
   scope: Scope = null,
-): Promise<void> {
+): Promise<ChangeSetWrite> {
   const change = filterChange(
     scope,
     await readRepositoryChange(config.root, repo, base, { hunks: true }),
   );
-  const full = await withLock(sessionDir(config.dataDir, session), async (held) => {
+  const patched = await withLock(sessionDir(config.dataDir, session), async (held) => {
     const previous = await readDiffCache(config.dataDir, session);
     // A cache for another base or scope gets a full scan, not a patch, run outside the lock because
     // it takes as long as every repository takes ([02-git.md](../../docs/reference/02-git.md)).
-    if (!patchable(previous, base, scope)) return true;
-    await held.assertHeld();
-    await writeDiffCache(config.dataDir, session, replaceRepository(previous, change));
-    return false;
+    if (!patchable(previous, base, scope)) return null;
+    return writeChangeSet(config, session, held, replaceRepository(previous, change), previous);
   });
-  if (!full) return;
+  if (patched !== null) return patched;
 
   const scanned = (await scanReview(config, base, scope)).cache;
-  await withLock(sessionDir(config.dataDir, session), async (held) => {
-    await held.assertHeld();
-    await writeDiffCache(config.dataDir, session, scanned);
+  return withLock(sessionDir(config.dataDir, session), (held) =>
+    writeChangeSet(config, session, held, scanned),
+  );
+}
+
+/** Whether the recomputed entry says anything the cached one did not; the patch is the content,
+ * so comparing it is comparing the change itself. */
+export function sameChange(before: RepositoryChange | null, after: RepositoryChange): boolean {
+  if (before === null) return after.files.length === 0;
+  if (before.branch !== after.branch) return false;
+  if (before.files.length !== after.files.length) return false;
+  if (before.warnings.join("\n") !== after.warnings.join("\n")) return false;
+  if (before.base?.sha !== after.base?.sha || before.base?.ref !== after.base?.ref) return false;
+  return before.files.every((file, index) => {
+    const other = after.files[index];
+    return (
+      other !== undefined &&
+      file.path === other.path &&
+      file.status === other.status &&
+      file.additions === other.additions &&
+      file.deletions === other.deletions &&
+      file.omitted === other.omitted &&
+      file.patch === other.patch
+    );
   });
+}
+
+/** `sameChange` where either side may be no entry, which is a repository with no changes. */
+function sameEntry(before: RepositoryChange | null, after: RepositoryChange | null): boolean {
+  if (after === null) return before === null || before.files.length === 0;
+  return sameChange(before, after);
+}
+
+/** Re-anchoring's reads of the root: files as anchor capture reads them, history through blame. */
+export function anchorSources(root: string): AnchorSources {
+  return {
+    source: fileSourceAt(root),
+    blame: (repo, path, boundary, at) => blameFrom(join(root, repo), path, boundary, at),
+  };
+}
+
+/** How long a pass may run inside the hold, a third of the lock's 30 s lease: past it no comment is
+ * started, and the rest is the next writer's (04-domain.md, "Re-anchoring"). */
+const PASS_BUDGET_MS = 10_000;
+
+/** What a write of `diff.json` did to the comments. `pending` are the repositories whose entry was
+ * kept as it was, so the next writer places their comments; `failure` is why, when a fault was. */
+type ChangeSetWrite = Reanchored & {
+  unreadable: StorageError | null;
+  failure: unknown;
+  pending: string[];
+};
+
+type WriteOptions = {
+  /** A test's own reads; the root's files and history otherwise. */
+  sources?: AnchorSources;
+  budgetMs?: number;
+};
+
+/** `cache` with one repository's entry put back as it was, `null` being no entry. */
+function keepEntry(cache: DiffCache, repo: string, entry: RepositoryChange | null): DiffCache {
+  if (cache.rootWarnings === undefined) return cache;
+  const change = entry ?? { path: repo, branch: "", base: null, files: [], warnings: [] };
+  return replaceRepository({ ...cache, rootWarnings: cache.rootWarnings }, change);
+}
+
+/** The one write of `diff.json`, in the caller's hold of the session's lock: the pass runs against
+ * `next` first, and a repository it did not finish keeps its old entry, so the moves are not lost. */
+export async function writeChangeSet(
+  config: Config,
+  session: string,
+  held: Lock,
+  next: DiffCache,
+  previous?: DiffCache | null,
+  options: WriteOptions = {},
+): Promise<ChangeSetWrite> {
+  const was = previous === undefined ? await readDiffCache(config.dataDir, session) : previous;
+  const result: ChangeSetWrite = {
+    moved: [],
+    orphaned: [],
+    unreadable: null,
+    failure: null,
+    pending: [],
+  };
+  const paths = new Set(
+    [...(was?.repositories ?? []), ...next.repositories].map((one) => one.path),
+  );
+  const moves: RepositoryMove[] = [];
+  for (const repo of [...paths].sort(byCodePoint)) {
+    const before = was?.repositories.find((one) => one.path === repo) ?? null;
+    const after = next.repositories.find((one) => one.path === repo) ?? null;
+    if (was !== null && !sameEntry(before, after)) moves.push({ repo, before, after });
+  }
+  let done: string[] = [];
+  try {
+    const sources = options.sources ?? anchorSources(config.root);
+    const deadline = Date.now() + (options.budgetMs ?? PASS_BUDGET_MS);
+    const pass = await reanchorRepositories(config.dataDir, session, moves, sources, {
+      held,
+      deadline,
+    });
+    ({ done } = pass);
+    result.moved = pass.moved;
+    result.orphaned = pass.orphaned;
+  } catch (error) {
+    // The comments' own file is theirs to report; any other fault is the caller's.
+    const file = commentsPath(config.dataDir, session);
+    if (error instanceof StorageError && error.file === file) result.unreadable = error;
+    else result.failure = error;
+  }
+  // What the pass did not finish still reads, in the file, as the tree its comments are on.
+  let written = next;
+  for (const move of moves) {
+    if (done.includes(move.repo)) continue;
+    written = keepEntry(written, move.repo, move.before);
+    result.pending.push(move.repo);
+  }
+  await held.assertHeld();
+  await writeDiffCache(config.dataDir, session, written);
+  return result;
 }

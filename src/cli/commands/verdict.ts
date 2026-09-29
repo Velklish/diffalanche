@@ -2,11 +2,19 @@
  * domain's, since a skill is advice ([ADR-004](../../../docs/adr/adr-004-agent-contract.md)). */
 
 import type { Verdict } from "../../core/domain/index.ts";
-import { reopen as reopenComment, resolve as resolveComment } from "../../core/domain/index.ts";
+import {
+  get as getComment,
+  readSession,
+  reopen as reopenComment,
+  resolve as resolveComment,
+} from "../../core/domain/index.ts";
+import { fileSourceAt } from "../../core/git/browse.ts";
+import { refreshRepository } from "../../core/index.ts";
 import type { Arguments } from "../args.ts";
-import { choice, noExtra, positional, text } from "../args.ts";
+import { choice, count, noExtra, positional, text } from "../args.ts";
 import type { Command } from "../command.ts";
-import { DEFAULT_AUTHOR, DEFAULT_ROLE, ROLES } from "../comments.ts";
+import { DEFAULT_AUTHOR, DEFAULT_ROLE, ROLES, where } from "../comments.ts";
+import { UsageError } from "../errors.ts";
 
 const ROLE_OPTION = {
   type: "string",
@@ -57,6 +65,12 @@ export const reopen: Command = {
     about: "open a thread again; --role human is required",
     options: {
       note: { type: "string", value: "<text>", about: "written into the thread as it opens" },
+      line: {
+        type: "string",
+        value: "<n>",
+        about: "the line the comment belongs to now; required for an orphaned one",
+      },
+      "end-line": { type: "string", value: "<n>", about: "the last line of a range" },
       author: AUTHOR_OPTION,
       role: ROLE_OPTION,
     },
@@ -64,10 +78,40 @@ export const reopen: Command = {
   run: async (context, args) => {
     const id = positional(args, 0, "<id>");
     noExtra(args, 1);
+    const line = count(args, "line");
+    const endLine = count(args, "end-line");
+    if (line === undefined && endLine !== undefined) {
+      throw new UsageError("--end-line: the range needs its first line, --line");
+    }
     const session = await context.session();
-    const { dataDir } = await context.config();
-    const comment = await reopenComment(dataDir, session, id, verdict(args, text(args, "note")));
-    context.io.out(`${comment.id} is open again\n`);
+    const config = await context.config();
+    const given = verdict(args, text(args, "note"));
+    // The repository is read again first, as `comment` does, so the anchor is judged against the
+    // file now and its comments have moved with it; for a role refused anyway, nothing is read.
+    if (given.role === "human") {
+      const found = await getComment(config.dataDir, session, id);
+      if (found.repo !== null && found.path !== null && found.line !== null) {
+        const review = await readSession(config.dataDir, session);
+        await refreshRepository(config, session, review.base, found.repo, review.scope);
+      }
+    }
+    const comment = await reopenComment(
+      config.dataDir,
+      session,
+      id,
+      { ...given, ...(line === undefined ? {} : { line, endLine: endLine ?? null }) },
+      { source: fileSourceAt(config.root) },
+    );
+    // An anchor that no longer reads leaves the thread open and orphaned, and the line says so.
+    const lost =
+      comment.status === "orphaned"
+        ? `, orphaned: line ${comment.line} does not read as it did; name its line with --line`
+        : "";
+    context.io.out(
+      line === undefined
+        ? `${comment.id} is open again${lost}\n`
+        : `${comment.id} is open again on ${where(comment)}\n`,
+    );
     return 0;
   },
 };

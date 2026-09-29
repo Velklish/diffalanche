@@ -95,7 +95,10 @@ warning says what to do instead:
 
 A warning is `{ path, message }`, where `path` is relative to the root and names
 the repository or the directory the message is about. The scanner produces the
-two above; the base modes of [02-git.md](02-git.md) produce the rest.
+two above; the base modes of [02-git.md](02-git.md) produce the rest, and one
+more kind is added to the list wherever it is shown rather than by any scan:
+`N comments lost their anchor` on a repository holding orphaned comments
+([04-domain.md](04-domain.md#re-anchoring)).
 
 ## What it does not do yet
 

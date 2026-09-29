@@ -8,6 +8,7 @@ import {
   sameBase,
   sameScope,
   scanReview,
+  writeChangeSet,
 } from "../core/change-set.ts";
 import type { Config } from "../core/config/index.ts";
 import {
@@ -16,16 +17,11 @@ import {
   list,
   repositoryInScope,
   resolveSessionName,
+  withAnchorWarnings,
 } from "../core/domain/index.ts";
 import { readRepositoryChange, scan } from "../core/index.ts";
 import type { Base, DiffCache, Review } from "../core/storage/index.ts";
-import {
-  readDiffCache,
-  readReview,
-  sessionDir,
-  withLock,
-  writeDiffCache,
-} from "../core/storage/index.ts";
+import { readDiffCache, readReview, sessionDir, withLock } from "../core/storage/index.ts";
 import type {
   FileChange,
   FileStatus,
@@ -257,7 +253,9 @@ export function createReviewService(
       // Taken before the name is read from disk: a write that lands while it is
       // being read must not pass for one this read covers.
       const asked = writes;
-      return documentOf(await resolveSessionName(config.dataDir, session), asked);
+      return withOrphans(
+        await documentOf(await resolveSessionName(config.dataDir, session), asked),
+      );
     },
     payload: async (session) => {
       const asked = writes;
@@ -267,8 +265,10 @@ export function createReviewService(
       const entry = sessions.get(name);
       // A document an invalidation kept out of the cache is serialised for the
       // request that asked and not kept.
-      if (entry === undefined || entry.document !== document) return JSON.stringify(document);
-      entry.payload ??= JSON.stringify(document);
+      if (entry === undefined || entry.document !== document) {
+        return JSON.stringify(withOrphans(document));
+      }
+      entry.payload ??= JSON.stringify(withOrphans(document));
       return entry.payload;
     },
     repository: async (repo, session) => {
@@ -374,6 +374,13 @@ function trim(sessions: Map<string, Held>): void {
   }
 }
 
+/** The document as served, its orphaned comments counted into the warnings: added on the way out,
+ * so what is held keeps the change set's own list, which a rescan replaces (07-server.md). */
+function withOrphans(document: ReviewDocument): ReviewDocument {
+  const warnings = withAnchorWarnings(document.warnings, document.comments);
+  return warnings.length === document.warnings.length ? document : { ...document, warnings };
+}
+
 /** Whether two reads of a small file say the same thing: what keeps a held document's bytes. */
 function sameJson(left: unknown, right: unknown): boolean {
   return JSON.stringify(left) === JSON.stringify(right);
@@ -437,14 +444,13 @@ async function changeSet(
   return rebuild(config, session, review);
 }
 
-/** Reads every repository of the scope and writes `diff.json`; the hunks stay in the
- * file, where anchor capture is the one reader that needs them. */
+/** Reads every repository of the scope and writes `diff.json`, re-anchoring what it moved; the
+ * hunks stay in the file, where anchor capture is the one reader that needs them. */
 async function rebuild(config: Config, session: string, review: Review): Promise<DiffCache> {
   const { cache } = await scanReview(config, review.base, review.scope);
-  await withLock(sessionDir(config.dataDir, session), async (held) => {
-    await held.assertHeld();
-    await writeDiffCache(config.dataDir, session, cache);
-  });
+  await withLock(sessionDir(config.dataDir, session), (held) =>
+    writeChangeSet(config, session, held, cache),
+  );
   return cache;
 }
 

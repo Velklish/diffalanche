@@ -2,6 +2,7 @@
  * use this very text ([04-domain.md](../../../docs/reference/04-domain.md), "Markdown export"). */
 import { byCodePoint } from "../order.ts";
 import type { Comment, Review } from "../storage/index.ts";
+import { isOpen } from "./counters.ts";
 import { formatBase } from "./sessions.ts";
 
 /** Where a comment sits, written the way the export names it. */
@@ -43,7 +44,9 @@ function plural(count: number, noun: string): string {
 function section(title: string, comments: Comment[]): string[] {
   const lines = [`## ${title} — ${plural(comments.length, "comment")}`, ""];
   for (const comment of [...comments].sort(order)) {
-    lines.push(`- **${comment.severity}** · \`${anchorLabel(comment)}\``, "");
+    // Orphaned is open, and says so: the line named is where it was, not where it is.
+    const lost = comment.status === "orphaned" ? " · orphaned" : "";
+    lines.push(`- **${comment.severity}** · \`${anchorLabel(comment)}\`${lost}`, "");
     lines.push(indent(comment.body, "  "), "");
     for (const reply of comment.replies) {
       lines.push(indent(quote(`**${reply.author}** (${reply.role}) — ${reply.body}`), "  "), "");
@@ -55,7 +58,7 @@ function section(title: string, comments: Comment[]): string[] {
 /** The export of the comments it is given, open or all as the caller chose; the heading counts
  * the open ones among them, as the design's meta line does. */
 export function exportMarkdown(review: Review, comments: Comment[]): string {
-  const open = comments.filter((comment) => comment.status === "open").length;
+  const open = comments.filter(isOpen).length;
   const title = review.title === null ? "" : ` — ${review.title}`;
   const lines = [
     `# Review ${review.name}${title}`,

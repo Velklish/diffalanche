@@ -20,8 +20,8 @@ import {
   updateSession,
 } from "../storage/index.ts";
 import type { RepositoryChange } from "../types.ts";
-import { captureAnchor, captureFromFile } from "./anchors.ts";
-import { isUnanswered } from "./counters.ts";
+import { captureAnchor, captureFromFile, linesOf, locate } from "./anchors.ts";
+import { isOpen, isUnanswered } from "./counters.ts";
 import { DomainError } from "./errors.ts";
 import type { Actor } from "./roles.ts";
 import { assertHuman } from "./roles.ts";
@@ -71,9 +71,17 @@ export type Verdict = Actor & {
   note?: string;
 };
 
+/** A reopen that may also put a line comment on the line it belongs to now: the one way an
+ * orphaned comment goes back to `open` (04-domain.md, "Re-anchoring"). */
+export type Reopening = Verdict & {
+  line?: number;
+  /** The last line of a range; without it the comment is on `line` alone. */
+  endLine?: number | null;
+};
+
 export type CommentFilter = {
   /** Default `all`; the CLI picks its own default. */
-  status?: "open" | "resolved" | "all";
+  status?: "open" | "resolved" | "orphaned" | "all";
   repo?: string;
   severity?: Severity;
   /** Only threads whose last message is from a human. */
@@ -334,16 +342,30 @@ export async function resolve(
   });
 }
 
+/** With `line`, the anchor is taken again there before the thread opens; without one, a line
+ * comment whose anchor no longer reads at its line opens as `orphaned` (04-domain.md). */
 export async function reopen(
   dataDir: string,
   session: string,
   id: string,
-  verdict: Verdict,
+  verdict: Reopening,
+  options: AddOptions = {},
 ): Promise<Comment> {
   await assertSession(dataDir, session);
   assertHuman(verdict, "reopen a comment");
+  const placed =
+    verdict.line === undefined
+      ? null
+      : await replace(dataDir, session, id, verdict, options.source);
+  // Read before the lock, as the anchor of a new comment is: a file read is no writer's business.
+  const holds = placed === null ? await anchorHolds(dataDir, session, id, options.source) : true;
   return updateSession(dataDir, session, ({ review, comments }) => {
     const comment = find(comments, id, review.scope);
+    if (placed !== null) {
+      comment.line = placed.line;
+      comment.endLine = placed.endLine;
+      comment.anchor = placed.anchor;
+    }
     if (verdict.note !== undefined) {
       comment.replies.push({
         id: nextReplyId(comment.replies),
@@ -353,11 +375,68 @@ export async function reopen(
         createdAt: timestamp(),
       });
     }
-    comment.status = "open";
+    // Open again as the finding it is, but not on a line it no longer reads at: that one waits.
+    // Nothing to read the file by says nothing new: an orphaned comment stays orphaned then.
+    const lost = holds === null ? comment.status === "orphaned" : !holds;
+    comment.status = lost ? "orphaned" : "open";
     comment.resolvedAt = null;
     comment.resolvedBy = null;
     return comment;
   });
+}
+
+/** The new place of a line comment a human names, its anchor captured as `addComment` takes one;
+ * a comment above a line has no line to move (04-domain.md, "Re-anchoring"). */
+async function replace(
+  dataDir: string,
+  session: string,
+  id: string,
+  verdict: Reopening,
+  source?: FileSource,
+): Promise<{ line: number; endLine: number | null; anchor: Anchor }> {
+  const comment = await get(dataDir, session, id);
+  const line = verdict.line as number;
+  const endLine = verdict.endLine ?? null;
+  if (comment.repo === null || comment.path === null || comment.line === null) {
+    throw new DomainError(
+      "invalid-anchor",
+      `${comment.id} is on ${anchorName(comment.repo, comment.path)}, not on a line, so there ` +
+        "is no line to move it to",
+    );
+  }
+  assertAnchorLevels({ repo: comment.repo, path: comment.path, line, endLine });
+  const side = comment.side ?? "new";
+  const repositories = await changeSet(dataDir, session);
+  const anchor = await anchorOf(repositories, comment.repo, comment.path, side, line, source);
+  return { line, endLine, anchor };
+}
+
+/** Whether a line comment's anchor still reads at its line — a resolved thread is not moved when
+ * its line goes — or `null` with nothing to read it by; `true` for any other comment. */
+async function anchorHolds(
+  dataDir: string,
+  session: string,
+  id: string,
+  source: FileSource | undefined,
+): Promise<boolean | null> {
+  // One not found yet may be found inside the lock, a scope widened meanwhile: that find decides.
+  const comment = await get(dataDir, session, id).catch((error: unknown) => {
+    if (error instanceof DomainError && error.code === "no-such-comment") return null;
+    throw error;
+  });
+  if (comment === null) return true;
+  const { repo, path, line, anchor } = comment;
+  if (repo === null || path === null || line === null || anchor === null) return true;
+  if (source === undefined) return null;
+  const side = comment.side ?? "new";
+  const cache = await readDiffCache(dataDir, session);
+  const repository = cache?.repositories.find((one) => one.path === repo);
+  const file = repository?.files.find((one) => one.path === path) ?? null;
+  const sha = repository?.base?.sha;
+  const rev = side === "new" ? "worktree" : sha === undefined ? null : { sha };
+  if (rev === null) return null;
+  const text = await source(repo, side === "old" ? (file?.oldPath ?? path) : path, rev);
+  return text !== null && locate(anchor, linesOf(text), line) === line;
 }
 
 export async function get(dataDir: string, session: string, id: string): Promise<Comment> {
@@ -378,7 +457,9 @@ export async function list(
   const status = filter.status ?? "all";
   return comments.filter((comment) => {
     if (!commentInScope(scope, comment)) return false;
-    if (status !== "all" && comment.status !== status) return false;
+    // `open` is every open finding, orphaned ones too; `orphaned` is those alone.
+    if (status === "open" && !isOpen(comment)) return false;
+    if (status !== "all" && status !== "open" && comment.status !== status) return false;
     if (filter.repo !== undefined && comment.repo !== filter.repo) return false;
     if (filter.severity !== undefined && comment.severity !== filter.severity) return false;
     if (filter.unanswered === true && !isUnanswered(comment)) return false;

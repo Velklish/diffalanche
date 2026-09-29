@@ -388,6 +388,43 @@ describe("files listed without content", () => {
     expect(parseDiff(patch, { maxFileBytes: 1024 }).files[1]?.omitted).toBeNull();
   });
 
+  it("reads a rename that also changed lines as renamed, with its old path, however it is listed", () => {
+    const renamed = [
+      "diff --git a/src/calc.ts b/src/money.ts",
+      "similarity index 78%",
+      "rename from src/calc.ts",
+      "rename to src/money.ts",
+      "index 7f9432b..90671ba 100644",
+      "--- a/src/calc.ts",
+      "+++ b/src/money.ts",
+      "@@ -1,2 +1,2 @@",
+      "-one",
+      "+two",
+      " three",
+      "",
+    ].join("\n");
+    const expected = { path: "src/money.ts", oldPath: "src/calc.ts", status: "renamed" };
+    const [whole] = parseDiff(renamed, { maxFileBytes: 1024 }).files;
+    expect(whole).toMatchObject({ ...expected, omitted: null, additions: 1, deletions: 1 });
+    const [large] = parseDiff(renamed, { maxFileBytes: 60 }).files;
+    expect(large).toMatchObject({ ...expected, omitted: "too-large" });
+    const binary = [
+      "diff --git a/img/old.png b/img/new.png",
+      "similarity index 62%",
+      "rename from img/old.png",
+      "rename to img/new.png",
+      "index 1111111..2222222 100644",
+      "Binary files a/img/old.png and b/img/new.png differ",
+      "",
+    ].join("\n");
+    expect(parseDiff(binary).files[0]).toMatchObject({
+      path: "img/new.png",
+      oldPath: "img/old.png",
+      status: "renamed",
+      omitted: "binary",
+    });
+  });
+
   it("keeps a file whose only change is its mode, which has no hunks either", () => {
     const [file] = parseDiff("diff --git a/x.sh b/x.sh\nold mode 100644\nnew mode 100755\n").files;
     expect(file).toMatchObject({ path: "x.sh", status: "modified", omitted: null });

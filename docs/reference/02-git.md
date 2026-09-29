@@ -87,6 +87,7 @@ files. That is how `ref` mode skips one.
 | `ls-files -z --cached --others --exclude-standard -- :(literal)<path>` | whether a path is one git lists, before the working tree is read |
 | `cat-file -s <sha>:<path>`, `cat-file blob <sha>:<path>` | one file at the base revision: its size first, then its bytes |
 | `grep -n -z -I -F -i --untracked --no-color -e <text> -- [:(literal)<path>…]` | text search over the working tree ([Text search](#text-search)) |
+| `blame --porcelain -M --no-textconv ^<base> [<sha>] -- <path>` | where each line of the base is now, in the working tree or a later base, for re-anchoring ([Blame](#blame)) |
 
 The change set comes from the **plumbing**, not from `git diff`. The porcelain
 refreshes the index on its way out, and a refresh takes `.git/index.lock` and
@@ -322,7 +323,11 @@ line-anchored match over the whole patch would be matching against content.
 
 Statuses are `added`, `deleted`, `modified`, and `renamed`. Copy detection is
 not enabled — the reader passes `-M` and not `-C` — and a copy, were one to appear,
-would be reported as a rename.
+would be reported as a rename. **A rename that also changed lines is `renamed`,
+with its `oldPath`**, which the header says with `rename from` and `rename to`:
+`gitdiff-parser` types such a file `modify`, and until DA-42 it was reported as a
+modified file under its new name, which is also a file whose comments nothing
+could follow (`tests/reanchor.test.ts`, the `git mv` case).
 
 ## Paths
 
@@ -561,6 +566,24 @@ two copies had drifted: the CLI's dropped a warning the watcher's kept (DA-80).
   at the patch because that is where the copies drifted; taking the lock inside
   it would take a callback for each of those differences.
 
+### Writing the change set
+
+`writeChangeSet(config, session, held, next, previous?)` is **the one write of
+`diff.json`**, inside a hold of the session's lock the caller already has: the
+watcher's patch and its full rescan, the server's first read of a task,
+`refreshRepository` in both its branches — `comment`, `reopen`, and the server's
+reopen route — and `diff` all write through it. In that hold it re-anchors,
+against `next` in memory, the comments of every repository whose entry changed —
+`previous` being the cache the caller read in that hold or, when it passes none,
+the file as it stands — writes the comments it moved, and then writes the file
+([04-domain.md](04-domain.md#re-anchoring)). A repository whose comments were not
+all placed — `comments.json` unreadable, a fault in the pass, the pass's 10 s
+share of the lease spent — gets its old entry back in the file it writes, and
+the answer names it (`pending`) with the fault (`failure`, `unreadable`): the
+next writer's `before` is then still the tree those comments are on. The
+watcher reports the fault through `onError`, `diff` prints it as a warning
+([06-cli.md](06-cli.md)), and `comment` and `reopen` go on.
+
 ## Browsing a repository
 
 `src/core/git/browse.ts` reads a repository outside its diff, for browse mode
@@ -626,6 +649,62 @@ found", as for `check-ignore`.
 `git grep` over the working tree reads the index and writes nothing:
 `tests/search-text.test.ts` holds `.git/index` and `HEAD` byte for byte across a
 search.
+
+## Blame
+
+`blameFrom(cwd, path, boundary, at)` in `src/core/git/blame.ts` is the second
+step of re-anchoring ([04-domain.md](04-domain.md#re-anchoring)): which lines of
+`path` at `at` — the working tree, or a commit — git traces back to the commit
+`boundary` unchanged, as a map from the boundary's line number to the line's
+number now. It runs `git blame --porcelain -M --no-textconv ^<boundary> [<sha>]
+-- <path>` with the repository's driver keys emptied, as the diff does
+([What the reader trusts](#what-the-reader-trusts)).
+
+**`^<boundary>` with no positive revision is what annotates the working
+tree.** `<boundary>..` reads as `<boundary>..HEAD` and annotates HEAD, which
+leaves out every edit not yet committed — the edits re-anchoring exists for.
+Measured on git 2.43 before it was written: with the base at HEAD both forms
+agree, and with one commit on top of the base, `<boundary>..` annotated HEAD's
+six lines and none of the three the working tree added, while `^<boundary>`
+annotated the working tree's nine.
+
+**`git blame --reverse`, which `docs/design/HANDOFF.md` names, is not used**: it
+annotates a revision of the range's start with the last commit each line
+survived to, and the end of its range is a commit — it cannot annotate the
+working tree, where the edits re-anchoring follows have not been committed.
+Blame forward from the working tree, bounded at the base, answers the same
+question — where a base line is now — for the tree that exists.
+
+Lines git attributes to the boundary are the ones kept; `0000…` (not committed
+yet) and any commit after the boundary are left out, and so is a content line,
+which porcelain starts with a tab and the record pattern never matches.
+
+A path the history does not have — an untracked file, one renamed and not yet
+committed — and a boundary that is not a commit are git's non-zero exit, and
+the answer is `null`, which the caller reads as "no answer" rather than as a
+file whose every line is new. `-M` follows a block moved inside the file, past
+git's own threshold of twenty alphanumeric characters; a single short line
+moved is new to blame and is left to the text step.
+
+**The repository's `blame.ignoreRevsFile` is read**, as its other keys that name
+no program are ([ADR-012](../adr/adr-012-git-trust-model.md)). A file it names
+that does not exist makes every blame exit 128, which is git's non-zero exit and
+the same `null`: the pass goes on by the text, and `tests/reanchor.test.ts`
+holds that. A file that exists changes attribution — a commit it lists is
+skipped and its lines are blamed on an earlier one — and can put a base line
+somewhere its text is not. That is harmless by construction: a blame landing is
+taken only on the anchored text with a context that agrees
+([04-domain.md](04-domain.md#re-anchoring)), and anything else falls through to
+the text step.
+
+`git blame` of the working tree reads the index and writes nothing, the stat
+cache included. `tests/reanchor.test.ts` builds the case that would write, as
+[Reading one repository](#reading-one-repository) says a guard must: a tracked
+file whose content is unchanged and whose mtime is set to 2020, which
+`diff-files --quiet` confirms is stat-dirty, and `.git/index` is held byte for
+byte across a blame. Measured on git 2.43: the same test with `blameFrom`
+running `git diff <sha> -- <path>` in place of blame goes red, the porcelain
+refreshing the index on its way out.
 
 ## What it does not do yet
 

@@ -1,6 +1,6 @@
 import type { CSSProperties } from "react";
 import { memo, useCallback, useEffect, useMemo, useRef, useState } from "react";
-import { worstSeverity } from "../../core/domain/counters.ts";
+import { isOpen, worstSeverity } from "../../core/domain/counters.ts";
 import type { FileChange, FileOmission, FileStatus } from "../../core/types.ts";
 import { Composer } from "../Composer.tsx";
 import { linesAbove, newSideLines, oldSideRows } from "../context.ts";
@@ -335,7 +335,7 @@ function groupByRow(threads: Comment[], place: (thread: Comment) => DiffRow | nu
 function severityByRow(anchored: Anchored): Map<string, Severity> {
   const severities = new Map<string, Severity>();
   for (const [key, { threads }] of anchored) {
-    const worst = worstSeverity(threads.filter((thread) => thread.status === "open"));
+    const worst = worstSeverity(threads.filter(isOpen));
     severities.set(key, worst ?? (threads[0] as Comment).severity);
   }
   return severities;

@@ -267,7 +267,7 @@ diffalanche: only a human may resolve a comment; this call came with role "agent
 ```
 
 Exit code 1, nothing changed — with the default role and with an explicit
-`--role agent` alike. `reopen` is the same, and so are `review close` and
+`--role agent` alike. `reopen` is the same, `reopen --line` included, and so are `review close` and
 `review reopen`, which mark the whole task:
 
 ```

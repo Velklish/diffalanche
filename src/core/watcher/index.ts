@@ -1,9 +1,17 @@
-/** The watcher ([ADR-005](../../../docs/adr/adr-005-live-update.md)): it reads repositories and
- * writes only the data directory's change-set cache ([05-watcher.md](../../../docs/reference/05-watcher.md)). */
+/** The watcher ([ADR-005](../../../docs/adr/adr-005-live-update.md)): it reads repositories and writes
+ * only the data directory, its cache and re-anchored comments ([05-watcher.md](../../../docs/reference/05-watcher.md)). */
 import { stat } from "node:fs/promises";
 import { join, relative } from "node:path";
-import { filterChange, patchable, replaceRepository, scanReview } from "../change-set.ts";
+import {
+  filterChange,
+  patchable,
+  replaceRepository,
+  sameChange,
+  scanReview,
+  writeChangeSet,
+} from "../change-set.ts";
 import type { Config } from "../config/index.ts";
+import { withAnchorWarnings } from "../domain/reanchor.ts";
 import { commentInScope, repositoryInScope } from "../domain/scope.ts";
 import { checkIgnore, readRepositoryChange } from "../git/index.ts";
 import { byCodePoint } from "../order.ts";
@@ -24,11 +32,10 @@ import {
   readReview,
   sessionDir,
   withLock,
-  writeDiffCache,
 } from "../storage/index.ts";
-import type { Repository, RepositoryChange, ScanResult, ScanWarning } from "../types.ts";
+import type { Repository, ScanResult, ScanWarning } from "../types.ts";
 import type { ActivityLog } from "./activity.ts";
-import type { EventBus } from "./bus.ts";
+import type { EventBus, WatcherEvent } from "./bus.ts";
 import type { Ignore, PathKind, TreeWatcher, TreeWatcherOptions } from "./tree.ts";
 import { supportsRecursiveWatch, watchTree } from "./tree.ts";
 
@@ -143,6 +150,8 @@ export async function startWatcher(options: WatcherOptions): Promise<Watcher> {
   // The repositories rescanned since `current` last moved; until then a rescan that finds
   // nothing may be an edit the move's read took in, which no other task heard of (05-watcher.md).
   const settled = new Set<string>(scan.repositories.map((repository) => repository.path));
+  // The current session's change-set warnings as last handed over, which its orphans are added to.
+  let scanWarnings: ScanWarning[] | null = null;
 
   /** Debounce with a ceiling: a change resets the wait, never past `MAX_DEBOUNCE_MS` after the
    * first, so a burst that does not end still produces a rescan. */
@@ -171,6 +180,12 @@ export async function startWatcher(options: WatcherOptions): Promise<Watcher> {
         report(error);
       }
     });
+  }
+
+  /** The warnings of a session's change set with its comments' own, as a frame. */
+  function warningsFrame(name: string, list: ScanWarning[]): WatcherEvent {
+    const known = comments.get(name)?.values() ?? [];
+    return { type: "warnings", list: withAnchorWarnings(list, known) };
   }
 
   /** The runtime gave up, not one tree: the trees after the first say the same thing. */
@@ -278,17 +293,20 @@ export async function startWatcher(options: WatcherOptions): Promise<Watcher> {
     // bytes says nothing (05-watcher.md, "The change-set cache").
     const rescanned = await rescanRepository(config, followed, repo, (outcome) => {
       options.onRescan?.(followed, outcome.cache);
+      if (followed === session) scanWarnings = outcome.cache.warnings;
       // From inside the rescan, so it says the change set moved rather than
       // that a file was written: a save with the same bytes reaches no one.
       options.onRepositoryChanged?.(repo);
       bus.emit({ type: "diff-changed", repo, files });
       activity.diffChanged(repo);
-      if (outcome.warningsChanged) bus.emit({ type: "warnings", list: outcome.cache.warnings });
+      if (outcome.warningsChanged) bus.emit(warningsFrame(followed, outcome.cache.warnings));
     });
     // Once per repository per move, the repository is said to have moved whatever the rescan
     // found: it compared with a cache the move's read wrote, not with what others hold.
     if (!rescanned.changed && !settled.has(repo)) options.onRepositoryChanged?.(repo);
     settled.add(repo);
+    // The kept entry makes the next rescan try again; the fault is said once for this one.
+    if (rescanned.failure !== undefined) report(rescanned.failure);
   }
 
   /** The tasks followed: the current one, and the ones windows are open on. */
@@ -320,14 +338,15 @@ export async function startWatcher(options: WatcherOptions): Promise<Watcher> {
   /** A session's whole change set read from the working tree and handed over, where a `diff.json` last
    * written when it was last followed is there to replace; the answer is what moved since that file. */
   async function readWhole(name: string | null, review: Review | null): Promise<Moved> {
-    const moved: Moved = { repositories: [], warnings: null };
+    const moved: Moved = { repositories: [], warnings: null, scan: null };
     // A session that cannot be read is the first document's to report, not this one's.
     if (name === null || review === null) return moved;
     // Without a cache the first document reads the working tree itself, and a read here would be a second.
     const before = await readDiffCache(config.dataDir, name);
     if (before === null) return moved;
-    await rescanSession(config, name, review, ({ cache }) => {
+    const whole = await rescanSession(config, name, review, ({ cache }) => {
       options.onRescan?.(name, cache);
+      moved.scan = cache.warnings;
       const paths = new Set([...before.repositories, ...cache.repositories].map((one) => one.path));
       for (const repo of [...paths].sort(byCodePoint)) {
         const was = before.repositories.find((one) => one.path === repo) ?? null;
@@ -337,6 +356,7 @@ export async function startWatcher(options: WatcherOptions): Promise<Watcher> {
       }
       if (!sameWarnings(before.warnings, cache.warnings)) moved.warnings = cache.warnings;
     });
+    if (whole.failure !== undefined) report(whole.failure);
     return moved;
   }
 
@@ -347,7 +367,9 @@ export async function startWatcher(options: WatcherOptions): Promise<Watcher> {
       options.onRepositoryChanged?.(repo);
       bus.emit({ type: "diff-changed", repo, files: [] });
     }
-    if (moved.warnings !== null) bus.emit({ type: "warnings", list: moved.warnings });
+    if (moved.warnings !== null && session !== null) {
+      bus.emit(warningsFrame(session, moved.warnings));
+    }
   }
 
   async function reloadCurrent(): Promise<void> {
@@ -360,9 +382,10 @@ export async function startWatcher(options: WatcherOptions): Promise<Watcher> {
     // cache nothing refreshed. A read that fails is reported, and the session followed all the same.
     const moved = await readWhole(next, review).catch((error: unknown): Moved => {
       report(error);
-      return { repositories: [], warnings: null };
+      return { repositories: [], warnings: null, scan: null };
     });
     session = next;
+    scanWarnings = moved.scan;
     settled.clear();
     if (session === null) return;
     // The comments of the session switched to are the new baseline, not news; a session a window
@@ -440,7 +463,8 @@ export async function startWatcher(options: WatcherOptions): Promise<Watcher> {
         recordWrite(activity, "commented", comment.role, comment.author, comment);
         continue;
       }
-      if (was.status !== comment.status) {
+      // A thread re-anchored to another line is re-read as a status change is: it moved.
+      if (was.status !== comment.status || was.place !== placeOf(comment)) {
         bus.emit({ type: "comment-status", session: name, id: comment.id });
       }
       for (const reply of comment.replies.slice(was.replies)) {
@@ -448,7 +472,16 @@ export async function startWatcher(options: WatcherOptions): Promise<Watcher> {
         recordWrite(activity, "replied", reply.role, reply.author, comment);
       }
     }
-    comments.set(name, snapshotOf(list));
+    const next = snapshotOf(list);
+    comments.set(name, next);
+    if (name !== session) return;
+    // An orphan found or reopened changes the warnings, while the change set's own stand.
+    const orphans = (states: Iterable<CommentState>) =>
+      JSON.stringify(withAnchorWarnings([], states));
+    if (orphans(baseline.values()) === orphans(next.values())) return;
+    const cached =
+      scanWarnings === null ? await readDiffCache(config.dataDir, name).catch(() => null) : null;
+    bus.emit(warningsFrame(name, scanWarnings ?? cached?.warnings ?? []));
   }
 
   /** Every comment write bumps `updatedAt` in `review.json`; only a change to what the review is —
@@ -561,7 +594,9 @@ export async function startWatcher(options: WatcherOptions): Promise<Watcher> {
     refresh: () => {
       // Nothing is announced: no window can be listening before the first document.
       enqueue(async () => {
-        await readWhole(session, await readSessionOrNull(config, session));
+        const name = session;
+        const { scan: read } = await readWhole(name, await readSessionOrNull(config, name));
+        if (read !== null && name === session) scanWarnings = read;
       });
       return queue;
     },
@@ -578,7 +613,12 @@ export async function startWatcher(options: WatcherOptions): Promise<Watcher> {
 }
 
 /** What a read on the way to a session found different from the `diff.json` it replaced. */
-type Moved = { repositories: string[]; warnings: ScanWarning[] | null };
+type Moved = {
+  repositories: string[];
+  warnings: ScanWarning[] | null;
+  /** The warnings of the change set read, changed or not; `null` when nothing was read. */
+  scan: ScanWarning[] | null;
+};
 
 type Rescan = {
   /** The change set as it now stands on disk. */
@@ -587,6 +627,8 @@ type Rescan = {
   changed: boolean;
   /** Whether the warnings of the change set are not what they were. */
   warningsChanged: boolean;
+  /** Why the comments were not moved, the entry being kept for the next writer to try again. */
+  failure?: unknown;
 };
 
 /** The new change set, handed over before it is written: writing megabytes of `diff.json` is the
@@ -627,9 +669,9 @@ export async function rescanRepository(
       warningsChanged: !sameWarnings(cached.warnings, cache.warnings),
     };
     ready?.(outcome);
-    await held.assertHeld();
-    await writeDiffCache(config.dataDir, session, cache);
-    return outcome;
+    // The comments move in this hold, after the frames: the next writer waits for them.
+    const written = await writeChangeSet(config, session, held, cache, cached);
+    return written.failure === null ? outcome : { ...outcome, failure: written.failure };
   });
   if (patched !== null) return patched;
   return rescanSession(config, session, review, ready);
@@ -646,33 +688,10 @@ async function rescanSession(
   const { cache } = await scanReview(config, review.base, review.scope);
   const outcome: Rescan = { cache, changed: true, warningsChanged: true };
   ready?.(outcome);
-  await withLock(sessionDir(config.dataDir, session), async (held) => {
-    await held.assertHeld();
-    await writeDiffCache(config.dataDir, session, cache);
-  });
-  return outcome;
-}
-
-/** Whether the recomputed entry says anything the cached one did not; the patch is the content,
- * so comparing it is comparing the change itself. */
-function sameChange(before: RepositoryChange | null, after: RepositoryChange): boolean {
-  if (before === null) return after.files.length === 0;
-  if (before.branch !== after.branch) return false;
-  if (before.files.length !== after.files.length) return false;
-  if (before.warnings.join("\n") !== after.warnings.join("\n")) return false;
-  if (before.base?.sha !== after.base?.sha || before.base?.ref !== after.base?.ref) return false;
-  return before.files.every((file, index) => {
-    const other = after.files[index];
-    return (
-      other !== undefined &&
-      file.path === other.path &&
-      file.status === other.status &&
-      file.additions === other.additions &&
-      file.deletions === other.deletions &&
-      file.omitted === other.omitted &&
-      file.patch === other.patch
-    );
-  });
+  const written = await withLock(sessionDir(config.dataDir, session), (held) =>
+    writeChangeSet(config, session, held, cache),
+  );
+  return written.failure === null ? outcome : { ...outcome, failure: written.failure };
 }
 
 function sameWarnings(before: ScanWarning[], after: ScanWarning[]): boolean {
@@ -686,7 +705,18 @@ function sameWarnings(before: ScanWarning[], after: ScanWarning[]): boolean {
 }
 
 /** What a comment looked like at the last read: enough to tell what changed. */
-type CommentState = { status: CommentStatus; replies: number };
+type CommentState = {
+  status: CommentStatus;
+  replies: number;
+  /** The repository, which the warnings about orphaned comments are counted by. */
+  repo: string | null;
+  /** Path, side and lines as one string: re-anchoring changes them, and a window re-reads it. */
+  place: string;
+};
+
+function placeOf(comment: Comment): string {
+  return `${comment.path}\0${comment.side}:${comment.line}:${comment.endLine}`;
+}
 
 /** What a window was served of a task, as the watcher compares it; `scope` is what the document
  * showed, the comments outside it having never been in it. */
@@ -696,7 +726,12 @@ function snapshotOf(comments: readonly Comment[]): Map<string, CommentState> {
   return new Map(
     comments.map((comment) => [
       comment.id,
-      { status: comment.status, replies: comment.replies.length },
+      {
+        status: comment.status,
+        replies: comment.replies.length,
+        repo: comment.repo,
+        place: placeOf(comment),
+      },
     ]),
   );
 }

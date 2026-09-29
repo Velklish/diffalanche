@@ -61,6 +61,13 @@ sat in. If the file no longer says what `lineContent` says, the code moved under
 the comment — find the line by its content, and say in your reply where you
 found it.
 
+A thread whose `status` is `orphaned` is still open and still yours to answer:
+the tool lost its line after the code changed, and its `line` and `anchor` are
+where it was, not where it is. Find the code by `lineContent` and the context,
+fix or decline as for any other, and say in the reply where the code is now —
+or that it is gone, if the change removed what the comment was about. You do
+not put it back on a line: `reopen --line` is the human's.
+
 **3. Group by repository and present the plan.**
 
 The `repo` field is a path relative to the root; the file is at
@@ -144,8 +151,8 @@ A decline in its three:
 > retry masking a real fault would change this.
 
 **7. Never close a thread, and never close the task.** `resolve` and `reopen`
-are the human's; they need `--role human` and refuse anything else with exit
-code 1, changing nothing. So do `review close` and `review reopen`, which mark
+— `reopen --line` too, which re-anchors a thread — are the human's; they need
+`--role human` and refuse anything else with exit code 1, changing nothing. So do `review close` and `review reopen`, which mark
 the whole task. Do not pass `--role human` to make any of them work — that is
 impersonating the reviewer. A thread you answered stays open until the human
 verifies it; that is what "awaiting" means on their side.

@@ -330,6 +330,15 @@ The lock options go through as well, which is how the lease is tested: a change
 that outruns `staleMs` and has the lock taken from it is refused and writes
 nothing.
 
+**`held` joins a hold the caller already has** instead of taking the lock: the
+lock is not reentrant, and a writer inside `withLock` that called
+`updateSession` would wait on itself for a whole lease. Re-anchoring is the one
+caller — its comment write happens inside the hold of the `diff.json` write it
+follows, so no other writer's pass can come between the two
+([04-domain.md](04-domain.md#re-anchoring)). Everything else about the write is
+the same: the existence checks, `updatedAt`, and `assertHeld` before the files
+are written.
+
 ## Config
 
 `src/core/config` turns `config.json` and the command-line flags into one
@@ -554,6 +563,18 @@ threads stay, and an `auto` that nobody confirmed stops asking to be. A refusal
 would have lost the whole session to that build, which is worse. The case
 closes itself once every build that touches the data directory is this one or
 later.
+
+**`status: "orphaned"` did not raise it either** (DA-42), and its price is the
+other way round. It is a new value of a field every build reads, not a new
+field, so there is nothing for an earlier build to drop: its strict parse
+refuses the value, naming `comments[<n>].status`, and that build cannot read
+that session's `comments.json` at all while the file holds an orphaned comment.
+Nothing is lost — the refusal writes nothing, and the file stays as this build
+wrote it — and it holds for that one session only, until a `reopen --line` of
+this build or later puts the comment back to `open`. A raised version would
+have had that build refuse every `comments.json` and `review.json` a newer build
+wrote, orphans or none: the whole data directory instead of one session, which
+is what DA-36 declined for the same reason.
 
 ## What it does not do yet
 
