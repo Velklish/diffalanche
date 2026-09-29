@@ -890,10 +890,11 @@ on the untouched base), five `perf/run.ts` processes a variant, medians:
 So a regression inside `revealCard` that costs work — another round — moves the
 line now and did not before. A frame added before the first scroll moved neither
 window beyond its spread, +6.4 and −1.7 ms: with the frame-rate limit off, a
-frame that has something to draw costs about its work, so a regression that adds
-a frame carrying work the page would have done anyway is out of the gate's sight,
-while an added idle frame is not — measured in **What a frame costs unpaced,
-and what the gate does not see**, below (DA-82.3). The hook also fails the run when the diff has not mounted within ten
+frame that has something to draw costs about its work, and an added idle frame
+is visible to the gate. That the probe's frame went unresolved because it only
+carries work the page would have done anyway is an inference — the gate itself
+read +14.0 ms against the frame's own 14.5 — set out in **What a frame costs
+unpaced, and what the gate does not see**, below (DA-82.3). The hook also fails the run when the diff has not mounted within ten
 frames, or when the store's current file after the jump is not the file jumped
 to. The resolution tables below, of DA-110 and DA-115, and the `jumps` step of
 the wall-per-step table measured the window before DA-82; since DA-82 that step
@@ -1130,8 +1131,13 @@ the first scroll's frame would otherwise have painted is an inference from these
 readings, not a measurement. Both of the gate's medians are over the 50 ms
 budget on that container, whose untouched base is red on six lines, so the
 gate's own verdict could not change there. Two of the 34 probed processes failed
-instead: one on the hook's own check that the jump leaves the file current, and
-one whose error was not kept. That check catching a frame before the scroll is a
+instead. The 34 are the 15 of the frame counts — ten unpaced, of them five with
+the timer inside the page, and five at 60 Hz, the probe's share of DA-82.4's 25
+— the gate's five, and fourteen of `perf/compare.ts`'s branch side: five in a
+first comparison and nine in the one in the table. The first comparison stopped
+on its fifth branch repetition, on the hook's own check that the jump leaves the
+file current; one unpaced frame-count process, of the five without the timer,
+exited 1 before printing, with its error not kept. That check catching a frame before the scroll is a
 property of this probe, not a verdict of the gate.
 
 **What the gate sees of an added frame, then, is what the frame costs unpaced:**
@@ -1150,7 +1156,8 @@ The frame-rate limit is off so the scroll takes what its frames cost, DA-115's
 decision, and the price is that the other lines charge an added frame its work
 rather than the reader's tick. Counting the frames a line spans would see it: a
 `requestAnimationFrame` counter installed from the harness side read 3 frames
-for every jump and 1 for every composer opening in the runs above. But the
+for every jump on the page as it ships, 4 with the probe, and 1 for every
+composer opening in the runs above. But the
 count is only a measure where the window is the page's own work: the session
 switch read 6 to 62 frames, since the counter keeps frames coming while the
 page waits for the server, and the update and the first render wait the same
