@@ -1463,7 +1463,11 @@ behind it simply never ran, and it prints green. So every wait in `tests/`,
   a loaded machine has arrived, and a deadline tight enough to fail it tests the
   machine. An expected *absence* is a condition too: wait for something queued
   after the thing that must not happen — the next event of the same queue, a
-  frame on a second stream, a task created behind it — and then look.
+  frame on a second stream, a task created behind it — and then look. Behind
+  it only once it exists: on a tree that is walked, the write that must stay
+  silent can still be waiting for its walk, so `settle` of
+  `tests/watcher.test.ts` first waits for each tree to report a marker
+  ([05-watcher.md](05-watcher.md#what-the-unit-tests-hold)).
 - **An order, not a length.** Where nothing can be polled, a wait may lean on an
   order the platform guarantees: a macrotask queued behind another, the next
   painted frame, or a timer of the same delay set after the one it waits out —
