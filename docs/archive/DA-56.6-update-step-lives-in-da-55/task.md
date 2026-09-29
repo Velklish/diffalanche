@@ -8,7 +8,7 @@
 
 ## Context
 
-[DA-56.3](../../archive/DA-56.3-perf-pass-over-the-package/task.md) closes on attribution,
+[DA-56.3](../DA-56.3-perf-pass-over-the-package/task.md) closes on attribution,
 not on a fix. It attributed the step; this entry is the fix.
 
 `Update after an edit in one repository` is budgeted at 300 ms and is the one
@@ -33,7 +33,7 @@ DA-55 on is at or over 315. The separation is clean, it is about 35 % of the
 lower group, and it is one commit: **`1079222`, DA-55.**
 
 That confirms rather than contradicts
-[DA-55.2](../../archive/DA-55.2-update-budget-step-up/task.md), which bracketed
+[DA-55.2](../DA-55.2-update-budget-step-up/task.md), which bracketed
 the step to DA-55's own review round and could not prove it because the two
 sides were never measured beside each other. Both commits of that round are
 inside `1079222`.
@@ -72,8 +72,8 @@ because `fixtureEnv()` arrived with DA-54.1, late in this range.
 
 - The CPU-per-frame line, which the same pass found over budget on every commit
   of the range including the one before the package — that is
-  [DA-56.4](../../archive/DA-56.4-cpu-per-frame-misses-its-budget-at-rest/task.md) and
-  [DA-56.5](../deferred/DA-56.5-scroll-does-not-fit-the-120-fps-frame.md).
+  [DA-56.4](../DA-56.4-cpu-per-frame-misses-its-budget-at-rest/task.md) and
+  [DA-56.5](../../backlog/deferred/DA-56.5-scroll-does-not-fit-the-120-fps-frame.md).
 - The load precondition of [ADR-013](../../adr/adr-013-perf-gate-off-ci.md),
   under whose ceiling every reading above was taken.
 

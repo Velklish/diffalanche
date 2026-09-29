@@ -77,7 +77,7 @@ budget, and it is then also used for A/B comparisons it cannot resolve.
 
 - The budgets themselves, and which lines are over them. Those are
   [DA-56.5](../../backlog/deferred/DA-56.5-scroll-does-not-fit-the-120-fps-frame.md),
-  [DA-56.6](../../backlog/queue/DA-56.6-update-step-lives-in-da-55.md) and
+  [DA-56.6](../DA-56.6-update-step-lives-in-da-55/task.md) and
   [DA-69.1](../../backlog/deferred/DA-69.1-long-task-count-follows-the-machine.md).
 - The load precondition and what it reads, which is
   [DA-54.5](../DA-54.5-load-precondition-reads-one-minute-only/task.md). Both runs above

@@ -547,6 +547,29 @@ on the synthetic review, from the edit to the frame that showed it: 295 ms for a
 window on a named task against 235 ms for one on the current session, inside the
 300 ms budget of `docs/SPEC.md` section 6 and close to it.
 
+**Unless the name is the session the watcher rescans (`watched()`).** A window lands on
+`?review=<current>` whenever the reader picks the current task in the sessions
+menu — switching away and back is the everyday case, and it is what the perf
+harness does before it measures the update. For that name the reasoning above
+does not hold: the watcher rescans exactly that session and hands the change set
+to `adopt` before it emits `diff-changed`, so the held document's working tree is
+already as fresh as a read of git would be. Its `review.json` is not: a change of
+it with no rescan behind it — the task deleted and made again, a base or scope
+written — is not reflected until the data directory's burst, as on the path
+with no name. `repository(repo, session)` therefore reads git only when
+`session` is not what `watched()` names, and a named request for the session the
+watcher rescans is answered from the document like one with no name. The
+comparison is with the watcher's session and not with `current` on disk: a task
+`current` has just moved to is followed only once its read is done (above), and
+until then it is still answered from git. Reading git for it anyway was the step
+in the update budget that DA-55 introduced and DA-56.6 took back: on the 4-core
+container of 2026-09-29, nine a side, `1079222` against `4be4936` was +81 ms at
+the median, and the same commit with only this condition added came out −77 ms
+against itself and not different from `4be4936` (+20 ms against ±37)
+([11-perf.md](11-perf.md#the-gate)). That answer starts no git process and joins
+no path: it is a lookup in the held document by the exact path, so the check
+below has nothing to guard on it.
+
 **The path is checked to be under the root before any git process starts.** It
 comes from the URL and goes to a `join` against the root, and the scope is not a
 containment check — a task created without `--scope` is about the whole root and

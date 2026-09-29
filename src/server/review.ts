@@ -82,8 +82,8 @@ export type ReviewService = {
   /** The same document serialised: one per session, serialised once per change
    * ([07-server.md](../../docs/reference/07-server.md)). */
   payload: (session?: string) => Promise<string>;
-  /** One repository of that task's change set, `null` without changes; a named task's is read
-   * from git, its cache not kept fresh (07-server.md, "The task a request is about"). */
+  /** One repository of that task's change set, `null` without changes; a named task is read from
+   * git unless it is the session the watcher rescans (`watched()`) (07-server.md, DA-56.6). */
   repository: (repo: string, session?: string) => Promise<RepositoryChange | null>;
   /** The change set a rescan of that session left. It is recorded either way, and
    * the answer says whether a document was held for it to patch. */
@@ -272,11 +272,14 @@ export function createReviewService(
       return entry.payload;
     },
     repository: async (repo, session) => {
-      if (session !== undefined) return freshRepository(config, session, repo);
+      // The session the watcher rescans (`watched()`) is patched before its event (DA-56.6).
+      if (session !== undefined && session !== watched()) {
+        return freshRepository(config, session, repo);
+      }
       const asked = writes;
       // The live update's own fetch: a burst of the data directory, which every rescan's lock is,
       // must not charge it two reads of files it does not answer with (07-server.md).
-      const name = await resolveSessionName(config.dataDir);
+      const name = session ?? (await resolveSessionName(config.dataDir));
       const document = await documentOf(name, asked, false);
       return document.repositories.find((one) => one.path === repo) ?? null;
     },

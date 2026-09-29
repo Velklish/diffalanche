@@ -705,6 +705,19 @@ and `bun run release` refuses a version that has no section. See
   configuration outside the repository reaches the reader's git
   ([02-git.md](docs/reference/02-git.md)).
 
+- **A live update in a window on the current task by name no longer reads git
+  again** (DA-56.6). Since DA-55, switching tasks in the sessions menu puts
+  `?review=<name>` in the address, so a reader who switches away and back — and
+  the perf harness, which does exactly that before it measures — lands on
+  `?review=<current>`, and every `diff-changed` fetch read that repository from
+  git although the watcher had just rescanned it and patched the held document.
+  `GET /api/repos/:repo/diff?review=<name>` now reads git only for a task other
+  than the one the watcher rescans. That read was the step DA-56.3 located in `1079222`: on
+  a 4-core container, nine a side, the step measured +81 ms at the median, the
+  condition alone took back 77 of it, and on the tip `bun perf/compare.ts` called
+  the fix better by 52 and 43 ms in two runs of three
+  ([11-perf.md](docs/reference/11-perf.md#the-gate), [07-server.md](docs/reference/07-server.md#the-task-a-request-is-about)).
+
 - **The ring walk of `all files` asserts the row it focused, not a re-resolved first**
   (DA-54.6). `focusByKey` of `e2e/focus.spec.ts` asked `.first()` again after
   focusing it, and a repository's tree landing in between put its rows above
