@@ -82,8 +82,8 @@ export type ReviewService = {
   /** The same document serialised: one per session, serialised once per change
    * ([07-server.md](../../docs/reference/07-server.md)). */
   payload: (session?: string) => Promise<string>;
-  /** One repository of that task's change set, `null` without changes; a named task the watcher
-   * does not follow is read from git (07-server.md, "The task a request is about"). */
+  /** One repository of that task's change set, `null` without changes; a named task is read from
+   * git unless it is the session the watcher rescans (`watched()`) (07-server.md, DA-56.6). */
   repository: (repo: string, session?: string) => Promise<RepositoryChange | null>;
   /** The change set a rescan of that session left. It is recorded either way, and
    * the answer says whether a document was held for it to patch. */
@@ -272,7 +272,7 @@ export function createReviewService(
       return entry.payload;
     },
     repository: async (repo, session) => {
-      // The followed task's document is patched before its event goes out, named or not (DA-56.6).
+      // The session the watcher rescans (`watched()`) is patched before its event (DA-56.6).
       if (session !== undefined && session !== watched()) {
         return freshRepository(config, session, repo);
       }

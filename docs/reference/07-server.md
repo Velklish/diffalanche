@@ -547,15 +547,18 @@ on the synthetic review, from the edit to the frame that showed it: 295 ms for a
 window on a named task against 235 ms for one on the current session, inside the
 300 ms budget of `docs/SPEC.md` section 6 and close to it.
 
-**Unless the name is the followed session's.** A window lands on
+**Unless the name is the session the watcher rescans (`watched()`).** A window lands on
 `?review=<current>` whenever the reader picks the current task in the sessions
 menu — switching away and back is the everyday case, and it is what the perf
 harness does before it measures the update. For that name the reasoning above
 does not hold: the watcher rescans exactly that session and hands the change set
-to `adopt` before it emits `diff-changed`, so the held document is already as
-fresh as a read of git would be. `repository(repo, session)` therefore reads git
-only when `session` is not what `watched()` names, and a named request for the
-followed session is answered from the document like one with no name. The
+to `adopt` before it emits `diff-changed`, so the held document's working tree is
+already as fresh as a read of git would be. Its `review.json` is not: a change of
+it with no rescan behind it — the task deleted and made again, a base or scope
+written — is not reflected until the data directory's burst, as on the path
+with no name. `repository(repo, session)` therefore reads git only when
+`session` is not what `watched()` names, and a named request for the session the
+watcher rescans is answered from the document like one with no name. The
 comparison is with the watcher's session and not with `current` on disk: a task
 `current` has just moved to is followed only once its read is done (above), and
 until then it is still answered from git. Reading git for it anyway was the step
