@@ -708,18 +708,26 @@ and `bun run release` refuses a version that has no section. See
   - **A directory removed and made again is watched again.** Examples are
     `rm -rf dist && mkdir dist`, `mv tmp dist`, and a `git checkout` between
     branches that differ in `src/gen`. ext4 gives the new directory the freed
-    inode at once, so a directory is known by inode and birth time, compared on
-    every listing, and a `rename` naming it renews its watch.
+    inode at once, so a directory is known by its inode and, where the birth
+    time is real, by that too, compared on every listing; a `rename` naming it
+    renews its watch. Without `statx`, libuv reports the change time as the
+    birth time, so a birth time counts only once one has differed from its
+    change time, and inodes alone decide until then. That leaves a directory
+    missed only when its inode is reused and neither a rename event nor a
+    listing tells it apart.
   - **A directory the server may not read is left out**, as the walk leaves it
     out. Before, it sent the whole tree to the walk.
   - **The tree reports in the order of the writes.** A new directory's files
-    come out of a listing, and a name written after them now waits for it. So
-    a report still means everything written before it has been reported, which
-    the watcher suite's `settle` relies on.
+    come out of a listing, and a name now waits for the listings and arms
+    already under way in the tree when its event came. So a report still means
+    everything written before it has been reported, which the watcher suite's
+    `settle` relies on. Each piece of work is tracked once, so a burst of 5000
+    files costs 12 MB, not the 1.4 GB of a copy per event.
   - **A lock counts only when its file moved.** A `git status` that refreshes
     nothing costs no rescan, and `diff-changed` names `.git/index` or
     `.git/HEAD`, never the lock, so the symbol index no longer reads the
-    repository whole for it.
+    repository whole for it. The file's stamp is kept once the rescan is
+    through, so a rescan that fails does not turn the next lock into nothing.
 
 - **The watcher tests' waits hold on the walk and on the watch** (DA-110.2).
   `tests/watcher.test.ts` went red on commits that changed only docs, in the

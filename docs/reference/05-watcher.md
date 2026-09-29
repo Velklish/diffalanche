@@ -358,11 +358,23 @@ directory's, which outlives every rename into it.
   since they may have been written before its watch existed.
 - **In the order of the writes.** Those files come out of a listing, later
   than an event would carry them. So a name an event carries is reported only
-  once the listings and arms under way when the event came have finished, and
-  whatever they find, which was written before it, is said first. A name that
-  comes while nothing is under way is reported at once. One that comes during
-  a stream of events into its directory waits for at most two of that
-  directory's listings.
+  once every listing and arm the tree had started and not finished when the
+  event came has finished, anywhere in the tree, and whatever they find, which
+  was written before it, is said first. A name that comes while nothing is
+  under way is reported at once. A name never waits for work started after its
+  event, so a stream of events cannot starve it. It can wait for a slow listing
+  of another directory that was already under way.
+
+  Each piece of work is tracked once, and chained into one promise that an event
+  takes as it is, in constant time. `aefc358` copied the set of work under way
+  on every event instead, and every event of a stream added one entry to that
+  set. A burst of 5000 files in one directory, which libuv delivers in one
+  synchronous loop, took 13.0 s, a 7.4 s stall of the event loop and 1406 MB of
+  heap on Node, and 20000 files ended the process out of heap. Now 5000 take
+  1.6 s and 12 MB, and 20000 take 2.3 s and 10 MB, the same as `ff0dc4b`. Of
+  those 20000 the tree hears 16384, the kernel's default `max_queued_events`,
+  as `ff0dc4b` did; the rescan reads the repository whole, so a lost name is
+  not a lost change.
 - **A directory removed and made again under its name** — `rm -rf dist &&
   mkdir dist`, `mv tmp dist`, a `git checkout` between branches that differ
   in `src/gen` — keeps a watch on the directory that is gone, and nothing
@@ -371,16 +383,38 @@ directory's, which outlives every rename into it.
   - **By identity, on every listing.** The listing that follows an event
     compares each watched directory it lists with the identity its watch was
     taken on, and one that differs is watched again from scratch. The identity
-    is the inode and the birth time, read before the watch is taken. The inode
-    alone says nothing: ext4 hands the freed inode to the next `mkdir` at once,
-    and `rm -rf dist && mkdir dist` gave back the same inode 4 times of 4 on
-    both runtimes, with a birth time that differed each time. This is the check
-    that holds under Bun, whose read may name only the source of `mv tmp dist`,
-    so no event need name `dist` at all.
-  - **By the event, on Node.** A `rename` event that names a watched directory
-    says the name was made or removed, and its watch is renewed whatever the
-    identity says. That covers a filesystem that records no birth time, where
-    the identity falls back to the inode.
+    is the inode and the birth time, read before the watch is taken, and
+    recorded only by the call that took the watch. A second arm of the same
+    path read a later directory. The inode alone says nothing: ext4 hands the
+    freed inode to the next `mkdir` at once, and `rm -rf dist && mkdir dist`
+    gave back the same inode 4 times of 4 on both runtimes, with a birth time
+    that differed each time. This is the check that holds under Bun, whose read
+    may name only the source of `mv tmp dist`, so no event need name `dist` at
+    all.
+  - **Only a birth time that is one.** Where `statx` is refused — WSL1, a
+    strict seccomp profile, some emulators — libuv reports the change time as
+    the birth time. That moves whenever the directory gains or loses an entry,
+    so every new file re-armed its directory and reported the subtree again. At
+    `aefc358`, under a wrapper that refuses `statx` (the review's `nostatx.c`),
+    a save in `src/` and then a root write reported 2002–2003 names a round on
+    Node; now 1 or 2. So the tree counts birth times only once it has seen a
+    directory whose birth time differs from its change time, which a copy of
+    the change time never does, and compares inodes alone until then. This is
+    read, not probed: the tree may write nowhere but the data directory, and a
+    reviewed tree is not one. No test holds it, since refusing `statx` needs a
+    seccomp wrapper the suite does not have.
+  - **By a rename event, on both runtimes.** A `rename` event that names a
+    watched directory says the name was made or removed, and its watch is
+    renewed whatever the identity says. That is what holds where birth times do
+    not count, with the inode reused. On Bun it holds whenever Bun's one name of
+    the read is the directory's.
+
+  A directory made again is missed only when all four of these hold: the tree
+  has not counted birth times (none recorded, or only copies of the change
+  time); the new directory got the old inode; no `rename` event named it while
+  its old watch was still in the map; and the listing after it found the same
+  inode. On ext4 with `statx` the first never holds once any directory of the
+  tree has had an entry added after it was made.
 
   At `26556f5`, where the inode alone decided, a write into the directory made
   again was never heard in 4 of 4 rounds of `rm -rf && mkdir` on either
@@ -402,8 +436,9 @@ What it costs:
   The kernel's per-user watch count is spent per directory the rules let in,
   where the emulation spent it per path.
 - **The update path.** It adds, per event, one `readdir` of the directory the
-  event names and one `stat` of each watched directory inside it, and none of
-  it holds the event back: the name is reported first. Measured on the 4-core
+  event names and one `stat` of each watched directory inside it. A name is
+  held back only while listings or arms are under way, and an edit into a
+  quiet tree finds none and is reported at once. Measured on the 4-core
   container of 2026-09-29, not on the development machine, with nine a side of
   `bun perf/compare.ts` against `f7b57b8`. The gate's server runs on Bun, so
   each run compares Bun's recursive watch with the watch per directory.
@@ -421,6 +456,9 @@ What it costs:
   - `aefc358`, where a name waits for the work under way, 07:44–07:50 UTC,
     loads 1.63–3.12: 364 against 362 ms, −2 against ±52, `no difference`, as
     were the other six lines.
+  - `956c10a`, where each piece of work is tracked once, 08:28–08:35 UTC, loads
+    0.93–3.10: 376 against 343 ms, −33 against ±52, `no difference`, as were
+    the other six lines.
 
   On Node, the latency case of `tests/watcher.test.ts` at `26556f5`, two runs
   a side alternating, read 141.7 and 146.4 ms at the base and 142.8 and
@@ -467,6 +505,13 @@ of the repository read, or the one the watcher took before its first tree. The
 lock stands for its file when the stamp moved, and is dropped when it did not.
 A burst left with nothing is no rescan, no signal and no loss of verdicts. The
 price is two `stat` calls on a burst that names git's own files.
+
+The stamps a burst read are kept only once its rescan is through. A rescan that
+fails leaves the old ones, so the next lock of the same move is still a change,
+where keeping the new stamp first would have dropped it as a `git status`. No
+test holds this. The suite's one cheap way to fail a rescan is to point
+`current` at a task that is not there, and pointing it back makes the watcher
+read the whole task again, which would hear the move whatever the stamps said.
 
 **A lock is carried as the file it stands for.** The `files` of `diff-changed`
 say `.git/index` or `.git/HEAD`, never the lock. A reader that looks up what
@@ -997,11 +1042,20 @@ after an `arm` that repeats a write until one is heard.
   in it, then a file at the root, each expecting the directory's file among
   what was reported before the root's. Against `ff0dc4b`'s `tree.ts` it is red
   on both runtimes.
+- **A burst in linear time and memory:** 5000 files written into one directory
+  by a process the test waits on, so the kernel queues every event and libuv
+  delivers them in one loop. Then a file at the root; everything before it is
+  reported by then. Node must have named all 5000, and Bun, which names one
+  change per read, at least one. The heap must grow by less than 200 MB on
+  both. Against `aefc358`'s `tree.ts` it grew by 1.4 GB, red on both runtimes.
 - **A directory it may not read** runs a helper in a process of its own over a
   tree with a mode-000 directory, and expects a write beside it heard, no walk
-  and no `onFallback`. Root reads such a directory anyway, so as root the
-  helper runs under `setpriv --inh-caps=-all --bounding-set=-all`, and the case
-  skips, saying why, when root has no `setpriv`.
+  and no `onFallback`. The helper also lists that directory itself and reports
+  the refusal, which must be `EACCES`: a child that could read it would prove
+  nothing. Root reads such a directory anyway, so as root the helper runs under
+  `setpriv --inh-caps=-all --bounding-set=-all`. The case first checks that
+  `setpriv` really leaves root unable to list a mode-000 directory, and skips,
+  saying why, when it does not.
 - **A watch the kernel refuses** replaces `fs.watch` for that file through
   `vi.mock`, and refuses past a count with `ENOSPC`. The count runs out at the
   start in one case and on a directory made later in the other. Each expects the
