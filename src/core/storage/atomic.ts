@@ -42,6 +42,9 @@ const UNSUPPORTED = new Set(["EINVAL", "ENOTSUP"]);
 
 /** Flushes the entry the rename created; the bytes it points at are already down. */
 async function syncDir(path: string): Promise<void> {
+  // Windows flushes only a handle opened for writing, and a directory opens read-only here, so the
+  // flush can never succeed there (DA-45.3, 03-storage.md).
+  if (process.platform === "win32") return;
   // A platform that will not open a directory at all skips the flush; the write
   // it belongs to is published either way.
   const handle = await open(path, "r").catch(() => null);
