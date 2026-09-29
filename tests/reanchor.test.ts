@@ -880,6 +880,17 @@ describe("what a pass trusts", () => {
     expect(await stored(id)).toMatchObject({ line: 13, status: "open" });
   });
 
+  it("keeps a comment in place even when blame names a copy of its whole window", async () => {
+    // The tree before is the one the comment was put on, so only the order of the steps is left:
+    // `total` and the start of `average` appended again, and a blame that says the copy is it.
+    const brace = await commentOn(7);
+    const next = [...WORKTREE, ...WORKTREE.slice(0, 10)];
+    const copy = WORKTREE.length + 7;
+    const other: AnchorSources = { ...sources, blame: async () => new Map([[7, copy]]) };
+    await edit(next, other);
+    expect(await stored(brace.id)).toMatchObject({ line: 7, status: "open" });
+  });
+
   it("does not take blame's word from a tree the comment was not put on, however well it reads", async () => {
     // A copy of `total` at the end: its `}` has the three lines before it the comment has, so
     // a landing there clears the context check, and only the tree check refuses it.
