@@ -135,8 +135,11 @@ async function open(page: Page, theme: "dark" | "light", path = "/") {
  * to nothing, where a modifier alone sets no modality and two `Shift`s are global search. */
 async function focusByKey(page: Page, selector: string): Promise<void> {
   await page.keyboard.press("F2");
-  await page.locator(selector).first().focus();
-  await expect(page.locator(selector).first()).toBeFocused();
+  // The element itself, not `.first()` again: a list still arriving puts another first (08-ui.md,
+  // "A focused row in a list still arriving").
+  const target = await page.locator(selector).first().elementHandle();
+  await target?.focus();
+  await expect.poll(() => target?.evaluate((el) => el === document.activeElement)).toBe(true);
 }
 
 /** The control that opens an overlay, focused and pressed as the keyboard would. */
