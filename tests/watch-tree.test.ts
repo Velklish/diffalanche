@@ -103,6 +103,27 @@ describe("a directory that comes, goes and comes back", () => {
     }
   });
 
+  // `settle` of the watcher's suite rests on this: a name reported means all written before it was.
+  it("reports what a new directory held before a name written after it", async () => {
+    const dir = mkdtempSync(join(tmpdir(), "diffalanche-tree-order-"));
+    const tree = start(dir);
+    try {
+      await arm(tree, dir);
+      for (let round = 0; round < 5; round += 1) {
+        const from = tree.heard.length;
+        sh(`mkdir -p "${dir}/n${round}/deep" && printf x > "${dir}/n${round}/deep/f.ts"`);
+        sh(`printf x > "${dir}/marker-${round}"`);
+        await heardAfter(tree, from, `marker-${round}`);
+        const after = tree.heard.slice(from);
+        expect(after.indexOf(`n${round}/deep/f.ts`)).toBeGreaterThanOrEqual(0);
+        expect(after.indexOf(`n${round}/deep/f.ts`)).toBeLessThan(after.indexOf(`marker-${round}`));
+      }
+    } finally {
+      tree.tree.close();
+      rmSync(dir, { recursive: true, force: true });
+    }
+  });
+
   // ext4 hands the freed inode to the next `mkdir` at once, so an inode alone says it is the same.
   it("is watched again when it is removed and made again under its name", async () => {
     const dir = mkdtempSync(join(tmpdir(), "diffalanche-tree-again-"));

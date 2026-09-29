@@ -137,8 +137,12 @@ function perDirectory(options: TreeWatcherOptions, onFailure: () => void): TreeS
   const watches = new Map<string, FSWatcher>();
   // Which directory each watch is on: one removed and made again under its name is another.
   const identities = new Map<string, string>();
-  // A directory relisted while its last listing still runs is listed once more after it.
-  const listing = new Map<string, boolean>();
+  // Per directory: the listing not yet started, which every request made meanwhile shares, and the
+  // last one chained, which the next waits for.
+  const queued = new Map<string, Promise<void>>();
+  const chained = new Map<string, Promise<void>>();
+  // Listings and arms under way: what they find was written before any event that comes meanwhile.
+  const inFlight = new Set<Promise<void>>();
   let closed = false;
 
   const close = (): void => {
@@ -155,6 +159,24 @@ function perDirectory(options: TreeWatcherOptions, onFailure: () => void): TreeS
 
   const within = (relative: string, name: string): string =>
     relative === "" ? name : `${relative}/${name}`;
+
+  const track = (work: Promise<void>): void => {
+    const held = work.catch(() => fail());
+    inFlight.add(held);
+    void held.finally(() => inFlight.delete(held));
+  };
+
+  /** A name waits for the work under way when its event came, so the tree reports in the order of
+   * the writes, a new directory's files included (05-watcher.md, "What the unit tests hold"). */
+  const report = (path: string, before: Promise<void>[]): void => {
+    if (before.length === 0) {
+      options.onChange(path);
+      return;
+    }
+    void Promise.all(before).then(() => {
+      if (!closed) options.onChange(path);
+    });
+  };
 
   /** Drops the watches of a directory that is gone, and of everything that was under it. */
   const forget = (relative: string): void => {
@@ -230,57 +252,64 @@ function perDirectory(options: TreeWatcherOptions, onFailure: () => void): TreeS
 
   /** Finds the directories that came, went or were replaced: by listing and by identity rather
    * than by the event's name, which Bun drops when several changes share one read (05-watcher.md). */
-  async function relist(relative: string): Promise<void> {
-    if (listing.has(relative)) {
-      listing.set(relative, true);
+  async function listOnce(relative: string): Promise<void> {
+    let entries: Dirent[];
+    try {
+      entries = await readdir(join(options.dir, relative), { withFileTypes: true });
+    } catch {
+      forget(relative);
       return;
     }
-    try {
-      do {
-        listing.set(relative, false);
-        let entries: Dirent[];
-        try {
-          entries = await readdir(join(options.dir, relative), { withFileTypes: true });
-        } catch {
-          forget(relative);
-          return;
-        }
-        const present = new Set<string>();
-        const checks: Promise<void>[] = [];
-        for (const entry of entries) {
-          if (closed) break;
-          if (!entry.isDirectory()) continue;
-          const path = within(relative, entry.name);
-          present.add(path);
-          if (options.ignore(path, "dir")) continue;
-          checks.push(watches.has(path) ? recheck(path) : arm(path, true));
-        }
-        await Promise.all(checks);
-        for (const path of [...watches.keys()]) {
-          const parent = path.slice(0, Math.max(0, path.lastIndexOf("/")));
-          if (path !== relative && parent === relative && !present.has(path)) forget(path);
-        }
-      } while (!closed && listing.get(relative) === true);
-    } catch {
-      fail();
-    } finally {
-      listing.delete(relative);
+    const present = new Set<string>();
+    const checks: Promise<void>[] = [];
+    for (const entry of entries) {
+      if (closed) break;
+      if (!entry.isDirectory()) continue;
+      const path = within(relative, entry.name);
+      present.add(path);
+      if (options.ignore(path, "dir")) continue;
+      checks.push(watches.has(path) ? recheck(path) : arm(path, true));
     }
+    await Promise.all(checks);
+    for (const path of [...watches.keys()]) {
+      const parent = path.slice(0, Math.max(0, path.lastIndexOf("/")));
+      if (path !== relative && parent === relative && !present.has(path)) forget(path);
+    }
+  }
+
+  /** One listing after the one under way, shared by every request until it starts: a request
+   * waits for two listings at most, however fast the events come. */
+  function relist(relative: string): Promise<void> {
+    const waiting = queued.get(relative);
+    if (waiting !== undefined) return waiting;
+    const listing = (chained.get(relative) ?? Promise.resolve()).then(() => {
+      queued.delete(relative);
+      return closed ? undefined : listOnce(relative);
+    });
+    queued.set(relative, listing);
+    chained.set(relative, listing);
+    void listing
+      .finally(() => {
+        if (chained.get(relative) === listing) chained.delete(relative);
+      })
+      .catch(() => undefined);
+    return listing;
   }
 
   function onEvent(relative: string, event: string, name: string | null): void {
     if (closed) return;
+    const before = [...inFlight];
     if (name !== null && name !== "") {
       const path = within(relative, String(name));
-      if (!options.ignore(path, "file")) options.onChange(path);
+      if (!options.ignore(path, "file")) report(path, before);
       // A rename naming a watched directory made or removed that name: its watch is renewed
       // whatever the identity says, which a filesystem without a birth time cannot tell.
       if (event === "rename" && watches.has(path)) {
         forget(path);
-        void arm(path, true).catch(() => fail());
+        track(arm(path, true));
       }
     }
-    void relist(relative);
+    track(relist(relative));
   }
 
   try {
@@ -290,6 +319,7 @@ function perDirectory(options: TreeWatcherOptions, onFailure: () => void): TreeS
     return null;
   }
   const ready = arm("", false).catch(() => fail());
+  track(ready);
   return { polling: false, ready, close };
 }
 
