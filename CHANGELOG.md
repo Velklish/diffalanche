@@ -687,6 +687,13 @@ and `bun run release` refuses a version that has no section. See
 
 ### Fixed
 
+- **A durable write finishes on Windows** (DA-45.3). The directory flush after
+  the rename is refused there with `EPERM`, which failed every durable write —
+  the Windows smoke stopped at `review new` with `durability flush failed:
+  EPERM`. On Windows `EPERM` now reads as the platform declining the flush, as
+  `EINVAL` and `ENOTSUP` already did; elsewhere it is still a refusal of the
+  file ([03-storage.md](docs/reference/03-storage.md)).
+
 - **git's configuration is pinned to `/dev/null`, not `os.devNull`** (DA-45.1).
   On Windows `os.devNull` is `\\.\nul`, which git refuses with `unable to access
   '//./nul'`, so the Windows smoke never got past the generator's first `git init`,

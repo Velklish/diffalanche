@@ -91,6 +91,21 @@ describe("writeFileAtomic", () => {
     expect(readFileSync(target, "utf8")).toBe("first\n");
   });
 
+  it("reads EPERM as the platform declining only on Windows", async () => {
+    dirSyncFails.code = "EPERM";
+    const platform = Object.getOwnPropertyDescriptor(process, "platform");
+    if (process.platform !== "win32") {
+      await expect(writeFileAtomic(target, "first\n")).rejects.toThrow(/EPERM/);
+    }
+    Object.defineProperty(process, "platform", { value: "win32", configurable: true });
+    try {
+      await writeFileAtomic(target, "second\n");
+      expect(readFileSync(target, "utf8")).toBe("second\n");
+    } finally {
+      if (platform !== undefined) Object.defineProperty(process, "platform", platform);
+    }
+  });
+
   it("leaves the previous file intact when the rename never happens", async () => {
     await writeFileAtomic(target, "first\n");
     failRename.value = true;

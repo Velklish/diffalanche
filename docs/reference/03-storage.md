@@ -154,7 +154,13 @@ A platform that refuses to open a directory at all — the hypothesis is Windows
 where the build ships binaries — does not turn a successful write into an error:
 the flush is skipped and the write stands, because the rename has already
 published it. **A flush that was attempted and failed is a different event**, and
-only `EINVAL` and `ENOTSUP` are read as the platform declining it. Everything
+only `EINVAL` and `ENOTSUP` are read as the platform declining it, plus `EPERM`
+on Windows. There the directory opens and its flush is refused: the Windows
+smoke stopped at `review new` with `durability flush failed: EPERM` (DA-45.3).
+The likely cause, not checked on a Windows machine, is that Node opens the
+directory read-only and Windows flushes only a handle opened for writing. So on
+Windows a durable write is the file's flush and the rename, not the directory
+entry's flush. Everything
 else, `EIO` above all, comes back to the caller as a `StorageError` naming the
 directory — `/root/.diffalanche/reviews/one: durability flush failed: EIO` — so
 it reads like every other refusal of this module and the CLI answers 1 with that
