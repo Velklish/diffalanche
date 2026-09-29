@@ -703,8 +703,8 @@ and `bun run release` refuses a version that has no section. See
   over. The stall DA-25.2 worked around without a cause has one now: under
   `strace`, Bun closed the first browser's two DevTools pipes a second time
   about eleven seconds after the next browser had been given the same
-  descriptor numbers, and Chromium, finding its pipe closed, exited, unnoticed
-  by Playwright. On a 4-core container the old loop stalled in six attempts of
+  descriptor numbers, and Chromium, finding its pipe closed, exited; no call of
+  Playwright's returned after that. On a 4-core container the old loop stalled in six attempts of
   six and the new one finished two of two
   ([11-perf.md](docs/reference/11-perf.md#the-gate)); why Bun closes them twice
   is DA-82.5.

@@ -523,18 +523,22 @@ switch — 10 to 13 s after that browser was launched:
   closed, the second browser was given the same two numbers, and eleven seconds
   later Bun's main thread closed 20 and 22 again — the second browser's pipes,
   with nothing in the harness asking for it;
-- Bun never reports the closed pipe to Playwright, so no `disconnected` fires,
-  every pending call waits for ever, and the process sits at 0 % CPU.
+- after that, every pending call waits for ever and the process sits at 0 % CPU:
+  no `disconnected` event was seen and no call returned, not even with an error.
+  That Bun never tells Playwright the pipe was closed is the inference drawn from
+  that, not something traced.
 
 What makes Bun close them a second time is not found: a forced garbage
 collection after each measurement let two of three runs finish, and keeping the
-closed browser reachable let neither of two, so it is not the browser object's
-own collection that does it. A process
-with one browser is never hurt by it, because nothing is left to take the old
-numbers but the exit. The server and the CLI give no child process more than
-the three standard descriptors, so the product is not on the path this trace
-followed.
-It prints one row per budget line and exits 1 when the **median** of any line is
+closed browser reachable let neither of two — which suggests, from two runs,
+that it is not the browser object's own collection that does it. A process with
+one browser is never hurt by it, because nothing is left to take the old numbers
+but the exit. The server and the CLI give no child process more than the three
+standard descriptors, so the product is not on the path this trace followed —
+as far as DA-82.5's assumption holds, that only a child with more than three
+stdio entries is hit.
+
+`perf/gate.ts` prints one row per budget line and exits 1 when the **median** of any line is
 over its ceiling. Two slow runs do not fail the build; three do. Five and not
 three since DA-110, below.
 

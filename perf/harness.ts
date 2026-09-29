@@ -301,7 +301,8 @@ export function repetitionArgs(fixture: string, variant: string, lag: Options["l
   return ["perf/run.ts", "--fixture", fixture, "--variant", variant, "--runs", "1", ...load];
 }
 
-/** Whether `perf/run.ts` measures in its own process: one browser a process (DA-82.2). */
+/** True when `perf/run.ts` may measure in the process it runs in: one run of one variant, so one
+ * browser; anything more goes to a process a repetition (DA-82.2). */
 export function inOneProcess(runs: number, variants: number): boolean {
   return runs * variants <= 1;
 }
