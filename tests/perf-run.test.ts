@@ -1,3 +1,5 @@
+import { join } from "node:path";
+import { fileURLToPath } from "node:url";
 import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
 
 const spawned = vi.hoisted(() => ({ calls: [] as { file: string; args: string[] }[] }));
@@ -16,8 +18,9 @@ vi.mock("node:child_process", async (importOriginal) => {
 
 const { measureOnce } = await import("../perf/harness.ts");
 
-/** Nowhere: a run that went to its own server instead would fail on it at once. */
-const MISSING = "/nonexistent/da-82-2-fixture";
+/** Under this very file, so no user can make it: a run that went to its own server instead fails
+ * with ENOTDIR on its first mkdir and writes nothing anywhere. */
+const UNREACHABLE = join(fileURLToPath(import.meta.url), "fixture");
 
 beforeEach(() => {
   spawned.calls.length = 0;
@@ -61,18 +64,19 @@ describe("perf/run.ts above one repetition", () => {
     await vi.waitFor(() =>
       expect(out.mock.calls.length + exit.mock.calls.length).toBeGreaterThan(0),
     );
-    expect(exit).not.toHaveBeenCalled();
+    const said = err.mock.calls.map((call: unknown[]) => String(call[0])).join("");
+    expect(exit, `perf/run.ts exited; its stderr:\n${said}`).not.toHaveBeenCalled();
     return JSON.parse(String(out.mock.calls[0]?.[0])) as unknown[];
   }
 
   it("measures each repetition in a process of its own and prints every row", async () => {
-    const rows = await run("--fixture", MISSING, "--runs", "3");
+    const rows = await run("--fixture", UNREACHABLE, "--runs", "3");
     expect(rows).toHaveLength(3);
     expect(spawned.calls.map((call) => call.args)).toEqual(
       Array.from({ length: 3 }, () => [
         "perf/run.ts",
         "--fixture",
-        MISSING,
+        UNREACHABLE,
         "--variant",
         "default",
         "--runs",
@@ -82,7 +86,7 @@ describe("perf/run.ts above one repetition", () => {
   });
 
   it("carries --lag to each repetition's process", async () => {
-    await run("--fixture", MISSING, "--runs", "2", "--lag");
+    await run("--fixture", UNREACHABLE, "--runs", "2", "--lag");
     expect(spawned.calls).toHaveLength(2);
     for (const call of spawned.calls) expect(call.args.slice(-1)).toEqual(["--lag"]);
   });
