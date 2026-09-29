@@ -880,6 +880,19 @@ describe("what a pass trusts", () => {
     expect(await stored(id)).toMatchObject({ line: 13, status: "open" });
   });
 
+  it("does not take blame's word from a tree the comment was not put on, however well it reads", async () => {
+    // A copy of `total` at the end: its `}` has the three lines before it the comment has, so
+    // a landing there clears the context check, and only the tree check refuses it.
+    const tree = [...HEADER, ...WORKTREE];
+    write(tree);
+    const id = await placedOn(tree, 12);
+    const next = ["// one more", ...tree, ...tree.slice(5, 12)];
+    const copy = next.length;
+    const stale: AnchorSources = { ...sources, blame: async () => new Map([[12, copy]]) };
+    await edit(next, stale);
+    expect(await stored(id)).toMatchObject({ line: 13, status: "open" });
+  });
+
   it("does not take a blame landing whose context disagrees with the anchor", async () => {
     const brace = await commentOn(7);
     // What an ignore-revs file can make blame say: `total`'s brace is `average`'s now.
