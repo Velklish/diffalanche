@@ -690,9 +690,11 @@ and `bun run release` refuses a version that has no section. See
 - **git's configuration is pinned to `/dev/null`, not `os.devNull`** (DA-45.1).
   On Windows `os.devNull` is `\\.\nul`, which git refuses with `unable to access
   '//./nul'`, so the Windows smoke never got past the generator's first `git init`,
-  and the reader's own git processes set the same path (not yet run on Windows). One
-  constant, `GIT_NULL` in `src/core/git/run.ts`, now serves the reader's
-  environment and hooks pin, the generator and the fixtures
+  and the reader's own git processes set the same path. One constant, `GIT_NULL`
+  in `src/core/git/run.ts`, now serves the reader's environment and hooks pin, the
+  generator and the fixtures, and a step of the Windows smoke job,
+  `scripts/check-git-null.ts`, fails if a file planted at `\dev\null` or any
+  configuration outside the repository reaches the reader's git
   ([02-git.md](docs/reference/02-git.md)).
 
 - **The ring walk of `all files` asserts the row it focused, not a re-resolved first**
