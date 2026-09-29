@@ -18,8 +18,8 @@ vi.mock("node:child_process", async (importOriginal) => {
 
 const { measureOnce } = await import("../perf/harness.ts");
 
-/** Under this very file, so no user can make it: a run that went to its own server instead fails
- * with ENOTDIR on its first mkdir and writes nothing anywhere. */
+/** Under this very file, so no user can make it: a run that went to its own server instead fails at
+ * once, reading the fixture's configuration (ENOTDIR), and writes nothing anywhere. */
 const UNREACHABLE = join(fileURLToPath(import.meta.url), "fixture");
 
 beforeEach(() => {
