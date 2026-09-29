@@ -4,8 +4,8 @@ import { GitError, gitError } from "./errors.ts";
 
 const execFileAsync = promisify(execFile);
 
-/** Not `os.devNull`: git cannot open Windows' `\\.\nul`, and is assumed to map `/dev/null` to
- * `nul` itself, which `scripts/check-git-null.ts` checks on the Windows runner (DA-45.1). */
+/** Not `os.devNull`: git cannot open Windows' `\\.\nul`, and maps `/dev/null` to `nul` itself,
+ * which `scripts/check-git-null.ts` checks on the Windows runner (DA-45.1). */
 export const GIT_NULL = "/dev/null";
 
 /** One `git diff` over the synthetic review is a few megabytes. */
