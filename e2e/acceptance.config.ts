@@ -1,7 +1,6 @@
 import { execFileSync } from "node:child_process";
 import { defineConfig } from "@playwright/test";
 import { fixtureEnv } from "../src/core/config/index.ts";
-import { BINARY, FIXTURE } from "./binary.ts";
 
 /** The acceptance suite, section 10 against the binary; it shares `dist/` with `test:ui`, so the
  * two never run at once (08-ui.md, "The acceptance suite"). */
@@ -51,14 +50,9 @@ export default defineConfig({
     viewport: { width: 1560, height: 900 },
   },
   webServer: {
-    // Built, generated and served, in that order: the binary carries the UI, so no `build:ui`, and
-    // the fixture is made from scratch because the suite writes comments into it.
-    command: [
-      "bun run build -- --target current",
-      `rm -rf ${FIXTURE}`,
-      `bun e2e/fixture.ts ${FIXTURE}`,
-      `${BINARY} serve --root ${FIXTURE} --port ${PORT}`,
-    ].join(" && "),
+    // Built, generated and served by one script rather than a shell line, which Windows' shell
+    // does not read (`e2e/serve-acceptance.ts`, 08-ui.md "The acceptance suite").
+    command: `bun e2e/serve-acceptance.ts ${PORT}`,
     cwd: "..",
     // The page, not `/api/review`: that route answers 404 whenever the data
     // directory resolved away from the fixture, and the wait reads as a hang.

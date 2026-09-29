@@ -172,10 +172,16 @@ jobs:
   e2e:
     name: acceptance on ${{ matrix.os }}
     runs-on: ${{ matrix.os }}
+    # Windows is read, not required, until DA-45 makes it so (11-perf.md, "The job").
+    continue-on-error: ${{ matrix.os == 'windows-latest' }}
     strategy:
       fail-fast: false
       matrix:
-        os: [ubuntu-latest, macos-latest]
+        os: [ubuntu-latest, macos-latest, windows-latest]
+    defaults:
+      run:
+        # Git Bash on the Windows runner, so the summary step's quoting holds on every cell.
+        shell: bash
     steps:
       - uses: actions/checkout@v4
       - uses: actions/setup-node@v4

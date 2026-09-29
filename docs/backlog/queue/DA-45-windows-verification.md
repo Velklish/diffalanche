@@ -45,12 +45,20 @@ end to end, from `review new` through `serve`, `comment`, `reply`, `resolve` and
 channel (`bun src/cli/index.ts`, Bun `latest`) and the `binary` channel (the
 Bun-compiled `diffalanche-windows-x64.exe`) to the Windows matrix, and both pass
 on their first run (`smoke: ./dist/diffalanche-windows-x64.exe passed`, job
-109258372320), with `check-git-null` green in each cell. What is still not run
-on Windows:
+109258372320), with `check-git-null` green in each cell. Fifth evidence, Velklish/diffalanche#13, 2026-09-29: DA-45.6 adds
+`windows-latest` to the `e2e` matrix. Its first run stopped at the web server:
+Windows' shell read neither `rm -rf` nor `./dist/…` in `webServer.command`
+(DA-45.7). Once that command became one script, `acceptance on windows-latest`
+passed all 11 criteria of SPEC section 10 against `diffalanche-windows-x64.exe`
+(job 109261781142, `11 passed (17.9s)`).
 
-- the e2e suite;
-- a record of the smoke cells passing across runs, before any is required;
-- a required Windows job.
+What is left:
+
+- a record of the four Windows cells passing across runs;
+- making them required. That is a branch protection rule on GitHub, the owner's
+  setting, together with the table in 11-perf ("The checks a pull request
+  requires"), `tests/ci-names.test.ts` and the `continue-on-error` in `ci.yml`,
+  all in one change.
 
 A hypothesis from DA-45.3's review, not yet seen on a runner: renaming a directory
 that another process holds handles in fails on Windows. `removeSession` and the
