@@ -107,10 +107,12 @@ nothing — the first document is the one that reports that.
 
 ## What it watches, and what it ignores
 
-One watch per repository, plus one over the data directory. `fs.watch` with
-`recursive: true` is the whole implementation where the runtime honours it;
-where it does not, the same interface walks the tree on a timer and compares
-modification time and size. A watch that **dies after it started** says so once,
+One watch per repository, plus one over the data directory. On macOS and
+Windows that watch is `fs.watch` with `recursive: true`, where the runtime
+honours it; on Linux it is one non-recursive `fs.watch` per directory, which the
+tree takes itself ([One watch per directory on
+Linux](#one-watch-per-directory-on-linux)); where neither is there, the same
+interface walks the tree on a timer and compares modification time and size. A watch that **dies after it started** says so once,
 through `onFallback`. A session that **walks from the start** says so once too,
 through `onWalk`: the probe below answered that the runtime cannot recurse, or
 `watch` itself refused one tree when it was built — Node's
@@ -135,9 +137,10 @@ asked for.
 Accepting `recursive: true` is not the same as honouring it — a runtime that
 takes the option and watches only the top directory would leave a silent dead
 watcher — so the answer comes from a probe rather than from a version table: `supportsRecursiveWatch(dataDir)`
-creates a temporary directory inside the data directory, watches it, and writes
-a file one level down every fifty milliseconds until it is reported back or half
-a second has passed. Writing once is not enough — Bun's watch arms a moment
+creates a temporary directory inside the data directory, watches it with the
+watch the trees take — the recursive one, or on Linux one per directory — and
+writes a file one level down every fifty milliseconds until it is reported back
+or half a second has passed. Writing once is not enough — Bun's watch arms a moment
 after `watch` returns, and a single write lands before it does, which would
 answer "this runtime cannot recurse" for the rest of the run. It runs once per
 process — the answer is a property of the runtime, not of a directory — and no
@@ -149,7 +152,8 @@ own timers, is not `unref`'d: while the probe waits it is the only thing holding
 the event loop, and a process that exited there would exit before the server it is
 starting ever listened. Measured with that probe: Node 25.2
 and Bun 1.3 on macOS both recurse and both report the path relative to the
-watched directory; the watch and the walk alike hand paths over with forward
+watched directory, and so do Node 22.22 and Bun 1.3.14 on Linux with the watch
+per directory; the watch and the walk alike hand paths over with forward
 slashes on every platform. A watch that fails after it started — an error from inotify or
 FSEvents — closes itself and the walk takes over, rather than ending the process
 with an unhandled event.
@@ -213,7 +217,7 @@ Inside a repository these are left out:
 
 | Left out | Why |
 |---|---|
-| everything under `.git` except `HEAD`, `index`, and `info/exclude` | the first two move when the base of the change set does and the third holds ignore rules; the rest is git's own bookkeeping. `.git` itself is not left out: a runtime that reports the directory rather than the file inside it would otherwise never say that HEAD moved |
+| everything under `.git` except `HEAD`, `index`, their `.lock`, and the files of `info/` | the first two move when the base of the change set does, and `info/exclude` holds ignore rules; the rest is git's own bookkeeping. The locks and the rest of `info/` are there because Bun names a rename by its source ([One watch per directory on Linux](#one-watch-per-directory-on-linux)). `.git` itself is not left out: a runtime that reports the directory rather than the file inside it would otherwise never say that HEAD moved |
 | any `node_modules` | not part of a review, and large enough to make the walk of the polling fallback cost real time |
 | the `exclude` globs of `config.json` | matched against the path inside the repository and against the file's own name, the way the scanner matches them ([01-scanner.md](01-scanner.md)) |
 | the data directory | on a root that is itself a repository the tool's own `diff.json` sits inside the watched tree, and without this writing it would wake the watcher that wrote it |
@@ -260,8 +264,9 @@ In the data directory every change is one signal: the reload reads `current`,
 each with the last read, so a name that turns out to be the lock, or a temporary
 file, or the directory itself costs a handful of small reads and says nothing.
 A whole-file write is a temporary file and a rename over the target, and the
-runtimes differ in which name they report: Node the file, Bun the temporary one,
-and Bun under a test runner only the directory the change was under. The lock
+runtimes differ in which name they report: Node the file — on Linux the
+temporary one before it — Bun the temporary one, and Bun under a test runner
+only the directory the change was under. The lock
 is deliberately not left out: it is not data, but a runtime that coalesces the
 changes of one directory into one notification — macOS does, and Bun reports
 what is left — can hand the lock back as the only name of a write that changed a
@@ -303,6 +308,100 @@ repositories is the one the scan handed over. A linked worktree keeps its `HEAD`
 and `index` in the main repository's directory, outside the watched tree, so a
 commit made in a worktree is noticed through the files it changed rather than
 through the two.
+
+### One watch per directory on Linux
+
+inotify does not recurse. A watch is set on one inode, and a directory's watch
+reports, by name, the entries that change inside it. So `recursive: true` on
+Linux is always an emulation, and Node 22's emulation loses a file replaced by
+rename after the first time (DA-110.3). Its `lib/internal/fs/recursive_watch.js`
+takes a watch per path, files included, each on the inode that was there when
+the watch was taken. A rename over a file gives the name a new inode. The watch
+on the old one fires once and then watches nothing, and the directory's own
+event is read back through a listing that reports only names the emulation has
+not seen before, which the replaced name is not.
+
+git replaces `.git/index` and `.git/HEAD` exactly that way, renaming
+`index.lock` and `HEAD.lock` over them, and `writeFileAtomic` replaces every
+file of the data directory the same way. Measured at `f7b57b8`, the commit
+before the fix, on Node 22.22.2 with `serve` on the small synthetic review:
+three `git add -f` in a row produced one `diff-changed`, and four moves of
+`HEAD` by `git symbolic-ref` produced one. A bare recursive watch heard the
+first and none of the rest of each of these: three index moves by `git add`
+and `git rm --cached`, three checkouts, three `writeFileAtomic` and three
+`updateComments` of `comments.json` from another process, and three of a
+shell's `printf > tmp && mv tmp comments.json`. The
+release branches v22.x, v24.x and v25.x of Node still carry that code. Node's
+`main`, read on 2026-09-29, has moved Linux to one watch per directory for the
+same reason, and that is not in a release `engines` accepts.
+
+So on Linux the tree does not ask for `recursive` at all. It takes one
+non-recursive watch per directory itself, and the inode it watches is the
+directory's, which outlives every rename into it.
+
+- **Taking the watches.** It lists the tree once at the start, the way the walk
+  does, and prunes what the ignore rules leave out as a directory:
+  `node_modules`, `.git` except `info`, the object store of a nested repository.
+  Those cost no watch at all, where Node's emulation took one per file inside
+  them. `ready` resolves once that listing has taken every watch.
+- **Following changes.** A directory's event names the entry, and the tree
+  reports it. Then it lists that directory again, to watch a directory that
+  appeared and drop the watches of one that went. It lists instead of trusting
+  the name because Bun reports one name per read of the descriptor: a new
+  directory named in the same read as a sibling's write would never be watched.
+- **A directory found after the start** reports every file already in it,
+  since they may have been written before its watch existed.
+- **A watched directory an event names** is checked against the inode its
+  watch is on. One that was removed and made again under the same name — `rm
+  -rf dist && mv tmp dist` — is watched again from scratch.
+- **Events about a directory itself**, such as a `chmod` or its removal, come
+  back from Node under the directory's own name, as `a/a` for `a`. Such a path
+  is an ordinary change, and it costs at most one `check-ignore`.
+
+What it costs:
+
+- **Descriptors.** Every watch of the process shares one inotify descriptor on
+  both runtimes: two thousand directory watches opened one descriptor in each.
+  The kernel's per-user watch count is spent per directory the rules let in,
+  where the emulation spent it per path.
+- **The update path.** It adds one `readdir` of the directory an event names,
+  beside the five git processes of the rescan. Measured on the 4-core container
+  of 2026-09-29, not on the development machine, with nine a side of `bun
+  perf/compare.ts` against `f7b57b8` (06:08–06:14 UTC, one-minute loads
+  0.85–3.02). The gate's server runs on Bun, so this compares Bun's recursive
+  watch with the watch per directory. The update after an edit read 313 ms on
+  the base and 297 ms on the branch: −16 ms against ±21 ms, `no difference`,
+  as were the other six lines. On Node, the latency case of
+  `tests/watcher.test.ts`, two runs a side alternating, read 141.7 and
+  146.4 ms at the base and 142.8 and 143.9 ms on the branch.
+- **Failure.** A watch that fails hands the tree to the walk, the way a dying
+  recursive watch does: `ENOSPC` when the user's inotify watches run out, or an
+  `error` event on a directory that is still there. An `error` on a directory
+  that is gone only drops its watches. The root is taken before the tree is
+  returned, so a runtime that refuses it walks from the start.
+
+The ways not taken:
+
+- **The walk on Linux** would hear every replacement. It would also add the
+  walk's interval to every update, which the 300 ms of `docs/SPEC.md` section 6
+  cannot afford.
+- **Watching `.git` and `.git/info` beside the recursive watch** would fix git's
+  three files. The data directory would still be heard once, and so would any
+  working-tree file an editor saves by rename — vim, `sed -i`.
+- **Waiting for Node** fixes nothing for Node 22, which `engines` accepts, and
+  no release branch has the change yet.
+
+**Bun names a rename by its source.** Both runtimes on Linux now take the same
+watches, and Bun still reports one name per read. For git's `index.lock` →
+`index`, that name is `.git/index.lock`. For an editor's replacement of
+`info/exclude`, it is whatever temporary name the editor wrote. The rule above
+used to drop both, and under Bun's own recursive watch, at `f7b57b8`, four
+moves of `HEAD` against `bun src/cli/index.ts serve` produced no event at all.
+So the rule keeps git's two locks and every file directly in `.git/info`. On a
+runtime that names only the lock, the event can come as git creates it, before
+the rename. Every read that holds a change is an event, though, and the debounce
+restarts on the one that holds the rename, so the rescan comes after it whatever
+name that read carries.
 
 ## Events
 
@@ -694,14 +793,12 @@ now goes in three steps.
    `watchTree` — the watch on Node, the walk on Bun — with each path it reports
    recorded on its way to the watcher. A walk reads the root listing before
    anything else, so a walk that reports a file new at the root has seen every
-   write made before that file existed. Node 22 has no recursive inotify watch
-   on Linux: it emulates one in userland, a watch per path, and all of them
-   share the process's one inotify descriptor, so the events of the tree come
-   out in the order of the writes. Past that report, the tree has nothing left
-   to say about anything written earlier — except what the emulation never says
-   at all: a file replaced by a rename is reported the first time only
-   ([DA-110.3](../backlog/queue/DA-110.3-node-recursive-watch-misses-rename-replacement.md)),
-   and a marker, a new name, is not one.
+   write made before that file existed. On Linux the tree takes a watch per
+   directory ([One watch per directory on
+   Linux](#one-watch-per-directory-on-linux)), and all of them share the
+   process's one inotify descriptor, so the events of the tree come out in the
+   order of the writes. Past that report, the tree has nothing left to say
+   about anything written earlier.
 2. **A burst queued behind theirs.** `settle` writes `settle-N.ts` into the other
    repository and waits for that repository's first `diff-changed` since the
    write, which has to name that file and nothing else. A burst that starts after
@@ -778,6 +875,31 @@ the `HEAD` write takes one in and the rescan of the cleanup's `.gitignore`
 removal clears it, and the `.git/objects` case, which lets no rescan happen,
 never has one in the cache. A case that reads the repository's entry in
 `diff.json` begins with a rescan of its own.
+
+**A file replaced by rename is waited for by its own name, every time it is
+replaced.** Two cases hold [One watch per directory on
+Linux](#one-watch-per-directory-on-linux).
+
+- **"hears every index move and every HEAD move, not only the first"** replaces
+  the index of the suite's repository three times and its `HEAD` four times.
+  Each step is waited for by `waitForChangeOf` naming `.git/index` or
+  `.git/HEAD`, with a `settle` after it. A move of `HEAD` changes the change set
+  because the branch it moves onto is a commit of git's empty tree, which every
+  repository resolves without having stored it.
+- **"hears a file replaced by rename every time, in .git and in the data
+  directory"** does the same on trees of its own: three index moves, two
+  checkouts, two replacements of `info/exclude` and three of a data directory's
+  `comments.json`. The replacements are a temporary file and `mv` from another
+  process. Each step waits for the target's own name among what the tree
+  reported after it.
+
+The target's name is what the watch on Node and the walk on Bun both report.
+Bun's own watch names the lock, so under Bun's runner these two cases stay on
+the walk with the rest of the suite (DA-110.5). With the branch's test file on
+`f7b57b8`, the base of the fix, both cases went red on Node in 2 of 2 runs, at
+the first move the emulation drops: `no diff-changed for repos/core/cargos-api
+naming .git/index` and `.git/index was not heard after the step`. On the branch
+both were green in the same alternating runs.
 
 The latency test takes the median of three edits, the way the performance gate
 reads its own numbers: one slow run on a busy machine is not a regression

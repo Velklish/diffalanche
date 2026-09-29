@@ -763,6 +763,9 @@ export function trimVerdicts(cache: Map<string, boolean>): void {
 /** The repository-local exclude file, whose rules are git's as much as a `.gitignore`'s. */
 const IGNORE_RULES_EXCLUDE = ".git/info/exclude";
 
+/** The two files of `.git` that move the change set, and the locks git renames over them. */
+const KEPT_IN_GIT_DIR = new Set([".git/HEAD", ".git/HEAD.lock", ".git/index", ".git/index.lock"]);
+
 /** Whether a burst's names make git's answers stale, and so a change in itself (05-watcher.md). */
 export function dropsVerdicts(paths: string[], cache: Map<string, boolean>): boolean {
   if (!paths.some((path) => changesWhatGitIgnores(path) || insideGitDir(path))) return false;
@@ -806,7 +809,9 @@ export function repositoryIgnore(config: Config, repository: Repository): Ignore
       // when the directory is all a runtime reports.
       if (segments.length === 1) return false;
       if (kind === "dir") return path !== ".git/info";
-      return path !== ".git/HEAD" && path !== ".git/index" && path !== IGNORE_RULES_EXCLUDE;
+      // A lock and any name under `info/` too: Bun names a rename by its source, the lock or the
+      // editor's temporary file (05-watcher.md, "What it watches…").
+      return !KEPT_IN_GIT_DIR.has(path) && !(segments.length === 3 && segments[1] === "info");
     }
     // A nested repository is never scanned as its own, so its git directory is seen only through
     // this watch (05-watcher.md, "What it watches…").
