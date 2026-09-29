@@ -38,10 +38,19 @@ Assumption, not checked: it is the directory flush after an atomic write (DA-90)
 and Windows refuses an `fsync` on a directory handle. The next work item is the
 storage layer's flush on Windows.
 
-DA-45.3 leaves the directory flush out on Windows. A hypothesis from its review,
-not yet seen on a runner: the next stop is a rename of a directory that another
-process holds handles in — `removeSession` and the lock's move-aside both rename
-directories, and Windows refuses that while a watcher or server has one open.
+Third evidence, Velklish/diffalanche#9, job 109246529382, 2026-09-29. With DA-45.3
+leaving the directory flush out on Windows, `smoke node on windows-latest` passes
+end to end, from `review new` through `serve`, `comment`, `reply`, `resolve` and
+`export` (`smoke: node dist/cli.js passed`). What is still not run on Windows:
+
+- the `bun` and `binary` channels of the smoke (the matrix has only `node` there);
+- the e2e suite;
+- a required Windows job.
+
+A hypothesis from DA-45.3's review, not yet seen on a runner: renaming a directory
+that another process holds handles in fails on Windows. `removeSession` and the
+lock's move-aside both do it, and the smoke does not exercise either against a
+running server.
 
 ## Work to do
 
