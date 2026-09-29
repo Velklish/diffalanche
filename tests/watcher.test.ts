@@ -697,30 +697,30 @@ describe("the snapshot the session events are read from", () => {
     // and a `reviews/` it cannot enter keeps it from letting go for the lock's 30 s (DA-60.2).
     const own = { ...config, dataDir: mkdtempSync(join(tmpdir(), "diffalanche-listing-")) };
     const reviews = join(own.dataDir, "reviews");
-    mkdirSync(join(reviews, SESSION), { recursive: true });
-    copyFileSync(
-      join(config.dataDir, "reviews", SESSION, "review.json"),
-      join(reviews, SESSION, "review.json"),
-    );
-    const first = await snapshotSessions(own, null);
-    expect(first?.get(SESSION)).toBe("open");
-
-    // A file where the directory was fails the listing for root too, which a mode does not (DA-117.1).
-    renameSync(reviews, `${reviews}.away`);
     try {
-      writeFileSync(reviews, "");
-      // A failed listing is not an empty data directory: that answer would make every session news
-      // on the next readable pass, and a few hundred would push the replay out of the ring.
-      expect(await snapshotSessions(own, first)).toBeNull();
-    } finally {
-      rmSync(reviews, { force: true });
-      renameSync(`${reviews}.away`, reviews);
-    }
+      mkdirSync(join(reviews, SESSION), { recursive: true });
+      copyFileSync(
+        join(config.dataDir, "reviews", SESSION, "review.json"),
+        join(reviews, SESSION, "review.json"),
+      );
+      const first = await snapshotSessions(own, null);
+      expect(first?.get(SESSION)).toBe("open");
 
-    // A session whose own file cannot be read keeps the status it had: a file
-    // caught mid-write is not a task that changed.
-    writeFileSync(join(reviews, SESSION, "review.json"), "{ not json");
-    try {
+      // A file where the directory was fails the listing for root too, which a mode does not (DA-117.1).
+      renameSync(reviews, `${reviews}.away`);
+      try {
+        writeFileSync(reviews, "");
+        // A failed listing is not an empty data directory: that answer would make every session news
+        // on the next readable pass, and a few hundred would push the replay out of the ring.
+        expect(await snapshotSessions(own, first)).toBeNull();
+      } finally {
+        rmSync(reviews, { force: true });
+        renameSync(`${reviews}.away`, reviews);
+      }
+
+      // A session whose own file cannot be read keeps the status it had: a file
+      // caught mid-write is not a task that changed.
+      writeFileSync(join(reviews, SESSION, "review.json"), "{ not json");
       expect((await snapshotSessions(own, first))?.get(SESSION)).toBe("open");
       expect((await snapshotSessions(own, null))?.has(SESSION)).toBe(false);
     } finally {
