@@ -8,4 +8,4 @@
 
 **Documentation in the same pass.** [08-ui.md](../../reference/08-ui.md) (the UI tests: the precondition before and after, the wait, the bypass); [11-perf.md](../../reference/11-perf.md#a-red-the-machine-caused) (a red the machine caused, written once for every gate); [ADR-013](../../adr/adr-013-perf-gate-off-ci.md) (the same precondition around `bun run test:ui`); `README.md`; `CHANGELOG.md`, `### Changed`.
 
-**Filed, not closed.** [DA-54.6](../../backlog/queue/DA-54.6-all-files-ring-walk-lost-its-first-focus.md) (queue, major) — the ring walk of all files lost its first row's focus once in three gate chains, green alone and under load on both trees since.
+**Filed, not closed.** [DA-54.6](../DA-54.6-all-files-ring-walk-lost-its-first-focus/task.md) (closed, major) — the ring walk of all files lost its first row's focus once in three gate chains, green alone and under load on both trees since.
