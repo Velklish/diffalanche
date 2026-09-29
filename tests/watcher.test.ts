@@ -69,6 +69,8 @@ const REPO = "repos/core/cargos-api";
 /** A second repository with changes, for the settle gate. */
 let OTHER_REPO = "";
 const OTHER = "repos/core/cargos-api-worktree";
+/** git's empty tree, which every repository resolves without having stored it. */
+const EMPTY_TREE = "4b825dc642cb6eb9a060e54bf8d69288fbee4904";
 /** `docs/SPEC.md` section 6: update after an edit in one repository. */
 const BUDGET_MS = 300;
 /** How many edits the budget is measured over. */
@@ -554,6 +556,66 @@ describe("watcher", () => {
     await settle();
   }, 60_000);
 
+  it("hears every index move and every HEAD move, not only the first", async () => {
+    const git = (...args: string[]) => run("git", ["-C", join(root, REPO), ...args]);
+    const gitignore = join(root, REPO, ".gitignore");
+    mkdirSync(join(root, REPO, "dist"), { recursive: true });
+    await writeFile(join(root, REPO, "dist", "one.js"), "console.log(1);\n");
+    await writeFile(join(root, REPO, "dist", "two.js"), "console.log(2);\n");
+    await writeFile(gitignore, "dist/\n");
+    // A commit of the empty tree: HEAD moved onto it changes the change set, and nothing else does.
+    const identity = ["-c", "user.name=watcher", "-c", "user.email=watcher@example.invalid"];
+    const empty = (await git(...identity, "commit-tree", EMPTY_TREE, "-m", "empty")).stdout.trim();
+    const branch = (await git("symbolic-ref", "HEAD")).stdout.trim();
+    await git("update-ref", "refs/heads/da-110-3", empty);
+    await settle();
+
+    // git renames `index.lock` and `HEAD.lock` over the two files each time; Node 22's
+    // emulated recursive watch heard the first rename of each and none after it (DA-110.3).
+    const moves: string[][] = [
+      ["add", "-f", "dist/one.js"],
+      ["add", "-f", "dist/two.js"],
+      ["rm", "--cached", "-q", "dist/one.js", "dist/two.js"],
+    ];
+    const first = performance.now();
+    for (const move of moves) {
+      const mark = performance.now();
+      await git(...move);
+      await waitForChangeOf(REPO, mark, ".git/index");
+      await settle();
+    }
+    for (const ref of ["refs/heads/da-110-3", branch, "refs/heads/da-110-3", branch]) {
+      const mark = performance.now();
+      await git("symbolic-ref", "HEAD", ref);
+      await waitForChangeOf(REPO, mark, ".git/HEAD");
+      await settle();
+    }
+    // A lock is named as the file it moved: gone by the time a reader of `files` looks for it.
+    expect(named(changesOf(first, REPO), (path) => path.endsWith(".lock"))).toEqual([]);
+
+    await git("update-ref", "-d", "refs/heads/da-110-3");
+    await rm(join(root, REPO, "dist"), { recursive: true, force: true });
+    await rm(gitignore);
+    await settle();
+  }, 120_000);
+
+  it("says nothing about a git status that takes the index lock and moves nothing", async () => {
+    const git = (...args: string[]) => run("git", ["-C", join(root, REPO), ...args]);
+    // Twice first: a status after recent writes refreshes the index for real, which is a move.
+    await git("status", "--porcelain");
+    await git("status", "--porcelain");
+    await settle();
+    await hide("status-pad", "export const pad = 1;\n");
+
+    const mark = performance.now();
+    await git("status", "--porcelain");
+    await settle();
+    expect(changesOf(mark, REPO)).toEqual([]);
+
+    await reveal("status-pad");
+    await settle();
+  }, 60_000);
+
   it("wakes for a burst inside .git whatever the rules say about it", async () => {
     const gitignore = join(root, REPO, ".gitignore");
     const head = join(root, REPO, ".git", "HEAD");
@@ -814,7 +876,13 @@ describe("what a repository's watch reports", () => {
     // change set has, and the walk has to be let into `.git/info` to see them.
     expect(ignore(".git/info/exclude", "file")).toBe(false);
     expect(ignore(".git/info", "dir")).toBe(false);
-    expect(ignore(".git/info/attributes", "file")).toBe(true);
+    // Bun names a rename by its source: git's lock, or whatever temporary file an editor wrote
+    // into `info/` (DA-110.3).
+    expect(ignore(".git/index.lock", "file")).toBe(false);
+    expect(ignore(".git/HEAD.lock", "file")).toBe(false);
+    expect(ignore(".git/info/exclude.tmp-1", "file")).toBe(false);
+    expect(ignore(".git/refs/heads/main.lock", "file")).toBe(true);
+    expect(ignore(".git/ORIG_HEAD", "file")).toBe(true);
     expect(ignore(".git/objects/ff/0123", "file")).toBe(true);
     expect(ignore(".git/objects", "dir")).toBe(true);
     expect(ignore(".git", "dir")).toBe(false);
@@ -1072,6 +1140,92 @@ describe("watching a tree", () => {
       rmSync(dir, { recursive: true, force: true });
     }
   }, 30_000);
+
+  it("hears a file replaced by rename every time, in .git and in the data directory", async () => {
+    const repo = mkdtempSync(join(tmpdir(), "diffalanche-renamed-"));
+    const data = mkdtempSync(join(tmpdir(), "diffalanche-renamed-data-"));
+    const git = (...args: string[]) => run("git", ["-C", repo, ...args]);
+    await git("init", "-q");
+    writeFileSync(join(repo, "f.ts"), "export const f = 1;\n");
+    await git("add", "f.ts");
+    await git(
+      "-c",
+      "user.name=t",
+      "-c",
+      "user.email=t@example.invalid",
+      "commit",
+      "-q",
+      "-m",
+      "one",
+    );
+    mkdirSync(join(repo, ".git", "info"), { recursive: true });
+    writeFileSync(join(repo, ".git", "info", "exclude"), "");
+    mkdirSync(join(data, "reviews", "s"), { recursive: true });
+    writeFileSync(join(data, "reviews", "s", "comments.json"), "[]");
+    const heard: string[] = [];
+    const trees = [
+      {
+        dir: repo,
+        ignore: repositoryIgnore(config, { path: ".", absolutePath: repo, kind: "repo" }),
+      },
+      { dir: data, ignore: dataIgnore },
+    ].map(({ dir, ignore }) =>
+      watchTree({
+        dir,
+        ignore,
+        onChange: (path) => heard.push(`${dir}:${path}`),
+        // The walk under Bun's runner, whose watch goes quiet; the watch under Node.
+        recursive: NATIVE_WATCH,
+        pollIntervalMs: 20,
+      }),
+    );
+    /** Waits for the tree to name a path after a step, however many times it named it before. */
+    const step = async (dir: string, path: string, act: () => Promise<unknown>): Promise<void> => {
+      const from = heard.length;
+      await act();
+      const deadline = performance.now() + 20_000;
+      while (!heard.slice(from).includes(`${dir}:${path}`)) {
+        if (performance.now() > deadline) throw new Error(`${path} was not heard after the step`);
+        await new Promise((done) => setTimeout(done, 5));
+      }
+    };
+    /** From another process, the way git and a CLI write: a temporary file renamed over the target. */
+    const replace = (target: string, text: string) =>
+      run("sh", ["-c", 'printf "$2" > "$1.tmp-x" && mv "$1.tmp-x" "$1"', "sh", target, text]);
+    try {
+      await Promise.all(trees.map((tree) => tree.ready));
+      // Armed by writes repeated until one is heard: a watch is not delivering when it returns.
+      for (const dir of [repo, data]) {
+        for (let attempt = 0; !heard.some((one) => one.startsWith(`${dir}:armed-`)); attempt += 1) {
+          writeFileSync(join(dir, `armed-${attempt}`), "");
+          await new Promise((done) => setTimeout(done, 50));
+        }
+      }
+      for (const move of [
+        ["rm", "--cached", "-q", "f.ts"],
+        ["add", "f.ts"],
+        ["rm", "--cached", "-q", "f.ts"],
+      ]) {
+        await step(repo, ".git/index", () => git(...move));
+      }
+      for (const branch of ["b1", "b2"]) {
+        await step(repo, ".git/HEAD", () => git("checkout", "-q", "-b", branch));
+      }
+      for (const text of ["one", "two"]) {
+        await step(repo, ".git/info/exclude", () =>
+          replace(join(repo, ".git", "info", "exclude"), text),
+        );
+      }
+      for (const text of ["[1]", "[2]", "[3]"]) {
+        const comments = join(data, "reviews", "s", "comments.json");
+        await step(data, "reviews/s/comments.json", () => replace(comments, text));
+      }
+    } finally {
+      for (const tree of trees) tree.close();
+      rmSync(repo, { recursive: true, force: true });
+      rmSync(data, { recursive: true, force: true });
+    }
+  }, 60_000);
 
   it("walks the tree when the recursive watch is not used", async () => {
     const dir = mkdtempSync(join(tmpdir(), "diffalanche-walk-"));
