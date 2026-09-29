@@ -61,9 +61,12 @@ of that repository is not left showing what the edit replaced
 `startWatcher` resolves once every tree is being watched for real. **The
 guarantee is the walk's**: it takes its baseline before it reports anything, and
 a change made before that baseline exists would be part of it rather than a
-change. The recursive watch has nothing to prepare and its `ready` is already
-resolved — where a runtime arms its watch a moment after `watch` returns, as Bun
-does, that moment is not covered, and it cannot be: arming a repository's watch
+change. The recursive watch of macOS and Windows has nothing to prepare, and its
+`ready` is already resolved. On Linux `ready` resolves once the first listing of
+the tree has taken every directory's watch ([One watch per directory on
+Linux](#one-watch-per-directory-on-linux)), so no directory is still unwatched.
+Neither covers the moment between taking a watch and its first delivery — Bun
+arms a moment after `watch` returns — and nothing can: arming a repository's watch
 would mean writing into a repository, which the tool never does
 (`docs/SPEC.md` section 11). What the probe arms is the data directory, which is
 the tool's own.
@@ -349,11 +352,45 @@ directory's, which outlives every rename into it.
   appeared and drop the watches of one that went. It lists instead of trusting
   the name because Bun reports one name per read of the descriptor: a new
   directory named in the same read as a sibling's write would never be watched.
+  A listing asked for while one runs shares the single one queued after it, so
+  a directory written into without a pause is listed at most twice at a time.
 - **A directory found after the start** reports every file already in it,
   since they may have been written before its watch existed.
-- **A watched directory an event names** is checked against the inode its
-  watch is on. One that was removed and made again under the same name — `rm
-  -rf dist && mv tmp dist` — is watched again from scratch.
+- **In the order of the writes.** Those files come out of a listing, later
+  than an event would carry them. So a name an event carries is reported only
+  once the listings and arms under way when the event came have finished, and
+  whatever they find, which was written before it, is said first. A name that
+  comes while nothing is under way is reported at once. One that comes during
+  a stream of events into its directory waits for at most two of that
+  directory's listings.
+- **A directory removed and made again under its name** — `rm -rf dist &&
+  mkdir dist`, `mv tmp dist`, a `git checkout` between branches that differ
+  in `src/gen` — keeps a watch on the directory that is gone, and nothing
+  written into the new one would be heard. Two checks catch it, each for a
+  case the other cannot see:
+  - **By identity, on every listing.** The listing that follows an event
+    compares each watched directory it lists with the identity its watch was
+    taken on, and one that differs is watched again from scratch. The identity
+    is the inode and the birth time, read before the watch is taken. The inode
+    alone says nothing: ext4 hands the freed inode to the next `mkdir` at once,
+    and `rm -rf dist && mkdir dist` gave back the same inode 4 times of 4 on
+    both runtimes, with a birth time that differed each time. This is the check
+    that holds under Bun, whose read may name only the source of `mv tmp dist`,
+    so no event need name `dist` at all.
+  - **By the event, on Node.** A `rename` event that names a watched directory
+    says the name was made or removed, and its watch is renewed whatever the
+    identity says. That covers a filesystem that records no birth time, where
+    the identity falls back to the inode.
+
+  At `26556f5`, where the inode alone decided, a write into the directory made
+  again was never heard in 4 of 4 rounds of `rm -rf && mkdir` on either
+  runtime, nor after 3 of 3 checkouts; Bun lost the `mv tmp dist` form in 2 to
+  4 rounds of 4. Now all are heard (`tests/watch-tree.test.ts`).
+- **A directory it may not read** — a volume of mode 700 owned by another user,
+  where `fs.watch` refuses with `EACCES` or `EPERM` — is left out, the way the
+  walk leaves out a directory it cannot list, and the rest of the tree stays
+  watched. At `26556f5` such a directory sent the whole tree to the walk and its
+  250 ms interval.
 - **Events about a directory itself**, such as a `chmod` or its removal, come
   back from Node under the directory's own name, as `a/a` for `a`. Such a path
   is an ordinary change, and it costs at most one `check-ignore`.
@@ -364,21 +401,36 @@ What it costs:
   both runtimes: two thousand directory watches opened one descriptor in each.
   The kernel's per-user watch count is spent per directory the rules let in,
   where the emulation spent it per path.
-- **The update path.** It adds one `readdir` of the directory an event names,
-  beside the five git processes of the rescan. Measured on the 4-core container
-  of 2026-09-29, not on the development machine, with nine a side of `bun
-  perf/compare.ts` against `f7b57b8` (06:08–06:14 UTC, one-minute loads
-  0.85–3.02). The gate's server runs on Bun, so this compares Bun's recursive
-  watch with the watch per directory. The update after an edit read 313 ms on
-  the base and 297 ms on the branch: −16 ms against ±21 ms, `no difference`,
-  as were the other six lines. On Node, the latency case of
-  `tests/watcher.test.ts`, two runs a side alternating, read 141.7 and
-  146.4 ms at the base and 142.8 and 143.9 ms on the branch.
+- **The update path.** It adds, per event, one `readdir` of the directory the
+  event names and one `stat` of each watched directory inside it, and none of
+  it holds the event back: the name is reported first. Measured on the 4-core
+  container of 2026-09-29, not on the development machine, with nine a side of
+  `bun perf/compare.ts` against `f7b57b8`. The gate's server runs on Bun, so
+  each run compares Bun's recursive watch with the watch per directory.
+  - `26556f5`, 06:08–06:14 UTC, one-minute loads 0.85–3.02: update after an
+    edit 313 ms at the base and 297 ms on the branch, −16 ms against ±21 ms,
+    `no difference`, as were the other six lines.
+  - `ff0dc4b`, 07:08–07:14 UTC, the first run after the container restarted,
+    loads 0.67–2.86: 387 against 546 ms, +159 against ±218, `no difference`.
+    It resolves nothing. The branch's first five samples ran 546–751 ms and
+    its last four 316–409 ms, the base had samples of 719 and 840 ms, and the
+    first cold switch took 1244 ms.
+  - `ff0dc4b` again at once, warm, 07:14–07:21 UTC, loads 1.63–2.87: 363
+    against 343 ms, −20 against ±43, `no difference`, as were the other six
+    lines.
+  - `aefc358`, where a name waits for the work under way, 07:44–07:50 UTC,
+    loads 1.63–3.12: 364 against 362 ms, −2 against ±52, `no difference`, as
+    were the other six lines.
+
+  On Node, the latency case of `tests/watcher.test.ts` at `26556f5`, two runs
+  a side alternating, read 141.7 and 146.4 ms at the base and 142.8 and
+  143.9 ms on the branch.
 - **Failure.** A watch that fails hands the tree to the walk, the way a dying
-  recursive watch does: `ENOSPC` when the user's inotify watches run out, or an
-  `error` event on a directory that is still there. An `error` on a directory
-  that is gone only drops its watches. The root is taken before the tree is
-  returned, so a runtime that refuses it walks from the start.
+  recursive watch does: `ENOSPC` when the user's inotify watches run out, at
+  the start or on a directory made later, or an `error` event on a directory
+  that is still there. An `error` on a directory that is gone only drops its
+  watches. The root is taken before the tree is returned, so a runtime that
+  refuses it walks from the start.
 
 The ways not taken:
 
@@ -402,6 +454,25 @@ runtime that names only the lock, the event can come as git creates it, before
 the rename. Every read that holds a change is an event, though, and the debounce
 restarts on the one that holds the rename, so the rescan comes after it whatever
 name that read carries.
+
+**A lock is a change only when its file moved.** git takes `index.lock` for
+more than a move of the index. A `git status` without `--no-optional-locks` —
+a shell prompt, an editor's poll — takes the lock to refresh the index, and
+lets it go without a rename when there is nothing to refresh. Kept as a name,
+that lock would cost a rescan per poll, five git processes in the shared queue,
+and the repository's kept ignore verdicts. So once a burst's debounce closes,
+a burst that names a lock or its file has the file's stamp read — inode, size,
+modification and change time — and compared with the stamp the last such burst
+of the repository read, or the one the watcher took before its first tree. The
+lock stands for its file when the stamp moved, and is dropped when it did not.
+A burst left with nothing is no rescan, no signal and no loss of verdicts. The
+price is two `stat` calls on a burst that names git's own files.
+
+**A lock is carried as the file it stands for.** The `files` of `diff-changed`
+say `.git/index` or `.git/HEAD`, never the lock. A reader that looks up what
+was named finds the lock gone by then, and the symbol index took a name that
+was not there for a reason to read the repository whole
+([09-ml.md](09-ml.md#the-symbol-index)).
 
 ## Events
 
@@ -797,8 +868,15 @@ now goes in three steps.
    directory ([One watch per directory on
    Linux](#one-watch-per-directory-on-linux)), and all of them share the
    process's one inotify descriptor, so the events of the tree come out in the
-   order of the writes. Past that report, the tree has nothing left to say
-   about anything written earlier.
+   order of the writes. The files of a directory made after the start come out
+   of a listing rather than an event, so a name waits for the listings under way
+   when its event came. Without that wait, a marker written after `mkdir -p
+   nested/clone/.git` was reported before the listing found
+   `nested/clone/.git/HEAD`. The late name restarted that repository's
+   debounce, its burst was queued behind `settle`'s own, and "wakes for a burst
+   from a nested repository's git directory" went red on Node in 5 of about 17
+   runs at `ff0dc4b`. Past that report, the tree has nothing left to say about
+   anything written earlier.
 2. **A burst queued behind theirs.** `settle` writes `settle-N.ts` into the other
    repository and waits for that repository's first `diff-changed` since the
    write, which has to name that file and nothing else. A burst that starts after
@@ -899,7 +977,59 @@ the walk with the rest of the suite (DA-110.5). With the branch's test file on
 `f7b57b8`, the base of the fix, both cases went red on Node in 2 of 2 runs, at
 the first move the emulation drops: `no diff-changed for repos/core/cargos-api
 naming .git/index` and `.git/index was not heard after the step`. On the branch
-both were green in the same alternating runs.
+both were green in the same alternating runs. The first case also asserts that
+no event it waited for names a lock. "says nothing about a git status that
+takes the index lock and moves nothing" runs `git status` twice to let it
+refresh what it will, hides a change, runs it once more and expects no event
+through `settle`.
+
+**`tests/watch-tree.test.ts` holds the watch per directory on its own**, and it
+watches on both runtimes: unlike the watcher's suite, nothing in it has gone
+quiet under Bun's runner. Every case writes a file and waits for its own name,
+after an `arm` that repeats a write until one is heard.
+
+- **Directories that come, go and come back:** one made after the start with a
+  file already in it, then a later write; `rm -rf && mkdir`, three rounds;
+  `mkdir next && rm -rf dist && mv next dist`, three rounds; three checkouts
+  between branches that differ in `src/gen`; and a removed directory whose
+  siblings stay watched.
+- **In the order of the writes:** five rounds of a directory made with a file
+  in it, then a file at the root, each expecting the directory's file among
+  what was reported before the root's. Against `ff0dc4b`'s `tree.ts` it is red
+  on both runtimes.
+- **A directory it may not read** runs a helper in a process of its own over a
+  tree with a mode-000 directory, and expects a write beside it heard, no walk
+  and no `onFallback`. Root reads such a directory anyway, so as root the
+  helper runs under `setpriv --inh-caps=-all --bounding-set=-all`, and the case
+  skips, saying why, when root has no `setpriv`.
+- **A watch the kernel refuses** replaces `fs.watch` for that file through
+  `vi.mock`, and refuses past a count with `ENOSPC`. The count runs out at the
+  start in one case and on a directory made later in the other. Each expects the
+  walk to take over, `onFallback` once, and a later write heard. Linux only,
+  since elsewhere the tree takes the recursive watch.
+
+Not held there: the sharing of one queued listing, which only a burst that
+lands during a listing exercises, and no write order makes that deterministic. The
+`error` event of a watch, which no runtime here emits on demand, is not held
+either.
+
+**What each case holds, measured by taking its code away.** Against
+`26556f5`'s `tree.ts`, the file went red on Node in 3 cases — the unreadable
+directory, `rm -rf && mkdir`, the checkout — and on Bun in those 3 plus `mv
+next dist`. Against `ff0dc4b` with one check removed at a time:
+
+| Removed | Node | Bun |
+|---|---|---|
+| the comparison by identity on each listing | green | `mv next dist` red |
+| the renewal on a `rename` event | green | green |
+| both | `rm -rf && mkdir`, `mv next dist` and the checkout red | not run |
+| `EACCES` and `EPERM` among the skipped | the unreadable directory red | not run |
+| the settling of locks, in `index.ts` (watcher suite) | both lock cases red | not run |
+
+So each check has a case on some runtime that only it covers, except the
+renewal on a `rename` event: on ext4 the birth time already tells the
+directories apart. It is there for a filesystem that records no birth time, and
+no test here has one.
 
 The latency test takes the median of three edits, the way the performance gate
 reads its own numbers: one slow run on a busy machine is not a regression

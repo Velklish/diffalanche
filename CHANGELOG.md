@@ -705,6 +705,21 @@ and `bun run release` refuses a version that has no section. See
   `.git/info`. Both servers now announce every index move, `HEAD` move and
   reply in the same runs
   ([05-watcher.md](docs/reference/05-watcher.md#one-watch-per-directory-on-linux)).
+  - **A directory removed and made again is watched again.** Examples are
+    `rm -rf dist && mkdir dist`, `mv tmp dist`, and a `git checkout` between
+    branches that differ in `src/gen`. ext4 gives the new directory the freed
+    inode at once, so a directory is known by inode and birth time, compared on
+    every listing, and a `rename` naming it renews its watch.
+  - **A directory the server may not read is left out**, as the walk leaves it
+    out. Before, it sent the whole tree to the walk.
+  - **The tree reports in the order of the writes.** A new directory's files
+    come out of a listing, and a name written after them now waits for it. So
+    a report still means everything written before it has been reported, which
+    the watcher suite's `settle` relies on.
+  - **A lock counts only when its file moved.** A `git status` that refreshes
+    nothing costs no rescan, and `diff-changed` names `.git/index` or
+    `.git/HEAD`, never the lock, so the symbol index no longer reads the
+    repository whole for it.
 
 - **The watcher tests' waits hold on the walk and on the watch** (DA-110.2).
   `tests/watcher.test.ts` went red on commits that changed only docs, in the
