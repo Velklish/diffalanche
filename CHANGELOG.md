@@ -375,6 +375,15 @@ and `bun run release` refuses a version that has no section. See
   file current. `data-file-index` is gone from the file card, and the
   development machine's reading of the new window is DA-82.1
   ([11-perf.md](docs/reference/11-perf.md#the-gate)).
+- **What an unpaced frame costs is measured, and a regression that only adds
+  frames is outside the perf gate by decision** (DA-82.3). On a 4-core container
+  a frame with something to draw cost 0.7–2.8 ms at the median with the
+  frame-rate limit off, against 16.7 at 60 Hz, and an idle one 17.6–17.7: the
+  frame DA-82 added before `revealCard`'s first scroll was one tick at 60 Hz,
+  +18.7 ms, and `no difference` unpaced. A frame count saw it — 3 frames a jump,
+  4 with the probe, in every run — but it is no measure for the lines that wait
+  on the server, and a ceiling on it is a budget row, DA-82.4
+  ([11-perf.md](docs/reference/11-perf.md#what-a-frame-costs-unpaced-and-what-the-gate-does-not-see)).
 - **The perf gate takes about 45 s instead of about 66, and CPU per frame is
   taken with the frames unpaced** (DA-115). The harness launches Chromium with
   `--disable-frame-rate-limit`: the same 600 frames of the same step, each
