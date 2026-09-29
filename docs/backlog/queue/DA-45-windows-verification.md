@@ -38,6 +38,11 @@ Assumption, not checked: it is the directory flush after an atomic write (DA-90)
 and Windows refuses an `fsync` on a directory handle. The next work item is the
 storage layer's flush on Windows.
 
+DA-45.3 leaves the directory flush out on Windows. A hypothesis from its review,
+not yet seen on a runner: the next stop is a rename of a directory that another
+process holds handles in — `removeSession` and the lock's move-aside both rename
+directories, and Windows refuses that while a watcher or server has one open.
+
 ## Work to do
 
 - Run the smoke scenario and the e2e suite on a Windows runner against the Windows x64 binary; fix what fails; record the platform notes in the reference.

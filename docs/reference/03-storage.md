@@ -149,24 +149,33 @@ What the sync does not close is the drive's own cache. On macOS `fsync(2)` does
 not ask the drive to flush it: the manual page says the drive "may not
 physically write the data to the platters for quite some time" and points at
 `F_FULLFSYNC`, which neither Node nor Bun exposes. So the honest statement is
-that a durable write survives the operating system losing power, not the drive.
-A platform that refuses to open a directory at all — the hypothesis is Windows,
-where the build ships binaries — does not turn a successful write into an error:
-the flush is skipped and the write stands, because the rename has already
-published it. **A flush that was attempted and failed is a different event**, and
-only `EINVAL` and `ENOTSUP` are read as the platform declining it, plus `EPERM`
-on Windows. There the directory opens and its flush is refused: the Windows
-smoke stopped at `review new` with `durability flush failed: EPERM` (DA-45.3).
-The likely cause, not checked on a Windows machine, is that Node opens the
-directory read-only and Windows flushes only a handle opened for writing. So on
-Windows a durable write is the file's flush and the rename, not the directory
-entry's flush. Everything
-else, `EIO` above all, comes back to the caller as a `StorageError` naming the
-directory — `/root/.diffalanche/reviews/one: durability flush failed: EIO` — so
-it reads like every other refusal of this module and the CLI answers 1 with that
-line rather than 2 with a stack. A write whose durability was asked for and did
-not happen is what the caller wanted to hear about, and swallowing it would
-leave `comment` exiting 0 on the one outcome this section promises against.
+that on Linux and macOS a durable write survives the operating system losing
+power, not the drive.
+
+**On Windows the directory entry is not flushed at all.** The directory opens,
+read-only, and Windows flushes only a handle opened for writing: the Windows
+smoke stopped at `review new` with `durability flush failed: EPERM` until the
+flush was left out there (DA-45.3). Neither Node nor Bun offers a directory
+handle opened for writing, so `syncDir` returns before it opens anything, which
+also keeps the outcome independent of how either runtime names the refusal.
+What a Windows write guarantees is the file's own flush and the rename: NTFS
+journals the rename, so after a crash the file is the old one or the new one,
+never a torn one, but a power cut can still bring back the old one after
+`comment` exited 0. That the cause is the read-only handle comes from the
+Win32 documentation of `FlushFileBuffers`, not from a run on a Windows machine.
+
+Elsewhere, a platform that refuses to open a directory at all does not turn a
+successful write into an error: the flush is skipped and the write stands,
+because the rename has already published it. **A flush that was attempted and
+failed is a different event**, and only `EINVAL` and `ENOTSUP` are read as the
+platform declining it. Everything else, `EIO` above all, comes back to the
+caller as a `StorageError` naming the directory —
+`/root/.diffalanche/reviews/one: durability flush failed: EIO` — so it reads
+like every other refusal of this module and the CLI answers 1 with that line
+rather than 2 with a stack. A write whose durability was asked for and did not
+happen is what the caller wanted to hear about, and swallowing it would leave
+`comment` exiting 0 on the one outcome this section promises against on those
+platforms.
 
 ## The lock
 

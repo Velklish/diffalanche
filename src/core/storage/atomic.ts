@@ -40,14 +40,11 @@ export async function writeFileAtomic(
 /** The flush a platform is allowed to refuse, and nothing else: `fsync` of a directory. */
 const UNSUPPORTED = new Set(["EINVAL", "ENOTSUP"]);
 
-/** Windows refuses the flush of a directory handle with `EPERM` (DA-45.3, 03-storage.md); elsewhere
- * `EPERM` is a refusal of this file like any other. */
-function declined(code: string): boolean {
-  return UNSUPPORTED.has(code) || (code === "EPERM" && process.platform === "win32");
-}
-
 /** Flushes the entry the rename created; the bytes it points at are already down. */
 async function syncDir(path: string): Promise<void> {
+  // Windows flushes only a handle opened for writing, and a directory opens read-only here, so the
+  // flush can never succeed there (DA-45.3, 03-storage.md).
+  if (process.platform === "win32") return;
   // A platform that will not open a directory at all skips the flush; the write
   // it belongs to is published either way.
   const handle = await open(path, "r").catch(() => null);
@@ -56,7 +53,7 @@ async function syncDir(path: string): Promise<void> {
     await handle.sync();
   } catch (error) {
     const code = (error as NodeJS.ErrnoException).code;
-    if (code !== undefined && declined(code)) return;
+    if (code !== undefined && UNSUPPORTED.has(code)) return;
     // A failed flush is a refusal of this file, not a fault of the tool: the
     // caller asked for durability and is told it did not happen.
     throw new StorageError(path, null, `durability flush failed: ${code ?? String(error)}`);

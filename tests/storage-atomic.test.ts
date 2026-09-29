@@ -91,16 +91,18 @@ describe("writeFileAtomic", () => {
     expect(readFileSync(target, "utf8")).toBe("first\n");
   });
 
-  it("reads EPERM as the platform declining only on Windows", async () => {
+  it("fails on EPERM here, and on Windows does not flush the directory at all", async () => {
     dirSyncFails.code = "EPERM";
     const platform = Object.getOwnPropertyDescriptor(process, "platform");
     if (process.platform !== "win32") {
       await expect(writeFileAtomic(target, "first\n")).rejects.toThrow(/EPERM/);
     }
+    opened.length = 0;
     Object.defineProperty(process, "platform", { value: "win32", configurable: true });
     try {
       await writeFileAtomic(target, "second\n");
       expect(readFileSync(target, "utf8")).toBe("second\n");
+      expect(opened).toEqual([]);
     } finally {
       if (platform !== undefined) Object.defineProperty(process, "platform", platform);
     }
