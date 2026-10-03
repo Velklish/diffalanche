@@ -2,24 +2,26 @@
 
 **Status:** Accepted
 **Date:** 2026-09-24
-**Deciders:** the owner chose the direction on 2026-09-24 — the model in a process of its own — from the candidates DA-34.2 lists; the `ml3` worker of the run of 2026-09-23 designed it within that, by the task brief, and the orchestrator accepted the design under that direction on 2026-09-24
+**Deciders:** the owner chose the direction on 2026-09-24 — the model in a process of its own — from the candidates the Context lists; the `ml3` worker of the run of 2026-09-23 designed it within that, by the task brief, and the orchestrator accepted the design under that direction on 2026-09-24
 
 ## Context
 
 [ADR-014](adr-014-embedding-model-and-npm-delivery.md) caps "a process that loads
-the model and embeds 200 comments" at 768 MiB peak resident size. Until DA-34.2
-the model loaded in the process that asked for a vector: a command, or the
-server on a worker thread (DA-34.1). DA-34.2 measured both crossing the ceiling
-on Bun, the binary channel: a query over 50 000 comments at 803 MiB, and `serve`
-after its first suggestion on the synthetic review of 240 comments at 742 and 764
-MiB. Two weights sit in one process there. The model's is 697–714 MiB alone on
-the day of those measurements; the index's is about 1.5 KB of vectors a comment
-plus its entry, and the server's own is the review it holds.
+the model and embeds 200 comments" at 768 MiB peak resident size. Until this
+decision the model loaded in the process that asked for a vector: a command, or
+the server on a worker thread. Measurements on the development machine (Apple M1
+Pro, Bun 1.3.14) found both crossing the ceiling on Bun, the binary channel: a
+query over 50 000 comments at 803 MiB on 2026-09-23, and `serve` after its first
+suggestion on the synthetic review of 240 comments at 742 and 764 MiB on
+2026-09-24. Two weights sit in one process there. The model's is 697–714 MiB
+alone, measured beside the query on 2026-09-23; the index's is about 1.5 KB of
+vectors a comment plus its entry, and the server's own is the review it holds.
 
-A second constraint comes from DA-34.1: a run of the model holds the thread that
-runs it, and with the index rebuilt on the server's own thread the update after
-an edit took 422–435 ms against 272–297 ms without it. Whatever holds the model,
-it is not the server's event loop.
+A second constraint was measured on 2026-09-23, at load averages of 7.7–15.7 on
+8 cores, when the server's model moved to a worker thread: a run of the model
+holds the thread that runs it, and with the index rebuilt on the server's own
+thread the update after an edit took 422–435 ms against 272–297 ms without it.
+Whatever holds the model, it is not the server's event loop.
 
 The candidates listed when the owner decided were the model in a process of its
 own and unloading the model when it is idle; for the index's own share, mapping
@@ -69,8 +71,8 @@ chose the first. The rest of this record is how.
   From the sources and in the npm package the runtime runs
   `src/core/ml/embed/child-entry.ts` or `dist/embed-child.js`. A binary has no
   script to hand a runtime, so it runs itself with `DIFFALANCHE_EMBEDDER=1` and
-  no argument, the way DA-41 has it write its files out through a child of
-  itself; its entry serves the model only then, so a user who sets the variable
+  no argument, the way it already writes its embedded model files out through
+  a child of itself ([09-ml.md](../reference/09-ml.md)); its entry serves the model only then, so a user who sets the variable
   still runs a command.
 - **4B. A hidden subcommand of the CLI.** One way for every channel, but the
   npm package would load the whole CLI into the model's process, and a command
@@ -81,7 +83,7 @@ chose the first. The rest of this record is how.
 **1A, 2A, 3A, 4A.** Every way the child can fail — it cannot be started, it ends
 before the model is loaded, the model is not there, or it ends under a request —
 is a `ModelError`: one line from a command, a 503 from `GET /api/suggest`, as a
-model that is not there always was. The worker thread of DA-34.1 is removed: the
+model that is not there always was. The worker thread the server ran the model on is removed: the
 process is off the server's event loop as the thread was.
 
 Measured on 2026-09-24 (development machine, Apple M1 Pro; [09-ml.md](../reference/09-ml.md#in-a-process-of-its-own)):
@@ -99,8 +101,7 @@ the thread it replaces.
 - ADR-014's ceiling now meets the model's own weight and nothing else: the
   model's process peaks at up to 751 MiB on Bun, 17 MiB under it, and no change
   to the index or to this split lowers that. The levers are ADR-014's — another
-  model, another runtime, or the ceiling restated for the model's process
-  (DA-34.3).
+  model, another runtime, or the ceiling restated for the model's process.
 - A suggestion now takes two runtimes, so the memory of the two together is
   more than one process held; the ceiling is for a process, and nothing bounds
   the sum.

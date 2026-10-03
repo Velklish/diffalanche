@@ -2,14 +2,15 @@
 
 **Status:** Accepted
 **Date:** 2026-09-23
-**Deciders:** the `browse` worker, by the task brief of DA-39; accepted by the orchestrator of the run of 2026-09-23, since the rules force it — ADR-008 rules out 1A, `docs/SPEC.md` section 3 decision 11 ships the grammars with the tool, section 6 asks for 3B
+**Deciders:** the `browse` worker, by its task brief; accepted by the orchestrator of the run of 2026-09-23, since the rules force it — ADR-008 rules out 1A, `docs/SPEC.md` section 3 decision 11 ships the grammars with the tool, section 6 asks for 3B
 
 ## Context
 
 `docs/SPEC.md` section 3, decision 11, tier 2 asks for a symbol index built with
 tree-sitter, grammars for popular languages shipped with the tool and others
-added through configuration, no language hard-coded. DA-39 names the languages
-that must ship: TypeScript, JavaScript, C#, Python, Go, Rust, Java.
+added through configuration, no language hard-coded. The brief that commissioned
+the index names the languages that must ship: TypeScript, JavaScript, C#,
+Python, Go, Rust, Java.
 
 Two rules decide what "built with tree-sitter" can mean here. The server and the
 CLI use only APIs Node and Bun share, and a runtime-specific module outside

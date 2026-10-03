@@ -16,10 +16,10 @@ The work is cut into 49 tasks across four phases (see `docs/backlog/`). The owne
 
 ## Decision
 
-- Phase 0 (DA-1 to DA-5) is done by one Claude Code session, task by task, following `backslop-task`. The spike code stays in the repository as the skeleton for Phase 1.
+- Phase 0 — the repository skeleton, the synthetic review generator, the diff-rendering and delivery-channel spikes, and the performance gate in CI — is done by one Claude Code session, task by task, following `backslop-task`. The spike code stays in the repository as the skeleton for Phase 1.
 - Phase 1 runs through `backslop-batch`: one track per subsystem (core, cli, server, ui, docs), each with a self-contained brief and a worker session in its own branch or worktree. Workers do not move task files; findings become `new --parent N` entries.
 - Every track's diff is reviewed by an isolated read-only session with fresh context before acceptance. The approver squashes a task into one commit `DA-N: …` on `main`.
-- Phase 2 to 4 tasks stay in `deferred/` until DA-32 (Phase 1 acceptance) is archived; their cut is revisited then.
+- Phase 2 to 4 tasks stay in `deferred/` until the Phase 1 acceptance task is archived; their cut is revisited then.
 
 ## Consequences
 

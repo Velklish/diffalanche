@@ -67,9 +67,9 @@ have had no such rule, so a comment and its code diverge silently.
 ## Consequences
 
 - 720 blocks are out of compliance the day this is accepted. Bringing them in is
-  [DA-58](../archive/DA-58-comment-sweep-to-two-lines/task.md), which also turns
-  the count above into a gate; until then the rule binds new and edited code
-  only.
+  a sweep of its own — every block compressed, moved to the reference, or
+  deleted — which also turns the count above into a gate; until then the rule
+  binds new and edited code only.
 - `docs/reference/` grows. That is the point: the sections become the place the
   subsystem's gotchas live, rather than a summary of code whose details are
   elsewhere.

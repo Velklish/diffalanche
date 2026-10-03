@@ -11,7 +11,7 @@ repositories somebody else produced, and `AGENTS.md` states the boundary: the
 tool never writes to a reviewed repository, and git is read through the `git`
 binary only. Both halves failed, in opposite directions.
 
-**What the repository could do (DA-61).** `readOnlyEnv()` pointed
+**What the repository could do.** `readOnlyEnv()` pointed
 `GIT_CONFIG_GLOBAL` and `GIT_CONFIG_SYSTEM` at the null device and stopped
 there. The third configuration scope — `.git/config` of the repository being
 read — git treats as trusted, and several of its keys name a program git then
@@ -30,7 +30,7 @@ the path: `src/server/serve.ts` warms the review up at start-up, so opening a
 folder and running `diffalanche serve` was the whole exploit. `--no-ext-diff`
 closed `diff.external` and nothing else.
 
-**What the parent process could do (DA-87).** The same function spread
+**What the parent process could do.** The same function spread
 `process.env`, so every other `GIT_*` variable of whatever started diffalanche
 was carried through. Two families survived the two null files, both reproduced
 through the reader itself: `GIT_CONFIG_COUNT` / `GIT_CONFIG_KEY_n` /
@@ -64,7 +64,7 @@ documentation stated was false either way.
   per call with `-C` and keep the spread.** A named list is the same
   whack-a-mole as the allow-list above: `GIT_ASKPASS`, `GIT_SSH_COMMAND`,
   `GIT_EXTERNAL_DIFF` and `GIT_PAGER` are all in the family and none of them is
-  among the six DA-87 proved. `-C` fixes the repository and leaves the
+  among the six reproduced above. `-C` fixes the repository and leaves the
   configuration half untouched. Dropping the prefix removes both halves with one
   rule.
 
@@ -141,8 +141,8 @@ reader runs today are the table of `docs/reference/02-git.md`.
   skipped — `fatal: .gitattributes: clean filter 'pwn' failed`, exit 128, which
   in an unbounded `Promise.all` takes the whole review with it. Measured on this
   machine before the pin was added.
-- The flag and the pin are not redundant, and since DA-65 it is the **pin** that
-  carries the guarantee. The change set comes from `git diff-index`, where
+- The flag and the pin are not redundant, and since the change set moved from
+  `git diff` to `git diff-index` it is the **pin** that carries the guarantee. The change set comes from `git diff-index`, where
   textconv and the external driver are off unless asked for, so
   `--no-ext-diff` and `--no-textconv` are belt-and-braces on that command and
   removing them changes nothing — measured: with neither the flag nor the pin,

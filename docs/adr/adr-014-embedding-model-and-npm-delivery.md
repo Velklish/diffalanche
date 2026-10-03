@@ -2,7 +2,7 @@
 
 **Status:** Accepted
 **Date:** 2026-09-23
-**Deciders:** Velklish — accepted as proposed on 2026-09-23, with the one-second budget not yet measured on a quiet machine; DA-33.2 measures it, and a miss returns the budget to the owner
+**Deciders:** Velklish — accepted as proposed on 2026-09-23, with the one-second budget not yet measured on a quiet machine; a later measurement on a quiet machine settles it, and a miss returns the budget to the owner
 
 ## Context
 
@@ -10,10 +10,9 @@
 of about 118M parameters and 120 MB in int8 that ships with the tool, works
 offline with nothing to install, and runs in the server process. Open question 1
 of section 12, removed when this was accepted, asked how the npm channel gets
-it: a download on first run, or a separate `@diffalanche/model` package. DA-33
-asks for the model and a runtime
-that works under Node and Bun, measured for load time and memory, and verified
-three ways: 200 comments embed in under a second after warm-up, the same text
+it: a download on first run, or a separate `@diffalanche/model` package. What
+this record had to settle is the model and a runtime that works under Node and
+Bun, measured for load time and memory, and verified three ways: 200 comments embed in under a second after warm-up, the same text
 gives the same vector under both runtimes (cosine above 0.999), and a cached
 model loads and embeds with the network off.
 
@@ -23,7 +22,7 @@ so a runtime that needs `Bun.*` or a Node-only module is a new decision. The npm
 package is one bundle, `dist/cli.js`, with no runtime dependencies at all — every
 package in `package.json` is a development dependency because the bundler
 inlines it. And there are six binaries, built by `bun build --compile` into
-single files of 62–99 MiB (the figure in DA-41's card).
+single files of 62–99 MiB (as the release pipeline built them on 2026-09-05).
 
 ### How the numbers were taken
 
@@ -182,8 +181,9 @@ and vectors that differ on that platform by up to 0.0042 cosine.
 **Model to the npm channel → 4A download on first use into the user cache /
 4B a `@diffalanche/model` package.** 4A costs nothing to anyone who never uses
 a Phase 2 feature, survives an npx cache that was cleared or a version upgrade
-that kept the same pin, and is what decision 10 and DA-41 already describe; it
-needs the network once, a source the project controls, and its own checksum. 4B
+that kept the same pin, and is what decision 10 and the model delivery planned
+at the time already describe; it needs the network once, a source the project
+controls, and its own checksum. 4B
 is offline the moment the install finishes and gets npm's integrity and
 provenance for free; it costs 85.0 MB on every cold `npx diffalanche`, whether
 or not suggestions are ever used, and a new package release for every new pin.
@@ -235,19 +235,22 @@ budget would then have to be restated for it.
 
 - **Not yet measured on a quiet machine: the one-second budget.** The best wall
   time for 200 comments was 1.86 s on Node and 1.94 s on Bun, the module as
-  committed at load averages of 21–28; one thread spent 2.0 s of CPU on them. Whether four to six quiet cores bring that under a
-  second is unmeasured. The owner accepted this without it: DA-33.2 measures it,
-  and a miss returns the budget to the owner.
-- DA-41 builds 4A and 5B: the published assets and their checksums, the
-  download with progress and a clear message when offline, `model pull
-  --embedding`, the binding redirected at build time for the npm bundle and for
-  the binaries, and the binary writing its embedded files into the cache. Until
-  then `dist/cli.js` contains no runtime and embeds nothing — no command reaches
-  `src/core/ml/embed/embedder.ts` — and `onnxruntime-node` and
-  `@huggingface/tokenizers` are development dependencies like every other.
-- DA-34 and DA-35 embed in the server process and must not hold its event loop
-  for long: one text per run keeps a stall to one text, and a rebuild of many
-  comments either yields between texts or moves to a worker.
+  committed at load averages of 21–28; one thread spent 2.0 s of CPU on them.
+  Whether four to six quiet cores bring that under a second is unmeasured. The
+  owner accepted this without it: a later measurement on a quiet machine settles
+  it, and a miss returns the budget to the owner.
+- The model's delivery, a task of its own, builds 4A and 5B: the published
+  assets and their checksums, the download with progress and a clear message
+  when offline, `model pull --embedding`, the binding redirected at build time
+  for the npm bundle and for the binaries, and the binary writing its embedded
+  files into the cache. Until then `dist/cli.js` contains no runtime and embeds
+  nothing — no command reaches `src/core/ml/embed/embedder.ts` — and
+  `onnxruntime-node` and `@huggingface/tokenizers` are development dependencies
+  like every other.
+- The embedding index and the `suggest` command and API embed in the server
+  process and must not hold its event loop for long: one text per run keeps a
+  stall to one text, and a rebuild of many comments either yields between texts
+  or moves to a worker.
 - A vector belongs to the model, its revision, the runtime's version and the
   platform together: 1.23.2 and 1.30.0 differ by up to 0.0032 cosine,
   onnxruntime-web by up to 0.0042, and the four texts of
@@ -257,4 +260,4 @@ budget would then have to be restated for it.
   re-embeds when one changes; an index is local to one machine, so the platform
   never meets another.
 - `model status` reports the model's name, revision and cache directory today;
-  the generative model joins it in Phase 4 (DA-46).
+  the generative model joins it in Phase 4.

@@ -19,7 +19,7 @@ spike. The handoff allows virtualisation as long as drag selection and thread
 anchors keep working (`docs/design/HANDOFF.md`, "Performance & live update"),
 and forbids lazy loading of data: the whole review arrives in one response.
 
-Measured with `perf/run.ts` (DA-3), three runs per variant, medians below.
+Measured with `perf/run.ts`, three runs per variant, medians below.
 Machine: MacBook Pro 18,3, Apple M1 Pro, 8 cores, macOS 26.6.2. Browser:
 Playwright 1.63.0 driving Chrome Headless Shell 153.0.8010.12. Fixture:
 `bun run synth -- --out .perf/fixture`, the full profile.
@@ -93,8 +93,8 @@ which is what the budget line asks about, and what the person sees.
   while refractor 5 returns a hast root: `src/ui/renderers/ReactDiffFile.tsx`
   adapts one to the other in three lines. Without the adapter the page throws
   and renders nothing.
-- The CPU budget per frame is **8.3 ms**, the frame of 120 fps, and the gate of
-  DA-5 checks it together with zero long tasks.
+- The CPU budget per frame is **8.3 ms**, the frame of 120 fps, and the
+  performance gate checks it together with zero long tasks.
 - This revises two lines of [ADR-002](adr-002-stack-and-delivery.md), which
   carries a note pointing here. The first is the diff library, whose fallback
   ADR-002 named itself. The second is "no `Bun.*` outside build scripts":
@@ -104,32 +104,34 @@ which is what the budget line asks about, and what the person sees.
 - The spike page stays as the skeleton of the Phase 1 UI: `src/ui` (shell, file
   cards, renderer, composer placeholder, measurement hooks), `src/server` (the
   review in one response, the runtime switch), `perf/` (the harness). The second
-  library and the variant switches are kept until DA-21 fixes the renderer, then
-  removed with the dead dependency.
+  library and the variant switches are kept until the Phase 1 diff view fixes
+  the renderer, then removed with the dead dependency.
 
 ## Consequences
 
 - No variant meets the budgets without virtualisation, so virtualisation is not
-  an optimisation to add later: DA-21 and DA-22 build on it. The handoff's
-  condition holds them to it — drag selection over lines and thread anchors must
-  keep working when a line is outside the mounted window, and a thread whose
-  line is not mounted still has to be visible and clickable in the rail.
+  an optimisation to add later: the diff view and line selection with its
+  composer build on it. The handoff's condition holds them to it — drag
+  selection over lines and thread anchors must keep working when a line is
+  outside the mounted window, and a thread whose line is not mounted still has
+  to be visible and clickable in the rail.
 - A card that has never been mounted uses a height estimated from its patch;
   only after it has been mounted once is its real height known. Scrolling
-  backwards never jumps, scrolling forwards past unseen files can. DA-21 owns
-  making the estimate good enough that the scrollbar does not visibly drift.
+  backwards never jumps, scrolling forwards past unseen files can. The Phase 1
+  diff view owns making the estimate good enough that the scrollbar does not
+  visibly drift.
 - `@git-diff-view/react` loses its place in the stack. Its widget API
   (`extendData`, `renderExtendLine`) was the nicer one for the composer;
   `react-diff-view` puts a widget under a line through `widgets` keyed by
-  change, which DA-22 uses instead.
+  change, which the line composer uses instead.
 - Highlighting costs about a second of first render without virtualisation and
   2 ms of CPU per frame with it. It stays on: the spec makes it the library's
   job, and the budget holds with it.
-- Two budget lines are still unmeasured. DA-25 (live update) and DA-9 (sessions)
-  are the tasks that make them measurable, and they turn the pending lines of
-  the gate on.
+- Two budget lines are still unmeasured: switching review sessions and the
+  update after an edit. Building review sessions and live update makes them
+  measurable and turns the pending lines of the gate on.
 
-## Delivery channels (DA-4)
+## Delivery channels
 
 The same spike proved both channels of `docs/SPEC.md` section 3, decision 2 on a
 CLI with `version`, `serve`, and `--help`. `scripts/build.ts` produces
@@ -148,8 +150,8 @@ and Node 25.2.1; cold start is the median of ten runs of `version`, timed around
 | Binary, darwin-x64 | 67.9 MiB | not run here |
 | Binary, linux-arm64 | 91.3 MiB | not run here |
 | Binary, linux-x64 | 92.2 MiB | not run here |
-| Binary, windows-arm64 | 92.1 MiB | not run here (DA-45) |
-| Binary, windows-x64 | 95.9 MiB | not run here (DA-45) |
+| Binary, windows-arm64 | 92.1 MiB | not run here (Windows verification is Phase 3) |
+| Binary, windows-x64 | 95.9 MiB | not run here (Windows verification is Phase 3) |
 
 All six targets cross-compile on macOS with Bun 1.3.14, windows-arm64 included.
 A binary is mostly the Bun runtime: the bundled code and the embedded UI are two
@@ -165,16 +167,18 @@ binary.
 
 ## Re-measured after the review
 
-The review of DA-3 to DA-5 changed two things that touch the numbers above: the
-renderer registers nine refractor grammars instead of the package's root export,
-which registers every Prism language, and the reader now runs `git diff HEAD`.
-The UI bundle went from 1425.7 kB to 1370.5 kB, and the winner measured again on
-the same machine, three runs, medians: first render 32.6 ms, zero long tasks,
-6.9 ms of CPU per frame, composer 12.3 ms, file jump 7.8 ms. Nothing moved
-enough to change the verdict, and the table above stands as measured.
+The review of the two spikes and the performance gate changed two things that
+touch the numbers above: the renderer registers nine refractor grammars instead
+of the package's root export, which registers every Prism language, and the
+reader now runs `git diff HEAD`. The UI bundle went from 1425.7 kB to 1370.5 kB,
+and the winner measured again on the same machine, three runs, medians: first
+render 32.6 ms, zero long tasks, 6.9 ms of CPU per frame, composer 12.3 ms, file
+jump 7.8 ms. Nothing moved enough to change the verdict, and the table above
+stands as measured.
 
 One run of the same gate on the same commit came out red — 9.4 ms of CPU per
 frame and eight long tasks — while the machine carried a load average of about
 13 on eight cores. The numbers here are measurements of a quiet machine; the
-budget has 1.4 ms of headroom, and a busy machine spends it. DA-5.1 is where
-that is being decided for the CI runner.
+budget has 1.4 ms of headroom, and a busy machine spends it. What that means for
+the CI runner is decided on the runner's own measurement
+([11-perf.md](../reference/11-perf.md)).

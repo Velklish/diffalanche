@@ -10,8 +10,8 @@
 [ADR-006](adr-006-verification.md) weighed running the unit suite on both
 runtimes against a smoke scenario on both, and chose the smoke scenario:
 "running the whole unit suite twice is slow and mostly redundant". The
-measurement below overturns the first half of that sentence, and DA-13/DA-14
-found what the second half hides.
+measurement below overturns the first half of that sentence, and building the
+CLI's commands found what the second half hides.
 
 `bun run test` reads as though the suite runs on Bun. It does not: Bun starts
 Vitest, and Vitest runs the tests themselves on Node. A probe writing
@@ -20,10 +20,10 @@ Vitest, and Vitest runs the tests themselves on Node. A probe writing
 `process.execPath` and gets Node. So nothing executed the core on Bun's own
 runtime, while `docs/SPEC.md` section 10 asks for CI green on Node and on Bun.
 
-The smoke matrix of DA-15 does not close this. It runs the CLI on both runtimes,
-which covers the surface an agent uses; it does not cover storage's lock, the
-git reader, or the watcher, whose behaviour on the two runtimes is where a
-difference would sit.
+The CLI smoke matrix of ADR-006 does not close this. It runs the CLI on both
+runtimes, which covers the surface an agent uses; it does not cover storage's
+lock, the git reader, or the watcher, whose behaviour on the two runtimes is
+where a difference would sit.
 
 Evidence, on an M1 Pro:
 

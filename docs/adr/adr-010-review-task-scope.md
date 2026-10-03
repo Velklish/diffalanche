@@ -79,7 +79,7 @@ follows from them in the format, the core, the CLI, and the HTTP API.
    task and prints its address; the human opens it when they are ready. The UI
    creates every session that way, and switching a task in it moves that
    window's address rather than the pointer. **One exception, taken with the
-   owner in DA-55:** the first session of a root, created from the first-run
+   owner on 2026-09-10:** the first session of a root, created from the first-run
    screen, becomes current. What decision 4 protects is a screen a human is on
    from an agent that takes it away; on that screen there is no `current` at all
    and the human is doing it to themselves, and leaving the pointer unset would
@@ -119,5 +119,6 @@ follows from them in the format, the core, the CLI, and the HTTP API.
   before there is a session, and `GET /api/sessions/candidates`, what the scope
   editor picks from. Both are lists of repositories and files rather than a
   review, so neither shows the diff of what a task is not about.
-- Deleting a session (DA-40) and re-anchoring comments (DA-42) are unchanged by
-  this decision and stay where they are.
+- Deleting a session (`review delete` in the CLI and the UI) and re-anchoring
+  comments after code edits are unchanged by this decision and stay where they
+  are.
