@@ -129,7 +129,7 @@ is walking then has walked from the start. Nothing is rescanned for it: the
 walk's first baseline *is* the startup baseline and nothing was missed, which is
 the difference from the takeover below. `serve` turns it into one line on stderr,
 and the takeover line is not said after it — the operator already knows the
-session walks and why updates are slower (DA-85.1).
+session walks and why updates are slower.
 
 `recursive: false` skips the question and walks: a filesystem whose
 notifications cannot be trusted — a network mount — is what it is for, and so is
@@ -317,7 +317,7 @@ through the two.
 inotify does not recurse. A watch is set on one inode, and a directory's watch
 reports, by name, the entries that change inside it. So `recursive: true` on
 Linux is always an emulation, and Node 22's emulation loses a file replaced by
-rename after the first time (DA-110.3). Its `lib/internal/fs/recursive_watch.js`
+rename after the first time. Its `lib/internal/fs/recursive_watch.js`
 takes a watch per path, files included, each on the inode that was there when
 the watch was taken. A rename over a file gives the name a new inode. The watch
 on the old one fires once and then watches nothing, and the directory's own
@@ -571,8 +571,8 @@ the current session changes and an open window would otherwise never hear that
 it exists ([ADR-010](../adr/adr-010-review-task-scope.md)). It is read from the
 status of every session under `reviews/`, one small file each, on every burst
 the data directory produces — the cost `listSessions` already pays per request
-([04-domain.md](04-domain.md)). A session that disappears says nothing
-(DA-40): the frame's `status` has no value for "gone", and the history is read
+([04-domain.md](04-domain.md)). A session that disappears says nothing: the
+frame's `status` has no value for "gone", and the history is read
 afresh whenever the menu opens. A window on the deleted task hears
 `session-changed` for it, reads the review again and gets `no-such-session`; a
 deleted current session moves `current`, which is `current-changed`, read before
@@ -662,7 +662,8 @@ first burst of the data directory after the stream is open, and when that burst
 is the write itself
 — an agent's `review comment` into the task it has just printed a link to, a
 `review base` or `review scope` from a terminal — a baseline read from the files
-then would already hold the write, and no frame would go out. DA-55.8 reproduced
+then would already hold the write, and no frame would go out. The first-write
+regression test reproduced
 both, the comment and the scope: `tests/server.test.ts`, "a window that has just
 opened on it". So the server hands the watcher every document it serves, before
 serialising it: `watcher.served(name, review, comments)` keeps the session's
@@ -717,7 +718,7 @@ thread it already has, where comparing with the later document would lose it for
 the earlier window without a word.
 
 Three corners stay open, and closing them needs a stream that knows which
-document its window holds (DA-55.11):
+document its window holds:
 
 - **A document whose window closed before its stream opened** has no stream to
   end, so it stays until a burst follows the task, the task is gone, or another
@@ -731,7 +732,7 @@ document its window holds (DA-55.11):
 - **A task already followed when a window is served it** — the current one, or
   one another window is on — is compared with its own last read, so a frame sent
   between that window's document and its stream reaches the windows open then
-  and not this one (DA-55.10).
+  and not this one.
 
 An entry costs a few hundred comment ids at most, one per task served.
 
@@ -828,12 +829,12 @@ the next two minutes; past that the diff change is a plain `changed` again.
 ## Budget
 
 `docs/SPEC.md` section 6 gives 300 ms from an edit in one repository to the
-update. The performance gate measures that path now — an edit of one file to the
-page holding that repository's new diff — and prints it with DA-25 named
-instead of a verdict, because the render of the patched diff belongs in the same
-number and is DA-25's ([11-perf.md](11-perf.md)). What `tests/watcher.test.ts`
-measures is the
-part that belongs here — the file write, the debounce, the rescan, and the
+update. The performance gate measures and enforces that path — an edit of one
+file to the page holding that repository's new diff; an over-budget update
+fails the gate. The render of the patched diff belongs in the same 300 ms
+budget and in the UI live-update path ([11-perf.md](11-perf.md)). What
+`tests/watcher.test.ts` measures is the part that belongs here — the file
+write, the debounce, the rescan, and the
 event — over three edits, and it asserts **300 ms on the median of each edit
 less one rescan of the same repository timed beside it**, once the watcher's own
 write of that edit has landed, and only where the tree is watched: on the walk
@@ -893,9 +894,9 @@ one queue, so an event queued behind the burst under test is the proof — but
 only once that burst exists. On the native path the order of delivery gives that
 for nothing; on the walk each tree has a timer of its own, and a write into
 another repository can be walked, debounced and rescanned before the walk of the
-repository under test has seen the write made just before it. That was the whole
-of `settle` until DA-110.2 — one write into the other repository, its event
-awaited — and it held on Node and not on Bun. In an instrumented copy it
+repository under test has seen the write made just before it. Earlier `settle`
+wrote only into the other repository and awaited that event; it held on Node
+and not on Bun. In an instrumented copy it
 returned before the preceding burst of the repository under test had started its
 rescan in 4 of 5 Bun runs and 0 of 3 Node runs, and with the rules of the two
 ignore cases pointed at a directory the burst was not in, the `.gitignore` case
@@ -988,10 +989,11 @@ of the watch and no rule of these tests names it, so the file is in the change
 set the next rescan of the repository reads. That is what makes "no rescan"
 visible at all: an ignored file rescanned on its own finds the change set exactly
 as the cache has it and announces nothing either way — which is why the
-`.git/objects` case, which had none, held nothing until DA-110.2 gave it one. The
-first rescan of the repository spends the hidden change, so it is written after
-the last `settle` before the step it serves: a burst that `settle` waits out, such
-as a directory the test has just made, would announce it first. `reveal` is as
+`.git/objects` case, which had no hidden change, held nothing until `hide`
+supplied one. The first rescan of the repository spends the hidden change, so
+it is written after the last `settle` before the step it serves: a burst that
+`settle` waits out, such as a directory the test has just made, would announce
+it first. `reveal` is as
 invisible to the watch as `hide`, so a pad a rescan took in stays in `diff.json`
 until the repository's next rescan: in the nested-repository case the rescan of
 the `HEAD` write takes one in and the rescan of the cleanup's `.gitignore`
@@ -1018,7 +1020,7 @@ Linux](#one-watch-per-directory-on-linux).
 
 The target's name is what the watch on Node and the walk on Bun both report.
 Bun's own watch names the lock, so under Bun's runner these two cases stay on
-the walk with the rest of the suite (DA-110.5). With the branch's test file on
+the walk with the rest of the suite. With the branch's test file on
 `f7b57b8`, the base of the fix, both cases went red on Node in 2 of 2 runs, at
 the first move the emulation drops: `no diff-changed for repos/core/cargos-api
 naming .git/index` and `.git/index was not heard after the step`. On the branch

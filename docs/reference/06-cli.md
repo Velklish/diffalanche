@@ -82,7 +82,7 @@ the CLI works without one.
 
 A scope is a literal list of paths and does not follow a rename: a renamed file
 is at a path the scope does not name until `review scope add` or `review scope
-set` names it. That is a decision (DA-53.2, [04-domain.md](04-domain.md)), not
+set` names it. That is a decision ([04-domain.md](04-domain.md)), not
 a gap.
 
 `review scope add` only widens: adding a path to a repository that is in as a
@@ -120,7 +120,7 @@ closed one.
 ## Deleting a task
 
 `review delete <name>` removes the session's directory and everything in it
-(DA-40, [04-domain.md](04-domain.md)). Only a human deletes a task, as only a
+([04-domain.md](04-domain.md)). Only a human deletes a task, as only a
 human closes one: without `--role human` it is exit code 1, `only a human may
 delete a review task`, and nothing is asked or deleted. A name that is not a
 session is exit code 1 before that.
@@ -211,11 +211,9 @@ address is the bare one and the counters are the current session's, exactly as
 before: `current` never enters the address on its own.
 
 The server behind that address still answers about every task, one per request,
-so the flag narrows nothing — it chooses the window. One thing it does not
-change is which session the watcher follows: that is the current one whatever
-the page asks for, so a window on another task hears no live event about *its*
-comments ([07-server.md](07-server.md),
-[DA-55.1](../archive/DA-55.1-watcher-follows-one-session/task.md)).
+so the flag narrows nothing — it chooses the window. The watcher follows
+`current` and each task with an open window, so a named window receives live
+events about its own comments ([07-server.md](07-server.md)).
 
 **`serve` exits non-zero only for what stops it from starting**, and everything
 after the socket opens is a line rather than an exit. A file of the data
@@ -412,7 +410,7 @@ as a reply before the status changes; the domain's verdict carries one for both
 operations, and a thread reopened without a word in it says nothing about why.
 
 **`reply --confirm-severity`** agrees with a severity the model chose when the
-comment was sent (DA-36): the comment's `severitySource` goes from `auto` to
+comment was sent: the comment's `severitySource` goes from `auto` to
 `confirmed:<author>` in the same write as the reply, and the line after the id
 says so — `r_1 added to c_7f3k2q, severity warning confirmed`. On a comment
 whose `severitySource` is anything but `auto` it is exit code 1 naming why, and
@@ -547,7 +545,7 @@ See [11-perf.md](11-perf.md).
 
 ## What the unit tests hold
 
-`tests/cli.test.ts` (DA-13) runs the commands on a fixture root — sessions, the
+`tests/cli.test.ts` runs the commands on a fixture root — sessions, the
 change set, the exit codes, and the usage — and calls `run` in process rather
 than spawning the CLI: `run` is what both entry points call and what returns the
 exit code ([The two channels](#the-two-channels)). The case only a real process
@@ -560,7 +558,7 @@ held to is the text both delivery channels print.
 `--help`. Both are written by hand, in different files, and the one that goes
 stale is the README: a reader who trusts it types a flag that does not exist.
 
-`tests/scope.test.ts` (DA-53) is the scope of a task: what the CLI writes, what
+`tests/scope.test.ts` is the scope of a task: what the CLI writes, what
 it answers inside, and what it refuses. Its fixture is the small synthetic
 review, three repositories, so a scope over one of them and one file of another
 is the case the task was written against. The rename that shows the one rule

@@ -66,7 +66,7 @@ review writes it too ([11-perf.md](11-perf.md)).
 | `readDiffCache(dataDir, name)` | `diff.json`, or `null` before the first scan |
 | `writeDiffCache(dataDir, name, diff)` | replaces `diff.json` whole |
 | `readCurrent(dataDir)`, `writeCurrent(dataDir, name)`, `clearCurrent(dataDir)` | the current-session pointer; `clearCurrent` removes the file, which reads as no current session |
-| `removeSession(dataDir, name)` | deletes a session's directory under its lock (DA-40) |
+| `removeSession(dataDir, name)` | deletes a session's directory under its lock |
 | `sessionExists(dataDir, name)` | whether `review.json` is there, whatever is in it |
 | `listSessionNames(dataDir)` | `{ names, warnings }` |
 
@@ -155,7 +155,7 @@ power, not the drive.
 **On Windows the directory entry is not flushed at all.** The directory opens,
 read-only, and Windows flushes only a handle opened for writing: the Windows
 smoke stopped at `review new` with `durability flush failed: EPERM` until the
-flush was left out there (DA-45.3). Neither Node nor Bun offers a directory
+flush was left out there. Neither Node nor Bun offers a directory
 handle opened for writing, so `syncDir` returns before it opens anything, which
 also keeps the outcome independent of how either runtime names the refusal.
 What a Windows write guarantees is the file's own flush and the rename: NTFS
@@ -322,7 +322,7 @@ decides against the scope and the scope lives in `review.json` — read outside
 the lock it is the scope of a moment that has passed. For `addComment` a
 narrowing landing between the read and the write leaves a comment nothing reads
 back; for the other three a widening in that window refused a comment that was
-already in scope with `no-such-comment` (DA-67.1)
+already in scope with `no-such-comment`
 ([04-domain.md](04-domain.md)). Taking the scope from the draft costs no read:
 `updateSession` reads `review.json` inside the lock for every write anyway.
 
@@ -395,7 +395,7 @@ checked and nothing half-parsed reaches the caller.
 `endLine`, `title`, and `side` may be absent as well as `null` — both read as
 `null`, which is what the anchor levels of section 7 mean by an omitted field.
 
-`severitySource` (DA-36) is `auto`, `manual`, or `confirmed:<author>` with an
+`severitySource` is `auto`, `manual`, or `confirmed:<author>` with an
 author after the colon; anything else is refused with the field named. Absent
 or `null` reads as `manual`: a comment written before the field existed had its
 severity chosen by whoever wrote it. `confirmedBy(source)` in `types.ts` reads
@@ -442,9 +442,9 @@ that is not there is an answer, not a refusal — no session, never scanned, no
 `EISDIR` — a directory where a file should be — is left out on purpose and
 reaches exit code 2 with its stack: it is the case the "exit code 2" verdict of
 `tests/cli.test.ts` is written against, and that verdict needs one fault no
-layer claims (DA-99.1).
+layer claims.
 
-The two other reads storage and the configuration make word the same codes (DA-99.2). The
+The two other reads storage and the configuration make word the same codes. The
 configuration reads `config.json` — and the user's own
 `~/.config/diffalanche/config.json` — through the same `readError` and the same
 table rather than a second one: the file sits in the data directory, a person
@@ -468,7 +468,7 @@ than blaming a parent:
 directory reaches exit code 2 with its stack, and a listing never meets it.
 
 The embedding index takes a `stat` of every session's `comments.json` for its
-fingerprint and words it through the same `readError` (DA-99.3): the listing
+fingerprint and words it through the same `readError`: the listing
 reads `review.json` and passes a session whose `comments.json` is a link into a
 directory nobody may enter, or through a file, and that `stat` was a raw errno at
 exit code 2 under `suggest` and `index rebuild`. It is now a warning of the
@@ -527,7 +527,7 @@ no `scope` gets. It is the one file the tool writes and can write again, and
 `docs/SPEC.md` section 7 already says hand edits to it are lost.
 
 **A change of the cache's shape is marked by the cache, not by
-`SCHEMA_VERSION`.** `rootWarnings` (DA-80) did not raise the version: the
+`SCHEMA_VERSION`.** `rootWarnings` did not raise the version: the
 version is shared, and raising it would have every write of `review.json` and
 `comments.json` carry the new number, which every earlier build refuses — a
 server of one build and an `npx diffalanche` of another on one data directory
@@ -541,7 +541,7 @@ as the current session, a window on it as a named task. An earlier build
 reading a cache that has the field keeps working and leaves it as it found it,
 or drops it, which this build answers the same way.
 
-**`severitySource` did not raise it either** (DA-36), for the same reason: a
+**`severitySource` did not raise it either**, for the same reason: a
 raised version would have every build from before the field refuse every
 `comments.json` a newer build has written, and a server of one build with an
 `npx diffalanche` of another on one data directory is the ordinary case. Unlike
@@ -563,8 +563,8 @@ later.
 - Keeping unknown keys. Parsing is strict against the schema of the version it
   is reading: a key the schema does not name is dropped on the next write, so a
   note added by hand to a comment does not survive the next reply to it. That is
-  also what raises a version 1 file — the four fields DA-53 added are filled in
-  as it is read, and the write puts them on disk.
+  also what raises a version 1 file — the four scope and status fields added in
+  version 2 are filled in as it is read, and the write puts them on disk.
 - The lock covers one session directory. `current` and `config.json` sit outside
   every session and are written atomically but unlocked; two processes switching
   sessions at the same instant leave one of the two names, never a mixture. A

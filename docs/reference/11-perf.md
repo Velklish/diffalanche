@@ -94,7 +94,7 @@ pointer naming `synth`, so the fixture opens without `--review`
 truth and the scanner writes that cache itself.
 
 **Those two files are written at version 1 and stay there.** It is not a place
-the DA-53 schema bump missed: the fixture is what a data directory written
+the version 2 schema bump missed: the fixture is what a data directory written
 before that bump looks like, so every reader that opens it — the perf gate, the
 smoke matrix, and most of the suite — exercises the compatibility
 `READABLE_VERSIONS` promises, instead of one test doing it alone. The tool
@@ -290,9 +290,10 @@ embeds the pinned model from the user cache (09-ml.md).
 Bun is pinned to the version of the other jobs where it is the toolchain that
 builds the bundle and generates the fixture, and taken as `latest` in the `bun`
 channel, where it is what is being tested: a Bun release that breaks the tool
-shows up there. Windows runs all three channels, `node`, `bun` and `binary`
-(DA-45.5); all three passed end to end on their first run together, and none
-of the three is verified enough to require — DA-45 runs them, fixes what it finds, and
+shows up there. Windows runs all three channels, `node`, `bun` and `binary`;
+all three passed end to end on their first run together, and none
+of the three is verified enough to require. Windows verification runs them,
+fixes what it finds, and
 makes them required — so until then they are `continue-on-error` and a red one
 is something to read rather than a blocked pull request.
 
@@ -365,7 +366,7 @@ bun perf/run.ts --runs 3
 |---|---|
 | `--fixture <dir>` | Root of a synthetic review made by `bun run synth`. Default `.perf/fixture` |
 | `--variant <name>` | Measure only this variant; repeatable. Default: all of them. There is one, `default` |
-| `--runs <n>` | Repetitions per variant: a whole number of at least 1, anything else is an error. Default 1 for `perf/run.ts`, 5 for the gate, 9 a side for `perf/compare.ts`. Above 1, `perf/run.ts` measures each repetition in a process of its own, with its own server and browser, as the gate does ([why](#the-gate), DA-82.2) |
+| `--runs <n>` | Repetitions per variant: a whole number of at least 1, anything else is an error. Default 1 for `perf/run.ts`, 5 for the gate, 9 a side for `perf/compare.ts`. Above 1, `perf/run.ts` measures each repetition in a process of its own, with its own server and browser, as the gate does ([why](#the-gate)) |
 | `--embedding <main\|child>` | `perf/run.ts` only: rebuild the embedding index in a loop inside the server's process while the page is measured — the model on the server's own thread or in the process the server runs it in — and print on stderr how long each run took and how late a 5 ms timer fired ([09-ml.md](09-ml.md#in-a-process-of-its-own)) |
 | `--lag` | `perf/run.ts` only: the timer of `--embedding` with no model, the baseline to hold it against |
 
@@ -396,7 +397,7 @@ afterwards, so the fixture is what it was.
 
 The scroll is one pass over the whole review at up to 600 frames, so the step is
 `scrollHeight / 600` — far faster than a person scrolls, which is the point: it
-is the stress case, not the typical one. **The frames are not paced** (DA-115):
+is the stress case, not the typical one. **The frames are not paced**:
 Chromium is launched with `--disable-frame-rate-limit`, so a frame starts as
 soon as the one before it is done instead of on a 60 Hz tick, and the pass takes
 what its 600 frames cost — about 5 s on an M1 Pro — rather than 600 × 16.7 ms.
@@ -405,7 +406,7 @@ frame the browser draws: without the limit that frame comes when the work is
 done, not at the next tick. That holds for a frame that has something to draw,
 which costs about its work; a frame with nothing to draw still comes about
 17.7 ms after the last one
-([below](#what-a-frame-costs-unpaced-and-what-the-gate-does-not-see), DA-82.3).
+([below](#what-a-frame-costs-unpaced-and-what-the-gate-does-not-see)).
 The flag is `BROWSER_ARGS` in `perf/harness.ts`, and
 `tests/perf.test.ts` › "launches Chromium with the frame-rate limit off, so the
 scroll is not paced at 60 Hz" holds it: taking it out is red in the unit suite
@@ -417,7 +418,8 @@ check on a 120 Hz display.
 
 The Phase 0 spike carried both candidate diff libraries and measured eight
 combinations of library, highlighting, and virtualisation from one build. The
-verdict is [ADR-008](../adr/adr-008-diff-rendering-verdict.md); DA-21 removed
+verdict is [ADR-008](../adr/adr-008-diff-rendering-verdict.md); the diff-view
+implementation removed
 the losing library and the query switches, so `VARIANTS` now holds the one page
 that ships and the `--variant` option has one value. The reference of the UI
 side is [08-ui.md](08-ui.md).
@@ -500,14 +502,15 @@ with its own server and browser, the number read back from its stdout. The
 second browser one process launches after a whole measurement stalls on Bun:
 the page never reports ready, or a later step never returns, and Playwright's
 own timeouts do not fire, while a process that measures once and exits
-completes every time. **The cause is Bun closing a pipe it already closed**
-(DA-82.2), below; one browser a process is the shape that avoids it, and
+completes every time. **The cause is Bun closing a pipe it already closed**,
+below; one browser a process is the shape that avoids it, and
 `perf/run.ts --runs <n>` takes that shape too.
 
 **Why a second browser in one process stalls.** Found on the 4-core cloud
 container of 2026-09-29 (Chromium 141 headless shell, Bun 1.3.14, one-minute
 load 0.1–3.2 on 4 cores), where the one-process loop that `perf/run.ts --runs 3`
-ran before DA-82.2 stalled in each of the six attempts of the day, in the second
+ran before the one-browser-per-process fix stalled in all six attempts of the
+day, in the second
 browser or the third, in whichever step was under way — the scroll, the cold
 switch — 10 to 13 s after that browser was launched:
 
@@ -536,12 +539,12 @@ that it is not the browser object's own collection that does it. A process with
 one browser is never hurt by it, because nothing is left to take the old numbers
 but the exit. The server and the CLI give no child process more than the three
 standard descriptors, so the product is not on the path this trace followed —
-as far as DA-82.5's assumption holds, that only a child with more than three
-stdio entries is hit.
+as far as the extra-stdio assumption holds, that only a child with more than
+three stdio entries is hit.
 
 `perf/gate.ts` prints one row per budget line and exits 1 when the **median** of any line is
 over its ceiling. Two slow runs do not fail the build; three do. Five and not
-three since DA-110, below.
+three after the variance measurement below.
 
 **Which numbers are enforced where.** On a development machine the ceilings
 are the specification's numbers, as the table prints them. On a GitHub-hosted
@@ -550,9 +553,9 @@ budget times `RUNNER_ALLOWANCE` in `perf/budgets.ts` — 2.1 — and the long-ta
 line stays at zero. The first run of the job on `ubuntu-latest` measured the
 same commit a little over twice as slow on every millisecond line as the
 machine the budgets were written on (CPU per frame 17.3 ms against 7.8, the
-composer 50.5 against 22.6, first render 161 against 87) with zero long tasks
-(DA-5.1); the allowance leaves about fifteen percent over that, so a regression
-of a runner's own size is still red there, and a smaller one is red on the
+composer 50.5 against 22.6, first render 161 against 87) with zero long tasks;
+the allowance leaves about fifteen percent over that, so a regression of a
+runner's own size is still red there, and a smaller one is red on the
 development machine first. The table names the widened ceiling beside the
 budget — `9.5 ms (20 on a runner)` — so a green runner is never read as the
 strict number holding.
@@ -564,27 +567,28 @@ slow in the same proportion. **The row it is tuned to is CPU per frame**, which
 is the tightest: 9.5 ms against a measured 17.3 gives 2.1, and a ceiling of
 about 20. Every other row gets whatever 2.1 happens to produce — first render
 ends up several times over what a runner measured, and that is accepted rather
-than fixed. Seven per-row ceilings, all derived from the DA-5.1 readings of
-2026-09-10 and all maintained by hand, cost more than they are worth.
+than fixed. Seven per-row ceilings cost more than they are worth: each derives
+from the first GitHub runner readings of 2026-09-10 and needs maintenance by
+hand.
 
 So the rule is narrower than it looks: **moving the CPU-per-frame budget
 recomputes the multiplier in the same pass; moving any other millisecond budget
-does not touch it.** DA-56.4 is why the rule exists at all — it took CPU per
-frame from 8.3 to 9.5 while the allowance stayed 2.5, which carried the runner
-ceiling from 20.8 to 23.8 against the same measured 17.3 and turned fifteen
-percent of headroom into thirty-eight, letting a regression the size of the
-runner's own reading pass on CI unnoticed.
+does not touch it.** The rule exists because the earlier budget change took CPU
+per frame from 8.3 to 9.5 while the allowance stayed 2.5, which carried the
+runner ceiling from 20.8 to 23.8 against the same measured 17.3 and turned
+fifteen percent of headroom into thirty-eight, letting a regression the size
+of the runner's own reading pass on CI unnoticed.
 
-**DA-115 left the budget and the multiplier where they were, and the runner's
-reading behind them is a 60 Hz one.** The owner kept 9.5 and 2.1 on 2026-09-24,
-so the rule above is not triggered. But the 17.3 ms of DA-5.1 is a reading of
-the 60 Hz harness, and nobody has run the unpaced one on `ubuntu-latest`: this
-repository's runs are local until a push. If a runner comes down in this
-machine's proportion, 0.92–0.94, to about 16 ms, the CI ceiling of about 20 is
-about 24 % over it instead of fifteen — the looser gate DA-56.4's rule exists
-against. That is an assumption from one machine's shift and not a reading; the
-first `perf` job after DA-115 is the reading, and recomputing the multiplier
-from it by the rule is DA-115.1.
+**The unpaced harness change left the budget and multiplier in place, and the
+runner reading behind them is a 60 Hz one.** The owner kept 9.5 and 2.1 on
+2026-09-24, so the rule above is not triggered. But the first runner reading
+of 17.3 ms came from the 60 Hz harness, and nobody has run the unpaced one on
+`ubuntu-latest`: this repository's runs are local until a push. If a runner
+comes down in this machine's proportion, 0.92–0.94, to about 16 ms, the CI
+ceiling of about 20 is about 24 % over it instead of fifteen — the looser gate
+the multiplier rule guards against. That is an assumption from one machine's
+shift, not a reading. The first `perf` job with the unpaced harness will provide
+the reading; recomputing the multiplier from it by the rule remains open.
 
 **What `bun run perf` means off a runner, and when it declines to say.** Off a
 runner, and only there: `GITHUB_ACTIONS=true` turns the precondition off
@@ -601,7 +605,7 @@ and exits 1 without a budget verdict; before the run it first waits for the
 machine to come under the ceiling, and declines without measuring at all only
 when the wait runs out. The decision and the two options it beat are
 [ADR-013](../adr/adr-013-perf-gate-off-ci.md); what it reads and the wait are
-DA-54.5, below.
+the load-precondition measurement below.
 
 So a red `bun run perf` is now one of three things, and the output says which
 without the reader having to compare numbers:
@@ -609,7 +613,7 @@ without the reader having to compare numbers:
 | what it prints | what it means |
 |---|---|
 | `over budget: <lines>` | the median of a line is over its ceiling |
-| `not measured: <lines>` | a line's samples could not be trusted (DA-69) |
+| `not measured: <lines>` | a line's samples could not be trusted |
 | `unable to measure: load averages …` | the machine was too busy for any number off it to be about the code |
 
 **`DIFFALANCHE_PERF_IGNORE_LOAD=1`** measures anyway. It is for a run that wants
@@ -620,7 +624,7 @@ takes that exact value and nothing else: a bypass armed by a stray `export
 DIFFALANCHE_PERF_IGNORE_LOAD=maybe` would be the development allowance ADR-013
 rejected, wearing another name.
 
-**What the precondition reads, and why it waits** (DA-54.5). A load average is a
+**What the precondition reads, and why it waits**. A load average is a
 damped mean of the runnable work, and the one-minute figure is the one that
 forgets fastest: when a burst of work stops — the suites of a `gates` chain,
 another session's — the minute falls under the ceiling well inside a minute,
@@ -647,7 +651,7 @@ reading changes: the busier end, now of two averages, decides whether the table
 is evidence.
 
 **A chain on its own does not make `perf` wait, and the wait is for what is not
-the chain.** The base of DA-54.5, `f9cda1b`, run as `gates` runs it on 2026-09-24
+the chain.** The measured base, `f9cda1b`, run as `gates` runs it on 2026-09-24
 with nothing else started on the machine — its own background at a one-minute
 average of about 3.5 on 8 cores — and the load read every five seconds:
 
@@ -664,12 +668,13 @@ ninety-six seconds let the minute fall back to 1.16 per core before `perf`
 started, and `perf` then measured what eight runs of the gate on the same
 commit had measured in the same quiet twenty minutes earlier — CPU per frame
 8.0 ms against 7.9–8.1, update 284 ms against 281–303. So a chain alone does not
-leave the tail DA-54.5 measured, whose fifteen-minute figure stood at 2.39 per
-core; that takes load the chain does not bring, and it is what the wait is for.
+leave the tail measured on 2026-09-24, whose fifteen-minute figure stood at
+2.39 per core; that takes load the chain does not bring. The wait guards against
+that outside load.
 The UI suite is the gate a chain on its own does hold up, because it starts
 where the minute peaks: 5 to 35 s over five chains of 2026-09-24, the 25 s above
 among them. In four of the five all 151 of its specs passed; the fifth is
-DA-54.6.
+the ring-walk focus failure.
 The wait is 300 s, one time constant of the five-minute figure, and that bounds
 what it can wait out rather than promising to wait anything out: in one time
 constant a damped mean closes 1 − 1/e of its distance to what is left, so even
@@ -681,8 +686,8 @@ damping and has not been measured. A shorter wait would decline on the tail of
 a busy session as the gate did before; a longer one would hold the gate on a
 machine another session keeps busy instead of refusing it.
 
-Why the same ceiling and a wait, and not the other three candidates DA-54.5
-weighed:
+Why the same ceiling and a wait, rather than the three other candidates
+considered in the load-precondition decision:
 
 - **A tighter ceiling on the five-minute figure** would have refused the 0.77
   run, whose five minutes stood at 1.56 per core. It would be a number nobody
@@ -691,22 +696,23 @@ weighed:
   not a measurement of its own. So the 0.77 run still passes. What would
   separate it from a quiet machine is not a second ceiling on the same count,
   which at about one per core does not tell the two apart at all (**What it
-  still does not see**, below; DA-110.1). The same ceiling on both figures
-  closes the shape the task's verification names — a minute under the ceiling
-  with five minutes over it — and no more.
+  still does not see**, below). The same ceiling on both figures closes the
+  case where the one-minute average is under the ceiling but the five-minute
+  average is over it — and no more.
 - **Sampled CPU idle over the seconds before the run.** `os.cpus()` gives it on
   both runtimes, so it is less unportable than it looks; what it cannot give is
   the scale the ceiling is on — utilisation stops at 100 %, where 1.2 runnable
   per core and 5 read the same.
 - **`perf` first in `gates`.** `backslop gates` stops at the first red, and
-  `perf` is the gate most often red on the base — the update line at its budget,
-  DA-56.6 — so ahead of the suites it would keep them from running; and it does
-  nothing for a machine busy for other reasons, which on an orchestrated run is
+  `perf` is the gate most often red on the base — the update line at its budget
+  until the held-document fix — so ahead of the suites it would keep them from
+  running; and it does nothing for a machine busy for other reasons, which on
+  an orchestrated run is
   most of the load. And at the end of a chain on its own `perf` measured as it
   does cold (above), so its place is not what spoils it.
 
 **What it still does not see.** A machine under the ceiling on both figures can
-still be decisively slower. The tree DA-110 quotes, `5e0ee24`, measured CPU per
+still be decisively slower. The tree `5e0ee24` measured CPU per
 frame 9.3 and 10.3 ms and the update 330 and 391 ms on 2026-09-22 at one-minute
 averages of 7.52 and 8.82 — about one per core; on 2026-09-24, alternated with
 `f9cda1b` under one hold of the lock at one-minute averages of 4.8–7.6 and
@@ -715,18 +721,19 @@ three runs of the gate. A count of runnable work at about one per core does not
 tell those two mornings apart. That the count treats all eight cores alike while
 two of this machine's are efficiency cores, so that what the harness gets
 depends on what else holds the performance ones, is a hypothesis the numbers fit
-and nothing here has tested (DA-110.1). What follows from it is not a tighter ceiling — the
+and nothing here has tested. What follows from it is not a tighter ceiling — the
 two readings overlap — but that a red near a budget, on a machine the
 precondition passed, is still attributed by alternating runs of the branch and
 the base under one hold of the lock, not by the gate's own run.
 
 **It belongs to two gates, not to the chain.** The precondition is asked by the
 gates whose verdict is the machine's by design — `bun run perf`, and `bun run
-test:ui` since DA-54.4 ([08-ui.md](08-ui.md#ui-tests)) — from one module,
-`perf/load.ts`, in the same words. The Vitest suites are not given one. Their
-wall-clock verdicts are the other end of the same problem, and DA-60 took that
-end: a wait in them is a condition with a deadline only a hang reaches (**Waits
-in the suites** below), not a duration a busy machine can miss. A chain that
+test:ui` after the load precondition was shared with the UI suite
+([08-ui.md](08-ui.md#ui-tests)) — from one module, `perf/load.ts`, in the same
+words. The Vitest suites are not given one. Their wall-clock verdicts are the
+other end of the same problem, and the suite wait rules address that end: a
+wait in them is a condition with a deadline only a hang reaches (**Waits in
+the suites** below), not a duration a busy machine can miss. A chain that
 declined in four places would be a chain nobody gets green.
 
 **Where the threshold comes from.** `LOAD_CEILING` is 2.5 runnable tasks per
@@ -753,13 +760,13 @@ and not enough to defend the second decimal.
 get — no other work on the machine, one-minute average 5.2 at the start, which is
 this machine's own floor — CPU per frame came out **8.6 to 9.0 ms against a
 budget of 8.3, on all three trees including `1193ab3`, which predates every task
-of the DA-53…56 package.** The lowest single repetition of the whole window was
-8.5.
+of the scope, repository, editor, and history changes.** The lowest single
+repetition of the whole window was 8.5.
 
 What that says is about the page, not about the laptop: `cpuPerFrameMs` is the
 application's own processor time per frame while scrolling, and the machine is
 the instrument. At rest, on an M1 Pro, the scroll does not fit inside the frame
-of 120 fps. What the window settles is narrower and is the part DA-56.3 owes:
+of 120 fps. What the window settles is narrower:
 **the line is not attributable to any task of this wave — it is red before the
 package as well, at rest, on all three trees.** The owner settled what follows
 from that on 2026-09-21: the gate is set on a number this machine reaches while
@@ -770,50 +777,57 @@ The update line is the opposite case, and the same window attributes it. `1193ab
 measured 244 ms and 267 ms — inside the 300 ms budget, twice; `ed81928`, after
 the package, measured 352 ms and 392 ms, over it, twice. The runs alternated
 between the trees under one lock, so the machine state is the same on both
-sides. The step DA-55.2 suspected and could not prove is real.
+sides. The earlier 260-to-341 ms comparison (about 31%) used different machine
+conditions, so it could not prove a regression then. These
+alternating runs show that the suspected update step is real.
 
 **A second window narrowed it to one commit.** Nine points over
 `1193ab3..ed81928` — which is fourteen closed tasks and not the package's four —
 one `bun run perf` each, one shared fixture, load average 7.6 to 10.8
 throughout:
 
-| commit | task | CPU per frame | update after an edit |
+| commit | change | CPU per frame | update after an edit |
 |---|---|---|---|
 | `1193ab3` | before the package | 8.5 ms | **244 ms** ok |
-| `2925a19` | DA-54 | 8.8 ms | **283 ms** ok |
-| `4be4936` | DA-53 | 9.1 ms | **297 ms** ok |
-| `1079222` | **DA-55** | 8.9 ms | **334 ms** FAIL |
-| `a8d673b` | DA-56 | 8.9 ms | 344 ms FAIL |
-| `c9305e1` | DA-57 | 8.8 ms | 315 ms FAIL |
-| `fa004df` | DA-78 | 8.7 ms | 323 ms FAIL |
-| `7308efa` | DA-90 | 8.8 ms | 334 ms FAIL |
+| `2925a19` | repository boundary and jump | 8.8 ms | **283 ms** ok |
+| `4be4936` | task scope and status | 9.1 ms | **297 ms** ok |
+| `1079222` | **scope editor and select mode** | 8.9 ms | **334 ms** FAIL |
+| `a8d673b` | task close and history | 8.9 ms | 344 ms FAIL |
+| `c9305e1` | two-line comment rule | 8.8 ms | 315 ms FAIL |
+| `fa004df` | lock ownership on release | 8.7 ms | 323 ms FAIL |
+| `7308efa` | durable directory flush | 8.8 ms | 334 ms FAIL |
 | `ed81928` | the tip | 8.7 ms | 347 ms FAIL |
 
-Everything up to and including DA-53 is at or under 297 ms; everything from
-DA-55 on is at or over 315. **The step is `1079222`, DA-55.** That is consistent
-with DA-55.2, which bracketed it to DA-55's own review round — both of that
-round's commits are inside this one. `DA-90`, whose title names an added
-directory flush on every atomic write, is innocent: the step is already there
-four commits before it.
+Everything up to and including `4be4936` is at or under 297 ms; everything from
+`1079222` onward is at or over 315. The nine-point window characterized the
+separation as about 35 % of its lower group.
+**The step is `1079222`, the scope editor commit.** That is consistent with the
+earlier comparison, which bracketed it to the scope editor review round — both
+of that round's commits are inside this one. `7308efa`, which added a directory
+flush on every atomic write, is innocent: the step is already there four
+commits before it.
 
 Two things about the method, because the window was not uniform. Every point
 needs `DIFFALANCHE_DATA_DIR=.diffalanche`, not only the oldest: `fixtureEnv()`
-arrived with DA-54.1, late in this range. And the two oldest points could not
-read a `diff.json` the shared fixture carried from a newer schema — DA-53 is in
-this range — so they were re-measured with the fixture reset to what the
-generator writes. The reset does not flatter the number: `1193ab3` gave 244 ms
+arrived with the fixture isolation change, late in this range. The two oldest
+points could not read a `diff.json` the shared fixture carried from a newer
+schema — the version 2 schema change is in this range — so they were re-measured
+with the fixture reset to what the generator writes. The reset does not flatter
+the number: `1193ab3` gave 244 ms
 reset and 286 ms unreset, and `updateMs` is measured after the document is
 built, so the first scan is not inside the window it times.
 
-**What inside DA-55 carries it: the harness's own switch back, and a read of git
-it brought on** (DA-56.6). The harness switches to `perf-scratch` and back to the
-generated session before it measures the update, and since DA-55 the menu's
+**What inside the scope editor commit carries it: the harness's own switch
+back, and a read of git it brought on**. The harness switches to `perf-scratch`
+and back to the generated session before it measures the update. After the scope
+editor change, the menu's
 switch moves the window's address rather than `current`: the page comes back on
 `?review=synth`, not on a bare address. Every fetch a `diff-changed` frame then
 makes carries the name, and `repository(repo, session)` read a named task's
 repository from git — four processes then, five now, on top of the watcher's rescan of the
 same repository — even when the name was the session the watcher had just
-rescanned and handed over. DA-55.2 looked at `repository(repo, undefined)` and
+rescanned and handed over. The earlier update investigation looked at
+`repository(repo, undefined)` and
 found it unchanged, which it was; the update line had stopped taking that path.
 The fix answers a name equal to `watched()` from the held document
 ([07-server.md](07-server.md#the-task-a-request-is-about)). Measured on the
@@ -837,18 +851,18 @@ So the condition accounts for 77 of the step's 81 ms on `1079222`, and what is
 left there is inside what nine a side resolves. On the tip it is a difference by
 two runs of three, 43–52 ms. Against `4be4936` the fixed tip is still `worse`
 twice, by 25 and 59 ms: the two sides are 151 commits apart and run different
-harnesses, and which later commit that is — if it is one — is DA-56.11, not
-this step. These are the container's numbers, not
+harnesses, and which later commit that is — if it is one — remains a separate
+comparison, not this step. These are the container's numbers, not
 the M1 Pro's: a budget verdict is not evidence on a machine the untouched base is
 over budget on ([A red the machine caused](#a-red-the-machine-caused)), and the
-reading on a quiet development machine is DA-56.9.
+reading on a quiet development machine remains unmeasured.
 
 CPU per frame over the same nine points is 8.5 to 9.1 with no trend, which says
 there is no scroll regression in this range — the line is simply above 8.3
-everywhere, which is DA-56.4.
+everywhere, which is the CPU-per-frame budget decision.
 
 **And what the gate guarantees about the thing it measured.** A green table used
-to mean two weaker things than it looked like, and both are closed (DA-69).
+to mean two weaker things than it looked like, and both are closed.
 
 *The fixture is the one the generator wrote.* The old check was the existence of
 `.diffalanche/current`, and `current` exists whatever it points at: the harness
@@ -882,25 +896,26 @@ different and the gate says which — `over budget: …` and `not measured: …`
 | Scrolling the diff: long tasks | 0 tasks | 0 tasks | ok |
 | Scrolling the diff: CPU per frame | 9.5 ms | 8.7 ms | ok |
 | Opening the comment form | 50 ms | 13.9 ms | ok |
-| Jumping to a file from the navigation | 50 ms | — | not re-measured since DA-82 |
+| Jumping to a file from the navigation | 50 ms | — | not re-measured since the file-jump harness change |
 | Switching review sessions | 100 ms | 70.9 ms | ok |
 | Update after an edit in one repository | 300 ms | 221 ms | ok |
 ```
 
-The switch row is from the run that made that line warm (DA-24.1); the rest of
+The switch row is from the run that made that line warm; the rest of
 the sample is the older capture it was written with, and the two are not one
-run. The CPU-per-frame reading, 8.7 ms, was taken at 60 Hz, before DA-115, and
-is not comparable with one taken now. The jump row read 7.7 ms in that capture,
-and it measured a different window; it waits for a reading on the development
-machine (DA-82.1).
+run. The CPU-per-frame reading, 8.7 ms, was taken at 60 Hz before the unpaced
+harness change, so it is not comparable with one taken now. The jump row read
+7.7 ms in that capture, and it measured a different window; it waits for a
+reading on the development machine.
 
-**Jumping to a file** is the tree's own path, since DA-82. `perf.jumpToFile`
-calls `revealFile` — the function a row of the tree and a file hit of global
-search call — and the window runs from before it to the frame after
-`revealCard`'s last round, once that frame shows the file's diff mounted. Before
-DA-82 the hook called `scrollIntoView` on a selector of its own and stopped at
-the next frame: no store write and none of `revealCard`'s rounds. What that
-frame shows was read on `revealFile`'s first painted frame — the store write and
+**Jumping to a file** is the tree's own path after the file-jump harness
+change. `perf.jumpToFile` calls `revealFile` — the function a row of the tree
+and a file hit of global search call — and the window runs from before it to
+the frame after `revealCard`'s last round, once that frame shows the file's
+diff mounted. Before that change, the hook called `scrollIntoView` on a
+selector of its own and stopped at the next frame: no store write and none of
+`revealCard`'s rounds. The result was read on `revealFile`'s first painted
+frame — the store write and
 the same first scroll — on the synthetic review: in two of the three jumps the
 harness makes, to the last file and to the middle one, the target's diff was not
 mounted and the card showed its spacer, at the height measured when the scroll
@@ -918,12 +933,12 @@ on the untouched base), five `perf/run.ts` processes a variant, medians:
 
 | Variant | `fileJumpMs`, median | lowest–highest |
 |---|---|---|
-| Before DA-82 | 25.6 ms | 14.6–49.8 |
-| Before DA-82, `ROUNDS` 3 → 6 | 31.6 ms | 26.7–38.4 |
-| DA-82, to the frame after the last round | 69.8 ms | 62.3–78.7 |
-| DA-82, `ROUNDS` 3 → 6 | 100.7 ms | 85.6–109.1 |
-| DA-82, a frame added before the first scroll | 76.2 ms | 63.1–95.0 |
-| DA-82 ending at the frame that first shows the diff | 53.8 ms | 47.4–85.7 |
+| Before the file-jump harness change | 25.6 ms | 14.6–49.8 |
+| Before the file-jump harness change, `ROUNDS` 3 → 6 | 31.6 ms | 26.7–38.4 |
+| With the file-jump harness change, to the frame after the last round | 69.8 ms | 62.3–78.7 |
+| With the file-jump harness change, `ROUNDS` 3 → 6 | 100.7 ms | 85.6–109.1 |
+| With the file-jump harness change, a frame added before the first scroll | 76.2 ms | 63.1–95.0 |
+| With the file-jump harness change, ending at the frame that first shows the diff | 53.8 ms | 47.4–85.7 |
 | The same, a frame added before the first scroll | 52.1 ms | 47.4–82.2 |
 
 So a regression inside `revealCard` that costs work — another round — moves the
@@ -933,11 +948,12 @@ frame that has something to draw costs about its work, and an added idle frame
 is visible to the gate. That the probe's frame went unresolved because it only
 carries work the page would have done anyway is an inference — the gate itself
 read +14.0 ms against the frame's own 14.5 — set out in **What a frame costs
-unpaced, and what the gate does not see**, below (DA-82.3). The hook also fails the run when the diff has not mounted within ten
-frames, or when the store's current file after the jump is not the file jumped
-to. The resolution tables below, of DA-110 and DA-115, and the `jumps` step of
-the wall-per-step table measured the window before DA-82; since DA-82 that step
-read 181–324 ms of wall time on the container.
+unpaced, and what the gate does not see**, below. The hook also fails the run
+when the diff has not mounted within ten frames, or when the store's current
+file after the jump is not the file jumped to. Both resolution tables below,
+including their "Jumping to a file" rows, and the `jumps` step of the
+wall-per-step table measured the window before the file-jump harness change.
+After that change, the step read 181–324 ms of wall time on the container.
 
 **Switching review sessions** covers the whole wait — the press, the request,
 the read, the render — and fails the build like any other line. **It is the
@@ -962,13 +978,15 @@ of `docs/SPEC.md` section 6 is qualified with "after the server responds"; a row
 without that qualifier is measured from the moment the person acts, because that
 is when their wait starts.
 
-The session switch became measurable with DA-24. The fixture the generator
+The session switch became measurable when the header gained session switching.
+The fixture the generator
 writes carries one review session and switching needs two, so the harness makes
 the second itself, in `withServer`: a session with the same base, the first
 one's change set copied into its `diff.json` — the same base is the same answer,
 and the copy is what the CLI reads there — and forty comments of its own, so
-the swap really is a different set of threads. **Since DA-69 that is what every
-repetition measures**: the scratch session is called `perf-scratch`, is built
+the swap really is a different set of threads. **With fixture validation that
+is what every repetition measures**: the scratch session is called
+`perf-scratch`, is built
 after the current session's change set exists rather than before, and is rebuilt
 when it does not hold those forty comments — before that fix the first
 repetition on a freshly generated fixture switched to a session with none, and
@@ -976,17 +994,21 @@ the line said `ok` about an empty rail. **The copy no longer spares the run a
 scan.** The server trusts `diff.json` only for the session the watcher follows
 ([07-server.md](07-server.md)), and that is never this one, so the first build
 of it reads the whole root from the working tree: that is the cold number above,
-and it is why the cold path is slower than the 513 ms DA-24.1 measured against
-the copied cache. A run switches to it and back once without measuring, to pay
-that build, then switches to it and back again and reports the slower of the
-two, which also leaves the fixture on the session it found it on. What is timed
-is the whole swap: from the press to the frame that shows the other review — the
-read of that review, which the page asks for as `?review=<name>` rather than by
-moving `current` ([ADR-010](../adr/adr-010-review-task-scope.md)), and the
-render. Only the first-render row of
-`docs/SPEC.md` section 6 is qualified with "after the server responds"; this one
-is not, and a session whose change set still has to be computed is part of what
-the reader waits for.
+and it is why the cold path is slower than the earlier 512.8 ms (about 513 ms)
+cold session switch against the copied cache. That reading was recorded in the
+task opened on 2026-09-05: three single-run processes on a quiet machine over a
+freshly generated synthetic review, measured from press to painted frame, with
+the first switch cold and the next two warm. The fixture, load and server path
+differ, so these figures are not a controlled comparison. A run switches to it
+and back once without measuring to pay that build, then switches to it and back
+again and reports the slower of the two, which also leaves the fixture on the
+session it found it on. What is timed is the whole swap: from the press to the
+frame that shows the other review — the read of that review, which the page
+asks for as `?review=<name>` rather than by moving `current`
+([ADR-010](../adr/adr-010-review-task-scope.md)), and the render. Only the
+first-render row of `docs/SPEC.md` section 6 is qualified with "after the
+server responds"; this one is not, and a session whose change set still has to
+be computed is part of what the reader waits for.
 
 **The CPU-per-frame ceiling is 9.5 ms, and 8.3 ms is the goal it is measured
 against.** The specification asks for 120 fps and a headless runner cannot
@@ -994,28 +1016,30 @@ measure frame rate, so the gate checks the two things it can: no long task at
 all, and CPU time per frame. One frame of 120 fps is 8.3 ms, and that is what
 `docs/SPEC.md` section 6 asks for.
 
-*How 9.5 was set, at 60 Hz, before DA-115.* On 2026-09-21 this machine measured
-8.5 to 9.1 ms over nine commits of the main branch, with no trend and no commit
-of that range responsible (DA-56.4). A budget no commit meets gates nothing, so
-the number the gate enforced was 9.5: about four percent over the worst reading
+*How 9.5 was set, at 60 Hz, before the unpaced harness change.* On 2026-09-21
+this machine measured 8.5 to 9.1 ms over nine commits of the main branch,
+with no trend and no commit of that range responsible. A budget no commit
+meets gates nothing, so the number the gate enforced was 9.5: about four
+percent over the worst reading
 taken where ADR-013's precondition lets the gate answer at all, which caught a
 regression of the size the line was written for — removing the sticky bar cost
 0.8 ms. 10.0 ms would have left ten percent and caught almost nothing; 9.2
 would have sat against the worst reading and brought back the flapping ADR-013
-exists against. The readings of this section from before DA-115 are all of
-that harness.
+exists against. The earlier readings in this section all use the paced harness.
 
-*What 9.5 means unpaced, since DA-115.* **The line's meaning changed, and a
-reading from before is not comparable with one from after.** The same code reads
-0.5 to 0.9 ms a frame lower unpaced, 0.6 at the median (**Where a run's time
-goes**, above). Taken this way on 2026-09-24, at one to two runnable tasks per
+*What 9.5 means unpaced, with the unpaced harness.* **The line's meaning
+changed, and a reading from before is not comparable with one from after.**
+The same code reads 0.5 to 0.9 ms a frame lower unpaced, 0.6 at the median
+(**Where a run's time goes**, above). Taken this way on 2026-09-24, at one to
+two runnable tasks per
 core, the final page read 8.0–8.4 ms in the repetitions of its gate run and
 8.0–8.2 as the median of each side of its comparisons: at the edge of the frame
 of 120 fps, with no room to spare. **The owner kept the ceiling at 9.5 that
 day**, over 8.8 and 8.5, the two numbers put to the owner with the readings
 below. Unpaced, 9.5 is about 13 % over the worst of those readings rather than
-the four percent it was set at, so **a regression of up to about 1 ms passes the local gate**: the sticky
-bar's 0.8 ms on 8.1 is 8.9, under 9.5. What the other ceilings would have done:
+the four percent it was set at, so **a regression of up to about 1 ms passes
+the local gate**: the sticky bar's 0.8 ms on 8.1 is 8.9, under 9.5. What the
+other ceilings would have done:
 over the day's 66 alternated repetitions of the final page, all at one to two
 and a half per core, a median of five drawn from them came out over 8.8 in none
 of 100 000 draws, over 8.5 in 2.4 % and over 8.3 in 5.3 %; the 60 Hz harness's
@@ -1025,16 +1049,18 @@ of 100 000 draws, over 8.5 in 2.4 % and over 8.3 in 5.3 %; the 60 Hz harness's
 to two per core all morning. Three gate runs of the harness's earlier shapes —
 the pulse still in the page, or stopped by reduced motion — read 7.3–7.6 ms, two
 of them at lower loads and one at a higher, against the final page's 8.0–8.4;
-what separates them is not known. Closing the gap to 8.3 is DA-56.5.
+what separates them is not known. Closing the gap to 8.3 ms remains open.
 
-The gate is the last of the eight `gates` of `backslop.json` — the eighth — so it runs before any task is
-reported, and it is the `perf` job of `.github/workflows/ci.yml`, which
+The gate is the last of the eight `gates` of `backslop.json` — the eighth — so
+it runs before any task is reported, and it is the `perf` job of
+`.github/workflows/ci.yml`, which
 installs Chromium, generates the fixture, and runs the gate — the gate builds
 the UI itself, so the job does not; the table lands in the run summary through
 `GITHUB_STEP_SUMMARY`. One local run takes about 45 seconds on
 an M1 Pro — five repetitions of about 9 s each and the UI build — plus about
-6 seconds when the fixture has to be generated first; it took about 67 before
-DA-115 let the frames run unpaced. Where those seconds go is the next section.
+6 seconds when the fixture has to be generated first; it took about 67 seconds
+before the 2026-09-24 harness change let the frames run unpaced. Where those
+seconds go is the next section.
 
 ### Where a run's time goes
 
@@ -1043,7 +1069,7 @@ step, ms: start 212, server 466, …` — with the wall time of each step of tha
 process, the first counted from the process's own start; the gate prints the
 build's time, each repetition's wall time in its `run k/n` line, and its own at
 the end, `the gate took <n> s`. The steps, in the order a repetition takes them,
-before and after DA-115 took the frame-rate limit off:
+before and after the 2026-09-24 change took the frame-rate limit off:
 
 | Step | What it is | Wall, 60 Hz frames | Wall, unpaced frames |
 |---|---|---|---|
@@ -1073,12 +1099,12 @@ regenerates the fixture takes about 6 s more.
 `requestAnimationFrame` at the 60 Hz a headless page is given, 16.7 ms a frame
 whatever the frame costs. Everything the harness sets up per process — `start`,
 `server`, `sessions`, `launch`, `page`, the two closes — comes to about 0.8 s a
-repetition, 4 s a run, and the build to 0.4 s, so the other two candidates of
-DA-115 — one process for all five repetitions, which DA-82.2 found Bun breaks,
-and skipping a build that is already current — would save a few seconds between
-them, and neither was taken.
+repetition, 4 s a run, and the build to 0.4 s. Two other ways to cut the run —
+one process for all five repetitions, which the second-browser investigation
+found Bun breaks, and skipping a build that is already current — would save a
+few seconds between them, and neither was taken.
 
-**What was cut: the 60 Hz tick** (DA-115, the owner's decision of 2026-09-24).
+**What was cut: the 60 Hz tick** (the owner's decision of 2026-09-24).
 Chromium is launched with `--disable-frame-rate-limit`: the scroll is the same
 600 frames of the same step over the same review, and a frame starts when the
 one before it is done, so the pass takes what its frames cost, about 5 s, and
@@ -1086,19 +1112,21 @@ the gate about 45 s instead of about 66. Fewer frames or a longer step would
 have cut the same seconds and changed what a frame is; this changes only when
 the next one starts. What it changes in the numbers, measured:
 
-- **CPU per frame reads lower, and a reading from before DA-115 is not
-  comparable with one from after.** The same code, alternated with the 60 Hz
-  harness under one hold, read 0.5 to 0.9 ms a frame less in each of the six
-  comparisons of the day the load let answer — the flag alone, the flag with
-  reduced motion, and the final page, two runs each — 0.6 at the median; past
-  what the run resolves in one of the final page's two, at the edge of it in
-  the other. Where the difference goes is not measured; that the harness
+- **CPU per frame reads lower, and a reading from before the unpaced harness
+  change is not comparable with one from after.** The same code, alternated
+  with the 60 Hz harness under one hold, read 0.5 to 0.9 ms a frame less in
+  each of the six comparisons of the day the load let answer — the flag alone,
+  the flag with reduced motion, and the final page, two runs each — with a
+  median difference of 0.6 ms. That difference is past what one of the final
+  page's two runs resolves and at the edge of the other. Where the difference
+  goes is not measured; that the harness
   at 60 Hz charged each frame for work that is paid per second rather than per
-  frame is a hypothesis, and it is DA-56.5's to test. The ceiling did not
+  frame is a hypothesis, and testing it remains open. The ceiling did not
   move with it, by the owner's decision, and what 9.5 means now is **The
   CPU-per-frame ceiling**, below.
-- **The other six lines did not move there, and the session switch moved later.** `bun perf/compare.ts` between this
-  tree and `21cf286`, nine a side, twice, 08:42–08:56 UTC at one-minute loads of
+- **The other six lines did not move there, and the session switch moved
+  later.** `bun perf/compare.ts` between this tree and `21cf286`, nine a side,
+  twice, 08:42–08:56 UTC at one-minute loads of
   1.1–2.4 per core: first render, the long-task count, the composer, the file
   jump, the session switch and the update after an edit came out `no difference`
   in both runs. A third run, 08:33–08:37, declined: another session's work put
@@ -1107,7 +1135,8 @@ the next one starts. What it changes in the numbers, measured:
   was above zero in 10 of 71 repetitions against 19 of 54 at 60 Hz, which no
   single comparison resolves. Three later runs against `cd3debe` put the
   session switch 23–31 ms higher unpaced, one of them past its resolution:
-  **Switching sessions swings with the machine unpaced**, below, and DA-115.3.
+  **Switching sessions swings with the machine unpaced**, below; the variance
+  remains unresolved.
 - **The page is measured as it ships, and has no endless animation to measure.**
   The live dot's pulse, `dcpulse`, ran for as long as the stream was up, and
   without the frame-rate limit Chromium composited it without pause: the page
@@ -1146,8 +1175,9 @@ still spaces such frames about 17.7 ms apart, a little slower than 60 Hz. Why it
 does is not measured. An added idle frame is therefore visible to the unpaced
 gate, at about the price the reader pays for it.
 
-The frame DA-82 probed is an `await afterPaint()` before the first
-`scrollIntoView` of `revealCard`, and it is not idle: it comes after
+The pre-scroll frame the file-jump investigation probed is an
+`await afterPaint()` before the first `scrollIntoView` of `revealCard`, and it
+is not idle: it comes after
 `revealFile`'s store write, whose render has the tree's selection to paint. A
 timer around it inside the page read 9.0–27.9 ms, 14.5 at the median over 15
 jumps — above every painted frame of the first table, and a range that takes in
@@ -1171,8 +1201,9 @@ readings, not a measurement. Both of the gate's medians are over the 50 ms
 budget on that container, whose untouched base is red on six lines, so the
 gate's own verdict could not change there. Two of the 34 probed processes failed
 instead. The 34 are the 15 of the frame counts — ten unpaced, of them five with
-the timer inside the page, and five at 60 Hz, the probe's share of DA-82.4's 25
-— the gate's five, and fourteen of `perf/compare.ts`'s branch side: five in a
+the timer inside the page, and five at 60 Hz, the probe's share of the 25 runs
+of the frame-count probe — the gate's five, and fourteen of
+`perf/compare.ts`'s branch side: five in a
 first comparison and nine in the one in the table. The first comparison stopped
 on its fifth branch repetition, on the hook's own check that the jump leaves the
 file current; one unpaced frame-count process, of the five without the timer,
@@ -1190,10 +1221,10 @@ property of this probe, not a verdict of the gate.
 - on the reader's 60 Hz display every added frame costs up to one 16.7 ms tick,
   whichever kind it is.
 
-**The second kind stays outside the gate's `ms` lines until DA-82.4 is decided.**
-The frame-rate limit is off so the scroll takes what its frames cost, DA-115's
-decision, and the price is that the other lines charge an added frame its work
-rather than the reader's tick. Counting the frames a line spans would see it: a
+**The second kind stays outside the gate's `ms` lines until the frame-count
+budget is decided.** The frame-rate limit is off, so the scroll takes what its
+frames cost; the other lines charge an added frame its work rather than the
+reader's tick. Counting the frames a line spans would see it: a
 `requestAnimationFrame` counter installed from the harness side read 3 frames
 for every jump on the page as it ships, 4 with the probe, and 1 for every
 composer opening in the runs above. But the
@@ -1201,18 +1232,20 @@ count is only a measure where the window is the page's own work: the session
 switch read 6 to 62 frames, since the counter keeps frames coming while the
 page waits for the server, and the update and the first render wait the same
 way. A ceiling on the jump's and the composer's frames is a new row of the
-budget table, and whether the gate gets one is the owner's call, DA-82.4. Until
+budget table, and whether the gate gets one is the owner's call. Until
 then a change that adds a frame to a measured path is read by the frames it
 adds as well as by the gate.
 
 ### What the gate resolves, and comparing two trees
 
 A verdict against a budget and a comparison of two trees are different
-questions, and until DA-110 the gate was used for both without anybody knowing
+questions, and before the variance investigation the gate was used for both
+without anybody knowing
 what it could see. This is what it can see, measured.
 
-**The measurement, before DA-115, at 60 Hz.** Two worktrees of one commit, `f9cda1b`, so every difference
-between them is the machine's; one hold of `/tmp/da-perf.lock` from 05:11 to
+**The measurement, before the unpaced harness change, at 60 Hz.** Two
+worktrees of one commit, `f9cda1b`, so every difference between them is the
+machine's; one hold of `/tmp/da-perf.lock` from 05:11 to
 05:30 UTC on 2026-09-24, an 8-core M1 Pro (six performance cores, two
 efficiency), one-minute averages 3.5–10.6 and five-minute ones 5.5–8.2 across
 the hold, read every five seconds, with swap 16.9 of 18.4 GB used. First the gate itself, `bun run perf -- --runs 5`, eight times, the two
@@ -1223,7 +1256,7 @@ seventy-two samples; the resolution is the difference of medians that two sides
 drawn from that pool exceed once in a hundred draws, at the number of samples a
 side named.
 
-| Line | Median | One process, lowest–highest | The gate's median of its first three, eight runs | Resolves, 3 a side: the gate before DA-110 | Resolves, 5 a side: one gate run against another | Resolves, 9 a side: the comparison |
+| Line | Median | One process, lowest–highest | The gate's median of its first three, eight runs | Resolves, 3 a side: the gate before the variance investigation | Resolves, 5 a side: one gate run against another | Resolves, 9 a side: the comparison |
 |---|---|---|---|---|---|---|
 | First render | 104.8 ms | 84.9–150.0 | 100.6–109.9 | 42.6 ms (41 %) | 37.8 ms | 7.4 ms (7 %) |
 | Scrolling: long tasks | 0 | 0–0 | 0 every run | — | — | — |
@@ -1240,20 +1273,20 @@ two single runs is not a difference; the last column is what the comparison
 below resolves at its default. **The long-task count has no resolution in milliseconds
 and needs none.** Identical code read 0 in 79 of 80 samples of the window —
 one repetition of one gate run read 2 — and the median was 0 in every run, so
-a median above zero is outside what the machine did here; what DA-69.1 says
-about the count on a busy machine stands.
+a median above zero is outside what the machine did here; the earlier
+observation that load changes the long-task count still stands.
 
-**Measured again unpaced, since DA-115.** Two worktrees of one tree — `6b99da6`
-with the frame-rate limit off, the tree DA-115 landed as — alternated
-twenty-four a side under one hold, 08:45–08:53 UTC on 2026-09-24, with the same
-tree's side of two comparisons against the 60 Hz harness and one run of its
-gate: seventy-one repetitions. The machine was not DA-110's quiet one: the
-busier of the one- and five-minute averages stood at 1.0 to 2.5 per core
-throughout, and a morning of other sessions' work never let it lower. So the
-table carries, beside it, the 60 Hz harness's fifty-four repetitions of the same
-morning (08:02–08:56, the base side of six comparisons), and it is the two
-columns side by side that say what the frame rate did to the resolution; the
-table above stays what a quiet machine resolves at 60 Hz.
+**Measured again with the unpaced harness.** Two worktrees of `6b99da6`, the
+commit that introduced the unpaced harness, alternated twenty-four a side
+under one hold, 08:45–08:53 UTC on 2026-09-24, with the same tree's side of
+two comparisons against the 60 Hz harness and one run of its gate: seventy-one
+repetitions. The machine was not in the quiet 05:11–05:30 UTC
+window of 2026-09-24: the busier of the one- and five-minute averages stood at
+1.0 to 2.5 per core throughout, and a morning of other sessions' work never
+let it lower. So the table carries, beside it, the 60 Hz harness's fifty-four
+repetitions of the same morning (08:02–08:56, the base side of six comparisons),
+and it is the two columns side by side that say what the frame rate did to the
+resolution; the table above stays what a quiet machine resolves at 60 Hz.
 
 | Line | Unpaced: median | lowest–highest | Resolves, 5 a side | Resolves, 9 a side | 60 Hz, same morning: 5 a side | 9 a side |
 |---|---|---|---|---|---|---|
@@ -1293,14 +1326,16 @@ load on 8 cores):
 | `cd3debe` | 09:47–09:50 | 80.9 → 103.8 ms, +22.9 ±24 | no difference | 7.0–9.2 / 10.2–12.3 |
 
 The 60 Hz side stayed at 80–85 ms in all five; the unpaced side, the same page
-and harness each time, read 79 to 111. By DA-110's rule one `worse` that a
-second run does not repeat is not a difference, and none was; but three runs in
-a row leaned the same way, with the unpaced median at the line's 100 ms budget.
+and harness each time, read 79 to 111. By the alternating-comparison rule one
+`worse` that a second run does not repeat is not a difference, and none was;
+but three runs in a row leaned the same way, with the unpaced median at the
+line's 100 ms budget.
 The gate went red on it once in the day's four unpaced runs: on `5bf8800` at
 2.4 runnable tasks per core its repetitions read 220.2, 128.7, 216.6, 100.6 and
 108.2 ms, median 128.7, and the rerun of the same tree read 86.2. **A red
-switch line in `bun run perf` is expected until DA-115.3 is done**, and is read
-with its five values and the load beside it, not as a regression by itself.
+switch line in `bun run perf` is expected until the session-switch variance is
+resolved**, and is read with its five values and the load beside it, not as a
+regression by itself.
 The lead, not a proven cause: the same tree with every animation and transition
 switched off after load, against itself as it ships, 09:51–09:54 UTC, read
 70.0 ms (65.8–74.9) against 79.2 (62.9–135.0), −9.2 ±9.2 — no difference by a
@@ -1310,8 +1345,9 @@ processor the second switch of the harness's pair needs. In that same window
 the tree as it ships read the 60 Hz level, 79.2, so the 23–31 ms is not a level
 of the tree: it comes and goes with the machine.
 
-**The two runs DA-110 was opened on were the machine.** On 2026-09-22 two runs
-of the gate on trees of identical executable content, `e3224ca` and `5e0ee24`,
+**The two runs that opened the variance investigation were the machine.** On
+2026-09-22 two runs of the gate on trees of identical executable content,
+`e3224ca` and `5e0ee24`,
 at one-minute averages of 7.52 and 8.82, disagreed by 18 % on the update line and
 25 % on the session switch, and one of them measured CPU per frame 10.3 ms. The
 same `5e0ee24`, alternated with `f9cda1b` in three runs of the gate each right
@@ -1323,7 +1359,8 @@ whatever that machine was doing, and the load average said about one per core
 both times. The same alternation shows one real difference between those two
 commits: first render 85.7–87.2 ms on `5e0ee24` against 104.7–106.5 on
 `f9cda1b`, three runs each, the ranges twenty milliseconds apart — the cost
-DA-37.5 suspects, still far inside the 500 ms budget.
+the browse-mode first-render investigation suspects, still far inside the
+500 ms budget.
 
 **Five repetitions, and no warm-up rule.** Over the pool, the median of three
 update samples on this commit comes out over the 300 ms budget in 7 % of draws,
@@ -1334,7 +1371,7 @@ its budget flaps on a quiet machine, for about 26 s more a run. Seven would
 cost 52 s for two more points. A trimmed statistic would
 change nothing the median does not already do with one slow repetition in five.
 The price beside the time: a line is `UNMEASURED` when any one of its samples
-cannot be trusted (DA-69), so five repetitions give such a line five chances
+cannot be trusted, so five repetitions give such a line five chances
 where three gave it three.
 The first repetition of a run was not warmer or slower as a rule: across the
 eight runs it was above the median of the other four in 4, 3, 2, 5, 4 and 5 of 8
@@ -1370,7 +1407,7 @@ nine zeros against nine ones split any way at random put one side's median at
 0 and the other's at 1, so a median there resolves nothing, where the mean
 tells the two apart. A line whose difference is inside that is `no difference`; past it,
 `worse` or `better`. A line with a sample the gate would not trust — absent, not
-finite, or an exact zero on a millisecond line (DA-69) — is `not measured` and
+finite, or an exact zero on a millisecond line — is `not measured` and
 not compared. It exits 1 when a line is worse or not measured, and it declines
 on load as the gate does — a comparison on a busy machine resolves less, and says so in
 its own last column before it would say anything wrong. Nine a side is the
@@ -1430,7 +1467,8 @@ add --detach <dir> <base>`, never a checkout that moves the branch's tree. Then:
 For a line of `bun run perf` "on its own" is not one more run of the gate, which
 cannot resolve a difference of the size in question, but `bun perf/compare.ts`
 against the base under one hold of `/tmp/da-perf.lock` — above — and never a
-single pair. The observation the rule grew from is DA-54.4's, on 2026-09-21:
+single pair. The observation the rule grew from is the UI-suite load
+observation on 2026-09-21:
 `e2e/live.spec.ts` › "an edit patches its own card, holds the reading position,
 and leaves the composer open" failed at `expect(settled).not.toBeNull()` on a
 branch at a load average of 23.16, and passed on that branch at 9.15 and on its
@@ -1442,7 +1480,7 @@ every run of `bun run perf`: red on the branch and red on the base the same way,
 so the gate cannot tell a branch's regression from the machine. A cloud session
 of Claude Code on the web is such a machine: on the 4-core container of
 2026-09-28 the base read 19 ms of CPU per frame and was over budget on five
-lines (DA-82). There, by the owner's decision of that day, the local evidence
+lines. There, by the owner's decision of that day, the local evidence
 for a branch is `bun perf/compare.ts` against the base, and a line it calls
 `worse` is the branch's; the verdict against the budgets is the `perf` job of
 the pull request's CI, with its runner allowance.
@@ -1492,9 +1530,10 @@ behind it simply never ran, and it prints green. So every wait in `tests/`,
 **A window the server has to see go away is closed with an abort.** Under Bun,
 cancelling a response body does not close the connection: the server keeps the
 stream subscribed and counts the window among the tasks the watcher follows.
-When DA-60.3 was filed the window was still counted 40 s later, past two
-heartbeats, where an abort of the request was gone in 52 ms on Bun and 54 ms on
-Node — which is what a closed tab does to its connection. So the stream helpers of the suites, `listen` in
+When the stream-close defect was measured the window was still counted 40 s
+later, past two heartbeats, where an abort of the request was gone in 52 ms on
+Bun and 54 ms on Node — which is what a closed tab does to its connection. So
+the stream helpers of the suites, `listen` in
 `tests/server.test.ts` and `read` in `tests/events.test.ts`, make the request
 themselves and abort it in `close()`, and a test cannot pick the cancel by
 accident. They hand the reader back once the response head is in, which is when
@@ -1513,7 +1552,7 @@ copied the file could copy the one before. The move tests of
 `tests/watcher.test.ts` copied the fixture's `diff.json` right after `arm()` had
 waited for the removal of its probe file, and when they ran alone the copy still
 listed `armed-0.ts` in the other repository, which the task's read then reported
-as moved (DA-55.9). They now write their tasks' cache from a scan of the tree
+as moved. They now write their tasks' cache from a scan of the tree
 itself, and wait on nothing.
 
 **A wait that runs out says afterwards whether its event was late or never
@@ -1523,7 +1562,7 @@ only the first is a question for the deadline. So `settle` in
 their 20 s, keep what they waited for when they give up, and the file reports
 each at its end: the first `diff-changed` naming the settle's own file, or the
 first frame of that name, and how long after the wait began it came — or that
-none did (DA-60.2). The verdict fails at the same moment it always did; the
+none did. The verdict fails at the same moment it always did; the
 report is the diagnosis the red lacked.
 
 That is how the red of "a comments.json that cannot be read › stops the comment
@@ -1563,8 +1602,9 @@ the only ceiling the mark has. It is 2.5 times the 300 ms `docs/SPEC.md`
 section 6 gives a live update, because a strict 300 on a loaded machine would
 fail on the machine rather than on the code. 2.5 was `RUNNER_ALLOWANCE` of
 `perf/budgets.ts` when the ceiling was set; the allowance has been 2.1 since
-DA-56.4 tuned it to the CPU-per-frame line ([the gate](#the-gate)), and the ceiling did
-not move with it — whether it should is DA-58.3. The perf gate does not measure
+the CPU-per-frame budget change tuned it to that line ([the gate](#the-gate)).
+The mark's ceiling did not move with it; whether it should move remains open.
+The perf gate does not measure
 the mark: `BUDGETS` has no line for it, and the nearest one, `updateMs`, times
 an edit in a repository reaching the card of that file — the `diff-changed`
 path, which shares nothing with this one but the stream itself. A line for it
@@ -1599,11 +1639,11 @@ A block is counted by its physical lines, from the first to the last:
 
 A trailing comment after code on the same line is not a block: the rule is about
 prose above the code. The ADR's own `awk` counted 720 blocks on 2026-09-11 and
-misses the JSX and the `#` forms; on the tree DA-58 started from, 2026-09-28, it
-counted 677 and the check 706 — the 29 are the twelve of `.github/`, the seven
-of `scripts/smoke.sh` and ten JSX comments —
-and DA-58 took that to 0 — the knowledge moved into the reference sections of
-the subsystems, and what is left above the code is a line of why and a pointer.
+misses the JSX and the `#` forms; on the baseline tree of 2026-09-28 it counted
+677 and the check 706 — the 29 are the twelve of `.github/`, the seven of
+`scripts/smoke.sh` and ten JSX comments — and the comment-length pass took that
+to 0. The knowledge moved into the reference sections of the subsystems, and
+what is left above the code is a line of why and a pointer.
 `tests/check-comments.test.ts` holds the counting; a three-line comment added
 anywhere under those roots is red in the gate.
 
@@ -1619,7 +1659,7 @@ full where its subject is:
 | `perf` | the budget table on the synthetic review | ubuntu | [the gate](#the-gate) |
 | `ui` | the Playwright UI suite, without the screenshot comparisons | ubuntu | [08-ui.md](08-ui.md#ui-tests) |
 | `smoke` | one review end to end through one delivery channel | ubuntu, macOS, Windows | [the job](#the-job) |
-| `e2e` | the acceptance list of specification section 10, against the binary | ubuntu, macOS, Windows (not required, DA-45.6) | [08-ui.md](08-ui.md#the-acceptance-suite) |
+| `e2e` | the acceptance list of specification section 10, against the binary | ubuntu, macOS, Windows (not required while the Windows acceptance cell is unverified) | [08-ui.md](08-ui.md#the-acceptance-suite) |
 
 `e2e` installs Chromium and runs `bun run test:e2e`, which is the one command a
 developer runs: building the binary of the runner and generating the fixture are
@@ -1634,7 +1674,7 @@ seconds, and the same criteria are checked in CI on two platforms rather than on
 whichever one the author happened to have. Run it before a change to the server,
 the CLI, or the scanner; the gates stay the fast ones.
 
-`bun run test:ui` **is** a gate and the `ui` job both, since DA-54.2. Its
+`bun run test:ui` **is** a gate and the `ui` job both. Its
 screenshot baselines were taken on macOS and are the only ones there are, so the
 two comparisons of `shell.spec.ts` declare the platform and skip anywhere else,
 saying so; the job runs the suite as the gate does, and everything else in it
@@ -1670,18 +1710,18 @@ none called `e2e`: a rule asking for those waits for a report that never comes,
 and every pull request sits at "Expected — waiting for status to be reported"
 instead. The Windows cells — `smoke node on windows-latest`, `smoke bun on
 windows-latest`, `smoke binary on windows-latest` and `acceptance on
-windows-latest` — are deliberately not in the list until DA-45 has run them and
-fixed what they find: the three smoke cells passed end to end for the first time
-on Velklish/diffalanche#12 (DA-45.5), which is not yet a record, and the
-acceptance cell is new with DA-45.6, so none is a gate ([the job](#the-job)). The `pull_request` trigger stays
+windows-latest` — are deliberately not in the list until Windows verification
+has run them and fixed what they find: the three smoke cells passed end to end
+for the first time on Velklish/diffalanche#12, which is not yet a record, and
+the acceptance cell is new in the Windows matrix, so none is a gate
+([the job](#the-job)). The `pull_request` trigger stays
 unfiltered — a pull request between two work branches is worth the same run, and
 what makes a check required is the rule, not the trigger.
 
 This table is the one copy of the list: `tests/ci-names.test.ts` reads both its
 columns and holds them against the names and the job ids `ci.yml` reports, and
 the paragraph above for the Windows cells, so a check renamed in the workflow and
-not here, or a row here the workflow does not report, is red in the unit suite
-(DA-58).
+not here, or a row here the workflow does not report, is red in the unit suite.
 
 ### Concurrency
 
@@ -1763,7 +1803,7 @@ The workflow does the rest, on the commit the tag names.
   downloader is told to look for. `dist/` is what `npm publish` packs and this
   job publishes from the same tree with no rebuild in between, so a manifest
   left in it shipped in the tarball, listing binaries the tarball does not
-  contain (DA-106). Writing it elsewhere makes that structural rather than a
+  contain. Writing it elsewhere makes that structural rather than a
   second exclusion in `files` to keep in sync. `sha256sum -c` resolves the
   manifest's paths against the current directory, so the binaries' lines are
   re-read from inside `dist/` and the assets' from their staging directory.

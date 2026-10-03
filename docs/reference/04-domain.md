@@ -58,7 +58,7 @@ switching to a session does not change it. `setBase` writes the new base and
 bumps `updatedAt`, as does every comment write
 ([03-storage.md](03-storage.md#read-modify-write)).
 
-`deleteSession` removes the session's directory and everything in it (DA-40).
+`deleteSession` removes the session's directory and everything in it.
 It asks what `closeSession` asks, in the same order: a name that is not a
 session is `no-such-session` before a role that is not `human` is
 `role-not-human`, and both write nothing. Deleting is a human's gesture for the
@@ -209,7 +209,7 @@ a file on screen under a name the scope has not, and then every reader of the
 comments — `list`, `show`, `export` — would have to resolve the rename again,
 from a change set that stops carrying it the moment the rename is committed.
 That the scope does *not* follow a rename is a decision, taken by the owner on
-2026-09-18 (DA-53.2): a scope is a literal list of paths that only a person or an
+2026-09-18: a scope is a literal list of paths that only a person or an
 agent changes, and a task's definition does not move under its reader.
 `review scope add` or `review scope set` is how a task takes the new name.
 
@@ -221,7 +221,7 @@ They read `review.json` for the scope, one small file per call. `list` and `get`
 read it before anything else, which is what a read is; `reply`, `resolve` and
 `reopen` take it from the same `updateSession` draft they write through, inside
 the session's lock, so a scope widened while they waited for the lock finds the
-thread instead of refusing it (DA-67.1, [03-storage.md](03-storage.md)).
+thread instead of refusing it ([03-storage.md](03-storage.md)).
 
 That "nothing writes such a comment" is held by where `addComment` checks the
 scope, and it takes two checks to hold it. **Both refuse with `out-of-scope`,
@@ -428,7 +428,7 @@ an unexplained reason is worse than one with a message.
 
 ### Who chose the severity
 
-A comment carries `severitySource` beside its `severity` (DA-36, `docs/SPEC.md`
+A comment carries `severitySource` beside its `severity` (`docs/SPEC.md`
 section 7). `addComment` takes it as `auto` or `manual`, and without it stores
 `manual`: the CLI's `comment` never passes it — an agent that names a severity
 chose it — and the composer passes `auto` when the reviewer left the choice to

@@ -326,7 +326,7 @@ already has it and finds nothing new. When the edit brought the repository back
 to what the replaced `diff.json` said — a revert of a change made while nobody
 followed the task — the read found no difference either, and a document another
 task held, showing the repository as it was before the revert, heard of it from
-nothing. DA-55.7 reproduced that: `tests/server.test.ts`, "drops another task's
+nothing. `tests/server.test.ts` reproduced that: "drops another task's
 document when a move's read absorbed an edit back to the old cache", reverts the
 edit from inside the read and waited 20 s for the document of the task `current`
 left to drop it. So **the first rescan of each repository after a move reports
@@ -386,7 +386,7 @@ while the move's read runs starts a build of a task that is not followed yet, an
 a rescan that lands after the move and before the build resolves hands its change
 set to `adopt` and signals nothing, since `repositoryChanged` passes the followed
 session over. A build judged by its start alone was then kept without that
-rescan, until the next one patched it (DA-55.7, "takes the rescan of a task that
+rescan, until the next one patched it ("takes the rescan of a task that
 became the followed one while its build ran").
 
 ### Keeping a held document honest
@@ -422,7 +422,7 @@ follows and no others ([05-watcher.md](05-watcher.md)). So a terminal's
 `review comment`, `reply` or `resolve`, or a base or scope change, into a task
 with no window reached no event, and the next window that opened it by
 `?review=` — or the window on the pointer, once `current` moved to it — was
-served the document from before. DA-55.7 reproduced both halves in
+served the document from before. The regression test reproduced both halves in
 `tests/server.test.ts`, "a held document of a task nobody follows": the comment
 was not in the document, and a scope set from a terminal left the old session
 in it.
@@ -562,7 +562,8 @@ watcher rescans is answered from the document like one with no name. The
 comparison is with the watcher's session and not with `current` on disk: a task
 `current` has just moved to is followed only once its read is done (above), and
 until then it is still answered from git. Reading git for it anyway was the step
-in the update budget that DA-55 introduced and DA-56.6 took back: on the 4-core
+in the update budget introduced by the scope editor and removed by reusing the
+followed session's held document: on the 4-core
 container of 2026-09-29, nine a side, `1079222` against `4be4936` was +81 ms at
 the median, and the same commit with only this condition added came out −77 ms
 against itself and not different from `4be4936` (+20 ms against ±37)
@@ -585,9 +586,10 @@ stream calls on every event, and the route is on the live path. What a path
 check lets through is a path inside the root that is not a repository, which the
 route already answers: no base resolves, no files come back, and that is the
 404 below. It compares paths and does not resolve symlinks, so a symlink inside
-the root that points out of it is still followed
-([DA-73](../archive/DA-73-untracked-files-are-read-through-symlinks/task.md)
-is the entry about reading through symlinks).
+the root that points out of it is still followed by this route. An untracked
+symbolic link inside that repository is reported as mode `120000`, with its
+target path read by `readlink`; the target's contents are never followed
+([02-git.md](02-git.md)).
 
 The refusal is the answer the route already gives — `404` with
 `error: "no-such-repository"` — rather than a code of its own: from outside, a
@@ -636,7 +638,7 @@ with.** The page asks for `GET /api/review?review=<name>` and opens its stream
 together on a first load, and opens the stream first on a switch of task; the
 watcher follows the task only from the first burst once the stream is open, and a
 comment or a scope written right then used to be that burst's baseline and
-reached no frame (DA-55.8, `tests/server.test.ts`, "a window that has just
+reached no frame (`tests/server.test.ts`, "a window that has just
 opened on it"). So `ReviewService` takes a `served` option, called with the
 session name and the document each time `payload` answers, before serialising
 it, and `serve.ts` hands it to `watcher.served` — the session and the comments in
@@ -990,7 +992,7 @@ either, which is why only a human ever resolves a thread through this server.
 
 `severitySource` is `auto` when the composer's `AUTO` chose `severity` from the
 suggestions' vote, and `manual` — also what its absence means — when the
-reviewer pressed a chip (DA-36, [08-ui.md](08-ui.md#commenting)). The server
+reviewer pressed a chip ([08-ui.md](08-ui.md#commenting)). The server
 takes the pair as sent and does not ask the model again: the vote was taken on
 the text being sent, in the page, a moment before. `confirmed:<author>` is a
 400 here — only a reply makes it, and the replies route takes none.
@@ -1009,7 +1011,8 @@ domain a source that reads it through the same `readFileAt` the file route
 uses. It is read at the moment the comment is written, not when the view was
 drawn: browse mode reads the file it shows again only once the live stream has
 changed its patch, and never a file the change set cannot see
-([DA-37.1](../archive/DA-37.1-browse-follow-ups/task.md)), so an edit made in
+(the browse-mode file refresh described in
+[08-ui.md](08-ui.md#browse-mode)), so an edit made in
 between anchors the comment to the line as it now is on disk. `base` is the
 string the CLI takes — `head`, `branch`, `branch:<name>`, or a ref — read by the
 domain's own parser, so the two interfaces have one grammar for it. A `note` on
@@ -1058,7 +1061,7 @@ of the four, an empty comment. What the *review* is wrong about is the domain's
 own refusal with its own code.
 
 `DELETE /api/sessions/:name` deletes as the configured user with `role: human`,
-the way `close` is signed (DA-40, [04-domain.md](04-domain.md)), and then
+the way `close` is signed ([04-domain.md](04-domain.md)), and then
 **forgets** the task: `forget` drops the document the server held for it, its
 serialised payload, and the change set a rescan handed over, where `invalidate`
 keeps the entry and only drops the document. A held document of a deleted task

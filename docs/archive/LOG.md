@@ -6,3 +6,4 @@ An `—` outcome means that `result.md` did not name one. An `—` commit means 
 
 - <a id="da-119"></a>`DA-119-backslop-020-base` · 2026-10-03 · completed · — · backslop v0.20.0: pin, hooks for claude, and the layout errors outside documentation
 - <a id="da-121"></a>`DA-121-backslop-020-adr-changelog` · 2026-10-03 · completed · — · ADRs and the unreleased CHANGELOG state their facts without task numbers
+- <a id="da-120"></a>`DA-120-backslop-020-docs` · 2026-10-03 · completed · — · Documentation states its facts without task numbers: README, reference, design, spec, glossary

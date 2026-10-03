@@ -164,7 +164,7 @@ Only `dataDir` is read from that file — the settings below stay in
 
 ## The embedding model
 
-Suggestions — `suggest`, and the composer from DA-36 — come from a multilingual
+Suggestions — `suggest`, and the comment composer — come from a multilingual
 embedding model that runs on your machine and needs nothing online once it is
 there: `multilingual-e5-small` in int8, pinned to one revision, with the ONNX
 Runtime that runs it. Both live in the user cache, shared by every root:
@@ -341,7 +341,7 @@ cp -R /path/to/diffalanche/skills/diffalanche-apply  .claude/skills/
 cp -R /path/to/diffalanche/skills/diffalanche-review .claude/skills/
 ```
 
-From the first release on (DA-31; the package is not on npm yet), `npm install
+From the first release onward (the package is not on npm yet), `npm install
 diffalanche` puts them under `node_modules/diffalanche/skills/`, and `npm
 install -g` under `$(npm root -g)/diffalanche/skills/`. Bare `npx diffalanche`
 never gives you a path to copy from: it runs the CLI out of a cache directory
@@ -626,9 +626,9 @@ What stays red in such a container, on the base as well:
   settles.
 
 Two reds the container used to add are gone: the unreadable-`reviews/` test of
-`tests/watcher.test.ts` no longer relies on a mode root ignores (DA-117.1), and
+`tests/watcher.test.ts` no longer relies on a mode root ignores, and
 the two tests of `e2e/history.spec.ts` that failed there were the container's
-Bun 1.3.11, which the hook now replaces with CI's (DA-116).
+Bun 1.3.11, which the hook now replaces with CI's.
 
 ## Releases
 

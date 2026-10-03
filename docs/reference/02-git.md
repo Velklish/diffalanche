@@ -14,8 +14,8 @@ Neither the repository it reads nor the environment it was started in
   `src/core/git/run.ts` copies `process.env` without a single `GIT_*` key and
   puts back `GIT_CONFIG_GLOBAL` and `GIT_CONFIG_SYSTEM` at the null device,
   spelled `/dev/null` on every platform (`GIT_NULL`). Node's `os.devNull` is
-  `\\.\nul` on Windows, which git refuses with `unable to access '//./nul'`
-  (DA-45.1). Git for Windows reads `/dev/null` as `nul` rather than as a
+  `\\.\nul` on Windows, which git refuses with `unable to access '//./nul'`.
+  Git for Windows reads `/dev/null` as `nul` rather than as a
   `\dev\null` a local user could create on the drive: `scripts/check-git-null.ts`,
   a step of the Windows smoke job, plants a configuration file at `\dev\null` on
   the drive of the process and on the drive of git's `cwd`, and fails if the
@@ -142,8 +142,8 @@ through.
 
 `gitOrNull` is the other half. It exists for a command whose failure is an
 answer — an unresolved ref, a missing remote — and only a non-zero **exit** is
-such an answer. Before DA-66 it swallowed everything, so a git that could not be
-started came back as `null` and became
+such an answer. Previously it swallowed every failure, so a git that could not
+be started came back as `null` and became
 `HEAD does not resolve: no commits yet`: every repository under the root reported
 as having no commits, an empty review, and exit code 0. That warning now means
 only what it says.
@@ -208,7 +208,7 @@ one side only. That warning comes back from `parseDiff` beside the files — it
 returns `{ files, notes }` — and `readRepositoryChange` puts the notes into the
 repository's warnings. It is a return value rather than an array the caller
 passes in, so no caller can lose it by leaving an argument out: taking the files
-means reaching past the notes (DA-76.3). `parseDiff` is exported from
+means reaching past the notes. `parseDiff` is exported from
 `src/core/index.ts` but not from the package, which ships the CLI alone, so the
 change of its return has no caller outside this repository.
 
@@ -491,7 +491,7 @@ await refreshRepository(config, session, review.base, "repos/group/service-api",
   `SCAN_CONCURRENCY` is 8, and `scanReview` and the server's `summarise` and
   `candidatesOf` all go through it, so how many git processes a scan has in
   flight is decided by the code rather than by how many repositories the folder
-  happens to hold (DA-98). Eight because the curve flattens there — the
+  happens to hold. Eight because the curve flattens there — the
   synthetic review — its twenty-one repositories and the sibling worktree the
   walk counts beside them, twenty-two reads — medians of three runs:
 
@@ -528,7 +528,7 @@ await refreshRepository(config, session, review.base, "repos/group/service-api",
 `diff.json`**, and both writers that patch go through it: `refreshRepository`
 above, before a line comment captures its anchor, and the watcher's rescan after
 an edit ([05-watcher.md](05-watcher.md)). It used to be written twice, and the
-two copies had drifted: the CLI's dropped a warning the watcher's kept (DA-80).
+two copies had drifted: the CLI's dropped a warning the watcher's kept.
 
 - **The entry is replaced.** The repository's old entry goes and the fresh read
   takes its place; a read with no files leaves the repository out, the way a
@@ -634,7 +634,7 @@ search.
 
 ## What the unit tests hold
 
-`tests/scope-scan.test.ts` (DA-53) holds the scan of a scoped task to its scope,
+`tests/scope-scan.test.ts` holds the scan of a scoped task to its scope,
 and measures it in git processes rather than in seconds: a task over two of the
 synthetic review's twenty-one repositories starts no git process in the other
 nineteen. Wall-clock time would say the same thing on a fast machine and

@@ -59,4 +59,4 @@ The “Term” column gives the spelling for prose; EN is the name in code and E
 | filter, filtered review | scope, review task | A scope is what the task is, not a view over a larger review: calling it a filter implies a whole review underneath that the screen is hiding, and there is none |
 | session file | review session directory | Since ADR-003 a session is a directory with three files, not one file |
 | MR, merge request | review session | diffalanche has no server-side merge requests; “merge-request-style” describes the look only |
-| review bundle | review document | One response, one name; the code calls it `review.document()`. The spelling survives in the title of the archived DA-16 |
+| review bundle | review document | One response, one name; the code calls it `review.document()`. The older spelling also appears in the archived HTTP server task title |

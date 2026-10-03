@@ -24,7 +24,7 @@ Some properties of the source are held by the unit suite, because neither Biome 
 
 ### Every export has an importer
 
-`tests/exports.test.ts` (DA-59). `noUnusedLocals` does not look at an exported symbol, so an `export` nothing consumes is how an unused symbol escapes `bun run typecheck`, and Biome 2.5 has no rule that sees it. The test reads every TypeScript file git would commit — tracked, or untracked and not ignored, declaration files aside — and fails on each export no other file imports. What counts as a use:
+`tests/exports.test.ts`. `noUnusedLocals` does not look at an exported symbol, so an `export` nothing consumes is how an unused symbol escapes `bun run typecheck`, and Biome 2.5 has no rule that sees it. The test reads every TypeScript file git would commit — tracked, or untracked and not ignored, declaration files aside — and fails on each export no other file imports. What counts as a use:
 
 - a named import, of a value or a type;
 - a re-export, by name, by `export *` or as `export * as ns`, which uses its source;
@@ -41,7 +41,7 @@ The check runs inside `bun run test`, which is already in `gates` in `backslop.j
 
 ### The frame tables mirror `WatcherEvent`
 
-`tests/frame-tables.test.ts` (DA-109). `WatcherEvent` in `src/core/watcher/bus.ts` is the wire shape of the live stream as well as the bus's own, and three tables enumerate it: the events in [05-watcher.md](05-watcher.md), the frames of the stream in [07-server.md](07-server.md), and what the page does with each in [08-ui.md](08-ui.md). Each sits under an HTML comment naming the union and what the table prints:
+`tests/frame-tables.test.ts`. `WatcherEvent` in `src/core/watcher/bus.ts` is the wire shape of the live stream as well as the bus's own, and three tables enumerate it: the events in [05-watcher.md](05-watcher.md), the frames of the stream in [07-server.md](07-server.md), and what the page does with each in [08-ui.md](08-ui.md). Each sits under an HTML comment naming the union and what the table prints:
 
 ```md
 <!-- frames of WatcherEvent, fields without type — checked by tests/frame-tables.test.ts -->

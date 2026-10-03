@@ -1,6 +1,6 @@
 # diffalanche — product specification
 
-Status: approved requirements, amended alongside the code that implements them. Phase 1 shipped as v0.1.0 on 2026-09-05; its findings are closed from the backlog; Phase 2 has started (DA-33). Owner: Velklish. License: MIT.
+Status: approved requirements, amended alongside the code that implements them. Phase 1 shipped as v0.1.0 on 2026-09-05; its findings are closed from the backlog; Phase 2 has started. Owner: Velklish. License: MIT.
 
 ## 1. Purpose
 
@@ -126,7 +126,7 @@ Synthetic review used for measurement: 21 repositories, 300 files, 30,000 diff l
 
 Nothing loads lazily while the user works: everything needed arrives when the review opens. A performance test on the synthetic review runs in CI and fails the build on regression. A headless runner cannot measure frame rate, so CI checks the CPU budget per frame and long tasks; 120 fps is verified by hand on a 120 Hz display at each phase checkpoint.
 
-**120 fps is the goal, and the gate is set on what the machine reaches.** The frame of 120 fps is 8.3 ms of CPU per frame. Since DA-115 the frames of the measured scroll are not paced by a 60 Hz tick — each starts when the one before it is done — and CPU per frame is taken that way, so a number taken before DA-115 is not comparable with one taken after: the same code read 0.5–0.9 ms a frame more at 60 Hz, 0.6 at the median, in every paired comparison of 2026-09-24. Taken this way on the development machine (Apple M1 Pro) at one to two runnable tasks per core, the scroll costs 8.0–8.4 ms a frame: at the edge of the frame of 120 fps, with no room to spare. The gate enforces 9.5 ms, kept by the owner's decision of 2026-09-24. Unpaced, that is about 13 % over the worst reading of the day rather than the 4 % it was set at, so a regression of up to about 1 ms passes the local gate — 0.8 ms on 8.1 is 8.9, under 9.5. 8.3 ms stays the target of this table, and closing the gap is its own work (DA-56.5). Where the numbers came from, and how they are re-measured, is in [11-perf.md](reference/11-perf.md).
+**120 fps is the goal, and the gate is set on what the machine reaches.** The frame of 120 fps is 8.3 ms of CPU per frame. In the unpaced harness measured on 2026-09-24, the frames of the measured scroll are not paced by a 60 Hz tick — each starts when the one before it is done — and CPU per frame is taken that way, so a number taken with 60 Hz pacing is not comparable with one taken unpaced: the same code read 0.5–0.9 ms a frame more at 60 Hz, 0.6 at the median, in every paired comparison of 2026-09-24. Taken this way on the development machine (Apple M1 Pro) at one to two runnable tasks per core, the scroll costs 8.0–8.4 ms a frame: at the edge of the frame of 120 fps, with no room to spare. The gate enforces 9.5 ms, kept by the owner's decision of 2026-09-24. Unpaced, that is about 13 % over the worst reading of the day rather than the 4 % it was set at, so a regression of up to about 1 ms passes the local gate — 0.8 ms on 8.1 is 8.9, under 9.5. 8.3 ms stays the target of this table, and closing the gap is its own work. Where the numbers came from, and how they are re-measured, is in [11-perf.md](reference/11-perf.md).
 
 ## 7. On-disk format
 

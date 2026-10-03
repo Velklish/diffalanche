@@ -52,7 +52,7 @@ their writes interleave without losing a message.
 `diffalanche-apply` also says when a reply confirms a severity: on a comment
 whose `severitySource` is `auto` — the tool chose the severity — and only when the
 agent agrees with it, `reply --confirm-severity` turns the thread's `auto` into
-`labelled by <author>` (DA-36, [04-domain.md](04-domain.md)). The CLI refuses the
+`labelled by <author>` ([04-domain.md](04-domain.md)). The CLI refuses the
 flag anywhere else, so the rule the skill states is also the one the domain holds.
 
 ## How they are shipped
@@ -67,7 +67,7 @@ into `dist` and let `scripts/build.ts` rewrite paths and version strings into
 them; nothing in the text needs rewriting today, and a build step between the
 file a contributor edits and the file an agent reads is a way for the two to
 disagree. If a later release does need a version string in a skill, that build
-step is the change to make, and the release pipeline (DA-31) owns it.
+step is the change to make, and the release pipeline owns it.
 
 ```
 $ npm pack --dry-run
