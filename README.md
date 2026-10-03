@@ -582,6 +582,14 @@ one runs:
 - `backslop init`, which writes the gitignored adapter files `backslop lint`
   checks for.
 
+The backslop `SessionStart` hook is separate from this setup hook. Claude Code
+runs matching hooks [in parallel](https://code.claude.com/docs/en/hooks#hook-handler-fields),
+so on a fresh container it may run before `bun install --frozen-lockfile`
+creates `node_modules`. Both backslop hooks need that local package; before the
+install finishes, `npx --no-install backslop` can report npm E404. If the first
+start hook fails, Stop has no start record and compares from HEAD at stop time,
+which can leave commits made during that session outside its lint scope.
+
 The environment's network access must let the two downloads through: add
 `huggingface.co` and the hosts it redirects a file to — `cdn-lfs.huggingface.co`
 and `cas-bridge.xethub.hf.co` when this was written, not observed from a session
@@ -626,6 +634,10 @@ Bun 1.3.11, which the hook now replaces with CI's (DA-116).
 
 A release is one annotated tag, `v0.1.0`, on `main`. The tag is made locally and
 pushed by hand; the push is the only thing that publishes anything.
+
+Before the release commit, run the `backslop-writer` skill in release mode over
+the diff since the previous tag. Include its documentation fixes in that
+commit, then run the release preflight on the clean tree.
 
 ```sh
 bun run release 0.1.0             # every check, then the tag
@@ -699,8 +711,13 @@ missing from the release page too.
 | [CHANGELOG.md](CHANGELOG.md) | What changed, per release |
 
 Tasks and decisions are tracked with [backslop](https://github.com/Velklish/backslop):
-`npx github:Velklish/backslop#v0.9.0 status` prints the queue, the active work,
+`npx --no-install backslop status` prints the queue, the active work,
 and the triage. The rules for working in this repository are in
 [AGENTS.md](AGENTS.md).
+
+To update backslop, first change the tag in `devDependencies.backslop`, then run
+`bun install` to update `bun.lock`, `npx --no-install backslop upgrade`, and the
+project gates. The local CLI does not move its own package pin: `upgrade`
+refuses until the installed binary is the target version.
 
 License: MIT.

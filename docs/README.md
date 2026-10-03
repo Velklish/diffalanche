@@ -1,6 +1,6 @@
 # diffalanche documentation
 
-The canonical project documentation. For current work, use `npx github:Velklish/backslop#v0.9.0 status`; for project direction, see [ROADMAP.md](ROADMAP.md); for why the system is arranged this way, see the ADRs in the table below.
+The canonical project documentation. For current work, use `npx --no-install backslop status`; for project direction, see [ROADMAP.md](ROADMAP.md); for why the system is arranged this way, see the ADRs in the table below.
 
 | Document | Topic | Status |
 |---|---|---|
@@ -9,8 +9,8 @@ The canonical project documentation. For current work, use `npx github:Velklish/
 | [reference/](reference/README.md) | Subsystem reference: how the current code works | Living |
 | [GLOSSARY.md](GLOSSARY.md) | Normative terminology: one concept, one name | Living |
 | [ROADMAP.md](ROADMAP.md) | Direction and goals; tasks are in the backlog | Living |
-| [backlog/](backlog/README.md) | Task tracker: one file per task, status is the directory, summary is `npx github:Velklish/backslop#v0.9.0 status` | Living |
-| [archive/](archive/README.md) | Closed tasks: task definition and result in separate files | Living |
+| [backlog/](backlog/README.md) | Task tracker: one file per task, status is the directory, summary is `npx --no-install backslop status` | Living |
+| [archive/](archive/README.md) | Closed tasks: the journal and unfolded task definitions and results | Living |
 | [adr/adr-001-process.md](adr/adr-001-process.md) | Tasks and decisions are managed with backslop | Accepted |
 | [adr/adr-002-stack-and-delivery.md](adr/adr-002-stack-and-delivery.md) | TypeScript on Bun, Node-neutral server, Hono, Vite + React, npm and binaries | Accepted |
 | [adr/adr-003-on-disk-format.md](adr/adr-003-on-disk-format.md) | A directory per review session, whole-file writes under a lock, diff cache | Accepted |
@@ -31,8 +31,8 @@ The canonical project documentation. For current work, use `npx github:Velklish/
 ## Cross-cutting principles
 
 1. **An undocumented change is incomplete.** Update the reference, subsystem README, and CHANGELOG in the same pass as the code.
-2. **An accepted decision is not edited; it is superseded.** A new decision on the same question gets a new ADR; the replaced ADR retains a “superseded by ADR-NNN” note.
+2. **An ADR states the decision in force.** Rewrite it when the decision changes, remove one that governs nothing, and consolidate a chain on one question into its highest-numbered ADR.
 3. **Use only terms from the glossary.** If a required name is missing, propose it rather than silently inventing it.
 4. **Evidence is stronger than intuition.** Put a number, file path, or command output in task definitions, results, and ADRs; state unverified claims as hypotheses.
 
-Create a new ADR with `npx github:Velklish/backslop#v0.9.0 adr <slug>` **and add a row to the table above**: without the row, `npx github:Velklish/backslop#v0.9.0 lint` fails.
+Create a new ADR with `npx --no-install backslop adr <slug>` and add a row to the table above. `npx --no-install backslop lint` requires a link to the ADR from this file.

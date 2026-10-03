@@ -47,6 +47,7 @@
     "@types/react-dom": "^19.2.7",
     "@vitejs/plugin-react": "^6.1.1",
     "@vscode/tree-sitter-wasm": "^0.3.1",
+    "backslop": "github:Velklish/backslop#v0.20.0",
     "gitdiff-parser": "^0.3.1",
     "hono": "^4.13.7",
     "onnxruntime-node": "^1.30.0",

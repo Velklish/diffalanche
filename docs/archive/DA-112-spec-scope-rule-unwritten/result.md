@@ -1,6 +1,6 @@
 # DA-112 · Result
 
-**Closed 2026-09-22. Done.** `AGENTS.md` now states what section 5 of the spec may contain:
+**Closed 2026-09-22. Completed.** `AGENTS.md` now states what section 5 of the spec may contain:
 behaviour the user and the agent can reach, plus contracts — the on-disk format, the CLI, budgets
 as numbers — with components, module paths and descriptions of the current build going to the
 reference or to an ADR.

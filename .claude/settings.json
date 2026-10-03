@@ -9,6 +9,24 @@
             "timeout": 600
           }
         ]
+      },
+      {
+        "hooks": [
+          {
+            "type": "command",
+            "command": "npx --no-install backslop hook session-start --harness claude"
+          }
+        ]
+      }
+    ],
+    "Stop": [
+      {
+        "hooks": [
+          {
+            "type": "command",
+            "command": "npx --no-install backslop hook stop --harness claude"
+          }
+        ]
       }
     ]
   }

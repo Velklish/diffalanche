@@ -14,6 +14,7 @@
         "@types/react-dom": "^19.2.7",
         "@vitejs/plugin-react": "^6.1.1",
         "@vscode/tree-sitter-wasm": "^0.3.1",
+        "backslop": "github:Velklish/backslop#v0.20.0",
         "gitdiff-parser": "^0.3.1",
         "hono": "^4.13.7",
         "onnxruntime-node": "^1.30.0",
@@ -163,6 +164,8 @@
     "adm-zip": ["adm-zip@0.6.1", "", {}, "sha512-Xwrja8nx9e5o2N1my4DsKCeKpdrnACyr1wtbPxBDgGzKzKyE9kRtBFA8mWldI+RVlD7CBZNWY/wQ2+ydwOR6kQ=="],
 
     "assertion-error": ["assertion-error@2.0.1", "", {}, "sha512-Izi8RQcffqCeNVgFigKli1ssklIbpHnCYc6AknXGYoB6grJqyeby7jv12JUQgmTAnIDnbck1uxksT4dzN3PWBA=="],
+
+    "backslop": ["backslop@github:Velklish/backslop#f69500c", { "bin": { "backslop": "bin/backslop.js" } }, "Velklish-backslop-f69500c", "sha512-wiUCxDYOBFIzLha+EwOtGwMAXJgr4zvRoSuFIWeK/JNkP7ouWkaB48rtIfPOeG6kIabcNNEG/MxAxYMTeb9new=="],
 
     "chai": ["chai@6.2.2", "", {}, "sha512-NUPRluOfOiTKBKvWPtSD4PhFvWCqOi0BGStNWs57X9js7XGTprSmFoz5F0tWhR4WPjNeR9jXqdC7/UpSJTnlRg=="],
 

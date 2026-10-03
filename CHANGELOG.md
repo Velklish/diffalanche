@@ -355,6 +355,15 @@ and `bun run release` refuses a version that has no section. See
 
 ### Changed
 
+- **The local task tracker uses backslop v0.20.0.** Its project rules now cover
+  the closed-task journal and role guide. Claude sessions run the tracker's
+  session-start and stop hooks alongside the existing project setup hook. The
+  GitHub tag is pinned as a development dependency in the lockfile, and the
+  tracker commands use the installed CLI. Its repository URL is recorded for
+  future upgrades. The release instructions now call
+  for a `backslop-writer` pass over the changes since the previous tag before
+  the release commit.
+
 - **The Impeccable commands are its launcher's** (DA-117). In `skill-v4.3.1`
   the skill's `scripts/impeccable` runs one binary and the `node scripts/*.mjs`
   entry points are gone: `AGENTS.md` and README call `impeccable context`,

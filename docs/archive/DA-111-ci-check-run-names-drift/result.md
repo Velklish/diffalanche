@@ -1,6 +1,6 @@
 # DA-111 · Result
 
-**Closed 2026-09-22. Done.** `tests/ci-names.test.ts` expands the check-run names out of
+**Closed 2026-09-22. Completed.** `tests/ci-names.test.ts` expands the check-run names out of
 `.github/workflows/ci.yml` — `name:` when a job declares one, the job id otherwise, one name per
 matrix cell, with `${{ matrix.<key> }}` filled from the cell — and holds them against the list in
 the header comment in both directions. Both matrix forms in the file are handled: `include:`
