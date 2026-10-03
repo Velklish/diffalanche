@@ -15,6 +15,20 @@ and `bun run release` refuses a version that has no section. See
 
 ### Added
 
+- **`npm run probe`, the mutation probe**. `npm run probe -- <file> --mutate
+  's|<regexp>|<replacement>|[flags]' [--run <command>]` applies one
+  substitution to one file, runs the command that should turn red, puts the file
+  back from a copy taken before the mutation rather than from git, and runs the
+  command again. Red with the mutation and green without it is the only pass; a
+  check that stays green with the mutation in place is reported as not seeing
+  the file; a mutation that changes nothing and a dirty tree are refused before
+  the command runs, with the dirty paths named. Without `--run` a test file runs
+  itself with `bun run test`, its name passed as one argument and never through
+  a shell. The file is put back after each of the two runs, and a stop by
+  `SIGINT`, `SIGTERM` or `SIGHUP` in either run kills the command's whole
+  process group before it is. `backslop.json` declares it as `probe`, so `init`
+  writes the command into the agent rules (README, "Development").
+
 - **A cloud session sets itself up**. `.claude/hooks/session-start.sh`,
   registered in `.claude/settings.json`, runs only in Claude Code on the web: the
   Bun the pinned CI jobs run, `bun install --frozen-lockfile`, the Playwright

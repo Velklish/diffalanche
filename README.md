@@ -388,6 +388,7 @@ bun run build      # both delivery channels: dist/cli.js and six binaries
 bun run build -- --target current   # one binary, for this machine
 bun run build:cli  # the npm bundle alone
 bun run build:ui   # build the UI into dist/ui with Vite
+npm run probe -- <file> --mutate 's|<regexp>|<replacement>|' # the mutation probe
 ```
 
 The performance harness measures the UI on the synthetic review in headless
@@ -457,6 +458,35 @@ A test that asserts a file **was not** written says it with
 that puts the same bytes back is what the comparison cannot see, and the helper
 stamps the mtime before the command and checks the stamp and the bytes after it
 ([06-cli.md](docs/reference/06-cli.md)).
+
+`npm run probe` is the mutation probe, the command `backslop.json` declares as
+`probe`: it proves that a check turns red when the code it covers is broken.
+
+```sh
+npm run probe -- <file> --mutate 's|<regexp>|<replacement>|[flags]' [--run <command>]
+```
+
+It applies one substitution to one file, runs the command, puts the file back,
+and runs the command again. `--mutate` takes a JavaScript regexp, and the
+character after the `s` is the separator. Without `--run` a test file runs
+itself on Node, `bun run test -- <file>`, with the file name passed as one
+argument and never through a shell; any other file needs `--run`, a shell
+command, and so does the suite on Bun: `--run "bun run test:bun -- <test file>"`. The probe
+prints the exit code and the test count of both runs and the `FAIL` lines of
+the mutated one, and keeps its outcomes apart. Red with the mutation and green
+without it is the only pass, exit 0. A check that stays green with the mutation
+in place does not see the file: exit 1, the same as a check red without the
+mutation too and a command that leaves the tree dirty, whose writes are named
+before the probed file is put back. A mutation that changes
+nothing and a dirty tree are refused before the command runs, exit 2, with the
+dirty paths named. Commit first: the file comes back from a copy taken before
+the mutation, never from git, because `git checkout` would take the uncommitted
+work with it. The file is put back even when writing the mutation fails part
+way, and again after the run on the restored file, so a command that writes
+the file there is undone too. The command runs in a process group of its own:
+`SIGINT`, `SIGTERM` and `SIGHUP`, in either run, kill that whole group with
+`SIGKILL`, wait for it to end, and then put the file back, so nothing the
+command started can write after the restore.
 
 `bun run dev` runs the CLI from source. The same lint, typecheck, and test
 commands run in CI on pushes to `main` and on pull requests. Biome skips `backslop.json`:

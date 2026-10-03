@@ -197,3 +197,4 @@ An `—` outcome means that `result.md` did not name one. An `—` commit means 
 - <a id="da-60.5"></a>`DA-60.5-settle-returns-on-another-write` · 2026-09-29 · batch DA-110.2 · `bc3ce2f498` · settle in tests/watcher.test.ts returns on any diff-changed of the other repository, not on its own write's
 - <a id="da-110.3"></a>`DA-110.3-node-recursive-watch-misses-rename-replacement` · 2026-09-29 · completed · `b5092d294e` · On Linux, Node 22's userland recursive fs.watch reports a file replaced by rename only the first time
 - <a id="da-122"></a>`DA-122-backslop-020-fold` · 2026-10-03 · completed · — · The whole archive folds into the closed task journal
+- <a id="da-124"></a>`DA-124-mutation-probe-command` · 2026-10-04 · completed · — · One command for the mutation probe, declared as probe in backslop.json

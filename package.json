@@ -34,6 +34,7 @@
     "perf": "bun perf/gate.ts",
     "check:package": "bun run scripts/check-package.ts",
     "check:comments": "bun scripts/check-comments.ts",
+    "probe": "bun scripts/mutation-probe.ts",
     "test:ui": "bun e2e/quiet.ts",
     "test:e2e": "playwright test --config e2e/acceptance.config.ts"
   },
