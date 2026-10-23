@@ -370,6 +370,10 @@ and `bun run release` refuses a version that has no section. See
 
 ### Changed
 
+- Update the local Backslop dependency and managed project guidance to v1.0.0.
+  Keep generated skills ignored and version the `CLAUDE.md` import for fresh
+  checkouts.
+
 - **The local task tracker uses backslop v0.20.0.** Its project rules now cover
   the closed-task journal and role guide. Claude sessions run the tracker's
   session-start and stop hooks alongside the existing project setup hook. The

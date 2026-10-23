@@ -13,7 +13,7 @@
     "bun run perf"
   ],
   "probe": "npm run probe",
-  "version": "0.20.0",
+  "version": "1.0.0",
   "source": "https://github.com/Velklish/backslop.git",
   "lang": "en",
   "tools": [
