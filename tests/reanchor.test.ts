@@ -983,9 +983,13 @@ describe("review regressions", () => {
 
   it("retains committed CRLF identity with duplicate spans through two public refreshes", async () => {
     const f = await fixture();
+    f.git("config", "core.autocrlf", "false");
+    writeFileSync(join(f.repo, ".gitattributes"), "a.ts -text\n");
+    f.git("add", ".gitattributes");
     writeFileSync(f.file, "A\r\nTARGET\r\nB\r\nA\r\nTARGET\r\nB\r\n");
     f.git("add", "a.ts");
     f.git("commit", "-qm", "committed CRLF duplicates");
+    expect(f.git("cat-file", "blob", "HEAD:a.ts")).toContain("\r\n");
     await writeDiffCache(
       f.config.dataDir,
       "work",
