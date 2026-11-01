@@ -355,9 +355,17 @@ beforeAll(async () => {
     },
   });
 
-  // Both trees the tests below write into, and before any of them measures.
+  // Every tree the tests below write into proves delivery before any case measures it.
   await arm(REPO);
   await arm(OTHER_REPO);
+  const deadline = performance.now() + 20_000;
+  for (let attempt = 0; ; attempt += 1) {
+    if (reported.some((one) => one.dir === config.dataDir && one.path.startsWith("armed-data-")))
+      break;
+    if (performance.now() > deadline) throw new Error("the data directory watch never armed");
+    await writeFile(join(config.dataDir, `armed-data-${attempt}`), "");
+    await new Promise((done) => setTimeout(done, 50));
+  }
 }, 120_000);
 
 afterAll(async () => {

@@ -195,7 +195,7 @@ written the moment `startWatcher` returned: **four of the thirty writes produced
 no event at all** inside five seconds, while the other twenty-six produced one
 in about 190 ms; with the same probe repeating the write until the watch
 answered, thirty of thirty. That is why `tests/watcher.test.ts` arms the watch of
-every repository it writes into before it measures anything: a
+every repository it writes into and the data-directory tree before it measures anything: a
 `no diff-changed within 20000 ms` there was never a slow machine, it was a write
 nobody was listening for.
 
