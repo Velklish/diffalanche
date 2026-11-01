@@ -46,7 +46,10 @@ Neither the repository it reads nor the environment it was started in
 - **A repository whose configuration cannot be read is not read.** The pins are
   built from that answer, so without it there is nothing to read safely with:
   the repository comes back with `base: null`, no files, and the warning
-  `repository configuration could not be read`.
+  `repository configuration could not be read`. Its regression recorder observes
+  the production `diff-index` command; a permitted configuration is the positive
+  control that must reach the same recorder. The refusal still asserts the base,
+  files and warning, and restores `PATH` and removes the shim in `finally`.
 
 ## Reading one repository
 
