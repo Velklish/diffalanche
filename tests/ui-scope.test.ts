@@ -3,7 +3,10 @@ import { assertScope } from "../src/core/domain/scope.ts";
 import type { Scope } from "../src/core/storage/types.ts";
 import {
   confirmQuestion,
+  confirmQuestionParts,
   countScope,
+  deleteQuestion,
+  deleteQuestionParts,
   draftFromScope,
   draftToScope,
   isEmptyDraft,
@@ -166,6 +169,19 @@ describe("what a scope edit takes out of the task", () => {
 });
 
 describe("the question asked before comments are deleted", () => {
+  it("keeps each supplied name unknown while preserving the question text", () => {
+    const names = ["a, имя", "repo/путь", "third"];
+    const parts = confirmQuestionParts(names, 2, 1);
+    expect(parts.map((part) => part.text).join("")).toBe(confirmQuestion(names, 2, 1));
+    expect(parts.filter((part) => part.lang === "").map((part) => part.text)).toEqual(
+      names.slice(0, 2),
+    );
+    const deletion = deleteQuestionParts("task, имя", 3, 1);
+    expect(deletion.map((part) => part.text).join("")).toBe(deleteQuestion("task, имя", 3, 1));
+    expect(deletion.filter((part) => part.lang === "").map((part) => part.text)).toEqual([
+      "task, имя",
+    ]);
+  });
   it("names what is going, how many comments there are, and how many are open", () => {
     // The name `removedFrom` gives, the path with its repository in front, since two files of one
     // name in two repositories would otherwise be the same sentence.

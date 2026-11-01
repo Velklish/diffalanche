@@ -117,7 +117,18 @@ export function Composer() {
         <Suggestions suggest={suggest} away={modelAway} />
         {/* A new node per saying, so the same words said again are spoken again (DA-36.1). */}
         <p className="visually-hidden" role="status">
-          {said === null ? null : <span key={said.seq}>{said.text}</span>}
+          {said === null ? null : (
+            <span key={said.seq}>
+              {said.parts === undefined
+                ? said.text
+                : said.parts.map((part, index) => (
+                    // biome-ignore lint/suspicious/noArrayIndexKey: parts retain the saying's order.
+                    <span key={index} lang={part.lang}>
+                      {part.text}
+                    </span>
+                  ))}
+            </span>
+          )}
         </p>
       </div>
     </form>

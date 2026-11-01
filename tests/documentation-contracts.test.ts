@@ -12,6 +12,9 @@ describe("current documentation contracts", () => {
     expect(ui).toContain(
       "Comment and reply bodies are user-authored and are not language-detected",
     );
+    expect(ui).toContain(
+      "Confirmation dialogs derive their accessible names from the same marked-up questions",
+    );
     expect(prose("docs/reference/09-ml.md")).toContain(
       "The table labels an unconfirmed model severity `(auto)`",
     );

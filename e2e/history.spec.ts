@@ -342,6 +342,17 @@ test("a task is deleted from its row after a question, and Отмена deletes 
     name: `Удалить задачу ${name} и 1 комментарий (1 открыт)?`,
   });
   await expect(question).toBeVisible();
+  const questionText = question.locator(".confirm-question");
+  await expect(questionText).toHaveAttribute("lang", "ru");
+  await expect(questionText.locator('[lang=""]')).toHaveText(name);
+  await expect(question).toHaveAttribute(
+    "aria-labelledby",
+    (await questionText.getAttribute("id")) ?? "",
+  );
+  await page.screenshot({
+    path: test.info().outputPath("delete-question.png"),
+    animations: "disabled",
+  });
   // The ring lands on the answer that deletes nothing, and goes back where it was with it.
   await expect(question.getByRole("button", { name: "Отмена" })).toBeFocused();
   await question.getByRole("button", { name: "Отмена" }).click();

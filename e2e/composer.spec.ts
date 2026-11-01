@@ -349,6 +349,12 @@ test("typing three words lists suggestions from the history, and TAB takes one",
   await expect(composer.getByRole("status")).toHaveText(
     `подсказка 2 из 5 · ${taken.severity.toUpperCase()} · ${taken.body.split("\n")[0]}`,
   );
+  await expect(composer.getByRole("status").locator('[lang="ru"]').first()).toContainText(
+    "подсказка 2 из 5",
+  );
+  await expect(composer.getByRole("status").locator('[lang=""]')).toHaveText(
+    taken.body.split("\n")[0] ?? "",
+  );
   await field.press("Tab");
 
   await expect(field).toBeFocused();

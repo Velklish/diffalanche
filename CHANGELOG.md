@@ -20,6 +20,8 @@ and `bun run release` refuses a version that has no section. See
 - The sidebar footer remains visible above the status bar when warnings move
   the workspace down.
 - Known Russian interface text exposes its language to assistive technology.
+  Symbol-search errors and confirmation questions distinguish that text from
+  names and error messages whose language is unknown.
 
 - Performance repetitions have a ten-minute outer deadline, including a stalled
   child holding stdout. Comparison failures name the side and repetition, keep

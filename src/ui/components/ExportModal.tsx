@@ -100,8 +100,8 @@ function Item({ comment }: { comment: Comment }) {
         <span className="export-anchor">{exportAnchor(comment)}</span>
         <p lang="">{comment.body}</p>
         {comment.replies.map((reply) => (
-          <blockquote key={reply.id} lang="">
-            <b>{reply.author}</b> ({reply.role}) — {reply.body}
+          <blockquote key={reply.id}>
+            <b lang="">{reply.author}</b> ({reply.role}) — <span lang="">{reply.body}</span>
           </blockquote>
         ))}
       </div>

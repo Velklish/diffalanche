@@ -180,6 +180,18 @@ test("taking a file out of the scope asks before it deletes the comments under i
   const question = page.locator(".confirm-question");
   await expect(question).toContainText(path);
   await expect(question).toContainText("1 комментарий (1 открыт)");
+  await expect(question).toHaveAttribute("lang", "ru");
+  await expect(question.locator('[lang=""]')).toHaveText(`${task.first.path}/${path}`);
+  await expect(
+    page.getByRole("dialog", { name: (await question.textContent()) ?? "" }),
+  ).toBeVisible();
+  await expect(
+    page.getByRole("dialog", { name: (await question.textContent()) ?? "" }),
+  ).toHaveAttribute("aria-labelledby", (await question.getAttribute("id")) ?? "");
+  await page.screenshot({
+    path: test.info().outputPath("scope-question.png"),
+    animations: "disabled",
+  });
 
   // One press closes one thing, and the editor comes back with its draft: the
   // ladder of `overlays.ts` is what does it (08-ui.md, DA-70).

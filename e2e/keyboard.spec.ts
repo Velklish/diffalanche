@@ -427,6 +427,8 @@ test("saying the same thing again gives it the whole lifetime", async ({ page })
 
   await copy.click();
   await expect(toast).toBeVisible();
+  await expect(toast.locator('[lang="en"]')).toHaveText("Markdown");
+  await expect(toast.locator('[lang="ru"]')).toHaveText(" скопирован");
   await expect.poll(lifetimes).toBe(1);
   // Late in the first toast's life, and early enough to be sure of it: the
   // lifetime is 2.2 s, so a second press at 1.6 s carries the bar past 2.2 s.

@@ -14,6 +14,7 @@ import { perf } from "./perf.ts";
 import type { ScopeDraft } from "./scope.ts";
 import {
   confirmQuestion,
+  confirmQuestionParts,
   countScope,
   draftFromScope,
   draftToScope,
@@ -279,6 +280,7 @@ export type ScopeConfirm = {
   /** The scope the reader is applying, held while they answer. */
   scope: Scope;
   question: string;
+  questionParts: { text: string; lang: string }[];
 };
 
 /** The scope editor (DA-55): an overlay over the whole root, since a tree that hides what is
@@ -596,7 +598,13 @@ export const useStore = create<Store>()((set, get) => ({
         // the deleting window does; a name that never opened keeps its failure screen (DA-40.1).
         const shown = get().reviewName;
         if (refused.code === "no-such-session" && shown !== null && get().session?.name === shown) {
-          set({ toast: raise(`${refused.message} — окно перешло на current`) });
+          set({
+            toast: raiseParts([
+              { text: refused.message, lang: "" },
+              { text: " — окно перешло на ", lang: "ru" },
+              { text: "current", lang: "en" },
+            ]),
+          });
           writeTaskInUrl(null, "replace");
           set({ reviewName: null });
           void loadSessions(set);
@@ -1213,8 +1221,15 @@ export const useStore = create<Store>()((set, get) => ({
     const row = rows[next];
     if (row === undefined) return false;
     const line = row.body.split("\n")[0];
-    const said = `подсказка ${next + 1} из ${count} · ${row.severity.toUpperCase()} · ${line}`;
-    set({ sugIdx: next, said: raise(said) });
+    set({
+      sugIdx: next,
+      said: raiseParts([
+        { text: `подсказка ${next + 1} из ${count} · `, lang: "ru" },
+        { text: row.severity.toUpperCase(), lang: "en" },
+        { text: " · ", lang: "ru" },
+        { text: `${line}`, lang: "" },
+      ]),
+    });
     return true;
   },
   acceptSuggestion: (index) => {
@@ -1397,7 +1412,12 @@ export const useStore = create<Store>()((set, get) => ({
     if (raw === "") return;
     try {
       await navigator.clipboard.writeText(raw);
-      set({ toast: raise("Markdown скопирован") });
+      set({
+        toast: raiseParts([
+          { text: "Markdown", lang: "en" },
+          { text: " скопирован", lang: "ru" },
+        ]),
+      });
     } catch (error) {
       set({ toast: raise(reason(error)) });
     }
@@ -1769,12 +1789,18 @@ function noteModel(set: (partial: Partial<Store>) => void, get: () => Store, res
   const pause = was === 0 ? RETRY_FIRST_MS : Math.min(was * 2, RETRY_MAX_MS);
   const moved = get().sev === "auto";
   // Said once, as the model goes: the 503s of the pauses after it change nothing on the form.
-  const said = `${result.absent} — AUTO недоступен${moved ? ", отправится WARNING" : ""}`;
+  const said = [
+    { text: result.absent, lang: "" },
+    { text: " — ", lang: "ru" },
+    { text: "AUTO", lang: "en" },
+    { text: moved ? " недоступен, отправится " : " недоступен", lang: "ru" },
+    ...(moved ? [{ text: "WARNING", lang: "en" }] : []),
+  ];
   set({
     modelAway: result.absent,
     modelRetry: { at: Date.now() + pause, pause },
     ...(moved ? { sev: "warning" as const } : {}),
-    ...(get().modelAway === null ? { said: raise(said) } : {}),
+    ...(get().modelAway === null ? { said: raiseParts(said) } : {}),
   });
 }
 
@@ -2072,9 +2098,11 @@ export async function refusal(response: Response): Promise<Refusal> {
 function asQuestion(store: Store, scope: Scope, ids: string[]): ScopeConfirm {
   const held = new Map(store.comments.map((comment) => [comment.id, comment]));
   const open = ids.filter((id) => held.get(id)?.status === "open").length;
+  const removed = removedFrom(store.session?.scope ?? null, scope);
   return {
     scope,
-    question: confirmQuestion(removedFrom(store.session?.scope ?? null, scope), ids.length, open),
+    question: confirmQuestion(removed, ids.length, open),
+    questionParts: confirmQuestionParts(removed, ids.length, open),
   };
 }
 

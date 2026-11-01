@@ -1,7 +1,7 @@
-import { useEffect, useRef, useState } from "react";
+import { useEffect, useId, useRef, useState } from "react";
 import { formatBase } from "../base.ts";
 import { afterPaint } from "../perf.ts";
-import { deleteQuestion, historyScopeLabel } from "../scope.ts";
+import { deleteQuestion, deleteQuestionParts, historyScopeLabel } from "../scope.ts";
 import { useStore } from "../store.ts";
 import { relativeTime } from "../time.ts";
 import type { ReviewStatus, SessionSummary } from "../types.ts";
@@ -218,6 +218,7 @@ function DeleteQuestion({
   onCancel: () => void;
 }) {
   const question = deleteQuestion(session.name, session.open + session.resolved, session.open);
+  const questionId = useId();
   const cancel = useRef<HTMLButtonElement>(null);
   // Once, as the question appears: a ref that focused on every render took the ring back from
   // wherever the reader had moved it, on every keystroke in the menu's own fields.
@@ -225,8 +226,17 @@ function DeleteQuestion({
     cancel.current?.focus();
   }, []);
   return (
-    <fieldset className="session-row asking" aria-label={question}>
-      <p className="confirm-question">{question}</p>
+    <fieldset className="session-row asking" aria-label={question} aria-labelledby={questionId}>
+      <p id={questionId} className="confirm-question" lang="ru">
+        {deleteQuestionParts(session.name, session.open + session.resolved, session.open).map(
+          (part, index) => (
+            // biome-ignore lint/suspicious/noArrayIndexKey: these parts retain the question's order.
+            <span key={index} lang={part.lang}>
+              {part.text}
+            </span>
+          ),
+        )}
+      </p>
       <p className="confirm-note" lang="ru">
         Каталог задачи уходит с диска целиком, вернуть его нельзя.
       </p>

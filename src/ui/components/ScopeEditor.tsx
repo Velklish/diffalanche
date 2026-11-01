@@ -1,3 +1,4 @@
+import { useId } from "react";
 import type { Mark } from "../scope.ts";
 import { countDraft, draftToScope, pathPicked, repoMark, scopeLabel } from "../scope.ts";
 import type { ScopeConfirm } from "../store.ts";
@@ -8,6 +9,7 @@ import { Overlay } from "./Overlay.tsx";
 /** The scope editor of handoff section 12, an overlay over the whole root: a scope cannot be
  * widened from a tree that hides what is missing (08-ui.md, "The scope editor"). */
 export function ScopeEditor() {
+  const labelId = useId();
   const status = useStore((store) => store.candidatesStatus);
   const candidates = useStore((store) => store.candidates);
   const draft = useStore((store) => store.scopeDraft);
@@ -22,9 +24,13 @@ export function ScopeEditor() {
       width={640}
       className="scope"
       label="состав задачи"
+      labelledBy={labelId}
       ladder="scope"
       onClose={() => openScope(false)}
     >
+      <span id={labelId} className="visually-hidden" lang="ru">
+        состав задачи
+      </span>
       <form
         className="scope-form"
         onSubmit={(event) => {
@@ -90,7 +96,9 @@ function Candidate({ repository }: { repository: CandidateRepository }) {
         onClick={() => pickRepo(repository.path, files)}
       >
         <Tick mark={mark} />
-        <span className="repo-name">{repository.path}</span>
+        <span className="repo-name" lang="">
+          {repository.path}
+        </span>
         <span className="spacer" />
         <span className="repo-files">· {repository.files.length} files</span>
       </button>
@@ -131,6 +139,7 @@ export function Tick({ mark }: { mark: Mark }) {
 /** The one question in front of destroyed review data, counted from the server's 409 that wrote
  * nothing (ADR-010, decision 6; 08-ui.md, "The confirmation"). */
 export function ScopeConfirmation({ confirm }: { confirm: ScopeConfirm }) {
+  const questionId = useId();
   const applying = useStore((store) => store.applying);
   const cancel = useStore((store) => store.cancelScopeConfirm);
   const applyScope = useStore((store) => store.applyScope);
@@ -142,10 +151,18 @@ export function ScopeConfirmation({ confirm }: { confirm: ScopeConfirm }) {
       width={460}
       className="confirm"
       label={confirm.question}
+      labelledBy={questionId}
       ladder="scope"
       onClose={cancel}
     >
-      <p className="confirm-question">{confirm.question}</p>
+      <p id={questionId} className="confirm-question" lang="ru">
+        {confirm.questionParts.map((part, index) => (
+          // biome-ignore lint/suspicious/noArrayIndexKey: these parts retain the question's order.
+          <span key={index} lang={part.lang}>
+            {part.text}
+          </span>
+        ))}
+      </p>
       <p className="confirm-note" lang="ru">
         Комментарии удаляются вместе с записью состава. Отмена не пишет ничего.
       </p>
@@ -171,6 +188,7 @@ export function ScopeConfirmation({ confirm }: { confirm: ScopeConfirm }) {
 /** `New task…` of select mode, created with `use: false` and opened in this window (ADR-010,
  * decisions 4 and 7; 08-ui.md, "The task this window is on"). */
 export function NewTaskForm() {
+  const labelId = useId();
   const name = useStore((store) => store.newName);
   const base = useStore((store) => store.newBase);
   const switching = useStore((store) => store.switching);
@@ -180,7 +198,16 @@ export function NewTaskForm() {
   const counted = countDraft(draft);
 
   return (
-    <Overlay width={420} label="новая задача" ladder="scope" onClose={() => openNewTask(false)}>
+    <Overlay
+      width={420}
+      label="новая задача"
+      labelledBy={labelId}
+      ladder="scope"
+      onClose={() => openNewTask(false)}
+    >
+      <span id={labelId} className="visually-hidden" lang="ru">
+        новая задача
+      </span>
       <form
         className="picker"
         onSubmit={(event) => {

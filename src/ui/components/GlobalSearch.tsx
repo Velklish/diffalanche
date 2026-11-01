@@ -1,4 +1,4 @@
-import type { KeyboardEvent } from "react";
+import type { KeyboardEvent, ReactNode } from "react";
 import { useCallback, useEffect, useMemo, useRef, useState } from "react";
 import { splitLines } from "../context.ts";
 import { afterPaint } from "../perf.ts";
@@ -163,7 +163,11 @@ function Palette() {
               </button>
             </li>
           )}
-          {symbols.note === null ? null : <li className="palette-capped">{symbols.note}</li>}
+          {symbols.note === null ? null : (
+            <li className="palette-capped" lang="ru">
+              {symbols.note}
+            </li>
+          )}
           {text.status === "error" ? (
             <li className="palette-capped" role="status" lang="ru">
               Поиск текста не удался.{" "}
@@ -373,7 +377,15 @@ function useSymbolSearch(query: string): SymbolState {
           }
           const body = (await response.json().catch(() => ({}))) as { message?: unknown };
           const said = typeof body.message === "string" ? body.message : `${response.status}`;
-          setState({ query: wanted, hits: [], note: `символы не найдены: ${said}` });
+          setState({
+            query: wanted,
+            hits: [],
+            note: (
+              <>
+                символы не найдены: <span lang="">{said}</span>
+              </>
+            ),
+          });
         })
         // An aborted read is an older query, and its rows are not this one's.
         .catch(() => {});
@@ -388,12 +400,17 @@ function useSymbolSearch(query: string): SymbolState {
 }
 
 /** What the index could not read, in one line under the list. */
-function unreadable(failed: SymbolSearch["failed"]): string {
+function unreadable(failed: SymbolSearch["failed"]): ReactNode {
   const names = failed.map((one) => one.language).join(", ");
-  return `символы ${names} не читаются: ${failed[0]?.message ?? ""}`;
+  return (
+    <>
+      символы <span lang="">{names}</span> не читаются:{" "}
+      <span lang="">{failed[0]?.message ?? ""}</span>
+    </>
+  );
 }
 
-type SymbolState = { hits: SymbolHit[]; note: string | null };
+type SymbolState = { hits: SymbolHit[]; note: ReactNode | null };
 
 const NO_SYMBOLS: SymbolState = { hits: [], note: null };
 
@@ -416,7 +433,7 @@ function TextPreview({ hit }: { hit: SearchHit }) {
           {hit.path}
         </span>
         <span className="palette-meta">
-          {hit.repo} · L{line}
+          <span lang="">{hit.repo}</span> · L{line}
           {hit.detail === undefined ? "" : ` · ${hit.detail}`}
         </span>
       </div>

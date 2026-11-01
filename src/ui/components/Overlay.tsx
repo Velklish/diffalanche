@@ -8,6 +8,7 @@ import { useStore } from "../store.ts";
 export function Overlay({
   width,
   label,
+  labelledBy,
   className,
   ladder,
   onClose,
@@ -15,6 +16,7 @@ export function Overlay({
 }: {
   width: number;
   label: string;
+  labelledBy?: string;
   /** What the panel is besides an overlay; global search is the tall one. */
   className?: string;
   /** Overlays that replace each other at one position share an opener (DA-100). */
@@ -50,6 +52,7 @@ export function Overlay({
         role="dialog"
         aria-modal="true"
         aria-label={label}
+        aria-labelledby={labelledBy}
         // So there is something to focus in a panel whose contents are not
         // focusable, and something to hold the ring against.
         tabIndex={-1}

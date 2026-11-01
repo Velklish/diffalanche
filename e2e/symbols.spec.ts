@@ -76,4 +76,29 @@ test("a refusal of the symbol search is said under the list, not swallowed", asy
   await page.keyboard.press("ControlOrMeta+k");
   await page.getByRole("textbox", { name: "search" }).fill("resolver");
   await expect(page.locator(".palette-capped")).toContainText("the grammar would not load");
+  const note = page.locator(".palette-capped").filter({ hasText: "символы не найдены" });
+  await expect(note).toHaveAttribute("lang", "ru");
+  await expect(note.locator('[lang=""]')).toHaveText("the grammar would not load");
+});
+
+test("an unreadable grammar names its unknown language and error in a Russian sentence", async ({
+  page,
+}) => {
+  await page.route("**/api/search/symbols?*", (route) =>
+    route.fulfill({
+      json: { hits: [], failed: [{ language: "Cyrillic_язык", message: "raw error" }] },
+    }),
+  );
+  await open(page);
+  await page.keyboard.press("ControlOrMeta+k");
+  await page.getByRole("textbox", { name: "search" }).fill("resolver");
+  const note = page.locator(".palette-capped").filter({ hasText: "символы" });
+  await expect(note).toHaveText("символы Cyrillic_язык не читаются: raw error");
+  await expect(note).toHaveAttribute("lang", "ru");
+  await expect(note.locator('[lang=""]')).toHaveText(["Cyrillic_язык", "raw error"]);
+  await note.scrollIntoViewIfNeeded();
+  await page.screenshot({
+    path: test.info().outputPath("symbol-error.png"),
+    animations: "disabled",
+  });
 });

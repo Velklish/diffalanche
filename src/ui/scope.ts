@@ -147,18 +147,53 @@ const NAMED = 2;
 /** The one question asked before review data is destroyed: what leaves the task, how many comments
  * hang under it, how many are open; nothing is written before the answer (ADR-010, decision 6). */
 export function confirmQuestion(removed: string[], count: number, open: number): string {
-  const named = removed.slice(0, NAMED).join(", ");
+  return confirmQuestionParts(removed, count, open)
+    .map((part) => part.text)
+    .join("");
+}
+
+export function confirmQuestionParts(
+  removed: string[],
+  count: number,
+  open: number,
+): { text: string; lang: string }[] {
+  const parts = [{ text: "Убрать ", lang: "ru" }];
+  if (removed.length === 0) parts.push({ text: "запись состава", lang: "ru" });
+  for (const [index, name] of removed.slice(0, NAMED).entries()) {
+    if (index > 0) parts.push({ text: ", ", lang: "ru" });
+    parts.push({ text: name, lang: "" });
+  }
   const rest = removed.length - Math.min(removed.length, NAMED);
-  const what =
-    removed.length === 0 ? "запись состава" : rest === 0 ? named : `${named} и ещё ${rest}`;
+  if (rest > 0) parts.push({ text: ` и ещё ${rest}`, lang: "ru" });
   const comments = `${count} ${plural(count, "комментарий", "комментария", "комментариев")}`;
-  return `Убрать ${what} и удалить ${comments} (${open} ${plural(open, "открыт", "открыто", "открыто")})?`;
+  parts.push({
+    text: ` и удалить ${comments} (${open} ${plural(open, "открыт", "открыто", "открыто")})?`,
+    lang: "ru",
+  });
+  return parts;
 }
 
 /** The other one (DA-40): a task deleted takes every comment of it, the closed ones too. */
 export function deleteQuestion(name: string, count: number, open: number): string {
+  return deleteQuestionParts(name, count, open)
+    .map((part) => part.text)
+    .join("");
+}
+
+export function deleteQuestionParts(
+  name: string,
+  count: number,
+  open: number,
+): { text: string; lang: string }[] {
   const comments = `${count} ${plural(count, "комментарий", "комментария", "комментариев")}`;
-  return `Удалить задачу ${name} и ${comments} (${open} ${plural(open, "открыт", "открыто", "открыто")})?`;
+  return [
+    { text: "Удалить задачу ", lang: "ru" },
+    { text: name, lang: "" },
+    {
+      text: ` и ${comments} (${open} ${plural(open, "открыт", "открыто", "открыто")})?`,
+      lang: "ru",
+    },
+  ];
 }
 
 function plural(n: number, one: string, few: string, many: string): string {
