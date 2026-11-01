@@ -1,6 +1,5 @@
 # DA-131 · Apply Config.exclude to files consistently in initial scans and live updates
 
-- **Order:** 970
 - **Scope:** [01-scanner](../../reference/01-scanner.md); [02-git](../../reference/02-git.md); [05-watcher](../../reference/05-watcher.md)
 - **Created:** 2026-11-01
 - **Dependencies:** none
@@ -8,6 +7,8 @@
 - **Audit finding:** PQA-101
 - **Audit priority:** P2
 - **Evidence status:** confirmed_mismatch
+- **Previous order:** 970
+- **Taken:** 2026-11-01
 
 
 ## Execution authorization — 2026-11-01
@@ -56,3 +57,7 @@ Audit finding PQA-101; evidence snapshot `087d3330128f8762ff88b0a9f7a7151dca8db0
 ## Next step
 
 The owner reviews and approves this item individually before it is queued for implementation. Creating this card does not authorize product changes.
+
+## Execution plan
+
+Git policy track owns change-set file exclusion, the read-only Git environment, focused regression tests and references 01/02. Preserve the selected Config.exclude contract for initial/full, per-repository, named, scoped and live reads. Limit watcher edits to passing the exclusion policy at its change-set filter call; coordinate that shared file with the watcher track. Preserve inert Git configuration and existing ignore semantics; documenting the global core.excludesFile boundary is allowed, importing arbitrary global Git configuration is not an implicit requirement. Verify each original minor source separately and keep new findings registration-only.

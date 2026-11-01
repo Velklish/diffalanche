@@ -1,10 +1,11 @@
 # DA-149 · Read-only Git configuration and ignore consistency
 
-- **Order:** 850
 - **Scope:** linked source scopes; [reference](../../reference/README.md)
 - **Created:** 2026-11-01
 - **Dependencies:** retain each source condition below
 - **Cost:** minor
+- **Previous order:** 850
+- **Taken:** 2026-11-01
 
 ## Context
 
@@ -80,3 +81,7 @@ Cost: a path ignored only by a global `core.excludesFile` is not
 suppressed, so a build writing there costs a rescan that finds nothing. The
 watcher over-reports; it never misses a change. The fix is a sentence in
 02-git.md, or a decision to pin `core.excludesFile` the way the other keys are.
+
+## Execution plan
+
+Git policy track owns change-set file exclusion, the read-only Git environment, focused regression tests and references 01/02. Preserve the selected Config.exclude contract for initial/full, per-repository, named, scoped and live reads. Limit watcher edits to passing the exclusion policy at its change-set filter call; coordinate that shared file with the watcher track. Preserve inert Git configuration and existing ignore semantics; documenting the global core.excludesFile boundary is allowed, importing arbitrary global Git configuration is not an implicit requirement. Verify each original minor source separately and keep new findings registration-only.
