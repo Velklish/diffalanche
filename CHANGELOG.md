@@ -13,6 +13,12 @@ and `bun run release` refuses a version that has no section. See
 
 ## [Unreleased]
 
+### Fixed
+
+- The design handoff names the installed renderer, the review task directory
+  and top-layer Escape behavior. The UI reference counts both destructive
+  confirmations consistently with the design policy.
+
 ### Added
 
 - **`npm run probe`, the mutation probe**. `npm run probe -- <file> --mutate
