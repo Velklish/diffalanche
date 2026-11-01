@@ -45,8 +45,23 @@ export function startLive(): () => void {
   const unsubscribe = useStore.subscribe((state, before) => {
     if (state.reviewName !== before.reviewName) {
       invalidate();
-      target = state.reviewName ?? state.session?.name ?? null;
-      switching = target !== (state.session?.name ?? null);
+      target = state.reviewName;
+      switching = target === null || target !== (state.session?.name ?? null);
+    } else if (
+      switching &&
+      target === null &&
+      state.documentRevision !== before.documentRevision &&
+      state.reviewName === null
+    ) {
+      target = state.session?.name ?? null;
+      switching = false;
+    } else if (
+      switching &&
+      target !== null &&
+      state.session !== before.session &&
+      state.session?.name === target
+    ) {
+      switching = false;
     } else if (state.session?.name !== before.session?.name) {
       if (switching) {
         if (state.session?.name === target) switching = false;
