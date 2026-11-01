@@ -48,8 +48,13 @@ vi.mock("node:fs", async (importOriginal) => {
   return { ...real, default: { ...real, watch }, watch };
 });
 
-for (const name of [null, "gone", "marker-before"]) {
-  it(`reports a removed directory after child-first reconciliation and root name ${name}`, async () => {
+for (const [name, earlierListing] of [
+  [null, true],
+  ["gone", true],
+  ["marker-before", true],
+  [null, false],
+] as const) {
+  it(`reports a removed directory with root name ${name}, earlier listing ${earlierListing}`, async () => {
     const dir = mkdtempSync(join(tmpdir(), "diffalanche-removed-entry-"));
     mkdirSync(join(dir, "gone", "deep"), { recursive: true });
     mkdirSync(join(dir, "kept"));
@@ -101,9 +106,15 @@ for (const name of [null, "gone", "marker-before"]) {
       const fire = (watcher: Handle, event: string, payload: string | null): void => {
         expect(watcher.fire(event, payload)).toBe(true);
       };
-      writeFileSync(join(dir, "marker-before"), "before\n");
-      fire(root, "change", "marker-before");
-      await armed;
+      if (earlierListing) {
+        mkdirSync(join(dir, "fresh", "deep"), { recursive: true });
+        writeFileSync(join(dir, "fresh", "deep", "seed.ts"), "seed\n");
+        writeFileSync(join(dir, "marker-before"), "before\n");
+        fire(root, "change", "marker-before");
+        await armed;
+        expect(heard).toContain("fresh/deep/seed.ts");
+        expect(heard).not.toContain("fresh/deep");
+      }
       from = heard.length;
       rmSync(join(dir, "gone"), { recursive: true });
       fire(gone, "rename", null);
