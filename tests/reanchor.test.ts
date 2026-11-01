@@ -1325,7 +1325,7 @@ describe("staged rename with a recreated source path", () => {
     writeFileSync(f.file, f.text);
     const captured = await scanReview(f.config, { mode: "head" });
     expect(
-      captured.changes[0]?.files.map(({ path, oldPath, status }) => ({ path, oldPath, status })),
+      captured.cache.repositories[0]?.files.map(({ path, oldPath, status }) => ({ path, oldPath, status })),
     ).toEqual([
       { path: "a.ts", oldPath: null, status: "added" },
       { path: "b.ts", oldPath: "a.ts", status: "renamed" },
@@ -1344,7 +1344,7 @@ describe("staged rename with a recreated source path", () => {
     writeFileSync(f.file, f.text);
     const captured = await scanReview(f.config, { mode: "head" });
     expect(
-      captured.changes[0]?.files.map(({ path, oldPath, status }) => ({ path, oldPath, status })),
+      captured.cache.repositories[0]?.files.map(({ path, oldPath, status }) => ({ path, oldPath, status })),
     ).toEqual([
       { path: "a.ts", oldPath: null, status: "added" },
       { path: "b.ts", oldPath: "a.ts", status: "renamed" },
