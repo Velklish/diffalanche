@@ -86,9 +86,10 @@ export function watchTree(options: TreeWatcherOptions): TreeWatcher {
 }
 
 function native(options: TreeWatcherOptions, onFailure: () => void): TreeSource | null {
-  // inotify does not recurse, and Node 22 emulates it per inode, losing a file replaced by rename
-  // after the first time (05-watcher.md, "One watch per directory on Linux").
-  if (process.platform === "linux") return perDirectory(options, onFailure);
+  // Directory watches survive rename saves and watch directories created after startup on macOS.
+  // See 05-watcher.md, "One watch per directory on Linux".
+  if (process.platform === "linux" || process.platform === "darwin")
+    return perDirectory(options, onFailure);
   try {
     const watcher = watch(
       options.dir,

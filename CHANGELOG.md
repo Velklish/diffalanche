@@ -15,6 +15,9 @@ and `bun run release` refuses a version that has no section. See
 
 ### Fixed
 
+- macOS watches each directory directly, so Bun continues hearing files in
+  directories created or replaced after startup.
+
 - Native watcher fault-injection tests install their stubs independently of the
   runtime capability probe. A measured false capability keeps its polling path.
 
