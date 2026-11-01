@@ -1,11 +1,11 @@
 import { join } from "node:path";
 import {
   type CapturedRemoval,
-  SCAN_CONCURRENCY,
   capturedRemovals,
   fileIncluded,
   filterChange,
   mapWithLimit,
+  SCAN_CONCURRENCY,
   sameBase,
   sameScope,
 } from "../change-set.ts";
