@@ -5,7 +5,11 @@ import { join } from "node:path";
 import { afterEach, describe, expect, it, onTestFailed, onTestFinished, vi } from "vitest";
 import { generate, PROFILES } from "../scripts/synth.ts";
 import { loadConfig } from "../src/core/config/index.ts";
-import { createSession, setScope, useSession as activateSession } from "../src/core/domain/index.ts";
+import {
+  useSession as activateSession,
+  createSession,
+  setScope,
+} from "../src/core/domain/index.ts";
 import { scan } from "../src/core/index.ts";
 import * as storage from "../src/core/storage/index.ts";
 import { diffCachePath } from "../src/core/storage/index.ts";
@@ -269,7 +273,7 @@ describe("a newly followed held scope", () => {
         clock?.mockRestore();
         await bounded(run.onopenRead(), "post-open payload");
         held.armJoin();
-      held.rescan.release.resolve();
+        held.rescan.release.resolve();
         await bounded(edited, "repository drain");
         await vi.waitFor(
           () =>
