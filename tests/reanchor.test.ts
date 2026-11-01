@@ -4,7 +4,7 @@ import { tmpdir } from "node:os";
 import { join } from "node:path";
 import { afterEach, describe, expect, it, vi } from "vitest";
 import { run } from "../src/cli/run.ts";
-import { scanReview } from "../src/core/change-set.ts";
+import { SCAN_CONCURRENCY, scanReview } from "../src/core/change-set.ts";
 import { loadConfig } from "../src/core/config/index.ts";
 import { locateAnchor } from "../src/core/domain/anchors.ts";
 import {
@@ -18,6 +18,7 @@ import {
   resolve,
 } from "../src/core/domain/index.ts";
 import { commentWarnings, reconcileAnchors } from "../src/core/domain/reanchor.ts";
+import * as anchorMappings from "../src/core/git/anchors.ts";
 import { reverseAnchor } from "../src/core/git/anchors.ts";
 import * as fileSources from "../src/core/git/browse.ts";
 import { fileSourceAt } from "../src/core/git/browse.ts";
@@ -1464,3 +1465,183 @@ it.each(["recreated source", "ordinary addition"])(
     expect(stored.originalAnchor).toMatchObject({ path, line: 2, anchor: comment.anchor });
   },
 );
+
+describe("bounded anchor reconciliation", () => {
+  function barrier() {
+    let release = () => {};
+    const promise = new Promise<void>((resolve) => {
+      release = resolve;
+    });
+    return { promise, release };
+  }
+
+  async function legacyFiles(count: number) {
+    const f = await fixture();
+    const anchor = structuredClone(f.comment.anchor);
+    if (anchor === null) throw new Error("fixture anchor missing");
+    delete anchor.revision;
+    const paths = Array.from({ length: count }, (_, index) => `parallel-${index}.ts`);
+    for (const path of paths) writeFileSync(join(f.repo, path), `${prefix}${f.text}`);
+    await updateComments(f.config.dataDir, "work", (comments) => {
+      comments.splice(
+        0,
+        comments.length,
+        ...paths.map((path, index) => ({
+          ...f.comment,
+          id: `c_p${String(index).padStart(5, "0")}`,
+          path,
+          anchor: structuredClone(anchor),
+        })),
+      );
+    });
+    const review = await readReview(f.config.dataDir, "work");
+    const before = await readDiffCache(f.config.dataDir, "work");
+    const after = (await scanReview(f.config, review.base)).cache;
+    return { ...f, paths, review, before, after };
+  }
+
+  it.each([2, 10])("admits independent reads together and bounds %i comments", async (count) => {
+    const f = await legacyFiles(count);
+    const entered = barrier();
+    const held = barrier();
+    const source = fileSourceAt(f.root, f.config.dataDir);
+    let admitted = 0;
+    let active = 0;
+    let peak = 0;
+    const pending = reconcileAnchors(f.config, "work", f.review, f.after.repositories, f.before, {
+      source: async (...args) => {
+        if (args[2] !== "worktree") return source(...args);
+        admitted += 1;
+        active += 1;
+        peak = Math.max(peak, active);
+        entered.release();
+        try {
+          await held.promise;
+          return await source(...args);
+        } finally {
+          active -= 1;
+        }
+      },
+    });
+    try {
+      await entered.promise;
+      expect(admitted).toBe(Math.min(count, SCAN_CONCURRENCY));
+      expect(active).toBe(admitted);
+    } finally {
+      held.release();
+      await pending;
+    }
+    expect(admitted).toBe(count);
+    expect(peak).toBeLessThanOrEqual(SCAN_CONCURRENCY);
+    expect(active).toBe(0);
+    const saved = await readComments(f.config.dataDir, "work");
+    expect(saved.map((comment) => comment.path)).toEqual(f.paths);
+    expect(saved.every((comment) => comment.line === 7 && comment.status === "open")).toBe(true);
+  });
+
+  it("drains held reads and preserves input-ordered errors without Ready or partial persistence", async () => {
+    const f = await legacyFiles(3);
+    const first = new Error("first comment source failed");
+    const second = new Error("second comment source failed");
+    const entered = barrier();
+    const failFirst = barrier();
+    const finishLast = barrier();
+    const source = fileSourceAt(f.root, f.config.dataDir);
+    const original = readFileSync(commentsPath(f.config.dataDir, "work"), "utf8");
+    const cachePath = join(f.config.dataDir, "reviews", "work", "diff.json");
+    const originalCache = readFileSync(cachePath, "utf8");
+    const admitted: string[] = [];
+    let ready = 0;
+    let finished = false;
+    vi.spyOn(fileSources, "fileSourceAt").mockReturnValue(async (...args) => {
+      if (args[2] !== "worktree") return source(...args);
+      admitted.push(args[1]);
+      entered.release();
+      if (args[1] === f.paths[0]) {
+        await failFirst.promise;
+        throw first;
+      }
+      if (args[1] === f.paths[1]) throw second;
+      await finishLast.promise;
+      return source(...args);
+    });
+    const pending = rescanRepository(f.config, "work", "repo", () => {
+      ready += 1;
+    }).then(
+      () => {
+        finished = true;
+        return null;
+      },
+      (error: unknown) => {
+        finished = true;
+        return error;
+      },
+    );
+    try {
+      await entered.promise;
+      expect(admitted).toEqual(f.paths);
+      failFirst.release();
+      await readComments(f.config.dataDir, "work");
+      expect(finished).toBe(false);
+      expect(ready).toBe(0);
+      expect(readFileSync(commentsPath(f.config.dataDir, "work"), "utf8")).toBe(original);
+    } finally {
+      failFirst.release();
+      finishLast.release();
+      await pending;
+      vi.restoreAllMocks();
+    }
+    expect(await pending).toBe(first);
+    expect(ready).toBe(0);
+    expect(readFileSync(commentsPath(f.config.dataDir, "work"), "utf8")).toBe(original);
+    expect(readFileSync(cachePath, "utf8")).toBe(originalCache);
+  });
+
+  it("shares pending source, mapping and patch reads for comments on one captured span", async () => {
+    const f = await fixture();
+    await updateComments(f.config.dataDir, "work", (comments) => {
+      comments.push({ ...structuredClone(f.comment), id: "c_shared", body: "a second thread" });
+    });
+    const review = await readReview(f.config.dataDir, "work");
+    const before = await readDiffCache(f.config.dataDir, "work");
+    writeFileSync(f.file, `${prefix}${f.text}const added = 4;\n`);
+    const after = (await scanReview(f.config, review.base)).cache;
+    const entered = barrier();
+    const drivers = barrier();
+    const originalDrivers = gitCalls.repositoryDrivers;
+    vi.spyOn(gitCalls, "repositoryDrivers").mockImplementation(async (...args) => {
+      entered.release();
+      await drivers.promise;
+      return originalDrivers(...args);
+    });
+    const patches = vi.spyOn(anchorMappings, "capturedAnchorPatch");
+    const mappings = vi.spyOn(anchorMappings, "reverseAnchor");
+    const source = fileSourceAt(f.root, f.config.dataDir);
+    const reads = new Map<string, number>();
+    const pending = reconcileAnchors(f.config, "work", review, after.repositories, before, {
+      source: async (...args) => {
+        const key = JSON.stringify(args);
+        reads.set(key, (reads.get(key) ?? 0) + 1);
+        return source(...args);
+      },
+    });
+    try {
+      await entered.promise;
+      drivers.release();
+      await pending;
+      expect(patches).toHaveBeenCalledTimes(1);
+      expect(mappings).toHaveBeenCalledTimes(1);
+      expect(reads.size).toBe(2);
+      expect([...reads.values()]).toEqual([1, 1]);
+      const saved = await readComments(f.config.dataDir, "work");
+      expect(saved.map((comment) => [comment.id, comment.line, comment.status])).toEqual([
+        [f.comment.id, 7, "open"],
+        ["c_shared", 7, "open"],
+      ]);
+    } finally {
+      drivers.release();
+      await pending;
+      vi.restoreAllMocks();
+    }
+  });
+});
