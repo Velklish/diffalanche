@@ -5,7 +5,7 @@ import { join } from "node:path";
 import { describe, expect, it } from "vitest";
 import { generate, PROFILES } from "../scripts/synth.ts";
 import { loadConfig } from "../src/core/config/index.ts";
-import { createSession, deleteSession } from "../src/core/domain/index.ts";
+import { createSession } from "../src/core/domain/index.ts";
 import { scan } from "../src/core/index.ts";
 import { diffCachePath } from "../src/core/storage/index.ts";
 import type { Watcher, WatcherEvent, WatcherOptions } from "../src/core/watcher/index.ts";
