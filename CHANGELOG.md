@@ -1727,6 +1727,22 @@ and `bun run release` refuses a version that has no section. See
   ([11-perf.md](docs/reference/11-perf.md#the-comment-gate)); the duplicated
   `ForbiddenError` doc of `src/server/errors.ts` went with the sweep.
 
+- **The base picker exposes its selection.** Mode and branch buttons report
+  their pressed state in the accessibility tree.
+
+- **Search finds comments at every anchor level.** Review and repository
+  comments show their scope and body, and choosing a comment reveals its thread,
+  even when it was already focused and scrolled out of the rail.
+
+- **The first-run terminal example follows the form.** Its POSIX shell arguments
+  represent the selected base and session name, including shell-sensitive input.
+
+- **Text search reports a failed first page.** The retry keeps results from
+  other sources visible and obsolete requests cannot replace the current query.
+
+- **An overlay no longer sends the draft behind it.** `⌘⏎` and `Ctrl+Enter`
+  leave the composer intact until the overlay is closed.
+
 ## [0.1.0] - 2026-09-05
 
 ### Changed

@@ -78,6 +78,81 @@ test("a next page that failed can be asked for again", async ({ page }) => {
   await expect(page.locator(".palette-hit:has(.palette-tag.text)")).toHaveCount(total);
 });
 
+for (const failure of ["http", "network"]) {
+  test(`a ${failure} failure on the first page can be retried without losing other hits`, async ({
+    page,
+  }) => {
+    let calls = 0;
+    await page.route("**/api/search/text?*", async (route) => {
+      calls++;
+      if (calls === 1) {
+        if (failure === "http") await route.fulfill({ status: 500, body: "{}" });
+        else await route.abort("failed");
+        return;
+      }
+      await route.continue();
+    });
+    await open(page);
+    await page.keyboard.press("ControlOrMeta+k");
+    await page.getByRole("textbox", { name: "search" }).fill("ts");
+    await expect(page.locator(".palette-hit").first()).toBeVisible();
+    await expect(page.getByText("Поиск текста не удался.")).toBeVisible();
+    await page.getByRole("button", { name: "повторить поиск текста" }).click();
+    await expect.poll(() => calls).toBe(2);
+    await expect(page.getByText("Поиск текста не удался.")).toBeHidden();
+  });
+}
+
+test("an obsolete text failure does not replace the new query", async ({ page }) => {
+  await page.addInitScript(() => {
+    const original = window.fetch;
+    window.fetch = (input, init) => {
+      const url = new URL(input instanceof Request ? input.url : String(input), location.href);
+      if (url.pathname !== "/api/search/text") return original(input, init);
+      if (url.searchParams.get("q") === "old-query") {
+        return new Promise((_resolve, reject) => {
+          Reflect.set(window, "rejectOldTextSearch", () => reject(new Error("late failure")));
+        });
+      }
+      return Promise.resolve(
+        new Response(
+          JSON.stringify({
+            hits: [
+              {
+                repo: "repos/a",
+                path: "new-result.ts",
+                line: 1,
+                text: "new-query",
+                before: [],
+                after: [],
+              },
+            ],
+            next: null,
+            total: 1,
+            capped: false,
+          }),
+        ),
+      );
+    };
+  });
+  await open(page);
+  await page.keyboard.press("ControlOrMeta+k");
+  const field = page.getByRole("textbox", { name: "search" });
+  await field.fill("old-query");
+  await expect
+    .poll(() => page.evaluate(() => typeof Reflect.get(window, "rejectOldTextSearch")))
+    .toBe("function");
+  await field.fill("new-query");
+  const result = page.locator(".palette-hit:has(.palette-tag.text)");
+  await expect(result).toContainText("new-result.ts:1");
+  await page.evaluate(async () => {
+    Reflect.get(window, "rejectOldTextSearch")();
+    await new Promise((resolve) => setTimeout(resolve, 0));
+  });
+  await expect(result).toContainText("new-result.ts:1");
+  await expect(page.getByText("Поиск текста не удался.")).toHaveCount(0);
+});
+
 test("the hit the keyboard is on keeps the focus when the text hits land after it", async ({
   page,
 }) => {
