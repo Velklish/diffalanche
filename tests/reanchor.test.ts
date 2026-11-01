@@ -1546,6 +1546,8 @@ describe("bounded anchor reconciliation", () => {
     const entered = barrier();
     const failFirst = barrier();
     const finishLast = barrier();
+    const lastFinished = barrier();
+    let lastStarted = false;
     const source = fileSourceAt(f.root, f.config.dataDir);
     const original = readFileSync(commentsPath(f.config.dataDir, "work"), "utf8");
     const cachePath = join(f.config.dataDir, "reviews", "work", "diff.json");
@@ -1562,8 +1564,13 @@ describe("bounded anchor reconciliation", () => {
         throw first;
       }
       if (args[1] === f.paths[1]) throw second;
-      await finishLast.promise;
-      return source(...args);
+      lastStarted = true;
+      try {
+        await finishLast.promise;
+        return await source(...args);
+      } finally {
+        lastFinished.release();
+      }
     });
     const pending = rescanRepository(f.config, "work", "repo", () => {
       ready += 1;
@@ -1589,6 +1596,7 @@ describe("bounded anchor reconciliation", () => {
       failFirst.release();
       finishLast.release();
       await pending;
+      if (lastStarted) await lastFinished.promise;
       vi.restoreAllMocks();
     }
     expect(await pending).toBe(first);
