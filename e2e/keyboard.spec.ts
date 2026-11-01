@@ -122,18 +122,20 @@ test("a word of a comment lists the thread with its line in the preview", async 
   const thread = comments("open").find(
     (comment) => comment.line !== null && comment.body.trim() !== "",
   );
-  if (thread === undefined) throw new Error("the fixture has no open thread on a line");
+  if (thread === undefined || thread.path === null)
+    throw new Error("the fixture has no open thread on a file line");
   const word = (thread.body.split(/\s+/).find((one) => one.length > 5) ??
     thread.body.trim()) as string;
 
   await page.keyboard.press("ControlOrMeta+k");
-  await page.getByRole("textbox", { name: "search" }).fill(word);
+  await page.getByRole("textbox", { name: "search" }).fill(`${word} ${thread.path}`);
   const hit = palette(page).locator(".palette-hit", { hasText: word }).first();
   await expect(hit).toBeVisible();
   await hit.hover();
   // Hovering selects, so the preview follows the pointer without a click.
   await expect(hit).toHaveClass(/on/);
   await expect(palette(page).locator(".palette-meta")).toContainText(`L${thread.line}`);
+  await expect(palette(page).locator(".palette-path")).toHaveText(thread.path);
   await expect(palette(page).locator(".palette-line.on")).toHaveCount(1);
 
   await page.keyboard.press("Enter");
@@ -304,44 +306,52 @@ test("esc over an overlay closes it and leaves the draft being written", async (
 
 test("an overlay blocks both comment shortcuts until it closes", async ({ page }) => {
   await open(page);
+  await page.locator(".file-row").last().click();
   await page.keyboard.press("c");
   const field = page.locator(".composer-field");
   const body = `overlay draft ${Date.now()}`;
-  await field.fill(body);
-  await page.getByRole("button", { name: "WARNING", exact: true }).click();
-  const anchor = await page.locator(".composer-anchor").textContent();
-  const card = page.locator(".file-card").filter({ has: field });
-  const repo = await card.getAttribute("data-repo");
-  const path = await card.getAttribute("data-path");
-  const line = Number(/L(\d+)/.exec(anchor ?? "")?.[1]);
-  expect(line).toBeGreaterThan(0);
-  let writes = 0;
-  page.on("request", (request) => {
-    if (request.method() === "POST" && new URL(request.url()).pathname === "/api/comments")
-      writes++;
-  });
-  await page.keyboard.press("ControlOrMeta+k");
-  await expect(palette(page)).toBeVisible();
-  await page.getByRole("textbox", { name: "search" }).fill("ts");
-  await expect(palette(page).locator(".palette-hit").first()).toBeVisible();
-  await page.keyboard.press("Meta+Enter");
-  await expect(palette(page)).toBeVisible();
-  await page.keyboard.press("Control+Enter");
-  await expect(palette(page)).toBeVisible();
-  await expect(field).toHaveValue(body);
-  expect(writes).toBe(0);
-  expect(comments().filter((comment) => comment.body === body)).toHaveLength(0);
-  await page.keyboard.press("Escape");
-  await expect(page.locator(".composer-anchor")).toHaveText(anchor ?? "");
-  await page.keyboard.press("Control+Enter");
-  await expect.poll(() => comments().filter((comment) => comment.body === body).length).toBe(1);
-  expect(writes).toBe(1);
-  expect(comments().find((comment) => comment.body === body)).toMatchObject({
-    repo,
-    path,
-    line,
-    severity: "warning",
-  });
+  try {
+    await field.fill(body);
+    await page.getByRole("button", { name: "WARNING", exact: true }).click();
+    const anchor = await page.locator(".composer-anchor").textContent();
+    const card = page.locator(".file-card").filter({ has: field });
+    const repo = await card.getAttribute("data-repo");
+    const path = await card.getAttribute("data-path");
+    const line = Number(/L(\d+)/.exec(anchor ?? "")?.[1]);
+    expect(line).toBeGreaterThan(0);
+    let writes = 0;
+    page.on("request", (request) => {
+      if (request.method() === "POST" && new URL(request.url()).pathname === "/api/comments")
+        writes++;
+    });
+    await page.keyboard.press("ControlOrMeta+k");
+    await expect(palette(page)).toBeVisible();
+    await page.getByRole("textbox", { name: "search" }).fill("ts");
+    await expect(palette(page).locator(".palette-hit").first()).toBeVisible();
+    await page.keyboard.press("Meta+Enter");
+    await expect(palette(page)).toBeVisible();
+    await page.keyboard.press("Control+Enter");
+    await expect(palette(page)).toBeVisible();
+    await expect(field).toHaveValue(body);
+    expect(writes).toBe(0);
+    expect(comments().filter((comment) => comment.body === body)).toHaveLength(0);
+    await page.keyboard.press("Escape");
+    await expect(page.locator(".composer-anchor")).toHaveText(anchor ?? "");
+    await page.keyboard.press("Control+Enter");
+    await expect.poll(() => comments().filter((comment) => comment.body === body).length).toBe(1);
+    expect(writes).toBe(1);
+    expect(comments().find((comment) => comment.body === body)).toMatchObject({
+      repo,
+      path,
+      line,
+      severity: "warning",
+    });
+  } finally {
+    for (const comment of comments().filter((one) => one.body === body && one.status === "open")) {
+      cli("resolve", comment.id, "--role", "human");
+    }
+  }
+  expect(comments("open").filter((one) => one.body === body)).toHaveLength(0);
 });
 
 test("⌘K and ⇧⇧ over an open overlay are refused, not stacked", async ({ page }) => {
