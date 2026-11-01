@@ -173,7 +173,10 @@ test("an agent reply's toast marks the interface text and leaves the author unkn
   page,
 }) => {
   await open(page);
-  const thread = lastThread();
+  const thread = comments("open")
+    .filter((comment) => comment.repo !== null && comment.path !== null && comment.line !== null)
+    .at(-1);
+  if (thread === undefined) throw new Error("the fixture has no open thread on a line");
   cli(
     "reply",
     thread.id,
