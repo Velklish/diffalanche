@@ -392,7 +392,8 @@ became the followed one while its build ran").
 
 ### Keeping a held document honest
 
-Repository signals keep their reported paths while a document is building.
+Repository signals copy their reported paths while a document is building, so
+a caller reusing its path array cannot change the queued signal.
 After the scope is known, the pending build uses the same path check as a held
 document. An unrelated path in the same repository therefore costs neither a
 cache eviction nor a second build. A repository control path remains a signal

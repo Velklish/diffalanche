@@ -406,8 +406,14 @@ describe("review document and stream handover", () => {
     }
   });
 
-  for (const path of ["A.ts", "B.ts", ".git/HEAD"]) {
-    it(`keeps pending B documents only when the reported path is unrelated: ${path}`, async () => {
+  for (const { path, later } of [
+    { path: "A.ts", later: null },
+    { path: "B.ts", later: null },
+    { path: ".git/HEAD", later: null },
+    { path: "A.ts", later: "B.ts" },
+    { path: "B.ts", later: "A.ts" },
+  ]) {
+    it(`keeps pending B documents only when the reported path is unrelated: ${path}${later === null ? "" : ` then caller reuses ${later}`}`, async () => {
       const run = await fixture();
       try {
         let signalled = false;
@@ -418,7 +424,9 @@ describe("review document and stream handover", () => {
               signalled = true;
               if (!path.startsWith(".git/"))
                 writeFileSync(join(run.root, REPO, path), "export const changed = 2;\n");
-              service.repositoryChanged(REPO, [path]);
+              const files = [path];
+              service.repositoryChanged(REPO, files);
+              if (later !== null) files[0] = later;
             }
             return Reflect.get(target, key, receiver);
           },

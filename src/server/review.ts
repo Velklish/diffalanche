@@ -341,7 +341,8 @@ export function createReviewService(
         if (document === null) {
           // A build in flight has no scope to judge by yet, so the name is kept
           // and the question asked again when it resolves.
-          if (entry.pending !== null) entry.signalled.push({ repo, files });
+          if (entry.pending !== null)
+            entry.signalled.push({ repo, files: files === undefined ? undefined : [...files] });
           continue;
         }
         if (!coversChange(document.session.scope, repo, files)) continue;
