@@ -214,6 +214,77 @@ describe("a thread read across a task switch", () => {
 });
 
 describe("a current thread read", () => {
+  it("keeps a newer thread read after an older same-task document finishes", async () => {
+    useStore.setState({
+      session: { name: "A" } as never,
+      reviewName: null,
+      comments: [],
+      toast: null,
+    });
+    vi.stubGlobal("EventSource", FakeSource as unknown as typeof EventSource);
+    vi.stubGlobal("document", { querySelector: () => null, documentElement: { scrollHeight: 0 } });
+    vi.stubGlobal("requestAnimationFrame", (callback: FrameRequestCallback) => {
+      callback(0);
+      return 0;
+    });
+    let documentAnswer: (response: Response) => void = () => {};
+    let threadAnswer: (response: Response) => void = () => {};
+    const fetcher = vi.fn((url: string) => {
+      if (url.startsWith("/api/review"))
+        return new Promise<Response>((resolve) => {
+          documentAnswer = resolve;
+        });
+      if (url.startsWith("/api/comments/"))
+        return new Promise<Response>((resolve) => {
+          threadAnswer = resolve;
+        });
+      return Promise.resolve(new Response(JSON.stringify({ user: "human" })));
+    });
+    vi.stubGlobal("fetch", fetcher);
+    const stop = startLive();
+    try {
+      const review = useStore.getState().loadReview();
+      await vi.waitFor(() => expect(fetcher).toHaveBeenCalledTimes(1));
+      (FakeSource.last as FakeSource).deliver("comment-added", {
+        type: "comment-added",
+        session: "A",
+        id: "c_one",
+      });
+      await vi.waitFor(() => expect(fetcher).toHaveBeenCalledTimes(2));
+      documentAnswer(
+        new Response(
+          JSON.stringify({
+            root: "/root",
+            repositories: [],
+            session: { name: "A" },
+            comments: [],
+            warnings: [],
+            counters: {
+              counters: {
+                total: 0,
+                open: 0,
+                resolved: 0,
+                unanswered: 0,
+                awaiting: 0,
+                severity: null,
+              },
+              repositories: [],
+            },
+          }),
+        ),
+      );
+      await review;
+      expect(useStore.getState().comments).toEqual([]);
+      threadAnswer(new Response(JSON.stringify(liveComment())));
+      await vi.waitFor(() => expect(useStore.getState().comments).toHaveLength(1));
+      expect(useStore.getState().comments[0]?.id).toBe("c_one");
+      expect(useStore.getState().counters.counters.open).toBe(1);
+      expect(useStore.getState().counters.counters.awaiting).toBe(1);
+    } finally {
+      stop();
+    }
+  });
+
   it("invalidates a pending read when current changes before the queued review read", async () => {
     useStore.setState({
       session: { name: "A" } as never,
