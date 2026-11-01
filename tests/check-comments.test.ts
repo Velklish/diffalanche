@@ -92,7 +92,9 @@ describe("the comment gate of ADR-011", () => {
     expect(
       blocks("a { background: url(  'image.png' /* first\nsecond\nthird */); }", "css"),
     ).toEqual([{ line: 1, lines: 3 }]);
-    expect(blocks("a { background: url(image/*data\nmore\nend*/.png); }", "css")).toEqual([]);
+    expect(blocks("a { background: url(image/*data\\61\nmore\\62\nend*/.png); }", "css")).toEqual(
+      [],
+    );
     expect(blocks('a { background: url("image/*data*/.png"); }', "css")).toEqual([]);
   });
 
