@@ -86,10 +86,13 @@ export function watchTree(options: TreeWatcherOptions): TreeWatcher {
 }
 
 function native(options: TreeWatcherOptions, onFailure: () => void): TreeSource | null {
-  // Directory watches survive rename saves and watch directories created after startup on macOS.
-  // See 05-watcher.md, "One watch per directory on Linux".
-  if (process.platform === "linux" || process.platform === "darwin")
+  // A failed macOS recursive lifecycle probe selects directory watches; Linux always uses them.
+  if (process.platform === "linux" || (process.platform === "darwin" && recursiveSupport === false))
     return perDirectory(options, onFailure);
+  return recursiveNative(options, onFailure);
+}
+
+function recursiveNative(options: TreeWatcherOptions, onFailure: () => void): TreeSource | null {
   try {
     const watcher = watch(
       options.dir,
@@ -136,7 +139,10 @@ async function identity(path: string): Promise<Identity | null> {
 
 /** One non-recursive watch per directory the ignore rules let in, taken by the tree itself: a
  * directory's inode outlives every rename into it (05-watcher.md, "One watch per directory…"). */
-function perDirectory(options: TreeWatcherOptions, onFailure: () => void): TreeSource | null {
+export function perDirectory(
+  options: TreeWatcherOptions,
+  onFailure: () => void,
+): TreeSource | null {
   const watches = new Map<string, FSWatcher>();
   // Which directory each watch is on: one removed and made again under its name is another.
   const identities = new Map<string, Identity>();
@@ -470,12 +476,16 @@ async function entrySnapshot(
 export async function supportsRecursiveWatch(dir: string): Promise<boolean> {
   // The answer is the runtime's, not the directory's, so it is asked once and
   // every watcher after the first gets it without writing anything.
-  probed ??= probeRecursiveWatch(dir);
+  probed ??= probeRecursiveWatch(dir).then((answer) => {
+    recursiveSupport = answer;
+    return answer;
+  });
   return probed;
 }
 
 /** The answer of this process, once it has one. */
 let probed: Promise<boolean> | null = null;
+let recursiveSupport: boolean | null = null;
 
 /** How the probe writes. A test that has to make the write fail brings its own. */
 type ProbeWrite = (path: string, data: string) => Promise<void>;
@@ -490,11 +500,15 @@ export async function probeRecursiveWatch(
     await mkdir(dir, { recursive: true });
     probe = await mkdtemp(join(dir, ".watch-probe-"));
     const nested = join(probe, "nested");
-    await mkdir(nested);
     const watched = probe;
     return await new Promise<boolean>((resolve) => {
       let source: TreeSource | null = null;
+      let finished = false;
+      let creating = false;
+      let nestedReady = false;
       const done = (answer: boolean): void => {
+        if (finished) return;
+        finished = true;
         clearTimeout(timer);
         clearInterval(writing);
         source?.close();
@@ -506,20 +520,33 @@ export async function probeRecursiveWatch(
       // Written again and again: a watch that arms a moment after `watch` returns, as Bun's does,
       // misses a single write and would answer "cannot recurse" for the whole run.
       const writing = setInterval(() => {
-        void write(join(nested, "deep"), `probe ${Date.now()}`).catch(() => undefined);
+        const path = nestedReady ? join(nested, "deep") : join(watched, "armed");
+        void write(path, `probe ${Date.now()}`).catch(() => undefined);
       }, PROBE_WRITE_MS);
-      // The watch the trees take, so the answer is about the one that will run.
+      // Root delivery precedes creating the directory: initial recursion alone does not prove lifecycle.
       const onChange = (name: string): void => {
+        if (finished) return;
+        if (name === "armed" && !creating) {
+          creating = true;
+          void mkdir(nested)
+            .then(async () => {
+              if (finished) return;
+              nestedReady = true;
+              await write(join(nested, "deep"), "probe");
+            })
+            .catch(() => done(false));
+        }
         if (name.includes("deep")) done(true);
       };
-      source = native({ dir: watched, ignore: () => false, onChange }, () => done(false));
+      const take = process.platform === "darwin" ? recursiveNative : native;
+      source = take({ dir: watched, ignore: () => false, onChange }, () => done(false));
       if (source === null) {
         done(false);
         return;
       }
       // A filesystem already refusing writes answers now rather than after the
       // timeout, and the probe still returns a boolean instead of throwing.
-      void write(join(nested, "deep"), "probe").catch(() => done(false));
+      void write(join(watched, "armed"), "probe").catch(() => done(false));
     });
   } catch {
     return false;

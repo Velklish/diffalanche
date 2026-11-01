@@ -16,10 +16,10 @@ import { tmpdir } from "node:os";
 import { join } from "node:path";
 import { fileURLToPath } from "node:url";
 import { promisify } from "node:util";
-import { describe, expect, it, vi } from "vitest";
+import { beforeAll, describe, expect, it, vi } from "vitest";
 import { repositoryIgnore } from "../src/core/watcher/index.ts";
-import type { Ignore, TreeWatcher } from "../src/core/watcher/tree.ts";
-import { watchTree } from "../src/core/watcher/tree.ts";
+import type { Ignore, TreeWatcher, TreeWatcherOptions } from "../src/core/watcher/tree.ts";
+import { perDirectory, supportsRecursiveWatch, watchTree } from "../src/core/watcher/tree.ts";
 import { needsTypeScript } from "./helpers/typescript.ts";
 
 const run = promisify(execFile);
@@ -52,7 +52,21 @@ const NATIVE_NAMES = process.env.DIFFALANCHE_TEST_RUNTIME !== "bun";
 
 type Tree = { tree: TreeWatcher; heard: string[]; fellBack: () => number };
 
-function start(dir: string, ignore: Ignore = () => false, pollIntervalMs = 250): Tree {
+beforeAll(async () => {
+  const dir = mkdtempSync(join(tmpdir(), "diffalanche-tree-capability-"));
+  try {
+    await supportsRecursiveWatch(dir);
+  } finally {
+    rmSync(dir, { recursive: true, force: true });
+  }
+});
+
+function start(
+  dir: string,
+  ignore: Ignore = () => false,
+  pollIntervalMs = 250,
+  native?: TreeWatcherOptions["native"],
+): Tree {
   const heard: string[] = [];
   let fellBack = 0;
   const tree = watchTree({
@@ -63,6 +77,7 @@ function start(dir: string, ignore: Ignore = () => false, pollIntervalMs = 250):
       fellBack += 1;
     },
     pollIntervalMs,
+    ...(native === undefined ? {} : { native }),
   });
   return { tree, heard, fellBack: () => fellBack };
 }
@@ -332,7 +347,7 @@ describe("a watch the kernel refuses", () => {
   it.skipIf(!DIRS)("walks a root it cannot take, and hears it once the root is there", async () => {
     const parent = mkdtempSync(join(tmpdir(), "diffalanche-tree-noroot-"));
     const dir = join(parent, "root");
-    const tree = start(dir, () => false, 20);
+    const tree = start(dir, () => false, 20, perDirectory);
     try {
       await tree.tree.ready;
       expect(tree.tree.polling()).toBe(true);
@@ -349,7 +364,7 @@ describe("a watch the kernel refuses", () => {
     const dir = mkdtempSync(join(tmpdir(), "diffalanche-tree-enospc-"));
     for (let one = 0; one < 6; one += 1) mkdirSync(join(dir, `d${one}`, "e"), { recursive: true });
     refusal.left = 3;
-    const tree = start(dir, () => false, 20);
+    const tree = start(dir, () => false, 20, perDirectory);
     try {
       const deadline = performance.now() + 20_000;
       while (tree.fellBack() === 0) {
@@ -369,7 +384,7 @@ describe("a watch the kernel refuses", () => {
   it.skipIf(!DIRS)("hands the tree to the walk when a new directory runs it out", async () => {
     const dir = mkdtempSync(join(tmpdir(), "diffalanche-tree-enospc-late-"));
     mkdirSync(join(dir, "a"));
-    const tree = start(dir, () => false, 20);
+    const tree = start(dir, () => false, 20, perDirectory);
     try {
       await arm(tree, dir);
       refusal.left = 1;
@@ -395,7 +410,7 @@ it("documents the native directory watches and the platform of lifecycle measure
     "utf8",
   );
   expect(reference).toContain(
-    "On Linux and macOS the tree takes one non-recursive watch per directory.",
+    "On macOS the lifecycle probe chooses recursive or per-directory native watching.",
   );
   expect(reference).not.toContain("nothing in it has gone\nquiet under Bun's runner");
   expect(reference).toContain(

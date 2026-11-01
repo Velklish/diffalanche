@@ -61,8 +61,8 @@ of that repository is not left showing what the edit replaced
 `startWatcher` resolves once every tree is being watched for real. **The
 guarantee is the walk's**: it takes its baseline before it reports anything, and
 a change made before that baseline exists would be part of it rather than a
-change. The recursive watch of Windows has nothing to prepare, and its
-`ready` is already resolved. On Linux and macOS `ready` resolves once the first listing of
+change. A selected recursive watch has nothing to prepare, and its `ready` is already
+resolved. On Linux and on the macOS directory-watch path, `ready` resolves once the first listing of
 the tree has taken every directory's watch ([One watch per directory on
 Linux](#one-watch-per-directory-on-linux)), so no directory is still unwatched.
 Neither covers the moment between taking a watch and its first delivery — Bun
@@ -110,10 +110,11 @@ nothing — the first document is the one that reports that.
 
 ## What it watches, and what it ignores
 
-One watch per repository, plus one over the data directory. On
-Windows that watch is `fs.watch` with `recursive: true`, where the runtime
-honours it; on Linux and macOS it is one non-recursive `fs.watch` per directory, which the
-tree takes itself ([One watch per directory on
+One watch per repository, plus one over the data directory. Windows uses
+`fs.watch` with `recursive: true` where the runtime honours it. Linux uses
+one non-recursive `fs.watch` per directory. On macOS a lifecycle probe selects
+the recursive watch when it reports a file in a directory created after root
+delivery; otherwise the tree takes one watch per directory itself ([One watch per directory on
 Linux](#one-watch-per-directory-on-linux)); where neither is there, the same
 interface walks the tree on a timer and compares modification time, size, inode
 and change time. Symbolic links are
@@ -121,7 +122,7 @@ entries too: the walk compares their target strings using `lstat` and `readlink`
 including dangling links. It never follows a link into a target directory or
 reads target content, so changing an outside target alone produces no change. A watch that **dies after it started** says so once,
 through `onFallback`. A session that **walks from the start** says so once too,
-through `onWalk`: the probe below answered that the runtime cannot recurse, or
+through `onWalk`: the probe below found no supported native path, or
 `watch` itself refused one tree when it was built — Node's
 `ERR_FEATURE_UNAVAILABLE_ON_PLATFORM` does that to every tree, and `ENOENT`,
 `EACCES` or `EMFILE` can do it to one — and the walk took the tree at
@@ -145,9 +146,13 @@ Accepting `recursive: true` is not the same as honouring it — a runtime that
 takes the option and watches only the top directory would leave a silent dead
 watcher — so the answer comes from a probe rather than from a version table: `supportsRecursiveWatch(dataDir)`
 creates a temporary directory inside the data directory, watches it with the
-watch the trees take — the recursive one on Windows, or on Linux and macOS one per directory — and
-writes a file one level down every fifty milliseconds until it is reported back
-or half a second has passed. Writing once is not enough — Bun's watch arms a moment
+recursive watch on macOS and Windows, or the directory watches on Linux. It
+first repeats a root-file write until delivery is proven, then creates a nested
+directory and repeats its file write every fifty milliseconds. Delivery of that
+file proves recursion after directory creation; the whole probe has a half-second
+deadline. A false macOS result chooses directory watches, whose own refusal can
+still select polling. An injected native adapter remains independent when
+`recursive: true` is supplied. Writing once is not enough — Bun's watch arms a moment
 after `watch` returns, and a single write lands before it does, which would
 answer "this runtime cannot recurse" for the rest of the run. It runs once per
 process — the answer is a property of the runtime, not of a directory — and no
@@ -343,8 +348,8 @@ release branches v22.x, v24.x and v25.x of Node still carry that code. Node's
 `main`, read on 2026-09-29, has moved Linux to one watch per directory for the
 same reason, and that is not in a release `engines` accepts.
 
-So on Linux and macOS the tree does not ask for `recursive` at all. It takes one
-non-recursive watch per directory itself, and the inode it watches is the
+Linux always takes one non-recursive watch per directory. macOS takes that
+path when the recursive lifecycle probe fails. In this path, and the inode it watches is the
 directory's, which outlives every rename into it.
 
 - **Taking the watches.** It lists the tree once at the start, the way the walk
@@ -1060,15 +1065,16 @@ refresh what it will, hides a change, runs it once more and expects no event
 through `settle`.
 
 **`tests/watch-tree.test.ts` holds native directory lifecycle behavior.**
-On Linux and macOS the tree takes one non-recursive watch per directory.
-Windows uses the recursive watch. Every case writes a file and waits for its
+On macOS the lifecycle probe chooses recursive or per-directory native watching.
+Linux uses directory watches; Windows uses the recursive watch. The kernel-refusal
+cases select the per-directory adapter explicitly on Linux and macOS. Every case writes a file and waits for its
 own name after an `arm` that repeats a write until one is heard.
 
 The earlier per-directory lifecycle measurements in this section were taken
 on Linux. On macOS 27 with Bun 1.3.14, the recursive watch reported the new
 directory but did not report its file within 20 seconds, both in Vitest and in
 a standalone child. The directory watch path avoids that recursive lifecycle
-failure. Native measurements must run where filesystem notifications are
+failure while a working recursive backend retains its original path. Native measurements must run where filesystem notifications are
 available: the local sandbox suppressed Bun events and made Node emit
 `EMFILE`; the same owned fixture delivered events outside it.
 
@@ -1101,8 +1107,8 @@ available: the local sandbox suppressed Bun events and made Node emit
 - **A watch the kernel refuses** replaces `fs.watch` for that file through
   `vi.mock`, and refuses past a count with `ENOSPC`. The count runs out at the
   start in one case and on a directory made later in the other. Each expects the
-  walk to take over, `onFallback` once, and a later write heard. Linux and
-  macOS, where the tree takes one watch per directory.
+  walk to take over, `onFallback` once, and a later write heard. These cases
+  explicitly select the directory-watch adapter on Linux and macOS.
 
 Not held there: the sharing of one queued listing, which only a burst that
 lands during a listing exercises, and no write order makes that deterministic. The
