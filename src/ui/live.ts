@@ -203,7 +203,9 @@ async function thread(id: string, generation: () => number, replyId?: string): P
     }
     comment = (await response.json()) as Comment;
   } catch (error) {
-    if (asked === generation()) throw error;
+    if (asked === generation()) {
+      useStore.getState().setToast(error instanceof Error ? error.message : String(error));
+    }
     return;
   }
   if (asked !== generation()) return;
