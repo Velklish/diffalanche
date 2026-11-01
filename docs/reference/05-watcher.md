@@ -73,10 +73,11 @@ what it already has, paid once per move. A session with no `diff.json` is not
 read, since there is nothing to trust. The read is a task of the queue, so a rescan an edit starts meanwhile
 waits for it: an edit right after `review use` is announced after the read, not
 inside the 300 ms of `docs/SPEC.md` section 6 ([07-server.md](07-server.md)).
-And the read can take in an edit made while it runs, so that edit's rescan finds
-nothing new: after a move, **the first rescan of each repository reports it to
-`onRepositoryChanged` whatever it finds**, once, so a document another task holds
-of that repository is not left showing what the edit replaced
+The read can take in an edit made while it runs, so that edit's rescan finds
+nothing new. When that first rescan finds an unchanged entry,
+`onRepositoryChanged` receives no path list: other tasks may still hold any part
+of the old repository. Later unchanged rescans report their paths, so held and
+pending documents can compare each accepted burst with their own scope
 ([07-server.md](07-server.md)).
 
 `startWatcher` resolves once every tree is being watched for real. **The
@@ -616,7 +617,7 @@ the same, because the CLI writes the same directory.
 
 | Event | Data | When |
 |---|---|---|
-| `diff-changed` | `{ repo, files, session }` | a repository was rescanned and its entry is not what it was; `files` are the paths that woke the watcher, not the files of the new change set, and it is **empty** when what woke it was the walk taking over a dead watch, or the read of a session `current` moved to — neither names a path |
+| `diff-changed` | `{ repo, files, session }` | current's repository entry changed, or a path signal targets a followed named task whose scope intersects it; `files` are notification paths, not the new change set's files, and are **empty** when a fallback walk or session read names no path |
 | `comment-added` | `{ session, id }` | a comment appeared in the `comments.json` of a followed session |
 | `reply-added` | `{ session, id, commentId }` | a reply appeared in a thread; `id` is the reply |
 | `comment-status` | `{ session, id }` | a comment was resolved or reopened |
@@ -646,8 +647,12 @@ outside the task's path list; a sibling with the same prefix is unrelated.
 
 A file touched without its content changing — a build output written again, a
 save with the same bytes — is not a change of the review: the recomputed entry
-is compared with the cached one, patch by patch, and nothing is announced when
-they agree. `session-changed` is the same kind of answer: every write to a
+is compared with the cached one, patch by patch. When they agree, current emits
+no unscoped `diff-changed`, rescan callback or activity line. The repository
+callback still invalidates matching held and pending documents, and followed
+named tasks can receive scoped frames even for a same-bytes save. These path
+signals do not establish that a named task's content changed.
+`session-changed` is the same kind of answer about metadata: every write to a
 session bumps `updatedAt` in `review.json`, and only a change to what the review
 *is* counts — its base, title, name, scope, or status.
 
@@ -716,12 +721,11 @@ know the repository moved ([07-server.md](07-server.md)).
 `onRepositoryChanged` therefore reports three cases:
 
 - **Inside the current task's scope**, from within the rescan, beside
-  `diff-changed`. The rescan compares the recomputed entry with the cached one,
-  so reaching that point means the change set really moved: a file touched
-  without its content changing — a build output, a save with the same bytes —
-  announces nothing. The exception is the first rescan of a repository after
-  `current` moves, which reports it here and nowhere else whatever it found: it
-  compared with a cache the move's read wrote, which may already hold the edit.
+  `diff-changed` when the entry changed. An unchanged entry still reports the
+  repository callback and can notify matching named scopes, without refreshing
+  current. The first unchanged rescan after `current` moves omits the path list
+  for broad document invalidation; later unchanged rescans include the reported
+  paths. The move's read may already hold an edit that another task has not read.
 - **Inside the repository but outside the current task's path scope**, even
   when the current filtered entry stays the same. Held documents compare the
   reported paths with their own scope; followed named tasks receive targeted
@@ -733,7 +737,7 @@ know the repository moved ([07-server.md](07-server.md)).
   burst is the whole of what is known. A write that changes no line still
   reports, and a reader of the signal has to be able to afford that.
 
-The price of the second is one `git check-ignore` per burst for repositories the
+The price of the outside-repository case is one `git check-ignore` per burst for repositories the
 current task is not about, where before there was none: the ignore question now
 comes first, so a build writing into an ignored directory of an unrelated
 repository still says nothing. One process against the five a rescan costs —
@@ -867,9 +871,12 @@ scope leaves of the repository is what goes in (`filterChange`,
 [02-git.md](02-git.md)): a repository the task is not about comes back empty and
 drops out of the cache, the way a repository without changes does.
 
-The cache is read, compared and written under the session's lock: the CLI writes
-the same directory, and a rescan that read the cache outside the lock would
-overwrite what the CLI wrote in between.
+A repository rescan starts its Git read and previous-cache read together. Both
+finish before reconciliation begins or either error escapes; the Git error has
+precedence when both fail. This early cache supplies legacy anchor history.
+The cache used for the patch is read again, compared and written under the
+session's lock. Reusing the earlier snapshot here would overwrite what the CLI
+wrote in between.
 
 With no cache at all — or with one computed against a base that is no longer the
 session's, or for another scope, which answers a different question — there is
@@ -934,6 +941,25 @@ A platform without a recursive watch cannot meet the budget at all: there the
 interval of the walk is added to every measurement.
 
 ## What the unit tests hold
+
+On macOS under Bun, the seven directory lifecycle scenarios in
+`tests/watch-tree.test.ts` run through
+`tests/helpers/native-directory-child.ts` in separate Bun processes. The
+scenarios live once in `tests/helpers/native-directory-cases.ts`; Node and
+other platforms execute that same code in process. Each child uses the same
+capability probe and per-directory native adapter. Event order, replacement,
+checkout, removal, fallback and heap assertions retain their original bounds,
+including the 20 s waits and the outer 60 s deadline.
+
+This boundary follows two ordinary full-suite failures on 2026-11-01:
+`1bfb4badfc2fd71c74d60e94e5a1d7d1feecc140` did not hear
+`kept/after.ts`; after isolating that case,
+`ac0fe0247e4105ad04c18fd4111de911a64c992d` did not hear
+`made/deep/later.ts`. Each failed case passed two isolated repetitions and
+its integration-base control. Standalone Bun removal and creation each passed
+twenty cases; bounded instrumented diagnostics also passed. Those passes do
+not establish the cause of the full-suite failures. Process isolation is a
+test workaround, not evidence that a native production defect was found or fixed.
 
 `tests/watcher.test.ts` measures the watcher on a fixture of its own, and its
 helpers carry rules a reader of a red run needs.
@@ -1015,7 +1041,8 @@ now goes in three steps.
    same-bytes case seemed to announce on Bun was that burst: the rewrite was
    rescanned after `settle` had returned and the next test had removed
    `diff.json`, and a rescan with no cache to patch reads the whole change set and
-   announces it. A save with the same bytes says nothing on either runtime.
+   announces it. A save with the same bytes emits no unscoped current
+   `diff-changed` on either runtime; named-scope notifications remain separate.
 
 The marker is not a change any test can see. The repository's
 `.git/info/exclude` carries `/marker-*` from before the watch starts, and the two
@@ -1107,7 +1134,8 @@ through `settle`.
 On macOS the lifecycle probe chooses recursive or per-directory native watching.
 Linux uses directory watches; Windows uses the recursive watch. The directory
 algorithm cases select the per-directory adapter explicitly on Linux and macOS,
-including the strict 5000-name assertion. A separate new-directory burst case
+with the strict 5000-name assertion on Node and at least one burst name on Bun.
+A separate new-directory burst case
 exercises the default backend after its lifecycle probe. Every case writes a file and waits for its
 own name after an `arm` that repeats a write until one is heard.
 

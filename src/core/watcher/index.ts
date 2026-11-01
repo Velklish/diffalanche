@@ -81,8 +81,8 @@ export type WatcherOptions = {
   /** The change set as it now stands, with the session it belongs to, for a caller
    * that keeps it in memory ([05-watcher.md](../../../docs/reference/05-watcher.md)). */
   onRescan?: (session: string, cache: DiffCache) => void;
-  /** A repository that moved, whatever the current task is about: inside the
-   * task's scope it means the change set did, outside it means files were written. */
+  /** A repository signal for other tasks: paths can invalidate their documents even when
+   * current's entry is unchanged; no paths means the whole repository (05-watcher.md). */
   onRepositoryChanged?: (repo: string, files?: readonly string[]) => void;
   /** The tasks windows are open on, asked on every burst of the data directory
    * ([05-watcher.md](../../../docs/reference/05-watcher.md)). */
@@ -301,19 +301,19 @@ export async function startWatcher(options: WatcherOptions): Promise<Watcher> {
       notifyOtherScopes(repo, files);
       return;
     }
-    // Announced before `diff.json` is written, and only when the entry moved: a save with the same
-    // bytes says nothing (05-watcher.md, "The change-set cache").
+    // Current's rescan callback, event and activity precede the cache write only when its entry
+    // changed; other tasks also need the unchanged-entry path below (05-watcher.md).
     const rescanned = await rescanRepository(config, followed, repo, (outcome) => {
       options.onRescan?.(followed, outcome.cache);
-      // From inside the rescan, so it says the change set moved rather than
-      // that a file was written: a save with the same bytes reaches no one.
+      // This callback reports a changed entry; the unchanged branch below still reports paths
+      // for other tasks without announcing a current change (05-watcher.md).
       options.onRepositoryChanged?.(repo, files);
       bus.emit({ type: "diff-changed", repo, files });
       activity.diffChanged(repo);
       if (outcome.warningsChanged) bus.emit({ type: "warnings", list: outcome.cache.warnings });
     });
-    // Once per repository per move, the repository is said to have moved whatever the rescan
-    // found: it compared with a cache the move's read wrote, not with what others hold.
+    // The first unchanged rescan after a move invalidates the whole repository for other tasks;
+    // later signals retain paths even when current's entry stays unchanged (05-watcher.md).
     if (!rescanned.changed) {
       options.onRepositoryChanged?.(repo, settled.has(repo) ? files : undefined);
       notifyOtherScopes(repo, files);

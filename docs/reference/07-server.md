@@ -339,16 +339,15 @@ task held, showing the repository as it was before the revert, heard of it from
 nothing. `tests/server.test.ts` reproduced that: "drops another task's
 document when a move's read absorbed an edit back to the old cache", reverts the
 edit from inside the read and waited 20 s for the document of the task `current`
-left to drop it. So **the first rescan of each repository after a move reports
-it to `onRepositoryChanged` whatever it finds** ([05-watcher.md](05-watcher.md)),
-and to nothing else — no frame, no activity line. Its cost is once per
-repository per move: when that rescan was a save with the same bytes, the
-documents of other tasks that could show the repository are built again on their
-next read, which is what a repository outside the current task's scope costs
-them on every burst. Telling the absorbed rescans from the rest was the
-alternative and was left: an edit is absorbed when it lands before the read
-reaches its repository, and its notification can arrive after the read has
-ended, so no moment of arrival separates the two.
+left to drop it. The first unchanged rescan after a move therefore calls
+`onRepositoryChanged` without paths, invalidating other tasks' documents across
+that repository ([05-watcher.md](05-watcher.md)). This broad invalidation costs
+once per repository per move. Later unchanged rescans carry paths and invalidate
+only documents whose scope intersects the signal. An unchanged current entry
+produces no unscoped current frame, rescan callback or activity line; matching
+followed named tasks can still receive scoped frames, including for a same-bytes
+save. An absorbed edit can arrive after the move's read ended, so notification
+time cannot establish whether that read included it.
 
 The price is the scope's repositories **on every move of `current`** to a task
 that has a cache, paid before the frame goes out, plus one parse of the file it
@@ -415,11 +414,11 @@ A held document's change set ages, because only the followed session's is
 refreshed by a rescan, and what it carries of its task's own files ages when a
 terminal writes them. Each has its signal.
 
-**The working tree moved.** The watcher reports every repository that moved,
-whatever the current task is about ([05-watcher.md](05-watcher.md)) — its change
-set where the current task's scope covers it, its files where it does not — and
-the server drops every held document whose task could show that repository,
-decided from the scope the document already carries with no disk read. The
+**A repository signal arrived.** The watcher reports accepted repository paths,
+even when current's entry is unchanged ([05-watcher.md](05-watcher.md)).
+The server drops held documents whose scope intersects those paths, decided
+from the scope each document carries with no disk read. A signal without paths
+or for a repository control path applies to the whole repository. The
 followed session is passed over, because the rescan patches it in place. So a
 window reloaded after the code changed builds again and shows the change; a
 window on a task the change cannot appear in keeps its document and its warm

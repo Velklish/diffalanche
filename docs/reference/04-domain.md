@@ -472,6 +472,14 @@ Renamed records still use their captured old path; modified records use their
 pinned base blob. The full target must agree with the captured patch before
 either Git mapping or unique text matching can move a comment.
 
+Repositories are processed sequentially. Within one repository, at most eight
+eligible comments compute their proposals at once. Reads, mappings and pending
+patch computations are shared for that pass; a pending patch is stored before
+awaiting its driver configuration. Results retain the input comment order.
+A failed pass finishes all its comment work before throwing the first error in
+that order, and persists no proposals. The existing single guarded write runs
+only after every repository has finished successfully.
+
 The file source captures committed provenance at creation only for rows that
 inverse-map through the pinned HEAD/captured-target patch and match the committed
 blob exactly. Inserted or replaced rows have no committed identity, including
