@@ -251,3 +251,4 @@ An `—` outcome means that `result.md` did not name one. An `—` commit means 
 - <a id="da-55.12"></a>`DA-55.12-switch-drops-frames-before-document` · 2026-11-01 · batch DA-152 · `03ef4b9fd5` · A switch of task drops the task's frames until its document arrives, and a write between the two reaches neither
 - <a id="da-110.6"></a>`DA-110.6-bun-watch-tree-red-on-macos` · 2026-11-01 · completed · `f9000c9c3b` · Under Bun on macOS the directory cases of the watch tree are not heard: test:bun is red on an untouched base
 - <a id="da-155"></a>`DA-155-execution-batch-close` · 2026-11-01 · completed · `597d23f477` · Bring documentation current for the authorized execution range
+- <a id="da-156"></a>`DA-156-stabilize-ready-integration` · 2026-11-01 · completed · `ffe2d0f3e2` · Stabilize the integrated ready implementations
