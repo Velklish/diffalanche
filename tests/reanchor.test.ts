@@ -1,5 +1,5 @@
 import { execFileSync } from "node:child_process";
-import { mkdirSync, mkdtempSync, readFileSync, rmSync, writeFileSync } from "node:fs";
+import { mkdirSync, mkdtempSync, readdirSync, readFileSync, rmSync, writeFileSync } from "node:fs";
 import { tmpdir } from "node:os";
 import { join } from "node:path";
 import { afterEach, describe, expect, it, vi } from "vitest";
@@ -81,7 +81,7 @@ async function fixture() {
       author: "human",
       role: "human",
     },
-    { source: fileSourceAt(root) },
+    { source: fileSourceAt(root, config.dataDir) },
   );
   return { root, repo, file, text, git, config, scanned, comment };
 }
@@ -170,7 +170,7 @@ describe("persisted anchoring", () => {
         author: "human",
         role: "human",
       },
-      { source: fileSourceAt(f.root) },
+      { source: fileSourceAt(f.root, f.config.dataDir) },
     );
     writeFileSync(path, `${prefix}const unique = 'not committed';\n`);
     expect((await refresh(f)).line).toBe(6);
@@ -222,7 +222,7 @@ describe("persisted anchoring", () => {
         author: "human",
         role: "human",
       },
-      { source: fileSourceAt(f.root) },
+      { source: fileSourceAt(f.root, f.config.dataDir) },
     );
     writeFileSync(f.file, `${prefix}${f.text}`);
     expect(await refresh(f)).toMatchObject({ line: 2, side: "old", status: "open" });
@@ -243,7 +243,7 @@ describe("persisted anchoring", () => {
         author: "human",
         role: "human",
       },
-      { source: fileSourceAt(f.root) },
+      { source: fileSourceAt(f.root, f.config.dataDir) },
     );
     writeFileSync(
       f.file,
@@ -408,7 +408,7 @@ describe("concurrent human writes", () => {
     const review = await readReview(f.config.dataDir, "work");
     writeFileSync(f.file, `${prefix}${f.text}const added = 4;\n`);
     const change = (await scanReview(f.config, review.base)).cache.repositories;
-    const source = fileSourceAt(f.root);
+    const source = fileSourceAt(f.root, f.config.dataDir);
     let changed = false;
     await reconcileAnchors(f.config, "work", review, change, before, {
       source: async (...args) => {
@@ -488,7 +488,7 @@ describe("git identity and target refusals", () => {
         author: "human",
         role: "human",
       },
-      { source: fileSourceAt(f.root) },
+      { source: fileSourceAt(f.root, f.config.dataDir) },
     );
     const sourceSha = f.git("rev-parse", "HEAD").trim();
     writeFileSync(f.file, `${prefix}${repeated}${repeated}`);
@@ -523,7 +523,7 @@ describe("git identity and target refusals", () => {
         author: "human",
         role: "human",
       },
-      { source: fileSourceAt(f.root) },
+      { source: fileSourceAt(f.root, f.config.dataDir) },
     );
     writeFileSync(f.file, `${prefix}${f.text}`);
     f.git("add", "a.ts");
@@ -650,7 +650,7 @@ it("reconciles a session switch before its diff frames", async () => {
       author: "human",
       role: "human",
     },
-    { source: fileSourceAt(f.root) },
+    { source: fileSourceAt(f.root, f.config.dataDir) },
   );
   const signals = new Map<string, (path: string) => void>();
   const bus = createEventBus();
@@ -710,7 +710,7 @@ it("does not assign committed identity to an uncommitted copy", async () => {
       author: "human",
       role: "human",
     },
-    { source: fileSourceAt(f.root) },
+    { source: fileSourceAt(f.root, f.config.dataDir) },
   );
   expect(copy.anchor).not.toHaveProperty("revision");
   const original = await get(f.config.dataDir, "work", f.comment.id);
@@ -725,7 +725,7 @@ it("skips an inconsistent file snapshot instead of persisting a sticky orphan", 
   const before = await readDiffCache(f.config.dataDir, "work");
   writeFileSync(f.file, `${prefix}${f.text}`);
   const after = (await scanReview(f.config, review.base)).cache;
-  const source = fileSourceAt(f.root);
+  const source = fileSourceAt(f.root, f.config.dataDir);
   await reconcileAnchors(f.config, "work", review, after.repositories, before, {
     source: async (repo, path, rev) => (rev === "worktree" ? null : source(repo, path, rev)),
   });
@@ -804,7 +804,7 @@ describe("rename and legacy identity", () => {
         author: "human",
         role: "human",
       },
-      { source: fileSourceAt(f.root) },
+      { source: fileSourceAt(f.root, f.config.dataDir) },
     );
     expect(f.comment.anchor?.revision?.path).toBe("a.ts");
     writeFileSync(join(f.repo, "b.ts"), `${prefix}${f.text}const added = 4;\n`);
@@ -826,7 +826,7 @@ describe("rename and legacy identity", () => {
 
   it("uses conservative text fallback for a legacy custom source without revision capture", async () => {
     const f = await fixture();
-    const source = fileSourceAt(f.root);
+    const source = fileSourceAt(f.root, f.config.dataDir);
     f.comment = await addComment(
       f.config.dataDir,
       "work",
@@ -879,7 +879,7 @@ describe("review regressions", () => {
           author: "human",
           role: "human",
         },
-        { source: fileSourceAt(f.root) },
+        { source: fileSourceAt(f.root, f.config.dataDir) },
       );
       f.git("mv", "a.ts", "b.ts");
       f.git("commit", "-qam", "committed rename");
@@ -1007,7 +1007,7 @@ describe("review regressions", () => {
         author: "human",
         role: "human",
       },
-      { source: fileSourceAt(f.root) },
+      { source: fileSourceAt(f.root, f.config.dataDir) },
     );
     expect(await refresh(f)).toMatchObject({ line: 2, status: "open" });
     expect(await refresh(f)).toMatchObject({ line: 2, status: "open" });
@@ -1039,12 +1039,12 @@ describe("review regressions", () => {
         author: "human",
         role: "human",
       },
-      { source: fileSourceAt(f.root) },
+      { source: fileSourceAt(f.root, f.config.dataDir) },
     );
     const t1 = `${base}D\n`;
     const t2 = `X\nY\n${t1}`;
     writeFileSync(f.file, t1);
-    const source = fileSourceAt(f.root);
+    const source = fileSourceAt(f.root, f.config.dataDir);
     const realGit = gitCalls.git;
     const realGitLines = gitCalls.gitLines;
     let captured = false;
@@ -1101,4 +1101,32 @@ describe("review regressions", () => {
       readyPatch,
     );
   });
+});
+
+it("keeps committed rename identity with a Git-quoted target path", async () => {
+  const f = await fixture();
+  const path = "quoted\tname.ts";
+  f.git("mv", "a.ts", path);
+  f.git("commit", "-qam", "quoted committed rename");
+  expect(await refresh(f)).toMatchObject({ path, line: 2, status: "open" });
+});
+
+it("cleans captured mapping scratch on a Git failure without changing the saved comment", async () => {
+  const f = await fixture();
+  const review = await readReview(f.config.dataDir, "work");
+  const before = await readDiffCache(f.config.dataDir, "work");
+  writeFileSync(f.file, `${prefix}${f.text}const added = 4;\n`);
+  const after = (await scanReview(f.config, review.base)).cache;
+  vi.spyOn(gitCalls, "gitLines").mockRejectedValueOnce(new Error("captured mapping Git failed"));
+  try {
+    await expect(
+      reconcileAnchors(f.config, "work", review, after.repositories, before),
+    ).rejects.toThrow("captured mapping Git failed");
+  } finally {
+    vi.restoreAllMocks();
+  }
+  expect(
+    readdirSync(join(f.config.dataDir, "index")).filter((name) => name.startsWith(".anchor-map-")),
+  ).toEqual([]);
+  expect(await get(f.config.dataDir, "work", f.comment.id)).toEqual(f.comment);
 });

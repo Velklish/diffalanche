@@ -67,13 +67,20 @@ type FileRead = { text: string; omitted: null } | { text: null; omitted: FileOmi
 
 /** What the domain anchors a line outside the change set from: a file's text on disk or at a
  * revision, `null` when there is none — the UI's server and the CLI read it the same way. */
-export function fileSourceAt(root: string): FileSource {
+export function fileSourceAt(root: string, dataDir?: string): FileSource {
   const source: FileSource = async (repo, path, rev) =>
     (await readFileAt(join(root, repo), path, rev))?.text ?? null;
-  source.revision = async ({ repo, path, line, endLine }) => {
-    if (!isRepositoryPath(repo) || !isRepositoryPath(path)) return null;
-    return captureRevision(join(root, repo), path, line, endLine);
-  };
+  if (dataDir !== undefined)
+    source.revision = async (input) => {
+      if (!isRepositoryPath(input.repo) || !isRepositoryPath(input.path)) return null;
+      const cwd = join(root, input.repo);
+      return captureRevision(
+        cwd,
+        dataDir,
+        input,
+        async (path, sha) => (await readFileAt(cwd, path, { sha }))?.text ?? null,
+      );
+    };
   return source;
 }
 

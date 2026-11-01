@@ -21,7 +21,7 @@ import {
   updateSession,
 } from "../storage/index.ts";
 import type { RepositoryChange } from "../types.ts";
-import { captureAnchor, captureFromFile, fileLines } from "./anchors.ts";
+import { captureAnchor, captureFromFile, fileLines, normalizeLine } from "./anchors.ts";
 import { isUnanswered } from "./counters.ts";
 import { DomainError } from "./errors.ts";
 import type { Actor } from "./roles.ts";
@@ -163,6 +163,8 @@ export type FileSource = {
     path: string;
     line: number;
     endLine: number;
+    text: string;
+    base?: { sha: string; path: string };
   }) => Promise<NonNullable<Anchor["revision"]> | null>;
 };
 
@@ -240,15 +242,23 @@ export async function addComment(
     const repository = (await changeSet(dataDir, session)).find((one) => one.path === repo);
     const oldPath = repository?.files.find((file) => file.path === path)?.oldPath ?? path;
     const baseSha = repository?.base?.sha;
-    const revision =
-      side === "new"
-        ? await options.source.revision?.({ repo, path, line, endLine: input.endLine ?? line })
-        : baseSha === undefined
-          ? null
-          : { sha: baseSha, path: oldPath, line, endLine: input.endLine ?? line };
+    let revision: Anchor["revision"] | null | undefined;
+    if (side === "new" && options.source.revision !== undefined) {
+      const text = await options.source(repo, path, "worktree");
+      if (text !== null)
+        revision = await options.source.revision({
+          repo,
+          path,
+          line,
+          endLine: input.endLine ?? line,
+          text,
+          ...(baseSha === undefined ? {} : { base: { sha: baseSha, path: oldPath } }),
+        });
+    } else if (side === "old" && baseSha !== undefined)
+      revision = { sha: baseSha, path: oldPath, line, endLine: input.endLine ?? line };
     if (revision !== undefined && revision !== null) {
       const text = await options.source(repo, revision.path, { sha: revision.sha });
-      const body = anchor.rangeContent ?? [anchor.lineContent];
+      const body = (anchor.rangeContent ?? [anchor.lineContent]).map(normalizeLine);
       const rows = text === null ? [] : fileLines(text).slice(revision.line - 1, revision.endLine);
       if (rows.length === body.length && rows.every((row, i) => row === body[i]))
         anchor = { ...anchor, revision };

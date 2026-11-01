@@ -88,7 +88,7 @@ export const comment: Command = {
         author: text(args, "author") ?? DEFAULT_AUTHOR,
         role: choice(args, "role", ROLES) ?? DEFAULT_ROLE,
       },
-      { source: fileSourceAt(config.root) },
+      { source: fileSourceAt(config.root, config.dataDir) },
     );
     context.io.out(`${written.id} opened on ${where(written)}\n`);
     return 0;

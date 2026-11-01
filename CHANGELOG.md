@@ -41,6 +41,10 @@ and `bun run release` refuses a version that has no section. See
   edits. Lost or ambiguous anchors retain their saved text as `orphaned`;
   `list --status orphaned` and session warnings expose them. Human reopen
   follows a manual anchor edit. Schema 3 retains readable versions 1 and 2.
+  Committed renames retain file identity even after the old path is recreated;
+  moves respect scope and exclusions. Mapping uses captured bytes so concurrent
+  edits cannot supply coordinates from another snapshot. Legacy source identity
+  is conservative, and committed CRLF anchors retain provenance.
   Renames that also edit content retain the old path for anchoring. Model
   proposals and their UI remain deferred.
 

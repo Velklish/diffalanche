@@ -81,5 +81,5 @@ export async function fileRoute(
 
 /** What the domain reads a line from when the change set does not carry it (04-domain.md). */
 export function fileSource(config: Config): FileSource {
-  return fileSourceAt(config.root);
+  return fileSourceAt(config.root, config.dataDir);
 }

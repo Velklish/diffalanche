@@ -122,17 +122,24 @@ export function filterChange(
   const patterns = exclude.map(globToRegExp);
   return {
     ...change,
-    files: change.files.filter((file) => {
-      if (!pathInScope(scope, change.path, file.path)) return false;
-      // A matching directory suppresses its descendants, as the watcher's directory pruning does.
-      for (let path = file.path; path !== ""; path = path.slice(0, path.lastIndexOf("/"))) {
-        const name = path.slice(path.lastIndexOf("/") + 1);
-        if (patterns.some((pattern) => pattern.test(name) || pattern.test(path))) return false;
-        if (!path.includes("/")) break;
-      }
-      return true;
-    }),
+    files: change.files.filter((file) => fileIncluded(scope, change.path, file.path, patterns)),
   };
+}
+
+/** The file predicate shared by scanning and automatic anchor path changes. */
+export function fileIncluded(
+  scope: Scope,
+  repo: string,
+  file: string,
+  excluded: readonly RegExp[],
+): boolean {
+  if (!pathInScope(scope, repo, file)) return false;
+  for (let path = file; path !== ""; path = path.slice(0, path.lastIndexOf("/"))) {
+    const name = path.slice(path.lastIndexOf("/") + 1);
+    if (excluded.some((pattern) => pattern.test(name) || pattern.test(path))) return false;
+    if (!path.includes("/")) break;
+  }
+  return true;
 }
 
 /** What one scan of the root came to: the cache, and every repository it saw. */

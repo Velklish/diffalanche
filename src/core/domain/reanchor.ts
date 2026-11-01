@@ -1,15 +1,16 @@
 import { join } from "node:path";
-import { sameBase, sameScope } from "../change-set.ts";
+import { fileIncluded, filterChange, sameBase, sameScope } from "../change-set.ts";
 import type { Config } from "../config/index.ts";
-import { mapWorktreeAnchor, reverseAnchor, worktreeAnchorPatch } from "../git/anchors.ts";
+import { capturedAnchorPatch, mapWorktreeAnchor, reverseAnchor } from "../git/anchors.ts";
 import { fileSourceAt, isRepositoryPath } from "../git/browse.ts";
 import { readRepositoryChange } from "../git/index.ts";
 import { repositoryDrivers, revParse } from "../git/run.ts";
 import { byCodePoint } from "../order.ts";
+import { globToRegExp } from "../scanner/index.ts";
 import type { Anchor, Comment, DiffCache, Review, Scope } from "../storage/index.ts";
 import { readComments, updateSession } from "../storage/index.ts";
 import type { FileChange, RepositoryChange, ScanWarning } from "../types.ts";
-import { fileLines, locateAnchor } from "./anchors.ts";
+import { fileLines, locateAnchor, normalizeLine } from "./anchors.ts";
 import type { FileSource } from "./comments.ts";
 import { commentInScope } from "./scope.ts";
 
@@ -54,7 +55,9 @@ export function commentWarnings(
 
 function sameRows(text: string, revision: Revision, body: string[]): boolean {
   const rows = fileLines(text).slice(revision.line - 1, revision.endLine);
-  return rows.length === body.length && rows.every((row, i) => row === body[i]);
+  return (
+    rows.length === body.length && rows.every((row, i) => row === normalizeLine(body[i] ?? ""))
+  );
 }
 
 function agreesWithScan(file: FileChange | undefined, base: string | null, text: string): boolean {
@@ -91,7 +94,7 @@ export async function reconcileAnchors(
   before: DiffCache | null,
   options: { source?: FileSource; repo?: string } = {},
 ): Promise<{ comments: Comment[]; changed: boolean }> {
-  const source = options.source ?? fileSourceAt(config.root);
+  const source = options.source ?? fileSourceAt(config.root, config.dataDir);
   const comments = await readComments(config.dataDir, session);
   const eligible = comments.filter(
     (comment) =>
@@ -105,12 +108,17 @@ export async function reconcileAnchors(
       (options.repo === undefined || comment.repo === options.repo),
   );
   const proposals: Proposal[] = [];
+  const excluded = config.exclude.map(globToRegExp);
   for (const repo of new Set(eligible.map((comment) => comment.repo))) {
     if (repo === null || !isRepositoryPath(repo)) continue;
     const cwd = join(config.root, repo);
     const change =
       changes.find((one) => one.path === repo) ??
-      (await readRepositoryChange(config.root, repo, review.base, { hunks: true }));
+      filterChange(
+        review.scope,
+        await readRepositoryChange(config.root, repo, review.base, { hunks: true }),
+        config.exclude,
+      );
     const head = await revParse(cwd, "HEAD");
     if (review.base.mode === "head" && change.base !== null && head !== change.base.sha) continue;
     const previous = before?.repositories.find((one) => one.path === repo);
@@ -124,16 +132,9 @@ export async function reconcileAnchors(
       }
       return pending;
     };
-    let patch: Promise<Awaited<ReturnType<typeof worktreeAnchorPatch>> | null> | null = null;
-    const worktreePatch = () =>
-      (patch ??= (async () => {
-        if (head === null) return null;
-        const drivers = await repositoryDrivers(cwd);
-        if (drivers === null)
-          throw new Error(`repository configuration could not be read: ${repo}`);
-        return worktreeAnchorPatch(cwd, head, drivers);
-      })());
-    const mappings = new Map<string, Promise<number[] | null>>();
+    const patches = new Map<string, Promise<Awaited<ReturnType<typeof capturedAnchorPatch>>>>();
+    let drivers: Promise<string[] | null> | null = null;
+    const mappings = new Map<string, Promise<Awaited<ReturnType<typeof reverseAnchor>>>>();
     for (const comment of eligible.filter((one) => one.repo === repo)) {
       const { path, anchor, side, line, endLine } = comment;
       if (
@@ -144,13 +145,63 @@ export async function reconcileAnchors(
         !isRepositoryPath(path)
       )
         continue;
-      const file = change.files.find((one) => one.path === path || one.oldPath === path);
-      const newPath = file?.path ?? path;
-      const targetPath = side === "old" ? (file?.oldPath ?? path) : newPath;
+      let saved = anchor;
+      let revision = anchor.revision;
+      const body =
+        (anchor.rangeContent ?? (endLine === null ? [anchor.lineContent] : null))?.map(
+          normalizeLine,
+        ) ?? null;
+      if (
+        revision === undefined &&
+        side === "old" &&
+        previous?.base !== null &&
+        previous?.base !== undefined
+      ) {
+        const sha = previous.base.sha;
+        const sourcePath = previous.files.find((one) => one.path === path)?.oldPath ?? path;
+        const committed = await read(sourcePath, { sha });
+        if (
+          committed !== null &&
+          fileLines(committed)[line - 1] === normalizeLine(anchor.lineContent)
+        ) {
+          const content = fileLines(committed).slice(line - 1, endLine ?? line);
+          if (
+            content.length === (endLine ?? line) - line + 1 &&
+            (body === null || content.every((row, i) => row === body[i]))
+          ) {
+            saved = endLine === null ? anchor : { ...anchor, rangeContent: content };
+            revision = { sha, path: sourcePath, line, endLine: endLine ?? line };
+          }
+        }
+      }
       const targetSha = side === "old" ? (change.base?.sha ?? null) : head;
+      let mapping: Awaited<ReturnType<typeof reverseAnchor>> = null;
+      if (revision !== undefined && targetSha !== null) {
+        const committed = await read(revision.path, { sha: revision.sha });
+        if (
+          committed !== null &&
+          sameRows(committed, revision, saved.rangeContent ?? [saved.lineContent])
+        ) {
+          const key = JSON.stringify([revision, targetSha]);
+          let pending = mappings.get(key);
+          if (pending === undefined) {
+            pending = reverseAnchor(cwd, revision, targetSha);
+            mappings.set(key, pending);
+          }
+          mapping = await pending;
+        }
+      }
+      const identityPath = mapping?.path ?? path;
+      if (!isRepositoryPath(identityPath)) continue;
+      const file = change.files.find(
+        (one) => one.path === identityPath || one.oldPath === identityPath,
+      );
+      const newPath = file?.path ?? identityPath;
+      const targetPath = side === "old" ? (file?.oldPath ?? identityPath) : newPath;
+      const allowed = fileIncluded(review.scope, repo, newPath, excluded);
       const target = side === "new" ? "worktree" : targetSha === null ? null : { sha: targetSha };
-      const text = target === null ? null : await read(targetPath, target);
-      if (side === "new") {
+      const text = !allowed || target === null ? null : await read(targetPath, target);
+      if (side === "new" && allowed) {
         if (
           text === null &&
           file !== undefined &&
@@ -162,48 +213,34 @@ export async function reconcileAnchors(
           const base =
             change.base === null
               ? null
-              : await read(file?.oldPath ?? path, { sha: change.base.sha });
+              : await read(file?.oldPath ?? identityPath, { sha: change.base.sha });
           if (!agreesWithScan(file, base, text)) continue;
         }
       }
-      let saved = anchor;
-      let revision = anchor.revision;
-      const body = anchor.rangeContent ?? (endLine === null ? [anchor.lineContent] : null);
-      if (revision === undefined && side === "old") {
-        const sha = previous?.base?.sha ?? targetSha;
-        const sourcePath = previous?.files.find((one) => one.path === path)?.oldPath ?? targetPath;
-        const committed = sha === null ? null : await read(sourcePath, { sha });
-        if (committed !== null && sha !== null) {
-          if (fileLines(committed)[line - 1] === anchor.lineContent) {
-            const content = fileLines(committed).slice(line - 1, endLine ?? line);
-            if (
-              content.length === (endLine ?? line) - line + 1 &&
-              (body === null || content.every((row, i) => row === body[i]))
-            ) {
-              saved = endLine === null ? anchor : { ...anchor, rangeContent: content };
-              revision = { sha, path: sourcePath, line, endLine: endLine ?? line };
-            }
-          }
-        }
-      }
       let mapped: number[] | undefined;
-      if (revision !== undefined && targetSha !== null) {
-        const committed = await read(revision.path, { sha: revision.sha });
-        const savedBody = saved.rangeContent ?? [saved.lineContent];
-        if (committed !== null && sameRows(committed, revision, savedBody)) {
-          const key = JSON.stringify([revision, targetSha]);
-          let mapping = mappings.get(key);
-          if (mapping === undefined) {
-            mapping = reverseAnchor(cwd, revision, targetSha);
-            mappings.set(key, mapping);
-          }
-          const rows = await mapping;
-          if (rows !== null) {
-            if (side === "old") mapped = rows;
-            else {
-              const diff = await worktreePatch();
-              if (diff !== null) mapped = mapWorktreeAnchor(diff, newPath, rows) ?? undefined;
+      if (allowed && mapping !== null && text !== null) {
+        if (side === "old") mapped = mapping.lines;
+        else if (head !== null) {
+          const committed = await read(mapping.path, { sha: head });
+          if (committed !== null) {
+            const key = `${mapping.path}\0${newPath}`;
+            let pending = patches.get(key);
+            if (pending === undefined) {
+              drivers ??= repositoryDrivers(cwd);
+              const overrides = await drivers;
+              if (overrides === null)
+                throw new Error(`repository configuration could not be read: ${repo}`);
+              pending = capturedAnchorPatch(
+                cwd,
+                config.dataDir,
+                mapping.path,
+                committed,
+                text,
+                overrides,
+              );
+              patches.set(key, pending);
             }
+            mapped = mapWorktreeAnchor(await pending, mapping.path, mapping.lines) ?? undefined;
           }
         }
       }
@@ -235,7 +272,8 @@ export async function reconcileAnchors(
         next.anchor = { ...found.anchor, revision };
       if (
         found.kind === "matched" &&
-        (found.line !== line ||
+        (newPath !== path ||
+          found.line !== line ||
           found.endLine !== endLine ||
           JSON.stringify(found.anchor) !== JSON.stringify(anchor))
       )
@@ -268,6 +306,13 @@ export async function reconcileAnchors(
           (one) => one.id === comment.id && one.fingerprint === fingerprint(comment),
         );
         if (proposal === undefined) continue;
+        if (
+          proposal.next.path !== comment.path &&
+          (comment.repo === null ||
+            proposal.next.path === null ||
+            !fileIncluded(draft.review.scope, comment.repo, proposal.next.path, excluded))
+        )
+          continue;
         Object.assign(comment, proposal.next);
         applied = true;
       }

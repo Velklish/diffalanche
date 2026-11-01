@@ -457,21 +457,30 @@ diff and base blob, computes matches outside the session lock,
 and persists proposals through `updateSession`. Under that lock it checks the
 session identity, base, scope and each comment's anchor/status fingerprint.
 Concurrent replies survive; a concurrent status or anchor edit rejects that
-proposal. A pass with no changes writes nothing. A target inconsistent with the captured
-diff is skipped so the next queued read can retry it.
+proposal. A pass with no changes writes nothing. A target inconsistent with the
+captured diff is skipped so the next queued read can retry it.
 
 The file source captures committed provenance at creation only for rows that
-inverse-map through the pinned HEAD/worktree patch and match the committed
+inverse-map through the pinned HEAD/captured-target patch and match the committed
 blob exactly. Inserted or replaced rows have no committed identity, including
 copies of existing text. Custom file sources can omit this optional capability;
 legacy new-side comments use the conservative unique text fallback.
 
 The Git matcher uses a verified committed span and pinned target commit,
-then maps surviving HEAD rows through a separate worktree patch for `new`.
+then maps surviving HEAD rows through a diff of the pinned HEAD blob and
+immutable captured target bytes for `new`. The porcelain filename carries
+committed rename identity, even when HEAD has no changes. A recreated old path
+cannot replace that target. Both scanning and proposed path changes share the
+scope/exclusion predicate; a refused target leaves the saved path available.
 The `old` side reads the resolved base and the rename's old path, never the
 working tree. Captured ranges map every selected row; insertions between
-surviving rows expand the range. A legacy range without its body is refused
-conservatively when no verified mapping exists.
+surviving rows expand the range. Legacy old-side source identity requires a
+trusted previous cache, never the
+new target commit as a substitute for the past. A body-less legacy range with no
+previous snapshot is orphaned conservatively rather than filled from a copy.
+
+Captured rows and context use the same CRLF line-ending normalization as blob
+and mapped-row verification. Original snapshots of existing data are preserved.
 
 The text fallback searches the whole target file, including untracked or
 uncommitted lines. Case-sensitive character bigram Dice similarity trims line

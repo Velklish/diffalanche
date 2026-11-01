@@ -81,10 +81,12 @@ export function captureAnchor(
     const found = onSide[index];
     if (found === undefined) continue;
     return {
-      lineContent: found.content,
+      lineContent: normalizeLine(found.content),
       hunk: hunk.header,
-      before: onSide.slice(Math.max(0, index - CONTEXT), index).map((one) => one.content),
-      after: onSide.slice(index + 1, index + 1 + CONTEXT).map((one) => one.content),
+      before: onSide
+        .slice(Math.max(0, index - CONTEXT), index)
+        .map((one) => normalizeLine(one.content)),
+      after: onSide.slice(index + 1, index + 1 + CONTEXT).map((one) => normalizeLine(one.content)),
     };
   }
 
@@ -145,8 +147,7 @@ export function captureFromFile(
   file: FileChange | null,
   name: string,
 ): Anchor {
-  const lines = text.split("\n");
-  if (lines.at(-1) === "") lines.pop();
+  const lines = fileLines(text);
   const index = line - 1;
   const found = lines[index];
   if (found === undefined) {
@@ -170,6 +171,10 @@ export function captureFromFile(
 export type AnchorMatch =
   | { kind: "matched"; line: number; endLine: number | null; anchor: Anchor }
   | { kind: "orphaned" };
+
+export function normalizeLine(line: string): string {
+  return line.replace(/\r$/, "");
+}
 
 export function fileLines(text: string): string[] {
   const lines = text.replace(/\r\n/g, "\n").split("\n");
@@ -207,7 +212,8 @@ export function locateAnchor(
 ): AnchorMatch {
   const lines = fileLines(text);
   const body =
-    saved.anchor.rangeContent ?? (saved.endLine === null ? [saved.anchor.lineContent] : null);
+    saved.anchor.rangeContent?.map(normalizeLine) ??
+    (saved.endLine === null ? [normalizeLine(saved.anchor.lineContent)] : null);
   if (body === null || body.length === 0) return { kind: "orphaned" };
   const finish = (start: number, end: number): AnchorMatch => ({
     kind: "matched",

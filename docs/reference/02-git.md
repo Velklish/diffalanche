@@ -635,14 +635,24 @@ same two words, for the same reasons, as a file of the change set
 ## Mapping comment anchors
 
 `anchors.ts` uses the trusted Git runner and inert configuration. Reverse blame
-walks a verified source commit to one pinned target commit; its porcelain
-coordinates are accepted only when every selected row survives at that target.
-It never names the uncommitted worktree as a revision. A separate `diff-index
--p -M PINNED_HEAD --no-ext-diff --no-textconv -U0` maps surviving rows through
-staged and unstaged changes without refreshing the index. Creation inverse-maps worktree rows before assigning committed provenance.
-Inserted and replaced rows have none, even when their text copies an existing
-line. Target text is still verified through the safe file reader. See
-[automatic re-anchoring](04-domain.md#automatic-re-anchoring).
+walks a verified source commit to one pinned target commit; every selected row
+must survive there with the same target filename. The porcelain filename is
+retained, so committed renames still work when the current HEAD diff is empty;
+recreating the old path does not substitute a copy for that identity.
+
+The HEAD-to-target mapping compares the pinned HEAD blob with the captured
+whole-file bytes, using `git diff --no-index --no-ext-diff --no-textconv -U0`.
+Both inputs are immutable files in one owned temporary directory under
+`dataDir/index/`, which the data watcher already ignores. A `finally` removes
+that directory on success or failure. The existing trusted line reader accepts
+Git's diff exit 1 as a differences result. No reviewed file or index is written.
+A live T1→T2→T1 worktree transition cannot change these captured diff inputs.
+
+Creation inverse-maps the same captured bytes before assigning committed
+provenance; inserted and replaced rows have none, including copied text.
+The provider receives the configured data directory for scratch storage;
+a source without this optional capability keeps conservative text matching.
+See [automatic re-anchoring](04-domain.md#automatic-re-anchoring).
 
 ## Text search
 
