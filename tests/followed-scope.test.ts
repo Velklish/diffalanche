@@ -372,6 +372,79 @@ describe("a newly followed held scope", () => {
     }
   });
 
+  it("drops a captured B notice after its known scope leaves behind another join", async () => {
+    const run = await fixture();
+    const detachB = run.attach(run.token);
+    const other = "held-other";
+    const rescanEntered = barrier();
+    const rescanRelease = barrier();
+    const joinEntered = barrier();
+    const joinRelease = barrier();
+    let heldRescan = false;
+    let heldJoin = false;
+    let detachOther: (() => void) | undefined;
+    let restoreRead = () => {};
+    try {
+      await run.onopenRead();
+      await run.edit("B.ts", 2);
+      await vi.waitFor(
+        () =>
+          expect(
+            run.events.filter((event) => event.type === "diff-changed" && event.session === B),
+          ).toHaveLength(1),
+        { timeout: 100 },
+      );
+      expect(run.current()).toBe(A);
+      const knownB = run.events.filter(
+        (event) => event.type === "diff-changed" && event.session === B,
+      );
+      await createSession(run.config.dataDir, other, { mode: "head" }, undefined, {
+        scope: [{ repo: REPO, paths: ["C.ts"] }],
+        use: false,
+      });
+      const actual = storage.readReview;
+      const read = vi.spyOn(storage, "readReview").mockImplementation(async (directory, name) => {
+        const review = await actual(directory, name);
+        if (name === A && !heldRescan) {
+          heldRescan = true;
+          rescanEntered.resolve();
+          await bounded(rescanRelease.promise, "rescan release");
+        }
+        if (name === other && !heldJoin) {
+          heldJoin = true;
+          joinEntered.resolve();
+          await bounded(joinRelease.promise, "other join release");
+        }
+        return review;
+      });
+      restoreRead = () => read.mockRestore();
+      const edited = run.edit("B.ts", 3);
+      await bounded(rescanEntered.promise, "rescan entered");
+      detachOther = run.attach(undefined, other);
+      rescanRelease.resolve();
+      await bounded(joinEntered.promise, "other join entered");
+      expect(run.current()).toBe(A);
+      expect(
+        run.events.filter((event) => event.type === "diff-changed" && event.session === B),
+      ).toEqual(knownB);
+      detachB();
+      joinRelease.resolve();
+      await bounded(edited, "repository drain");
+      await run.edit("C.ts", 2);
+      expect(
+        run.events.filter((event) => event.type === "diff-changed" && event.session === B),
+      ).toEqual(knownB);
+      run.negatives();
+    } finally {
+      rescanRelease.resolve();
+      joinRelease.resolve();
+      restoreRead();
+      detachOther?.();
+      detachB();
+      await run.close();
+    }
+  });
+
   it("does not send a captured notice to a different task that joins only after capture", async () => {
     const run = await fixture();
     const held = holdRescanAndJoin();
