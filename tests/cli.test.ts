@@ -6,7 +6,7 @@ import { createServer } from "node:net";
 import { join } from "node:path";
 import { PassThrough } from "node:stream";
 import { fileURLToPath } from "node:url";
-import { afterEach, beforeEach, describe, expect, it } from "vitest";
+import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
 import { processOutput } from "../src/cli/output.ts";
 import { run } from "../src/cli/run.ts";
 import { confirmOnTerminal } from "../src/cli/stdin.ts";
@@ -764,21 +764,38 @@ describe("output piped into a reader that stops early", () => {
     writeFileSync(join(root, REPOS[0], "big.ts"), BIG);
     await inRoot("review", "new", "t1");
 
-    const child = spawn(process.execPath, [cli, "diff", "--root", root], {
-      stdio: ["ignore", "pipe", "pipe"],
-    });
-    let err = "";
-    child.stderr.on("data", (chunk: Buffer) => {
-      err += chunk.toString();
-    });
-    // The reader takes what it wants and goes, which is what `| head` does.
-    child.stdout.once("data", () => child.stdout.destroy());
+    vi.stubEnv("NO_COLOR", "1");
+    vi.stubEnv("FORCE_COLOR", "1");
+    try {
+      const env: NodeJS.ProcessEnv = { ...process.env, NO_COLOR: "1" };
+      delete env.FORCE_COLOR;
+      const child = spawn(process.execPath, [cli, "diff", "--root", root], {
+        env,
+        stdio: ["ignore", "pipe", "pipe"],
+        timeout: 55_000,
+      });
+      const closed = new Promise<number>((exited, failed) => {
+        child.once("error", failed);
+        child.once("close", (status) => exited(status ?? -1));
+      });
+      try {
+        let err = "";
+        child.stderr.on("data", (chunk: Buffer) => {
+          err += chunk.toString();
+        });
+        // The reader takes what it wants and goes, which is what `| head` does.
+        child.stdout.once("data", () => child.stdout.destroy());
 
-    const code = await new Promise<number>((exited) => {
-      child.on("exit", (status) => exited(status ?? -1));
-    });
-    expect(err).toBe("");
-    expect(code).toBe(0);
+        const code = await closed;
+        expect(err).toBe("");
+        expect(code).toBe(0);
+      } finally {
+        if (child.exitCode === null && child.signalCode === null) child.kill();
+        await closed;
+      }
+    } finally {
+      vi.unstubAllEnvs();
+    }
   }, 60_000);
 
   it("swallows only the reader going away, and reports any other stream fault", () => {

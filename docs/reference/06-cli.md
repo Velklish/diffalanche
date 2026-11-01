@@ -268,18 +268,32 @@ JSON when `--json` is given and on stderr when it is not, so `diffalanche diff
 **A reader that goes away first is exit code 0 and nothing on stderr.**
 `diffalanche diff | head` is a normal way to use a CLI: the reader got what it
 asked for, the rest of the write has nowhere to go, and there is nothing to
-report. Without a handler on the stream that `EPIPE` is an unhandled `'error'`
-event — a Node internals stack trace and exit code 1, which is the table's row
-for a refusal the tool never made. The writes are single and large enough to
+report. Both `EPIPE` (broken pipe) and `ENOTCONN` (socket not connected) on
+standard output or standard error stop further writes without a diagnostic or
+failure status. These are inherited output streams, with no connection for the
+CLI to establish. Node can expose a standard stream as a socket
+([process I/O](https://nodejs.org/api/process.html#processstdout)); the error
+names are defined by [libuv](https://docs.libuv.org/en/v1.x/errors.html).
+Without a handler, the stream emits an unhandled `'error'` event — a Node
+internals stack trace and exit code 1, which is the table's row for a refusal
+the tool never made. The writes are single and large enough to
 reach it: `diff` emits the whole change set in one call, against a synthetic
 review of 30 000 lines. Both entry points take their streams from one place, so
 the npm channel and the binary answer the same way; under Bun the runtime never
 aborted on it to begin with.
 
-Any other fault of a stream — a full disk on a redirected stdout — is **not**
-swallowed with it: it is one line on stderr naming the stream and the fault, and
-exit code 2, because output the person asked for did not arrive and nothing
-about that is expected.
+Other stream faults, including `ENOSPC`, `EIO` and `EBADF`, keep exit code 2.
+A stdout failure prints one line on stderr naming the stream and fault; a
+stderr failure cannot report through itself. Output the person asked for did
+not arrive, and these errors do not identify an absent reader.
+
+`tests/cli-output.test.ts` supplies both reader-departure error codes through
+the shared stream interface, and checks the other failures independently on
+stdout and stderr. The real early-reader child in `tests/cli.test.ts` cannot
+choose the kernel's errno. Its explicit environment removes `FORCE_COLOR` and
+sets `NO_COLOR=1`, even with both variables set in its parent, so a Node color
+warning cannot be mistaken for a CLI diagnostic. The fixture restores its
+parent's environment and waits for the child and stderr to close.
 
 A refusal from the domain carries its own message (`no review session "x"`,
 `branch: names no branch`); a refusal from storage names the file and the field
