@@ -22,6 +22,8 @@ and `bun run release` refuses a version that has no section. See
 
 - Configuration file exclusions now apply to tracked and untracked files in
   initial, per-repository, named and scoped reads, and in live cache refreshes.
+  Named HTTP diffs, candidate files and scan counts use the same policy;
+  repositories with only excluded changes have no visible changes.
   Directory exclusions and scope continue to match current paths on renames.
 
 - The configuration-refusal regression records `diff-index`, the production

@@ -494,7 +494,8 @@ await refreshRepository(config, session, review.base, "repos/group/service-api",
   matching the current file path and its directory ancestors relative to the
   repository, plus each basename ([01-scanner.md](01-scanner.md#file-exclusions)).
   The same policy runs on full scans, CLI refreshes and watcher rescans, before
-  the cache and totals are built. With no exclusion, a
+  the cache and totals are built. Named HTTP repository reads, candidate files
+  and scan counts apply it too. With no exclusion, a
   repository the task is not about comes back with no files and no warnings — a
   warning about a repository outside the task is not this task's news — one
   the scope holds as a whole keeps every file, and one that names paths keeps

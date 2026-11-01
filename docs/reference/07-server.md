@@ -542,7 +542,8 @@ a minute ago: the card of an edited file never showed the edit, three times out
 of three on the synthetic review, while the same event on the current session
 showed it every time. So the route reads the one repository the event names —
 five git processes, what the watcher pays for the current session anyway, and
-not the whole scope's — and filters it by the task's scope. Measured end to end
+not the whole scope's — and filters it by the task's scope and `Config.exclude`,
+using the same current-path policy as full reads ([01-scanner.md](01-scanner.md#file-exclusions)). Measured end to end
 on the synthetic review, from the edit to the frame that showed it: 295 ms for a
 window on a named task against 235 ms for one on the current session, inside the
 300 ms budget of `docs/SPEC.md` section 6 and close to it.
@@ -682,7 +683,8 @@ the diff of a whole root is megabytes.
 ```
 
 A repository with nothing to show is not part of a change set, here as
-everywhere else.
+everywhere else. `Config.exclude` applies before candidate files are selected:
+ignoring the task's scope does not bypass file exclusions or Git-ignore rules.
 
 ### The scan
 
@@ -691,6 +693,10 @@ it lists every repository the scan finds, with its branch, its kind, and whether
 it has anything to review against the current session's base — `head` when
 there is no session — and it exists for the screen shown before there is a
 session, when there is no change set to answer from.
+
+File counts and `hasChanges` apply `Config.exclude` before counting. A repository
+whose changes are all excluded remains listed with `files: 0` and
+`hasChanges: false`, matching the file policy of named diffs and candidates.
 
 ```json
 {
