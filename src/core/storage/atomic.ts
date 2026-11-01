@@ -1,7 +1,7 @@
 /** A temporary file next to the target, flushed, then renamed over it: which crash that survives
  * is [03-storage.md](../../../docs/reference/03-storage.md), "Atomic writes" ([ADR-003](../../../docs/adr/adr-003-on-disk-format.md)). */
 import { randomUUID } from "node:crypto";
-import { open, rename, unlink } from "node:fs/promises";
+import { type FileHandle, open, rename, unlink } from "node:fs/promises";
 import { dirname } from "node:path";
 import { StorageError } from "./errors.ts";
 
@@ -37,7 +37,7 @@ export async function writeFileAtomic(
   if (options.durable !== false) await syncDir(dirname(path));
 }
 
-/** The flush a platform is allowed to refuse, and nothing else: `fsync` of a directory. */
+/** A platform may decline opening or flushing a directory, but not a real I/O failure. */
 const UNSUPPORTED = new Set(["EINVAL", "ENOTSUP"]);
 
 /** Flushes the entry the rename created; the bytes it points at are already down. */
@@ -45,19 +45,17 @@ async function syncDir(path: string): Promise<void> {
   // Windows flushes only a handle opened for writing, and a directory opens read-only here, so the
   // flush can never succeed there (DA-45.3, 03-storage.md).
   if (process.platform === "win32") return;
-  // A platform that will not open a directory at all skips the flush; the write
-  // it belongs to is published either way.
-  const handle = await open(path, "r").catch(() => null);
-  if (handle === null) return;
+  let handle: FileHandle | undefined;
   try {
+    handle = await open(path, "r");
     await handle.sync();
   } catch (error) {
-    const code = (error as NodeJS.ErrnoException).code;
-    if (code !== undefined && UNSUPPORTED.has(code)) return;
+    const code = error instanceof Error && "code" in error ? error.code : undefined;
+    if (typeof code === "string" && UNSUPPORTED.has(code)) return;
     // A failed flush is a refusal of this file, not a fault of the tool: the
     // caller asked for durability and is told it did not happen.
     throw new StorageError(path, null, `durability flush failed: ${code ?? String(error)}`);
   } finally {
-    await handle.close();
+    await handle?.close();
   }
 }

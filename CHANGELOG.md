@@ -716,6 +716,11 @@ and `bun run release` refuses a version that has no section. See
 
 ### Fixed
 
+- Directory-open failures such as `EMFILE`, `EACCES` and `EIO` now report the
+  durability failure as a `StorageError` after an atomic write. Only `EINVAL`
+  and `ENOTSUP` skip the directory flush; the already published replacement
+  remains in place. Windows and non-durable writes still omit that flush.
+
 - **A file replaced by rename is heard every time on Linux**. Node
   22 emulates `recursive: true` on Linux with one watch per path, each on the
   inode it found. git renames `index.lock` and `HEAD.lock` over `.git/index` and

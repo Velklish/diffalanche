@@ -164,18 +164,16 @@ never a torn one, but a power cut can still bring back the old one after
 `comment` exited 0. That the cause is the read-only handle comes from the
 Win32 documentation of `FlushFileBuffers`, not from a run on a Windows machine.
 
-Elsewhere, a platform that refuses to open a directory at all does not turn a
-successful write into an error: the flush is skipped and the write stands,
-because the rename has already published it. **A flush that was attempted and
-failed is a different event**, and only `EINVAL` and `ENOTSUP` are read as the
-platform declining it. Everything else, `EIO` above all, comes back to the
-caller as a `StorageError` naming the directory —
+Elsewhere, only `EINVAL` and `ENOTSUP` from opening or syncing the directory
+skip the flush. Every other open or sync error, including `EMFILE`, `EACCES`
+and `EIO`, comes back to the caller as a `StorageError` naming the directory —
 `/root/.diffalanche/reviews/one: durability flush failed: EIO` — so it reads
 like every other refusal of this module and the CLI answers 1 with that line
 rather than 2 with a stack. A write whose durability was asked for and did not
 happen is what the caller wanted to hear about, and swallowing it would leave
 `comment` exiting 0 on the one outcome this section promises against on those
-platforms.
+platforms. The rename has already published the replacement, so a durability
+error does not roll it back or remove it.
 
 ## The lock
 
