@@ -415,21 +415,30 @@ describe("the index with an embedder that is a function of the text", () => {
     expect(statSync(indexPath(dataDir)).mtimeMs).toBe(before);
   });
 
+  // Root bypasses directory mode bits; the link through a file above holds ENOTDIR separately.
   it.skipIf(process.getuid?.() === 0)(
     "says a comments.json behind a directory it may not enter is refused, not its errno",
     async () => {
-      await updateIndex(dataDir, fakeEmbedder());
+      const { index: before } = await updateIndex(dataDir, fakeEmbedder());
+      const bytes = readFileSync(indexPath(dataDir));
+      const stamp = statSync(indexPath(dataDir)).mtimeMs;
       const locked = join(dataDir, "locked");
       mkdirSync(locked);
       rmSync(commentsPath(dataDir, "alpha"));
       symlinkSync(join(locked, "comments.json"), commentsPath(dataDir, "alpha"));
       chmodSync(locked, 0o000);
       try {
-        const { update } = await updateIndex(dataDir, fakeEmbedder());
+        const fake = fakeEmbedder();
+        const { index, update } = await updateIndex(dataDir, fake);
         expect(update.warnings).toEqual([
           `${commentsPath(dataDir, "alpha")}: could not be read: permission denied; ` +
             "its comments were not indexed again",
         ]);
+        expect(index.entries).toEqual(before.entries);
+        expect(update).toMatchObject({ embedded: 0, kept: 3, dropped: 0 });
+        expect(fake.embedded).toEqual([]);
+        expect(readFileSync(indexPath(dataDir))).toEqual(bytes);
+        expect(statSync(indexPath(dataDir)).mtimeMs).toBe(stamp);
       } finally {
         chmodSync(locked, 0o755);
       }

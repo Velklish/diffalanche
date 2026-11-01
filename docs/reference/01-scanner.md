@@ -115,3 +115,14 @@ the selected review or scope.
 Scope and exclusions both match a rename's current path; an excluded old name
 does not hide a visible new name. Exclusions can hide tracked files, while Git's
 ignore rules continue to suppress only untracked files ([02-git.md](02-git.md#asking-what-git-ignores)).
+
+## What the unit tests hold
+
+`tests/scanner.test.ts` stages a listing refusal for every uid by naming a file
+in `roots`: it asserts `directory cannot be read: ENOTDIR` and that a second
+root is still scanned. This is a listing failure, not a permission failure.
+The chmod-staged unreadable subtree separately asserts `EACCES`, omits the
+repository below it and keeps a readable sibling. It skips as root because root
+bypasses directory mode bits; there is no callback between the parent listing
+and descent to stage that refusal deterministically without replacing filesystem
+calls. A file named in `roots` does not prove that descendant permission case.

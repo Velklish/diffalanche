@@ -417,6 +417,11 @@ first waits up to five minutes for the load averages to settle, and says
 `unable to measure` rather than a verdict when they do not
 ([11-perf.md](docs/reference/11-perf.md#the-gate)).
 
+The scanner, embedding index and model-delivery permission tests need non-root
+POSIX mode bits for literal `EACCES`; their documented skips and separate
+root-proof refusal coverage are in [01-scanner.md](docs/reference/01-scanner.md#what-the-unit-tests-hold)
+and [09-ml.md](docs/reference/09-ml.md#tests).
+
 `bun run test:ui` builds the UI, generates the small synthetic review
 (`synth -- --out .perf/e2e --small`) and serves it: the diff and navigation
 tests run against that fixture, and only the shell tests stub an empty review to

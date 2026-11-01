@@ -191,6 +191,7 @@ describe("a download from the release", () => {
     expect(readdirSync(dir)).toEqual(["model.onnx"]);
   });
 
+  // Root bypasses mode bits and Windows chmod does not deny writes; this case needs real EACCES.
   it.skipIf(process.platform === "win32" || process.getuid?.() === 0)(
     "says a write the disk refused apart from a network that failed",
     async () => {
@@ -213,6 +214,7 @@ describe("a download from the release", () => {
       } finally {
         chmodSync(dir, 0o700);
       }
+      expect(requests).toEqual(["release-model.onnx"]);
       expect(readdirSync(dir)).toEqual([]);
     },
   );
