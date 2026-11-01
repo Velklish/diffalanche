@@ -1,6 +1,5 @@
 # DA-137 · Prove lock contention in writer tests with an explicit barrier
 
-- **Order:** 1070
 - **Scope:** [03-storage](../../reference/03-storage.md)
 - **Created:** 2026-11-01
 - **Dependencies:** none
@@ -8,6 +7,8 @@
 - **Audit finding:** PQA-106
 - **Audit priority:** P2
 - **Evidence status:** hypothesis
+- **Previous order:** 1070
+- **Taken:** 2026-11-01
 
 
 ## Execution authorization — 2026-11-01
@@ -52,3 +53,7 @@ Audit finding PQA-106; evidence snapshot `087d3330128f8762ff88b0a9f7a7151dca8db0
 ## Next step
 
 The owner reviews and approves this item individually before it is queued for implementation. Creating this card does not authorize product changes.
+
+## Execution plan
+
+Storage durability and lock-test track owns atomic.ts, storage-atomic/lock-writers/sessions tests and reference 03. Prefer deterministic filesystem/domain barriers, preserve separate source outcomes and validate hypotheses before changing production locks. Propagate real directory-open durability failures without changing Windows or durable:false policy. Do not implement deferred first-session-directory flush or UI/orphaned features.
