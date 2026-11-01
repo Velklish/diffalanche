@@ -13,26 +13,6 @@ and `bun run release` refuses a version that has no section. See
 
 ## [Unreleased]
 
-### Fixed
-
-- SPEC and ADR-014 place embedding in a child process for server and CLI
-  callers. ADR-014 describes implemented delivery while preserving its dated
-  model/runtime measurements and leaving process placement to ADR-016.
-
-- Session-selection guidance separates bare windows that follow `current`, named
-  windows that keep their task, and the CLI default. The apply skill retains
-  its prohibition on unsolicited selection changes.
-
-- ADR-016 describes the dated 742/764 MiB server measurements as below the
-  768 MiB ceiling, preserving the measured query crossing and server headroom.
-
-- Phase 2 summaries distinguish implemented capabilities from phase acceptance
-  and outstanding quiet-machine embedding performance evidence.
-
-- The design handoff names the installed renderer, the review task directory
-  and top-layer Escape behavior. The UI reference counts both destructive
-  confirmations consistently with the design policy.
-
 ### Added
 
 - **`npm run probe`, the mutation probe**. `npm run probe -- <file> --mutate
@@ -735,6 +715,25 @@ and `bun run release` refuses a version that has no section. See
   [06-cli.md](docs/reference/06-cli.md).
 
 ### Fixed
+
+- SPEC and ADR-014 place embedding in a child process for server and CLI
+  callers. ADR-014 describes implemented delivery while preserving its dated
+  model/runtime measurements and leaving process placement to ADR-016.
+
+- Session-selection guidance separates bare windows that follow `current`, named
+  windows that keep their task, and the CLI default. The apply skill retains
+  its prohibition on unsolicited selection changes.
+
+- ADR-016 describes the dated 742/764 MiB server measurements as below the
+  768 MiB ceiling, preserving the measured query crossing and server headroom.
+
+- Phase 2 summaries distinguish implemented capabilities from phase acceptance
+  and outstanding quiet-machine embedding performance evidence.
+
+- The design handoff names the installed renderer, the review task directory
+  and top-layer Escape behavior. The UI reference counts both destructive
+  confirmations consistently with the design policy.
+
 
 - **A file replaced by rename is heard every time on Linux**. Node
   22 emulates `recursive: true` on Linux with one watch per path, each on the

@@ -13,7 +13,9 @@ describe("current documentation contracts", () => {
     expect(handoff).toContain("reviews/ls-240372/comments.json");
     expect(handoff).toContain("`.diffalanche/reviews/<name>/comments.json`");
     expect(handoff).toContain("`review.json` (метаданные) и `diff.json` (кэш дифа)");
-    expect(handoff).toContain("`esc` закрывает только верхний применимый слой; черновик композера под оверлеем сохраняется");
+    expect(handoff).toContain(
+      "`esc` закрывает только верхний применимый слой; черновик композера под оверлеем сохраняется",
+    );
     expect(handoff).not.toContain("`esc` закрывает всё");
   });
 
@@ -35,9 +37,10 @@ describe("current documentation contracts", () => {
       expect(summary).not.toContain("only the embedding model exists yet");
       expect(summary).not.toMatch(/Phase 2.*?Offline\. Not started/);
     }
-    expect(prose("docs/reference/README.md")).toContain("generative model and insights belong to Phase 4");
+    expect(prose("docs/reference/README.md")).toContain(
+      "generative model and insights belong to Phase 4",
+    );
   });
-
 
   it("keeps the dated serve measurements below the 768 MiB ceiling", () => {
     const adr = prose("docs/adr/adr-016-model-in-a-process-of-its-own.md");
@@ -46,7 +49,6 @@ describe("current documentation contracts", () => {
     expect(adr).toContain("4 MiB of headroom in the higher run");
     expect(adr).not.toContain("found both crossing the ceiling");
   });
-
 
   it("separates bare windows, named windows and the CLI default", () => {
     for (const file of ["README.md", "docs/SPEC.md", "skills/diffalanche-apply/SKILL.md"]) {
@@ -66,11 +68,14 @@ describe("current documentation contracts", () => {
     expect(apply).toContain("Do not change selection without an explicit request");
   });
 
-
   it("places embedding in a child for both callers without deferring delivery", () => {
-    expect(prose("docs/SPEC.md")).toContain("Server and CLI callers run embedding in a child process; the parent keeps the index, its update and its search");
+    expect(prose("docs/SPEC.md")).toContain(
+      "Server and CLI callers run embedding in a child process; the parent keeps the index, its update and its search",
+    );
     const adr = prose("docs/adr/adr-014-embedding-model-and-npm-delivery.md");
-    expect(adr).toContain("Server and command callers embed in a child process that holds only the model");
+    expect(adr).toContain(
+      "Server and command callers embed in a child process that holds only the model",
+    );
     expect(adr).toContain("The model's delivery implements 4A and 5B");
     expect(adr).toContain("loads the runtime binding from the user cache");
     expect(adr).not.toContain("runs in the server process");
@@ -79,5 +84,4 @@ describe("current documentation contracts", () => {
     expect(adr).toContain("**Date:** 2026-09-23");
     expect(adr).toContain("1.86 s on Node and 1.94 s on Bun");
   });
-
 });
