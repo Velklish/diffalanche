@@ -1,6 +1,5 @@
 # DA-138 · Make the listen-permission test deterministic and close any successful server
 
-- **Order:** 1080
 - **Scope:** [06-cli](../../reference/06-cli.md); [07-server](../../reference/07-server.md)
 - **Created:** 2026-11-01
 - **Dependencies:** none
@@ -8,6 +7,8 @@
 - **Audit finding:** PQA-107
 - **Audit priority:** P2
 - **Evidence status:** hypothesis
+- **Previous order:** 1080
+- **Taken:** 2026-11-01
 
 
 ## Execution authorization — 2026-11-01
@@ -50,3 +51,7 @@ Audit finding PQA-107; evidence snapshot `087d3330128f8762ff88b0a9f7a7151dca8db0
 ## Next step
 
 The owner reviews and approves this item individually before it is queued for implementation. Creating this card does not authorize product changes.
+
+## Execution plan
+
+CLI reliability track owns output stream error handling and focused CLI/listen reporting regressions. Reproduce each hypothesis before choosing a production change. Use a deterministic existing ListenError seam or owned child fixture, close every resource on both outcomes, and preserve real error diagnostics. Isolate color environment only in the owned stderr fixture; retain negative controls for other output errors. Keep separate original DA-115.2 and DA-119.1 outcomes and preserve the historical before quote. No host port-policy changes or deferred implementation.
