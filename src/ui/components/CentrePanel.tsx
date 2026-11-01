@@ -130,7 +130,9 @@ function RepoSection({ repo }: { repo: RepositoryChange }) {
       {/* Sticky inside its own section, so the next one pushes it out; the path is not a jump
           target (08-ui.md, "The page"). */}
       <div className="repo-head">
-        <span className="repo-path" lang="">{repo.path}</span>
+        <span className="repo-path" lang="">
+          {repo.path}
+        </span>
         <span className="repo-base">
           {repo.branch} ← {baseLine(repo.base)}
         </span>
