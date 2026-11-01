@@ -41,7 +41,10 @@ async function bounded<T>(pending: Promise<T>, label: string): Promise<T> {
   }
 }
 
-afterEach(() => vi.restoreAllMocks());
+afterEach(() => {
+  vi.useRealTimers();
+  vi.restoreAllMocks();
+});
 
 function holdRescanAndJoin() {
   const rescan = { entered: barrier(), release: barrier(), held: false };
@@ -170,6 +173,7 @@ async function fixture() {
   return {
     config,
     service,
+    current: () => watcher?.session(),
     token,
     events,
     currentFrames,
@@ -407,12 +411,15 @@ describe("a newly followed held scope", () => {
       await bounded(edited, "repository drain");
       await bounded(held.join.entered.promise, "join entered");
       await activateSession(run.config.dataDir, B);
+      vi.useFakeTimers({ toFake: ["setTimeout", "clearTimeout"] });
       const moved = run.lockBurst();
-      // Let the configured 1 ms data debounce enqueue behind the held initializer.
-      await new Promise((done) => setTimeout(done, 2));
+      // Enqueue the configured data debounce before the next join and the notice's release.
+      vi.advanceTimersByTime(1);
+      vi.useRealTimers();
       run.attach();
       held.join.release.resolve();
       await bounded(moved, "current data drain");
+      expect(run.current()).toBe(B);
       await run.edit("C.ts", 2);
       expect(run.events).toContainEqual({ type: "current-changed", name: B });
       expect(
