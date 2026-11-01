@@ -712,7 +712,7 @@ it("does not assign committed identity to an uncommitted copy", async () => {
   expect(copy.anchor).not.toHaveProperty("revision");
   const original = await get(f.config.dataDir, "work", f.comment.id);
   f.comment = copy;
-  expect(await refresh(f)).toMatchObject({ line: 5, status: "open" });
+  expect(await refresh(f)).toMatchObject({ line: 5, status: "orphaned" });
   expect(original.anchor?.revision?.sha).toBe(f.git("rev-parse", "HEAD").trim());
 });
 
@@ -743,4 +743,24 @@ it("requires the full target file to agree with the captured diff, including unc
     line: 2,
     status: "open",
   });
+});
+
+it("does not let stale Git provenance undo a manual orphan re-anchor after human reopen", async () => {
+  const f = await fixture();
+  writeFileSync(f.file, "unrelated();\n");
+  await refresh(f);
+  writeFileSync(f.file, `${prefix}${f.text}manual before\nconst anchor = 42;\nmanual after\n`);
+  const anchor = f.comment.anchor;
+  if (anchor === null) throw new Error("fixture anchor missing");
+  await updateComments(f.config.dataDir, "work", (comments) => {
+    const c = comments[0];
+    if (c) {
+      c.line = 10;
+      c.anchor = { ...anchor, before: ["manual before"], after: ["manual after"] };
+    }
+  });
+  await reopen(f.config.dataDir, "work", f.comment.id, { role: "human", author: "human" });
+  const moved = await refresh(f);
+  expect(moved).toMatchObject({ line: 10, status: "open" });
+  expect(moved.anchor?.before.at(-1)).toBe("manual before");
 });

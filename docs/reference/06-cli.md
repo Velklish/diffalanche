@@ -64,7 +64,8 @@ saved comments inside the task scope and is present even after a restart.
 
 To recover a lost anchor, edit its coordinates and context in `comments.json`,
 then run `reopen ID --role human`. Reopen clears resolved verdict metadata and
-changes status only; it does not choose coordinates. Model proposals and their
+does not choose coordinates. Reopening an orphan also discards its stale
+committed provenance so a later refresh retains the manual choice. Model proposals and their
 UI are deferred.
 
 ## The scope of a task

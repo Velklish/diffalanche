@@ -485,7 +485,9 @@ A successful match refreshes coordinates and context. The first mutation saves
 `originalAnchor`; failure retains the previous coordinates and context. Missing,
 binary and oversized targets become orphaned; process failures propagate.
 Orphaned status is sticky. Edit the anchor in `comments.json`, then use human
-`reopen` to return it to open; agents retain the existing role refusal.
+`reopen` to return it to open; agents retain the existing role refusal. Reopening
+an orphan discards stale committed provenance so it cannot undo the manual
+anchor choice. Coordinates, saved text and `originalAnchor` remain intact.
 
 The status and warning contract from [the specification](../SPEC.md):
 

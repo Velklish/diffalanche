@@ -421,6 +421,7 @@ export async function reopen(
         createdAt: timestamp(),
       });
     }
+    if (comment.status === "orphaned" && comment.anchor !== null) delete comment.anchor.revision;
     comment.status = "open";
     comment.resolvedAt = null;
     comment.resolvedBy = null;
