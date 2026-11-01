@@ -66,4 +66,18 @@ describe("current documentation contracts", () => {
     expect(apply).toContain("Do not change selection without an explicit request");
   });
 
+
+  it("places embedding in a child for both callers without deferring delivery", () => {
+    expect(prose("docs/SPEC.md")).toContain("Server and CLI callers run embedding in a child process; the parent keeps the index, its update and its search");
+    const adr = prose("docs/adr/adr-014-embedding-model-and-npm-delivery.md");
+    expect(adr).toContain("Server and command callers embed in a child process that holds only the model");
+    expect(adr).toContain("The model's delivery implements 4A and 5B");
+    expect(adr).toContain("loads the runtime binding from the user cache");
+    expect(adr).not.toContain("runs in the server process");
+    expect(adr).not.toContain("embed in the server process");
+    expect(adr).not.toContain("Until then `dist/cli.js` contains no runtime");
+    expect(adr).toContain("**Date:** 2026-09-23");
+    expect(adr).toContain("1.86 s on Node and 1.94 s on Bun");
+  });
+
 });

@@ -15,6 +15,10 @@ and `bun run release` refuses a version that has no section. See
 
 ### Fixed
 
+- SPEC and ADR-014 place embedding in a child process for server and CLI
+  callers. ADR-014 describes implemented delivery while preserving its dated
+  model/runtime measurements and leaving process placement to ADR-016.
+
 - Session-selection guidance separates bare windows that follow `current`, named
   windows that keep their task, and the CLI default. The apply skill retains
   its prohibition on unsolicited selection changes.
