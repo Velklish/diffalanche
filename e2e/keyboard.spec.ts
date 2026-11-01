@@ -134,8 +134,8 @@ test("a word of a comment lists the thread with its line in the preview", async 
   await hit.hover();
   // Hovering selects, so the preview follows the pointer without a click.
   await expect(hit).toHaveClass(/on/);
-  await expect(palette(page).locator(".palette-path")).toHaveText(thread.path);
   await expect(palette(page).locator(".palette-meta")).toContainText(`L${thread.line}`);
+  await expect(palette(page).locator(".palette-path")).toHaveText(thread.path);
   await expect(palette(page).locator(".palette-line.on")).toHaveCount(1);
 
   await page.keyboard.press("Enter");
