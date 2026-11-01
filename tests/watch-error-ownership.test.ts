@@ -80,31 +80,38 @@ vi.mock("node:fs", async (importOriginal) => {
 
 vi.mock("node:fs/promises", async (importOriginal) => {
   const real = await importOriginal<typeof import("node:fs/promises")>();
-  const stat = (...args: Parameters<typeof real.stat>) => {
+  const held = <T>(result: Promise<T>): Promise<T> => {
     const state = seam.current;
-    if (state.holdNext && args.length === 1 && args[0] === state.path) {
-      state.holdNext = false;
-      const completion = real.stat(...args).then(
-        async (info) => {
-          state.observed = "success";
-          state.captured.resolve();
-          await state.release.promise;
-          return info;
-        },
-        async (error: unknown) => {
-          state.observed =
-            error instanceof Error && "code" in error ? String(error.code) : "missing-code";
-          state.captured.resolve();
-          await state.release.promise;
-          throw error;
-        },
-      );
-      state.completion = completion;
-      return completion;
-    }
-    return real.stat(...args);
+    state.holdNext = false;
+    const completion = result.then(
+      async (info) => {
+        state.observed = "success";
+        state.captured.resolve();
+        await state.release.promise;
+        return info;
+      },
+      async (error: unknown) => {
+        state.observed =
+          error instanceof Error && "code" in error ? String(error.code) : "missing-code";
+        state.captured.resolve();
+        await state.release.promise;
+        throw error;
+      },
+    );
+    state.completion = completion;
+    return completion;
   };
-  return { ...real, default: { ...real, stat }, stat };
+  const stat = (...args: Parameters<typeof real.stat>) => {
+    const result = real.stat(...args);
+    return seam.current.holdNext && args.length === 1 && args[0] === seam.current.path
+      ? held(result)
+      : result;
+  };
+  const lstat = (...args: Parameters<typeof real.lstat>) => {
+    const result = real.lstat(...args);
+    return seam.current.holdNext && args[0] === seam.current.path ? held(result) : result;
+  };
+  return { ...real, default: { ...real, stat, lstat }, stat, lstat };
 });
 
 let dir = "";
@@ -163,7 +170,7 @@ async function capture(result: "success" | "ENOENT", previous: Handle): Promise<
 async function release(): Promise<void> {
   const completion = seam.current.completion;
   if (completion === null) throw new Error("no held stat completion");
-  // The source's reaction was registered first, so this resumes after that reaction ran.
+  // The final path read resumes identity before this observer, then the owner's handler runs.
   const consumed = completion.catch(() => undefined);
   seam.current.release.resolve();
   await consumed;
