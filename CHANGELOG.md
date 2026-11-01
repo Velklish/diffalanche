@@ -729,6 +729,13 @@ and `bun run release` refuses a version that has no section. See
 
 ### Fixed
 
+- **The comment gate distinguishes comments from source data**. TS/TSX
+  strings, templates, regular expressions and JSX text, CSS strings and URLs,
+  YAML scalars and shell quotes and heredoc bodies no longer count as comments.
+  Actual comments after code and inside expressions follow the same two-line
+  limit, including comments after quoted URL arguments and inside YAML flow
+  collections ([11-perf.md](docs/reference/11-perf.md#the-comment-gate)).
+
 - SPEC and ADR-014 place embedding in a child process for server and CLI
   callers. ADR-014 describes implemented delivery while preserving its dated
   model/runtime measurements and leaving process placement to ADR-016.

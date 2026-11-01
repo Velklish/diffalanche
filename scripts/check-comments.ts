@@ -1,6 +1,7 @@
 /** `bun run check:comments`: every comment block over two lines, the rule of ADR-011
  * ([11-perf.md](../docs/reference/11-perf.md#the-comment-gate)). */
 import { readdirSync, readFileSync, statSync } from "node:fs";
+import { createRequire } from "node:module";
 import { extname, join, relative, resolve } from "node:path";
 import { argv, exit, stderr, stdout } from "node:process";
 import { fileURLToPath } from "node:url";
@@ -11,38 +12,241 @@ const HASH = new Set([".yml", ".yaml", ".sh"]);
 const LIMIT = 2;
 
 type Block = { file: string; line: number; lines: number };
+type Kind = "slash" | "hash" | "ts" | "tsx" | "css" | "yaml" | "sh";
+type Comment = { start: number; end: number; line: number; lines: number; single: boolean };
+
+// The grammar package's runtime keeps this build-time gate separate from the symbol index's WASM.
+const require = createRequire(import.meta.url);
+const { Parser, Language } =
+  require("@vscode/tree-sitter-wasm") as typeof import("@vscode/tree-sitter-wasm");
+await Parser.init();
+const languages = new Map(
+  await Promise.all(
+    ["typescript", "tsx", "bash"].map(
+      async (name) =>
+        [
+          name,
+          await Language.load(
+            require.resolve(`@vscode/tree-sitter-wasm/wasm/tree-sitter-${name}.wasm`),
+          ),
+        ] as const,
+    ),
+  ),
+);
+
+function parsedComments(text: string, kind: Kind): Comment[] {
+  const name = kind === "sh" ? "bash" : kind === "ts" ? "typescript" : "tsx";
+  const parser = new Parser();
+  parser.setLanguage(languages.get(name) as import("@vscode/tree-sitter-wasm").Language);
+  const tree = parser.parse(text);
+  if (tree === null) throw new Error(`could not parse ${name} comments`);
+  const comments: Comment[] = [];
+  const cursor = tree.walk();
+  try {
+    for (;;) {
+      const node = cursor.currentNode;
+      if (node.type === "comment") {
+        if (!(node.startIndex === 0 && node.text.startsWith("#!"))) {
+          comments.push({
+            start: node.startIndex,
+            end: node.endIndex,
+            line: node.startPosition.row + 1,
+            lines: node.endPosition.row - node.startPosition.row + 1,
+            single: node.text.startsWith("//") || node.text.startsWith("#"),
+          });
+        }
+      } else if (cursor.gotoFirstChild()) continue;
+      while (!cursor.gotoNextSibling()) {
+        if (!cursor.gotoParent()) return comments;
+      }
+    }
+  } finally {
+    cursor.delete();
+    tree.delete();
+    parser.delete();
+  }
+}
+
+function cssComments(text: string): Comment[] {
+  const comments: Comment[] = [];
+  let index = 0;
+  let line = 1;
+  const advance = (end: number) => {
+    line += text.slice(index, end).split("\n").length - 1;
+    index = end;
+  };
+  while (index < text.length) {
+    if (text.startsWith("/*", index)) {
+      const close = text.indexOf("*/", index + 2);
+      const end = close === -1 ? text.length : close + 2;
+      const start = index;
+      const first = line;
+      advance(end);
+      comments.push({ start, end, line: first, lines: line - first + 1, single: false });
+      continue;
+    }
+    const char = text[index];
+    const url =
+      /^url\(/i.test(text.slice(index, index + 4)) &&
+      (index === 0 || !/[\w-]/.test(text[index - 1] as string)) &&
+      !/^[ \t\r\n\f]*["']/.test(text.slice(index + 4));
+    if (char === '"' || char === "'" || url) {
+      let quote = url ? "" : char;
+      let end = index + (url ? 4 : 1);
+      while (end < text.length) {
+        const next = text[end];
+        if (next === "\\") {
+          end += text[end + 1] === "\r" && text[end + 2] === "\n" ? 3 : 2;
+          continue;
+        }
+        if (quote !== "") {
+          if (next === quote) {
+            end += 1;
+            quote = "";
+            if (!url) break;
+            continue;
+          }
+          if (next === "\n" || next === "\r") break;
+        } else if (next === '"' || next === "'") quote = next;
+        else if (next === ")") {
+          end += 1;
+          break;
+        }
+        end += 1;
+      }
+      advance(Math.min(end, text.length));
+    } else if (char === "\\") advance(Math.min(index + 2, text.length));
+    else advance(index + 1);
+  }
+  return comments;
+}
+
+function yamlComments(text: string): Comment[] {
+  const comments: Comment[] = [];
+  let quote = "";
+  let offset = 0;
+  let flow = 0;
+  let flowPlain = false;
+  let plainParent: number | null = null;
+  let scalar: { parent: number; indent: number | null } | null = null;
+  for (const [index, row] of text.split("\n").entries()) {
+    if (row.trim() === "") {
+      offset += row.length + 1;
+      continue;
+    }
+    const indent = row.match(/^ */)?.[0].length ?? 0;
+    if (scalar !== null) {
+      scalar.indent ??= indent > scalar.parent ? indent : null;
+      if (scalar.indent === null || indent < scalar.indent) scalar = null;
+    }
+    if (scalar === null) {
+      let plain: boolean = flow > 0 ? flowPlain : plainParent !== null && indent > plainParent;
+      let tokenStart = !plain;
+      let scalarParent = indent;
+      if (!plain) plainParent = null;
+      for (let column = 0; column < row.length; column += 1) {
+        const char = row[column];
+        if (quote !== "") {
+          if (quote === '"' && char === "\\") column += 1;
+          else if (char === quote) {
+            if (quote === "'" && row[column + 1] === "'") column += 1;
+            else quote = "";
+          }
+        } else if ((char === '"' || char === "'") && tokenStart) {
+          scalarParent = column;
+          quote = char;
+          tokenStart = false;
+          plain = false;
+        } else if (char === "#" && (column === 0 || /\s/.test(row[column - 1] as string))) {
+          comments.push({
+            start: offset + column,
+            end: offset + row.replace(/\r$/, "").length,
+            line: index + 1,
+            lines: 1,
+            single: true,
+          });
+          break;
+        } else if ((char === "|" || char === ">") && tokenStart && flow === 0) {
+          const header = /^[|>]([+-]?[1-9]?|[1-9][+-]?)(?:[ \t\r]+(?:#.*)?)?$/.exec(
+            row.slice(column),
+          );
+          if (header !== null) {
+            const explicit = /[1-9]/.exec(header[1] ?? "");
+            scalar = {
+              parent: scalarParent,
+              indent: explicit === null ? null : scalarParent + Number(explicit[0]),
+            };
+            column += (header[1] ?? "").length;
+          }
+          tokenStart = false;
+          plain = true;
+        } else if ((char === "[" || char === "{") && (tokenStart || flow > 0)) {
+          flow += 1;
+          tokenStart = true;
+          plain = false;
+        } else if ((char === "]" || char === "}") && flow > 0) {
+          flow -= 1;
+          tokenStart = false;
+          plain = false;
+        } else if (
+          (char === ":" && (flow > 0 || /\s/.test(row[column + 1] ?? " "))) ||
+          (flow > 0 && char === ",")
+        ) {
+          tokenStart = true;
+          plain = false;
+        } else if (
+          tokenStart &&
+          (char === "-" || char === "?") &&
+          /\s/.test(row[column + 1] ?? " ")
+        ) {
+          scalarParent = column;
+          tokenStart = true;
+        } else if (column === 0 && /^(?:---|\.\.\.)(?:\s|$)/.test(row)) {
+          column = 2;
+          tokenStart = true;
+        } else if (tokenStart && (char === "&" || char === "!")) {
+          while (column + 1 < row.length && !/\s/.test(row[column + 1] as string)) column += 1;
+        } else if (char !== undefined && !/\s/.test(char)) {
+          if (tokenStart) scalarParent = column;
+          tokenStart = false;
+          plain = true;
+        }
+      }
+      flowPlain = flow > 0 && plain && quote === "";
+      if (scalar !== null) {
+        plainParent = null;
+      } else if (plain && quote === "" && flow === 0) {
+        plainParent ??= indent;
+      }
+    }
+    offset += row.length + 1;
+  }
+  return comments;
+}
 
 /** The blocks of one file's text, longer than the limit or not. */
-export function blocks(text: string, kind: "slash" | "hash"): { line: number; lines: number }[] {
+export function blocks(text: string, kind: Kind): { line: number; lines: number }[] {
   const found: { line: number; lines: number }[] = [];
-  const rows = text.split("\n");
-  let run: { line: number; lines: number } | null = null;
-  const close = () => {
-    if (run !== null) found.push(run);
-    run = null;
-  };
-  for (let index = 0; index < rows.length; index += 1) {
-    const row = (rows[index] as string).trim();
-    if (kind === "hash") {
-      if (row.startsWith("#") && !(index === 0 && row.startsWith("#!"))) {
-        run ??= { line: index + 1, lines: 0 };
-        run.lines += 1;
-      } else close();
-      continue;
-    }
-    if (row.startsWith("/*") || row.startsWith("{/*")) {
-      close();
-      const start = index;
-      while (index < rows.length && !(rows[index] as string).includes("*/")) index += 1;
-      found.push({ line: start + 1, lines: Math.min(index, rows.length - 1) - start + 1 });
-      continue;
-    }
-    if (row.startsWith("//")) {
-      run ??= { line: index + 1, lines: 0 };
-      run.lines += 1;
-    } else close();
+  const comments =
+    kind === "yaml"
+      ? yamlComments(text)
+      : kind === "css"
+        ? cssComments(text)
+        : parsedComments(text, kind === "hash" ? "sh" : kind);
+  let previous: Comment | undefined;
+  for (const comment of comments) {
+    const last = found.at(-1);
+    if (
+      last !== undefined &&
+      previous?.single &&
+      comment.single &&
+      comment.line === previous.line + 1 &&
+      /^\r?\n[ \t]*$/.test(text.slice(previous.end, comment.start))
+    ) {
+      last.lines += 1;
+    } else found.push({ line: comment.line, lines: comment.lines });
+    previous = comment;
   }
-  close();
   return found;
 }
 
@@ -59,7 +263,13 @@ export function overLimit(paths: string[], root: string): Block[] {
   const over: Block[] = [];
   for (const file of paths.flatMap((path) => files(resolve(root, path))).sort()) {
     const extension = extname(file);
-    const kind = SLASH.has(extension) ? "slash" : HASH.has(extension) ? "hash" : null;
+    const kind = SLASH.has(extension)
+      ? (extension.slice(1) as "ts" | "tsx" | "css")
+      : HASH.has(extension)
+        ? extension === ".sh"
+          ? "sh"
+          : "yaml"
+        : null;
     if (kind === null) continue;
     for (const block of blocks(readFileSync(file, "utf8"), kind)) {
       if (block.lines > LIMIT) over.push({ file: relative(root, file), ...block });

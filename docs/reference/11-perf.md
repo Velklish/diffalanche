@@ -1630,15 +1630,29 @@ CI's `check` job, after the typecheck.
 
 A block is counted by its physical lines, from the first to the last:
 
-- a run of `//` lines, which ends at the first line that is not one — a blank
-  line included;
+- in `.ts` and `.tsx`, a run of `//` lines, joined only across a newline and
+  indentation, so a blank line or intervening code ends the run;
 - a `/* … */` or a JSDoc, so a `/**` on a line of its own, one line of text and
   a closing ` */` are three lines, and a one-line doc is written `/** … */`;
 - a JSX `{/* … */}`;
-- in `.yml`, `.yaml` and `.sh`, a run of `#` lines, a shebang excepted.
+- in `.yml`, `.yaml` and `.sh`, a run of `#` lines, a shell shebang excepted.
 
-A trailing comment after code on the same line is not a block: the rule is about
-prose above the code. The ADR's own `awk` counted 720 blocks on 2026-09-11 and
+Comments after code follow the same two-line limit.
+Strings and scalar data do not count as comments. The existing Tree-sitter
+grammars distinguish comments from TS/TSX strings, regular expressions,
+template text and JSX text, and shell quotes, expansions
+and heredoc bodies. Comments inside template expressions, JSX expressions and
+shell command substitutions still count. The gate uses the grammar package's
+own runtime, separate from the symbol index's runtime. CSS scanning preserves
+quoted strings, escaped line continuations and unquoted URL data. Comments after
+a quoted URL argument still count. YAML scanning preserves
+quoted scalars and indented literal or folded block scalars, including explicit
+indentation and chomping indicators. A block indicator starts a scalar only at
+a value start, including an indented line; plain flow scalars continue across
+newlines. A `#` in a plain scalar needs preceding
+whitespace to begin a comment. `.css` counts `/* … */`, not `//`.
+
+The ADR's own `awk` counted 720 blocks on 2026-09-11 and
 misses the JSX and the `#` forms; on the baseline tree of 2026-09-28 it counted
 677 and the check 706 — the 29 are the twelve of `.github/`, the seven of
 `scripts/smoke.sh` and ten JSX comments — and the comment-length pass took that
