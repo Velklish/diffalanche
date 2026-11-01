@@ -258,9 +258,14 @@ export function perDirectory(
     // A directory removed under its watch is not a dead watch; anything else is, and the walk
     // takes the tree.
     watcher.on("error", () => {
+      // The stat may finish after rearm: only the watcher still owning this path may act.
       void stat(join(options.dir, relative)).then(
-        () => fail(),
-        () => forget(relative),
+        () => {
+          if (watches.get(relative) === watcher) fail();
+        },
+        () => {
+          if (watches.get(relative) === watcher) forget(relative);
+        },
       );
     });
     return "taken";

@@ -15,6 +15,9 @@ and `bun run release` refuses a version that has no section. See
 
 ### Fixed
 
+- Delayed watch-error checks act only on the watcher still owning the path, so
+  an old completion cannot close or fault a replacement directory watch.
+
 - The specification and references explicitly exclude `sessions-changed` history-mark
   appearance from separate product performance budgets and perf-gate lines. The
   existing browser deadline remains `300 * RUNNER_ALLOWANCE`, 630 ms at 2.1.
