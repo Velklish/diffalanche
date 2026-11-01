@@ -479,14 +479,17 @@ describe("the index with an embedder that is a function of the text", () => {
 
   it("reads a torn file as no index with the reason, and the next update rebuilds it", async () => {
     await updateIndex(dataDir, fakeEmbedder());
+    expect(JSON.parse(headerOf(dataDir)).version).toBe(3);
     const path = indexPath(dataDir);
     writeFileSync(path, `${JSON.stringify({ version: 2 })}`);
     expect((await readIndex(dataDir)).problem).toMatch(/no end of line/);
-    writeFileSync(path, `${JSON.stringify({ version: 1 })}\n`);
-    expect((await readIndex(dataDir)).problem).toMatch(/version: expected 2/);
+    for (const version of [1, 2]) {
+      writeFileSync(path, `${JSON.stringify({ version })}\n`);
+      expect((await readIndex(dataDir)).problem).toMatch(/version: expected 3/);
+    }
 
     const { update } = await updateIndex(dataDir, fakeEmbedder());
-    expect(update.rebuilt).toMatch(/^unreadable: .*version: expected 2/);
+    expect(update.rebuilt).toMatch(/^unreadable: .*version: expected 3/);
     expect(update.embedded).toBe(3);
     // Four floats short: the vectors are checked against the entries, not trusted.
     const whole = readFileSync(path);

@@ -536,7 +536,7 @@ describe("closing a task", () => {
 });
 
 describe("a session written before the scope existed", () => {
-  it("is read as the whole root and open, and is written back as version 2", async () => {
+  it("is read as the whole root and open, and is written back as version 3", async () => {
     await cli("review", "new", "t10", "--no-use");
     const path = reviewPath(config.dataDir, "t10");
     const file = JSON.parse(readFileSync(path, "utf8")) as Record<string, unknown>;
@@ -552,7 +552,7 @@ describe("a session written before the scope existed", () => {
 
     const based = await cli("review", "base", "head", "--review", "t10");
     expect(based, based.err).toMatchObject({ code: 0 });
-    expect(JSON.parse(readFileSync(path, "utf8")).version).toBe(2);
+    expect(JSON.parse(readFileSync(path, "utf8")).version).toBe(3);
   });
 });
 
