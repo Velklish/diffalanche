@@ -24,6 +24,7 @@ import { needsTypeScript } from "./helpers/typescript.ts";
 
 const run = promisify(execFile);
 const unreadableTree = fileURLToPath(new URL("./helpers/unreadable-tree.ts", import.meta.url));
+const removedDirectory = fileURLToPath(new URL("./helpers/removed-directory.ts", import.meta.url));
 
 /** How many more non-recursive watches `fs.watch` takes before it refuses the way inotify does. */
 const refusal = vi.hoisted(() => ({ left: Number.POSITIVE_INFINITY }));
@@ -266,6 +267,28 @@ describe("a directory that comes, goes and comes back", () => {
     const dir = mkdtempSync(join(tmpdir(), "diffalanche-tree-gone-"));
     mkdirSync(join(dir, "gone", "deep"), { recursive: true });
     mkdirSync(join(dir, "kept"));
+    if (process.platform === "darwin" && process.versions.bun !== undefined) {
+      try {
+        const { stdout } = await run(process.execPath, [removedDirectory, dir], {
+          timeout: 60_000,
+        });
+        const seen = JSON.parse(stdout) as {
+          failure: string | null;
+          removed: string[];
+          retained: string[];
+          polling: boolean;
+          fellBack: number;
+        };
+        expect(seen.failure).toBeNull();
+        expect(seen.removed).toContain("gone");
+        expect(seen.retained).toContain("kept/after.ts");
+        expect(seen.polling).toBe(false);
+        expect(seen.fellBack).toBe(0);
+      } finally {
+        rmSync(dir, { recursive: true, force: true });
+      }
+      return;
+    }
     const tree = start(dir);
     try {
       await arm(tree, dir);
