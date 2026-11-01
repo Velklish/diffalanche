@@ -1,6 +1,5 @@
 # DA-127 · Discard a late thread response after switching review tasks
 
-- **Order:** 930
 - **Scope:** [08-ui](../../reference/08-ui.md); [05-watcher](../../reference/05-watcher.md)
 - **Created:** 2026-11-01
 - **Dependencies:** none
@@ -8,6 +7,8 @@
 - **Audit finding:** PQA-206
 - **Audit priority:** P1
 - **Evidence status:** confirmed_probe
+- **Previous order:** 930
+- **Taken:** 2026-11-01
 
 
 ## Execution authorization — 2026-11-01
@@ -59,3 +60,7 @@ Audit finding PQA-206; evidence snapshot `087d3330128f8762ff88b0a9f7a7151dca8db0
 ## Next step
 
 The owner reviews and approves this item individually before it is queued for implementation. Creating this card does not authorize product changes.
+
+## Execution plan
+
+Live thread UI track owns late asynchronous thread read/patch/toast isolation and the separate browse duplicate hypothesis. Bind completion to the originating task generation, including current mode and A-to-B-to-A, preserving valid events/counters and the existing stream queue. Reproduce the duplicate hypothesis with controlled POST/SSE ordering before any fix, retain its separate verdict and do not infer refutation from no reproduction. DA-55.12 addresses dropped new-task frames and remains a distinct authorized source in its own batch, not silently implemented or closed here. Preserve existing UI fixtures, keyboard behavior and exact anchor/severity assertions.

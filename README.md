@@ -73,6 +73,8 @@ Then the review is in the browser: every repository with changes, its files, its
 diff. Select lines and write a comment; the comment lands in
 `.diffalanche/reviews/cargo-flags/comments.json` and an agent reads it from
 there through the CLI a moment later, with no restart on either side.
+If the live update arrives before the save response, the page keeps one thread
+and retains the newer live version.
 
 While you type, the form lists the five nearest comments from every past review
 — `↑` / `↓` choose one and `TAB` takes its text and severity — and the `AUTO`
@@ -91,6 +93,14 @@ with the reading position where it was. The **agent activity** panel under the
 file tree, collapsed by default, is the feed of what the server noticed while
 it has been running. The sidebar footer says `watching` while the stream is
 open and `reconnecting` while it is not.
+
+A thread read started for a task is discarded if the window switches tasks
+before it finishes, even if it has since returned to the same task.
+A queued thread event from the task the window left is discarded before its read.
+An event for the destination task remains queued while that task's document loads.
+When returning to `current`, its document determines the destination task.
+A refused or superseded document does not determine it.
+The first document also establishes the task for frames waiting in the stream queue.
 
 The keyboard follows the design handoff:
 

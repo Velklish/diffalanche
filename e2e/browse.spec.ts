@@ -354,3 +354,81 @@ test("an old-side thread outside every hunk is reached in browse mode on the bas
     );
   }
 });
+
+for (const order of ["event-first", "post-first"] as const) {
+  test(`browse comment with ${order} delivery`, async ({ page }, testInfo) => {
+    await open(page);
+    const { repo, path } = await openUnchanged(page);
+    const card = page.locator(".plain-card");
+    let releasePost: () => void = () => {};
+    let releaseRead: () => void = () => {};
+    const postGate = new Promise<void>((resolve) => {
+      releasePost = resolve;
+    });
+    const readGate = new Promise<void>((resolve) => {
+      releaseRead = resolve;
+    });
+    const deliveries: string[] = [];
+    await page.route("**/api/comments**", async (route) => {
+      const request = route.request();
+      const url = new URL(request.url());
+      if (request.method() === "POST" && url.pathname === "/api/comments") {
+        const response = await route.fetch();
+        if (order === "event-first") await postGate;
+        await route.fulfill({ response });
+        deliveries.push("post");
+        if (order === "post-first") {
+          await expect(page.locator(".toast")).toContainText("Комментарий сохранён в reviews/", {
+            timeout: SEND_DEADLINE_MS,
+          });
+        }
+        releaseRead();
+      } else if (request.method() === "GET" && /^\/api\/comments\/[^/]+$/.test(url.pathname)) {
+        const response = await route.fetch();
+        if (order === "post-first") await readGate;
+        await route.fulfill({ response });
+        deliveries.push("event-read");
+        if (order === "event-first") {
+          const comment = (await response.json()) as Comment;
+          await expect(card.locator(`[data-thread-anchor="${comment.id}"]`)).toHaveCount(1, {
+            timeout: SEND_DEADLINE_MS,
+          });
+        }
+        releasePost();
+      } else {
+        await route.continue();
+      }
+    });
+    await card.locator('[data-plain-line="2"]').click();
+    const body = `controlled ${order} ${Date.now()}`;
+    await card.locator(".composer-field").fill(body);
+    await page.keyboard.press("ControlOrMeta+Enter");
+    await expect.poll(() => deliveries.length, { timeout: SEND_DEADLINE_MS }).toBe(2);
+    expect(deliveries).toEqual(
+      order === "event-first" ? ["event-read", "post"] : ["post", "event-read"],
+    );
+    await expect(page.locator(".toast")).toContainText("Комментарий сохранён в reviews/", {
+      timeout: SEND_DEADLINE_MS,
+    });
+    await page.waitForTimeout(5_000);
+    const matching = listComments().filter((one) => one.body === body);
+    expect(matching).toHaveLength(1);
+    const written = matching[0];
+    expect(written).toMatchObject({ repo, path, line: 2, side: "new" });
+    expect(written?.anchor?.lineContent).toBe(onDisk(repo, path)[1]);
+    const anchors = card.locator(`[data-thread-anchor="${written?.id}"]`);
+    const elements = await anchors.evaluateAll((nodes) => nodes.map((node) => node.outerHTML));
+    const readback = testInfo.outputPath(`browse-${order}-readback.json`);
+    writeFileSync(readback, JSON.stringify({ deliveries, written, elements }, null, 2));
+    await testInfo.attach(`browse-${order}-readback.json`, {
+      path: readback,
+      contentType: "application/json",
+    });
+    await expect(anchors).toHaveCount(1);
+    await page.screenshot({ path: testInfo.outputPath(`browse-${order}-dark.png`) });
+    await page.getByRole("button", { name: "light theme" }).click();
+    await expect(page.locator(":root")).toHaveAttribute("data-theme", "light");
+    await expect(anchors).toHaveCount(1);
+    await page.screenshot({ path: testInfo.outputPath(`browse-${order}-light.png`) });
+  });
+}

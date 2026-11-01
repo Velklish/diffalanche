@@ -171,6 +171,8 @@ type ReviewSlice = {
   /** The task this window is on, `?review=<name>`, or `null` for `current`: every request of the
    * page carries it, and a switch never moves `current` (08-ui.md, "The task this window…"). */
   reviewName: string | null;
+  /** Advances only when a review document is applied. */
+  documentRevision: number;
   root: string;
   repositories: RepositoryChange[];
   /** Every file of the change set, flattened in the order the centre panel renders. */
@@ -557,6 +559,7 @@ export const useStore = create<Store>()((set, get) => ({
   status: "loading",
   failure: null,
   reviewName: taskInUrl(),
+  documentRevision: 0,
   root: "",
   repositories: [],
   files: [],
@@ -603,15 +606,16 @@ export const useStore = create<Store>()((set, get) => ({
       // the response was parsed to the frame that showed it.
       perf.responseAt = performance.now();
       const held = get();
-      set(
-        fromDocument(
+      set({
+        ...fromDocument(
           document,
           held.diffView,
           held.session?.name ?? null,
           held.warnings,
           held.repositories,
         ),
-      );
+        documentRevision: held.documentRevision + 1,
+      });
     } catch (error) {
       if (generation !== reading) return;
       set({ status: "failed", failure: reason(error) });
@@ -1235,8 +1239,12 @@ export const useStore = create<Store>()((set, get) => ({
       // The form that was sent is cleared; one opened while the write was out is left as it is.
       const same = get().composer === composer;
       if (same) forgetSuggestions();
+      const comments = get().comments;
       set({
-        ...withComments([...get().comments, comment], get().threadsByFile),
+        ...withComments(
+          comments.some((one) => one.id === comment.id) ? comments : [...comments, comment],
+          get().threadsByFile,
+        ),
         ...(same ? { composer: null, composerEnd: null, sel: null, body: "", sending: false } : {}),
         ...(same ? { focusId: comment.id } : {}),
         toast: raise(`Комментарий сохранён в reviews/${session?.name ?? "?"}/comments.json`),
