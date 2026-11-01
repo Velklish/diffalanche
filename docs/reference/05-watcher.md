@@ -124,6 +124,7 @@ reads target content, so changing an outside target alone produces no change.
 The explicitly named root may itself be a link. Below that root, directory
 components are checked with `lstat` before watching, listing and reporting their
 entries; a watched directory replaced by a link loses its descendant watches.
+A listing keeps the watch it started on: stale work cannot close its replacement.
 An entry removed and restored between checks is not detected by that check. A watch that **dies after it started** says so once,
 through `onFallback`. A session that **walks from the start** says so once too,
 through `onWalk`: the probe below found no supported native path, or

@@ -261,6 +261,15 @@ export function perDirectory(
     return "taken";
   };
 
+  async function heldDirectory(relative: string, watcher: FSWatcher | undefined): Promise<boolean> {
+    if (watcher === undefined) return false;
+    const id = await identity(options.dir, relative);
+    if (closed || watches.get(relative) !== watcher) return false;
+    if (id !== null) return true;
+    forget(relative);
+    return false;
+  }
+
   /** Watches a directory and every one below it; one found after the start reports its files,
    * since they may have been written before its watch existed. */
   async function arm(relative: string, fresh: boolean): Promise<void> {
@@ -269,6 +278,7 @@ export function perDirectory(
     if (id === null || closed) return;
     const taken = take(relative);
     if (taken === "skipped") return;
+    const watching = watches.get(relative);
     learn(id);
     // Only the call that took the watch says what it is on; another arm read a later directory.
     if (taken === "taken") identities.set(relative, id);
@@ -276,12 +286,13 @@ export function perDirectory(
     try {
       entries = await readdir(join(options.dir, relative), { withFileTypes: true });
     } catch {
-      forget(relative);
+      if (watches.get(relative) === watching) forget(relative);
       return;
     }
     const current = await identity(options.dir, relative);
+    if (closed || watches.get(relative) !== watching) return;
     if (current === null || !same(id, current)) {
-      forget(relative);
+      if (taken === "taken" && identities.get(relative) === id) forget(relative);
       return;
     }
     const baseline = await entrySnapshot(options.dir, relative, entries, options.ignore);
@@ -295,7 +306,7 @@ export function perDirectory(
       }
     }
     await Promise.all(below);
-    if (fresh && !closed && (await identity(options.dir, relative)) !== null) {
+    if (fresh && (await heldDirectory(relative, watching))) {
       for (const path of baseline.keys()) options.onChange(path);
     }
   }
@@ -321,22 +332,17 @@ export function perDirectory(
   /** Finds the directories that came, went or were replaced: by listing and by identity rather
    * than by the event's name, which Bun drops when several changes share one read (05-watcher.md). */
   async function listOnce(relative: string): Promise<void> {
-    if ((await identity(options.dir, relative)) === null) {
-      forget(relative);
-      return;
-    }
+    const watching = watches.get(relative);
+    if (!(await heldDirectory(relative, watching))) return;
     const previous = files.get(relative);
     let entries: Dirent[];
     try {
       entries = await readdir(join(options.dir, relative), { withFileTypes: true });
     } catch {
-      forget(relative);
+      if (watches.get(relative) === watching) forget(relative);
       return;
     }
-    if ((await identity(options.dir, relative)) === null) {
-      forget(relative);
-      return;
-    }
+    if (!(await heldDirectory(relative, watching))) return;
     const next = await entrySnapshot(options.dir, relative, entries, options.ignore);
     const present = new Set<string>();
     const checks: Promise<void>[] = [];
@@ -350,10 +356,7 @@ export function perDirectory(
     }
     await Promise.all(checks);
     if (closed || files.get(relative) !== previous) return;
-    if ((await identity(options.dir, relative)) === null) {
-      forget(relative);
-      return;
-    }
+    if (!(await heldDirectory(relative, watching))) return;
     if (previous !== undefined) {
       for (const [path, stamp] of next) {
         if (previous.get(path) !== stamp) options.onChange(path);
