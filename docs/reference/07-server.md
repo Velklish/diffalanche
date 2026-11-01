@@ -339,11 +339,12 @@ task held, showing the repository as it was before the revert, heard of it from
 nothing. `tests/server.test.ts` reproduced that: "drops another task's
 document when a move's read absorbed an edit back to the old cache", reverts the
 edit from inside the read and waited 20 s for the document of the task `current`
-left to drop it. The first unchanged rescan after a move therefore calls
+left to drop it. The first rescan after a move that leaves the entry and persisted anchors
+unchanged therefore calls
 `onRepositoryChanged` without paths, invalidating other tasks' documents across
 that repository ([05-watcher.md](05-watcher.md)). This broad invalidation costs
 once per repository per move. Later unchanged rescans carry paths and invalidate
-only documents whose scope intersects the signal. An unchanged current entry
+only documents whose scope intersects the signal. An unchanged current entry with no persisted anchor changes
 produces no unscoped current frame, rescan callback or activity line; matching
 followed named tasks can still receive scoped frames, including for a same-bytes
 save. An absorbed edit can arrive after the move's read ended, so notification
@@ -642,15 +643,13 @@ windows on one task are one entry. It is taken from the streams and not from the
 document cache because a connection exists exactly while a window does, and a
 cache's eviction answers a question about memory.
 
-**That parameter is a registry, not a filter.** The frames stay one broadcast
-with one sequence of ids and `Last-Event-ID` is untouched; it tells the server
-only which tasks have windows, so the watcher knows whose comments to read.
-Filtering is the client's, by the session name the frame carries. The two
-mechanisms look alike and are not the same one, and a per-connection filter was
-rejected for a concrete reason: the ring and its ids are one per server
-([The live stream](#the-live-stream)), so filtering per connection would make a
-client's ids non-contiguous and leave "what did I miss" unanswerable from one
-ring.
+**The parameter registers the task and selects targeted diff delivery.**
+Comment and other unscoped frames remain broadcast; the page drops comment
+frames for other tasks. Session-targeted `diff-changed` frames are filtered by
+the server for live delivery and replay. The server keeps one replay ring and
+one global sequence of ids. A connection may skip ids belonging to other tasks;
+`Last-Event-ID` is compared with the global ring bounds
+([The live stream](#the-live-stream)).
 
 A change to a task's own `review.json` now reaches its window too: the metadata
 of every followed session is compared each burst, and `session-changed` names the

@@ -301,12 +301,12 @@ export async function startWatcher(options: WatcherOptions): Promise<Watcher> {
       notifyOtherScopes(repo, files);
       return;
     }
-    // Current's rescan callback, event and activity precede the cache write only when its entry
-    // changed; other tasks also need the unchanged-entry path below (05-watcher.md).
+    // Current's rescan callback, event and activity precede the cache write when its entry or
+    // persisted anchors changed; the unchanged path still informs other tasks (05-watcher.md).
     const rescanned = await rescanRepository(config, followed, repo, (outcome) => {
       options.onRescan?.(followed, outcome.cache);
-      // This callback reports a changed entry; the unchanged branch below still reports paths
-      // for other tasks without announcing a current change (05-watcher.md).
+      // This callback reports changed entry or anchor state; the unchanged branch still reports
+      // paths for other tasks without announcing a current change (05-watcher.md).
       options.onRepositoryChanged?.(repo, files);
       bus.emit({ type: "diff-changed", repo, files });
       activity.diffChanged(repo);

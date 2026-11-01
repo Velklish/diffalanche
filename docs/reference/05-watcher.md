@@ -74,7 +74,7 @@ read, since there is nothing to trust. The read is a task of the queue, so a res
 waits for it: an edit right after `review use` is announced after the read, not
 inside the 300 ms of `docs/SPEC.md` section 6 ([07-server.md](07-server.md)).
 The read can take in an edit made while it runs, so that edit's rescan finds
-nothing new. When that first rescan finds an unchanged entry,
+nothing new. When that first rescan leaves the entry and persisted anchors unchanged,
 `onRepositoryChanged` receives no path list: other tasks may still hold any part
 of the old repository. Later unchanged rescans report their paths, so held and
 pending documents can compare each accepted burst with their own scope
@@ -617,7 +617,7 @@ the same, because the CLI writes the same directory.
 
 | Event | Data | When |
 |---|---|---|
-| `diff-changed` | `{ repo, files, session }` | current's repository entry changed, or a path signal targets a followed named task whose scope intersects it; `files` are notification paths, not the new change set's files, and are **empty** when a fallback walk or session read names no path |
+| `diff-changed` | `{ repo, files, session }` | current's repository entry or persisted anchors changed, or a path signal targets a followed named task whose scope intersects it; `files` are notification paths, not the new change set's files, and are **empty** when a fallback walk or session read names no path |
 | `comment-added` | `{ session, id }` | a comment appeared in the `comments.json` of a followed session |
 | `reply-added` | `{ session, id, commentId }` | a reply appeared in a thread; `id` is the reply |
 | `comment-status` | `{ session, id }` | a comment was resolved or reopened |
@@ -647,8 +647,8 @@ outside the task's path list; a sibling with the same prefix is unrelated.
 
 A file touched without its content changing — a build output written again, a
 save with the same bytes — is not a change of the review: the recomputed entry
-is compared with the cached one, patch by patch. When they agree, current emits
-no unscoped `diff-changed`, rescan callback or activity line. The repository
+is compared with the cached one, patch by patch. When the entries agree and reconciliation persists no anchor changes,
+current emits no unscoped `diff-changed`, rescan callback or activity line. The repository
 callback still invalidates matching held and pending documents, and followed
 named tasks can receive scoped frames even for a same-bytes save. These path
 signals do not establish that a named task's content changed.
@@ -721,8 +721,8 @@ know the repository moved ([07-server.md](07-server.md)).
 `onRepositoryChanged` therefore reports three cases:
 
 - **Inside the current task's scope**, from within the rescan, beside
-  `diff-changed` when the entry changed. An unchanged entry still reports the
-  repository callback and can notify matching named scopes, without refreshing
+  `diff-changed` when the entry or persisted anchors changed. When both are
+  unchanged, it still reports the repository callback and can notify matching named scopes, without refreshing
   current. The first unchanged rescan after `current` moves omits the path list
   for broad document invalidation; later unchanged rescans include the reported
   paths. The move's read may already hold an edit that another task has not read.
@@ -863,8 +863,10 @@ A rescan replaces one repository's entry in `diff.json`, and its warnings, with
 `replaceRepository` — the one patch of one repository, which the CLI's line
 comment uses as well. What it keeps, what it drops, and why the lists it writes
 are sorted is in [02-git.md](02-git.md). What the rescan adds around it is its
-own: a repository whose recomputed entry equals the cached one is not written at
-all, and the new change set is handed over before the write. The cache carries
+own: no cache write or handover occurs when the recomputed entry equals the
+cached one and reconciliation persisted no anchor changes. If only anchor state
+changed, the rescan still publishes Ready, the current diff event and activity,
+and writes the cache. The new change set is handed over before that write. The cache carries
 the hunks: it is the only place they live, and anchor capture reads them there,
 while the review response of the server drops them for speed. What the task's
 scope leaves of the repository is what goes in (`filterChange`,
@@ -1041,7 +1043,8 @@ now goes in three steps.
    same-bytes case seemed to announce on Bun was that burst: the rewrite was
    rescanned after `settle` had returned and the next test had removed
    `diff.json`, and a rescan with no cache to patch reads the whole change set and
-   announces it. A save with the same bytes emits no unscoped current
+   announces it. A save that leaves both content and persisted anchors unchanged emits no
+   unscoped current
    `diff-changed` on either runtime; named-scope notifications remain separate.
 
 The marker is not a change any test can see. The repository's
@@ -1129,6 +1132,12 @@ no event it waited for names a lock. "says nothing about a git status that
 takes the index lock and moves nothing" runs `git status` twice to let it
 refresh what it will, hides a change, runs it once more and expects no event
 through `settle`.
+
+On 2026-11-01, `env -u FORCE_COLOR bun run test:bun` completed three
+consecutive ordinary runs on macOS 27 arm64, Bun 1.3.14, at
+`a87e98927cb171464d3fc4911653412f931ccab7`. Each passed 1255/1255 tests in
+87 files, exit 0. This qualifies that source's full Bun suite; it does not
+identify the cause of the earlier unheard directory events.
 
 **`tests/watch-tree.test.ts` holds native directory lifecycle behavior.**
 On macOS the lifecycle probe chooses recursive or per-directory native watching.

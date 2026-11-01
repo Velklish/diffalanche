@@ -884,6 +884,27 @@ the M1 Pro's: a budget verdict is not evidence on a machine the untouched base i
 over budget on ([A red the machine caused](#a-red-the-machine-caused)), and the
 reading on a quiet development machine remains unmeasured.
 
+**Development-machine readings on 2026-11-01.** The current implementation
+`a87e98927cb171464d3fc4911653412f931ccab7` was measured on the 8-core Apple
+M1 Pro, Darwin 27 arm64, Bun 1.3.14, Node v25.2.1 and Chromium 1243.
+Three ordinary `bun run perf` invocations used
+`PLAYWRIGHT_BROWSERS_PATH=/Users/kim.p/.bb/thread-storage/diffalanche-execution-20261101/browsers`,
+with the original load guard, budgets and deadlines. Each reading is the median
+of five complete measurements; an interrupted invocation has no median.
+
+| Invocation | Update median | Exit | One/five-minute load before → after | Outcome |
+|---|---|---|---|---|
+| 1 | 300 ms | 0 | 35.21/27.80 → 9.34/18.33 | waited 125 s; measurement admitted at 6.44/19.73; 7/7 budgets |
+| 2 | 302 ms | 1 | 9.34/18.33 → 8.27/16.50 | five complete measurements; 6/7 budgets |
+| 3 | not measured | 1 | 8.27/16.50 → 3.38/12.60 | three complete measurements, then RESTORE timed out at 60000 ms in sample 4 |
+
+The third invocation retained update samples 301, 299 and 326 ms. These results
+do not satisfy three consecutive complete invocations inside the 300 ms budget.
+They do not establish that host load caused the timeout or compare the current
+implementation with the historical container baseline. The 300 ms budget is
+unchanged. A separate diagnostic run completed all five restores; that does not
+refute the ordinary timeout or establish its cause.
+
 CPU per frame over the same nine points is 8.5 to 9.1 with no trend, which says
 there is no scroll regression in this range — the line is simply above 8.3
 everywhere, which is the CPU-per-frame budget decision.
