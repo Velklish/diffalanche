@@ -1,6 +1,7 @@
 import { afterEach, describe, expect, it, vi } from "vitest";
 import { startLive } from "../src/ui/live.ts";
 import { useStore } from "../src/ui/store.ts";
+import type { Comment } from "../src/ui/types.ts";
 import { FakeSource } from "./helpers/event-source.ts";
 
 /** Frames that are not this window's (DA-68): one broadcast and one ring per server, so the client
@@ -121,7 +122,7 @@ describe("a comment frame that belongs to another task", () => {
   });
 });
 
-function liveComment() {
+function liveComment(): Comment {
   return {
     id: "c_one",
     repo: null,
@@ -144,6 +145,29 @@ function liveComment() {
     ],
   };
 }
+
+it("keeps the newer event thread when the comment POST answers later", async () => {
+  useStore.setState({ comments: [], toast: null });
+  useStore.getState().openComposer({ repo: null, path: null, side: null, line: null });
+  useStore.getState().setSeverity("warning");
+  useStore.getState().setBody("comment");
+  let answer: (response: Response) => void = () => {};
+  const fetcher = vi.fn(
+    () =>
+      new Promise<Response>((resolve) => {
+        answer = resolve;
+      }),
+  );
+  vi.stubGlobal("fetch", fetcher);
+  const sending = useStore.getState().submitComment();
+  await vi.waitFor(() => expect(fetcher).toHaveBeenCalledTimes(1));
+  useStore.getState().patchThread({ ...liveComment(), status: "resolved" });
+  answer(new Response(JSON.stringify(liveComment()), { status: 201 }));
+  await sending;
+  expect(useStore.getState().comments).toHaveLength(1);
+  expect(useStore.getState().comments[0]?.status).toBe("resolved");
+  expect(useStore.getState().counters.counters.resolved).toBe(1);
+});
 
 describe("a thread read across a task switch", () => {
   const frames = ["comment-added", "reply-added", "comment-status"] as const;

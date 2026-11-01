@@ -418,10 +418,17 @@ for (const order of ["event-first", "post-first"] as const) {
     expect(written?.anchor?.lineContent).toBe(onDisk(repo, path)[1]);
     const anchors = card.locator(`[data-thread-anchor="${written?.id}"]`);
     const elements = await anchors.evaluateAll((nodes) => nodes.map((node) => node.outerHTML));
+    const readback = testInfo.outputPath(`browse-${order}-readback.json`);
+    writeFileSync(readback, JSON.stringify({ deliveries, written, elements }, null, 2));
     await testInfo.attach(`browse-${order}-readback.json`, {
-      body: JSON.stringify({ deliveries, written, elements }, null, 2),
+      path: readback,
       contentType: "application/json",
     });
     await expect(anchors).toHaveCount(1);
+    await page.screenshot({ path: testInfo.outputPath(`browse-${order}-dark.png`) });
+    await page.getByRole("button", { name: "light theme" }).click();
+    await expect(page.locator(":root")).toHaveAttribute("data-theme", "light");
+    await expect(anchors).toHaveCount(1);
+    await page.screenshot({ path: testInfo.outputPath(`browse-${order}-light.png`) });
   });
 }

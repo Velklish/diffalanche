@@ -73,6 +73,8 @@ Then the review is in the browser: every repository with changes, its files, its
 diff. Select lines and write a comment; the comment lands in
 `.diffalanche/reviews/cargo-flags/comments.json` and an agent reads it from
 there through the CLI a moment later, with no restart on either side.
+If the live update arrives before the save response, the page keeps one thread
+and retains the newer live version.
 
 While you type, the form lists the five nearest comments from every past review
 — `↑` / `↓` choose one and `TAB` takes its text and severity — and the `AUTO`

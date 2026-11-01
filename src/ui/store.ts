@@ -1235,8 +1235,12 @@ export const useStore = create<Store>()((set, get) => ({
       // The form that was sent is cleared; one opened while the write was out is left as it is.
       const same = get().composer === composer;
       if (same) forgetSuggestions();
+      const comments = get().comments;
       set({
-        ...withComments([...get().comments, comment], get().threadsByFile),
+        ...withComments(
+          comments.some((one) => one.id === comment.id) ? comments : [...comments, comment],
+          get().threadsByFile,
+        ),
         ...(same ? { composer: null, composerEnd: null, sel: null, body: "", sending: false } : {}),
         ...(same ? { focusId: comment.id } : {}),
         toast: raise(`Комментарий сохранён в reviews/${session?.name ?? "?"}/comments.json`),

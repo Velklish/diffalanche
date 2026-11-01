@@ -15,6 +15,9 @@ and `bun run release` refuses a version that has no section. See
 
 ### Fixed
 
+- A comment received through live updates before its save response appears
+  once, retaining the newer live thread.
+
 - Late thread reads and their errors no longer update a window that has
   switched review tasks, including a switch away and back.
 
