@@ -178,6 +178,55 @@ test("search opens comment threads at every anchor level", async ({ page, reques
   }
 });
 
+for (const anchor of ["review", "repository"]) {
+  test(`search brings the already focused ${anchor} thread back into view`, async ({
+    page,
+    request,
+  }) => {
+    const bundle = await (await request.get("/api/review")).json();
+    const source = bundle.comments.find((one: Comment) => one.repo && one.path && one.line);
+    if (!source) throw new Error("the fixture has no line comment");
+    const target = {
+      ...source,
+      id: "search_again",
+      repo: anchor === "review" ? null : source.repo,
+      path: null,
+      line: null,
+      endLine: null,
+      status: "resolved",
+      body: "unique search_again",
+    };
+    bundle.comments = [
+      target,
+      ...Array.from({ length: 40 }, (_, index) => ({
+        ...source,
+        id: `filler_${index}`,
+        body: `filler ${index}`,
+      })),
+    ];
+    await page.route("**/api/review*", (route) => route.fulfill({ json: bundle }));
+    await open(page);
+    const find = async () => {
+      await page.keyboard.press("ControlOrMeta+k");
+      await page.getByRole("textbox", { name: "search" }).fill("search_again");
+      await palette(page).locator(".palette-hit").filter({ hasText: "search_again" }).click();
+    };
+    const card = page.locator('.rail-list [data-thread="search_again"]');
+    await find();
+    await expect(card).toBeInViewport();
+    await page.locator(".rail-list").evaluate((element) => {
+      element.scrollTop = element.scrollHeight;
+    });
+    await expect(card).not.toBeInViewport();
+    await find();
+    await expect(card).toBeInViewport();
+    await page.getByRole("button", { name: "unanswered", exact: true }).click();
+    await expect(card).toHaveCount(0);
+    await find();
+    await expect(card).toBeInViewport();
+  });
+}
+
 test("J walks the open threads and wraps at the end", async ({ page }) => {
   await open(page);
   // Every open thread, review-level ones included: `J` walks those too, and a count without them

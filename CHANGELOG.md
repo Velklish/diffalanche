@@ -19,7 +19,8 @@ and `bun run release` refuses a version that has no section. See
   their pressed state in the accessibility tree.
 
 - **Search finds comments at every anchor level.** Review and repository
-  comments show their scope and body, and choosing a comment reveals its thread.
+  comments show their scope and body, and choosing a comment reveals its thread,
+  even when it was already focused and scrolled out of the rail.
 
 - **The first-run terminal example follows the form.** Its POSIX shell arguments
   represent the selected base and session name, including shell-sensitive input.

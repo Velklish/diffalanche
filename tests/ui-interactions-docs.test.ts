@@ -10,6 +10,7 @@ describe("UI interaction reference", () => {
       "A failed first page ends loading and offers a retry",
       "The POSIX shell example quotes both arguments",
       "Review and repository comments have no file preview",
+      "the thread and brings its rail card into view, even if it was already focused",
       "Mode and branch buttons expose their selected state with `aria-pressed`",
     ]) {
       expect(reference).toContain(statement);

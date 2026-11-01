@@ -1,6 +1,7 @@
 import type { KeyboardEvent } from "react";
 import { useCallback, useEffect, useMemo, useRef, useState } from "react";
 import { splitLines } from "../context.ts";
+import { afterPaint } from "../perf.ts";
 import { revealFile, revealThread } from "../reveal.ts";
 import type { PreviewLine, SearchHit } from "../search.ts";
 import { PREVIEW_LINES, preview, search, symbolHits, textHits } from "../search.ts";
@@ -67,7 +68,12 @@ function Palette() {
         if (store.unansweredOnly) store.toggleUnanswered();
         if (store.awaitingOnly) store.toggleAwaiting();
         if (!store.railOn) store.toggleRail();
-        void revealThread(hit.id);
+        void revealThread(hit.id).then(async () => {
+          await afterPaint();
+          document
+            .querySelector(`.rail-list [data-thread="${CSS.escape(hit.id)}"]`)
+            ?.scrollIntoView({ block: "nearest" });
+        });
         return;
       }
       const store = useStore.getState();
