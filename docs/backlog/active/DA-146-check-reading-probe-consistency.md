@@ -1,6 +1,5 @@
 # DA-146 · Automatically check that the reading probe and its CSS and browser-test copies agree
 
-- **Order:** 1160
 - **Scope:** [08-ui](../../reference/08-ui.md)
 - **Created:** 2026-11-01
 - **Dependencies:** none
@@ -8,6 +7,8 @@
 - **Audit finding:** PQA-304
 - **Audit priority:** P3
 - **Evidence status:** confirmed_static
+- **Previous order:** 1160
+- **Taken:** 2026-11-01
 
 
 ## Execution authorization — 2026-11-01
@@ -44,3 +45,7 @@ Audit finding PQA-304; evidence snapshot `087d3330128f8762ff88b0a9f7a7151dca8db0
 ## Next step
 
 The owner reviews and approves this item individually before it is queued for implementation. Creating this card does not authorize product changes.
+
+## Execution plan
+
+Verification hygiene track owns only the four original fixture lifetimes, removal of the arithmetic skeleton, and a deterministic check linking the four existing reading-coordinate declarations. Keep the runtime smoke and browser behavior assertions. Do not introduce a fixture or geometry framework; source coordinates and UI behavior stay as specified. Prove owned-path cleanup after success and controlled failure without sweeping shared temporary directories. Keep separate original DA-143 and DA-144 outcomes; no new minor fixes.
