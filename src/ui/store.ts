@@ -595,7 +595,8 @@ export const useStore = create<Store>()((set, get) => ({
         if (refused.code === "no-current-session") {
           appliedReading = generation;
           set({ status: "no-session", failure: null });
-          await get().loadScan();
+          if (signal === undefined) await get().loadScan();
+          else void get().loadScan();
           return;
         }
         // The task this window was showing was deleted elsewhere: it goes where `current` points, as
