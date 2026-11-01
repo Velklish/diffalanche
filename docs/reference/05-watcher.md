@@ -585,7 +585,7 @@ the same, because the CLI writes the same directory.
 
 | Event | Data | When |
 |---|---|---|
-| `diff-changed` | `{ repo, files }` | a repository was rescanned and its entry is not what it was; `files` are the paths that woke the watcher, not the files of the new change set, and it is **empty** when what woke it was the walk taking over a dead watch, or the read of a session `current` moved to — neither names a path |
+| `diff-changed` | `{ repo, files, session }` | a repository was rescanned and its entry is not what it was; `files` are the paths that woke the watcher, not the files of the new change set, and it is **empty** when what woke it was the walk taking over a dead watch, or the read of a session `current` moved to — neither names a path |
 | `comment-added` | `{ session, id }` | a comment appeared in the `comments.json` of a followed session |
 | `reply-added` | `{ session, id, commentId }` | a reply appeared in a thread; `id` is the reply |
 | `comment-status` | `{ session, id }` | a comment was resolved or reopened |
@@ -599,6 +599,16 @@ feed is built from the same events. A listener is called in the order it
 subscribed, over a copy of the list, so one that unsubscribes itself while an
 event is being delivered — which is what a closing stream does — does not
 shorten the list under the loop.
+
+A path covered by a followed named task can lie outside the current task's path
+scope. When the current entry stays unchanged, the watcher still invalidates
+held documents covering the reported paths and sends a `diff-changed` with that
+named `session` only. The scope comes from the existing metadata snapshot and
+survives document-cache eviction; unreadable or unknown metadata grants no
+notification scope. Current's cache, rescan callback and activity stay unchanged.
+A repository control path under `.git/`, or a notification without paths,
+applies to the whole repository. Normal path notifications still pass the same
+exclude and scope predicates as other live updates.
 
 A file touched without its content changing — a build output written again, a
 save with the same bytes — is not a change of the review: the recomputed entry

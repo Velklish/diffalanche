@@ -7,7 +7,7 @@ import type { ScanWarning } from "../types.ts";
  * them as named SSE events ([07-server.md](../../../docs/reference/07-server.md), "The live stream"). */
 export type WatcherEvent =
   /** One repository's change set was recomputed; `files` are the paths that woke the watcher. */
-  | { type: "diff-changed"; repo: string; files: string[] }
+  | { type: "diff-changed"; repo: string; files: string[]; session?: string }
   /** `session` is the task the thread belongs to: a window on another one drops it. */
   | { type: "comment-added"; session: string; id: string }
   /** `id` is the reply, `commentId` the thread it landed in. */

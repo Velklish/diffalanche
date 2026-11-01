@@ -916,7 +916,7 @@ browser fetches what an event names rather than being sent it.
 
 | Event | Data |
 |---|---|
-| `diff-changed` | `{ type, repo, files }` — `files` are the paths that woke the watcher |
+| `diff-changed` | `{ type, repo, files, session }` — `session` is optional and targets a named task; `files` are the paths that woke the watcher |
 | `comment-added` | `{ type, session, id }` — `session` is the task the thread belongs to |
 | `reply-added` | `{ type, session, id, commentId }` — `id` is the reply |
 | `comment-status` | `{ type, session, id }` |
@@ -926,6 +926,11 @@ browser fetches what an event names rather than being sent it.
 | `warnings` | `{ type, list }` |
 | `activity` | `{ id, verb, author, repo, path, at }` — one line of the feed |
 | `reload` | `{ type, reason }` — read the review again; see below |
+
+A `diff-changed` carrying `session` reaches only windows on that task. The
+existing replay ring applies the same filter. A window on `current` resolves its
+pointer at delivery or replay time, so a pointer move keeps the stream following
+its current task. Frames without `session` retain their broadcast behavior.
 
 Every frame carries the name, an id that counts up from one, and the whole event
 as its JSON, `type` included, so a client can listen by name or read them all

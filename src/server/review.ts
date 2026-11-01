@@ -17,6 +17,7 @@ import {
   repositoryInScope,
   resolveSessionName,
 } from "../core/domain/index.ts";
+import { pathInScope } from "../core/domain/scope.ts";
 import { readRepositoryChange, scan } from "../core/index.ts";
 import type { Base, DiffCache, Review } from "../core/storage/index.ts";
 import {
@@ -97,7 +98,7 @@ export type ReviewService = {
   sessionsRead: (reviews: ReadonlyMap<string, Review | null>) => void;
   /** A repository under the root changed: every held document that could show it,
    * bar the followed session's, is dropped ([07-server.md](../../docs/reference/07-server.md)). */
-  repositoryChanged: (repo: string) => void;
+  repositoryChanged: (repo: string, files?: readonly string[]) => void;
   /** Only the comments of that session changed: a small file, where rebuilding the
    * document would charge the next reader for the whole change set. */
   invalidateComments: (session: string) => void;
@@ -328,7 +329,7 @@ export function createReviewService(
         }
       }
     },
-    repositoryChanged: (repo) => {
+    repositoryChanged: (repo, files) => {
       const followed = watched();
       for (const [name, entry] of sessions) {
         // The followed session's document is patched by the rescan itself.
@@ -341,6 +342,17 @@ export function createReviewService(
           continue;
         }
         if (!repositoryInScope(document.session.scope, repo)) continue;
+        if (
+          files !== undefined &&
+          files.length > 0 &&
+          !files.some(
+            (path) =>
+              path === ".git" ||
+              path.startsWith(".git/") ||
+              pathInScope(document.session.scope, repo, path),
+          )
+        )
+          continue;
         entry.version += 1;
         entry.document = null;
         entry.payload = null;

@@ -13,6 +13,8 @@ and `bun run release` refuses a version that has no section. See
 
 ## [Unreleased]
 
+- Named task windows receive path edits outside current's scope without refreshing current's unchanged review. Scoped repository notifications keep their target on reconnect and when current moves.
+
 - The CLI reply stream check accepts its exact reply before child exit without accepting historical or unrelated frames. The cause of the historical loaded timeout remains unknown.
 
 ### Fixed

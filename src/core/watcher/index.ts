@@ -4,7 +4,7 @@ import { stat } from "node:fs/promises";
 import { join, relative } from "node:path";
 import { filterChange, patchable, replaceRepository, scanReview } from "../change-set.ts";
 import type { Config } from "../config/index.ts";
-import { commentInScope, repositoryInScope } from "../domain/scope.ts";
+import { commentInScope, pathInScope, repositoryInScope } from "../domain/scope.ts";
 import { checkIgnore, readRepositoryChange } from "../git/index.ts";
 import { byCodePoint } from "../order.ts";
 import { globToRegExp } from "../scanner/index.ts";
@@ -70,7 +70,7 @@ export type WatcherOptions = {
   onRescan?: (session: string, cache: DiffCache) => void;
   /** A repository that moved, whatever the current task is about: inside the
    * task's scope it means the change set did, outside it means files were written. */
-  onRepositoryChanged?: (repo: string) => void;
+  onRepositoryChanged?: (repo: string, files?: readonly string[]) => void;
   /** The tasks windows are open on, asked on every burst of the data directory
    * ([05-watcher.md](../../../docs/reference/05-watcher.md)). */
   sessions?: () => string[];
@@ -130,17 +130,17 @@ export async function startWatcher(options: WatcherOptions): Promise<Watcher> {
   // Per session, because a window open on a task hears about that task's
   // comments and not only about the current one's (DA-55.1).
   const comments = new Map<string, Map<string, CommentState> | null>();
-  const metadata = new Map<string, string | null>();
+  const metadata = new Map<string, { value: string | null; scope: Scope }>();
   // The oldest document served of each task not yet followed: kept through the bursts that drop what
   // nobody follows, until one follows the task, it leaves the followed set, or it is gone (05-watcher.md).
   const served = new Map<string, Served>();
-  if (session !== null) {
-    comments.set(session, await snapshotComments(config, session));
-    metadata.set(session, await readMetadata(config, session));
-  }
   // What the current session is about, so a repository the task is not about
   // costs it no git process when its files change.
   let scope: Scope = (await readSessionOrNull(config, session))?.scope ?? null;
+  if (session !== null) {
+    comments.set(session, await snapshotComments(config, session));
+    metadata.set(session, { value: await readMetadata(config, session), scope });
+  }
   // `null` until a listing of `reviews/` succeeds: without a baseline nothing
   // is news, and the first readable listing becomes it.
   let sessions: Map<string, ReviewStatus> | null = await snapshotSessions(config, null);
@@ -278,7 +278,8 @@ export async function startWatcher(options: WatcherOptions): Promise<Watcher> {
     if (followed === null || !repositoryInScope(scope, repo)) {
       // Nothing will read this repository, so nothing can say whether its
       // content changed: the burst is all there is to report (05-watcher.md).
-      options.onRepositoryChanged?.(repo);
+      options.onRepositoryChanged?.(repo, files);
+      notifyOtherScopes(repo, files);
       return;
     }
     // Announced before `diff.json` is written, and only when the entry moved: a save with the same
@@ -287,15 +288,35 @@ export async function startWatcher(options: WatcherOptions): Promise<Watcher> {
       options.onRescan?.(followed, outcome.cache);
       // From inside the rescan, so it says the change set moved rather than
       // that a file was written: a save with the same bytes reaches no one.
-      options.onRepositoryChanged?.(repo);
+      options.onRepositoryChanged?.(repo, files);
       bus.emit({ type: "diff-changed", repo, files });
       activity.diffChanged(repo);
       if (outcome.warningsChanged) bus.emit({ type: "warnings", list: outcome.cache.warnings });
     });
     // Once per repository per move, the repository is said to have moved whatever the rescan
     // found: it compared with a cache the move's read wrote, not with what others hold.
-    if (!rescanned.changed && !settled.has(repo)) options.onRepositoryChanged?.(repo);
+    if (!rescanned.changed) {
+      options.onRepositoryChanged?.(repo, settled.has(repo) ? files : undefined);
+      notifyOtherScopes(repo, files);
+    }
     settled.add(repo);
+  }
+
+  /** A named task can cover paths outside current's scope, even after its document was evicted. */
+  function notifyOtherScopes(repo: string, files: string[]): void {
+    for (const name of options.sessions?.() ?? []) {
+      if (name === session) continue;
+      const known = metadata.get(name);
+      if (known === undefined || known.value === null || !repositoryInScope(known.scope, repo))
+        continue;
+      const covered =
+        files.length === 0 ||
+        files.some(
+          (path) =>
+            path === ".git" || path.startsWith(".git/") || pathInScope(known.scope, repo, path),
+        );
+      if (covered) bus.emit({ type: "diff-changed", repo, files, session: name });
+    }
   }
 
   /** The tasks followed: the current one, and the ones windows are open on. */
@@ -378,7 +399,11 @@ export async function startWatcher(options: WatcherOptions): Promise<Watcher> {
       comments.set(session, await snapshotComments(config, session, report));
     }
     // A session a window was already on keeps its baseline, as it keeps its comments.
-    if (!metadata.has(session)) metadata.set(session, review === null ? null : metadataOf(review));
+    if (!metadata.has(session))
+      metadata.set(session, {
+        value: review === null ? null : metadataOf(review),
+        scope: review?.scope ?? null,
+      });
     scope = review?.scope ?? null;
     // The pointer moved; what the session *is* has not changed, and the two are
     // different news for different windows ([08-ui.md](../../../docs/reference/08-ui.md)).
@@ -470,10 +495,11 @@ export async function startWatcher(options: WatcherOptions): Promise<Watcher> {
       const review = reviews.get(name) ?? null;
       const next = review === null ? null : metadataOf(review);
       const taken = metadata.has(name) ? undefined : served.get(name);
-      if (taken !== undefined) metadata.set(name, taken.metadata);
-      if (metadata.has(name) && metadata.get(name) === next) continue;
-      const known = metadata.has(name);
-      metadata.set(name, next);
+      if (taken !== undefined) metadata.set(name, { value: taken.metadata, scope: taken.scope });
+      const before = metadata.get(name);
+      metadata.set(name, { value: next, scope: review?.scope ?? null });
+      if (before !== undefined && before.value === next) continue;
+      const known = before !== undefined;
       // A task a window opened unserved is not a task that changed: its
       // metadata is read as the baseline, the way its comments are.
       if (!known) continue;

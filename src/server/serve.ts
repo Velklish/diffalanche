@@ -63,7 +63,11 @@ export async function startReviewServer(options: ReviewServerOptions): Promise<R
   });
   const bus = createEventBus();
   // The last window on a task gone, what it was served goes too, burst or none (05-watcher.md).
-  const events = createEventStream(undefined, (name) => watcher?.left(name));
+  const events = createEventStream(
+    undefined,
+    (name) => watcher?.left(name),
+    () => watcher?.session() ?? null,
+  );
   const activity = createActivityLog({ onRecord: forwardActivity(events) });
   forwardEvents(bus, events);
 
