@@ -59,7 +59,7 @@ diffalanche serve --open
 ```
 
 The base picker exposes its selected mode and branch in the accessibility tree.
-Automated DOM, accessibility-tree, and keyboard checks cover that selection;
+Selection verification requires automated DOM, accessibility-tree, and keyboard checks;
 manual screen-reader verification is not required
 ([UI reference](docs/reference/08-ui.md)).
 

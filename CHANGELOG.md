@@ -1794,7 +1794,7 @@ and `bun run release` refuses a version that has no section. See
   `ForbiddenError` doc of `src/server/errors.ts` went with the sweep.
 
 - **The base picker exposes its selection.** Mode and branch buttons report
-  their pressed state in the accessibility tree. Selection verification uses
+  their pressed state in the accessibility tree. Selection verification requires
   automated DOM, accessibility-tree, and keyboard checks; manual VoiceOver or
   other screen-reader verification is not required, and no reader run is claimed.
 
