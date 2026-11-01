@@ -384,6 +384,9 @@ test("a comment sent with AUTO is stored as auto, and an agent's confirmation re
       .first()
       .evaluate((node) => node.closest("[lang]")?.getAttribute("lang")),
   ).toBe("");
+  const repoPath = page.locator(".repo-path").first();
+  await expect(repoPath).toHaveAttribute("lang", "");
+  expect(await repoPath.evaluate((node) => node.closest("[lang]")?.getAttribute("lang"))).toBe("");
   const cdp = await page.context().newCDPSession(page);
   const dom = await cdp.send("DOM.getDocument");
   const toastNode = await cdp.send("DOM.querySelector", {

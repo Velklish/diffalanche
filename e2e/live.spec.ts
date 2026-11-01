@@ -179,6 +179,10 @@ test("an agent reply's toast marks the interface text and leaves the author unkn
   await expect(toast).toContainText("bob");
   await expect(toast.locator('[lang="ru"]')).toHaveText(" ответил · ");
   await expect(toast.locator('[lang=""]').first()).toHaveText("bob");
+  const reply = page.locator(`.rail-list [data-thread="${thread.id}"] .reply-body`).last();
+  await page.getByRole("button", { name: /^Review / }).click();
+  await expect(reply).toHaveText("fixed in the next commit");
+  expect(await reply.evaluate((node) => node.closest("[lang]")?.getAttribute("lang"))).toBe("");
 });
 
 test("an edit patches its own card, holds the reading position, and leaves the composer open", async ({
