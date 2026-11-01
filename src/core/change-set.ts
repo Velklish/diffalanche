@@ -142,9 +142,24 @@ export function fileIncluded(
   return true;
 }
 
+export type CapturedRemoval = { repo: string; path: string };
+
+/** Old paths proved absent by this raw scan, kept outside the public filtered cache. */
+export function capturedRemovals(change: RepositoryChange): CapturedRemoval[] {
+  return change.files.flatMap((file) =>
+    file.oldPath !== null
+      ? [{ repo: change.path, path: file.oldPath }]
+      : file.status === "deleted"
+        ? [{ repo: change.path, path: file.path }]
+        : [],
+  );
+}
+
 /** What one scan of the root came to: the cache, and every repository it saw. */
 type ReviewScan = {
   cache: DiffCache;
+  changes: RepositoryChange[];
+  removed: CapturedRemoval[];
   /** Every repository the walk found, changed or not: how a `--repo` nothing is at is told from
    * one that has nothing to show. */
   found: string[];
@@ -200,13 +215,11 @@ export async function scanReview(
     exclude: config.exclude,
   });
   const selected = found.repositories.filter((repo) => repositoryInScope(scope, repo.path));
-  const scanned = await mapWithLimit(selected, SCAN_CONCURRENCY, async (repo) =>
-    filterChange(
-      scope,
-      await readRepositoryChange(config.root, repo.path, base, { hunks: true }),
-      config.exclude,
-    ),
-  );
+  const captured = await mapWithLimit(selected, SCAN_CONCURRENCY, async (repo) => {
+    const raw = await readRepositoryChange(config.root, repo.path, base, { hunks: true });
+    return { change: filterChange(scope, raw, config.exclude), removed: capturedRemovals(raw) };
+  });
+  const scanned = captured.map((one) => one.change);
   const paths = found.repositories.map((repo) => repo.path);
   // A scope entry with no repository is named, not dropped: it was checked when it was written,
   // so the repository has gone since ([02-git.md](../../docs/reference/02-git.md)).
@@ -222,6 +235,8 @@ export async function scanReview(
     ...scanned.flatMap((repo) => repo.warnings.map((message) => ({ path: repo.path, message }))),
   ];
   return {
+    changes: scanned,
+    removed: captured.flatMap((one) => one.removed),
     cache: cache(
       config.root,
       base,

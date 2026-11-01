@@ -21,6 +21,7 @@ import { commentWarnings, reconcileAnchors } from "../src/core/domain/reanchor.t
 import { reverseAnchor } from "../src/core/git/anchors.ts";
 import * as fileSources from "../src/core/git/browse.ts";
 import { fileSourceAt } from "../src/core/git/browse.ts";
+import * as repositoryReads from "../src/core/git/index.ts";
 import * as gitCalls from "../src/core/git/run.ts";
 import { scan } from "../src/core/scanner/index.ts";
 import {
@@ -916,11 +917,14 @@ describe("review regressions", () => {
       if (mode === "refresh") await refresh(f);
       else {
         let err = "";
+        let out = "";
         const code = await run(
           ["diff", "--root", f.root, "--data-dir", f.config.dataDir, "--review", "work", "--json"],
           { read: async () => null },
           {
-            out: () => undefined,
+            out: (text) => {
+              out += text;
+            },
             err: (text) => {
               err += text;
             },
@@ -928,6 +932,9 @@ describe("review regressions", () => {
           },
         );
         expect(code, err).toBe(0);
+        expect(out).not.toContain("b.ts");
+        expect(JSON.parse(out)).not.toHaveProperty("removed");
+        expect(JSON.parse(out)).not.toHaveProperty("changes");
       }
       expect((await readComments(f.config.dataDir, "work"))[0]).toMatchObject({
         path: "a.ts",
@@ -1213,4 +1220,50 @@ describe("second review regressions", () => {
       anchor: f.comment.anchor,
     });
   });
+});
+
+it("does not reread an empty captured repository after its target changes before reconciliation", async () => {
+  const f = await fixture();
+  writeFileSync(f.file, f.text);
+  const realRead = repositoryReads.readRepositoryChange;
+  let calls = 0;
+  let capturedSha = "";
+  let readyLine = 0;
+  const watching = await startWatcher({
+    config: f.config,
+    scan: await scan(f.root, { roots: [f.root], depth: 2, exclude: [] }),
+    bus: createEventBus(),
+    activity: createActivityLog(),
+    recursive: true,
+    native: () => ({ polling: false, ready: Promise.resolve(), close: () => undefined }),
+    onRescan: () => {
+      readyLine = JSON.parse(readFileSync(commentsPath(f.config.dataDir, "work"), "utf8"))
+        .comments[0].line;
+    },
+  });
+  vi.spyOn(repositoryReads, "readRepositoryChange").mockImplementation(async (...args) => {
+    const change = await realRead(...args);
+    calls += 1;
+    if (calls === 1) {
+      expect(change.files).toEqual([]);
+      capturedSha = change.base?.sha ?? "";
+      writeFileSync(f.file, `${prefix}${f.text}`);
+    }
+    return change;
+  });
+  try {
+    await watching.refresh();
+  } finally {
+    await watching.close();
+    vi.restoreAllMocks();
+  }
+  expect(capturedSha).toBe(f.git("rev-parse", "HEAD").trim());
+  expect(readyLine).toBe(2);
+  expect(calls).toBe(1);
+  expect(await get(f.config.dataDir, "work", f.comment.id)).toMatchObject({
+    line: 2,
+    status: "open",
+    anchor: f.comment.anchor,
+  });
+  expect((await readDiffCache(f.config.dataDir, "work"))?.repositories).toEqual([]);
 });

@@ -214,6 +214,7 @@ export function locateAnchor(
   const body =
     saved.anchor.rangeContent?.map(normalizeLine) ??
     (saved.endLine === null ? [normalizeLine(saved.anchor.lineContent)] : null);
+  if (body === null || body.length === 0) return { kind: "orphaned" };
   const finish = (start: number, end: number): AnchorMatch => ({
     kind: "matched",
     line: start,
@@ -238,7 +239,6 @@ export function locateAnchor(
     const last = mapped.lines.at(-1);
     if (first !== undefined && last !== undefined) return finish(first, last);
   }
-  if (body === null || body.length === 0) return { kind: "orphaned" };
   let candidate: number | null = null;
   for (let start = 0; start + body.length <= lines.length; start += 1) {
     const core =

@@ -460,7 +460,9 @@ Concurrent replies survive; a concurrent status or anchor edit rejects that
 proposal. A pass with no changes writes nothing. A target inconsistent with the
 captured diff is skipped so the next queued read can retry it. A null safe read
 after an empty diff is also skipped when the captured base still has that file.
-Captured deletions and omitted files still become orphaned.
+Captured deletions, omitted files and old paths proved removed by a hidden
+rename still become orphaned. That removal evidence comes from the same raw
+scan before filtering; it does not expose excluded targets or bypass safe reads.
 
 The file source captures committed provenance at creation only for rows that
 inverse-map through the pinned HEAD/captured-target patch and match the committed

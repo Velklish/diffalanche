@@ -632,6 +632,11 @@ A file over `DEFAULT_MAX_FILE_BYTES` (512 KiB, the diff's own limit) is
 same two words, for the same reasons, as a file of the change set
 ([Files listed without content](#files-listed-without-content)).
 
+Full scans also retain an internal filtered record for each repository,
+including empty ones, and old-path removals captured before filtering. These
+values feed reconciliation from the same scan; the public change-set cache
+still lists only repositories with visible changes.
+
 ## Mapping comment anchors
 
 `anchors.ts` uses the trusted Git runner and inert configuration. Reverse blame

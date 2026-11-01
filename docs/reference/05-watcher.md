@@ -15,6 +15,12 @@ synchronous `Ready` callback and corresponding `diff-changed` frame. The comment
 write happens outside the cache lock; the cache writer rechecks the captured
 base and scope under its lock. `onRescan` and the event still precede the costly
 `diff.json` write. Full refresh and session-switch reads use the same path.
+Internal scan results retain filtered empty repository records and captured
+old-path removals from the same raw read. Reconciliation consumes these records
+without a second mutable repository read. Removed paths never enter the public
+cache or HTTP response; they distinguish proved removal from an unavailable
+safe read of an unchanged file.
+
 Empty or Git metadata wake paths and files returned to base still reconcile the
 repository's in-scope comments rather than treating wake paths as diff entries.
 

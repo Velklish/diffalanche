@@ -1,5 +1,12 @@
 import { join } from "node:path";
-import { fileIncluded, filterChange, sameBase, sameScope } from "../change-set.ts";
+import {
+  type CapturedRemoval,
+  capturedRemovals,
+  fileIncluded,
+  filterChange,
+  sameBase,
+  sameScope,
+} from "../change-set.ts";
 import type { Config } from "../config/index.ts";
 import { capturedAnchorPatch, mapWorktreeAnchor, reverseAnchor } from "../git/anchors.ts";
 import { fileSourceAt, isRepositoryPath } from "../git/browse.ts";
@@ -92,7 +99,7 @@ export async function reconcileAnchors(
   review: Review,
   changes: RepositoryChange[],
   before: DiffCache | null,
-  options: { source?: FileSource; repo?: string } = {},
+  options: { source?: FileSource; repo?: string; removed?: readonly CapturedRemoval[] } = {},
 ): Promise<{ comments: Comment[]; changed: boolean }> {
   const source = options.source ?? fileSourceAt(config.root, config.dataDir);
   const comments = await readComments(config.dataDir, session);
@@ -112,13 +119,14 @@ export async function reconcileAnchors(
   for (const repo of new Set(eligible.map((comment) => comment.repo))) {
     if (repo === null || !isRepositoryPath(repo)) continue;
     const cwd = join(config.root, repo);
-    const change =
-      changes.find((one) => one.path === repo) ??
-      filterChange(
-        review.scope,
-        await readRepositoryChange(config.root, repo, review.base, { hunks: true }),
-        config.exclude,
-      );
+    let change = changes.find((one) => one.path === repo);
+    let removed = options.removed ?? [];
+    if (change === undefined) {
+      const raw = await readRepositoryChange(config.root, repo, review.base, { hunks: true });
+      change = filterChange(review.scope, raw, config.exclude);
+      removed = [...removed, ...capturedRemovals(raw)];
+    }
+    const departed = new Set(removed.filter((one) => one.repo === repo).map((one) => one.path));
     const head = await revParse(cwd, "HEAD");
     if (review.base.mode === "head" && change.base !== null && head !== change.base.sha) continue;
     const previous = before?.repositories.find((one) => one.path === repo);
@@ -212,7 +220,7 @@ export async function reconcileAnchors(
           if (file !== undefined) continue;
           const base =
             change.base === null ? null : await read(identityPath, { sha: change.base.sha });
-          if (base !== null) continue;
+          if (base !== null && !departed.has(targetPath)) continue;
         }
         if (text !== null) {
           const base =

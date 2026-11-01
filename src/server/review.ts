@@ -454,8 +454,8 @@ async function changeSet(
  * file, where anchor capture is the one reader that needs them. */
 async function rebuild(config: Config, session: string, review: Review): Promise<DiffCache> {
   const before = await readDiffCache(config.dataDir, session);
-  const { cache } = await scanReview(config, review.base, review.scope);
-  await reconcileAnchors(config, session, review, cache.repositories, before);
+  const { cache, changes, removed } = await scanReview(config, review.base, review.scope);
+  await reconcileAnchors(config, session, review, changes, before, { removed });
   await withLock(sessionDir(config.dataDir, session), async (held) => {
     await held.assertHeld();
     await writeDiffCache(config.dataDir, session, cache);

@@ -3,6 +3,7 @@
 import { stat } from "node:fs/promises";
 import { join, relative } from "node:path";
 import {
+  capturedRemovals,
   filterChange,
   patchable,
   replaceRepository,
@@ -628,15 +629,13 @@ export async function rescanRepository(
   const review = await readReview(config.dataDir, session);
   // With hunks: `diff.json` is the only place they live, and anchor capture reads them there
   // (05-watcher.md, "The change-set cache").
-  const change = filterChange(
-    review.scope,
-    await readRepositoryChange(config.root, repo, review.base, { hunks: true }),
-    config.exclude,
-  );
+  const raw = await readRepositoryChange(config.root, repo, review.base, { hunks: true });
+  const change = filterChange(review.scope, raw, config.exclude);
 
   const beforeCache = await readDiffCache(config.dataDir, session);
   const reconciled = await reconcileAnchors(config, session, review, [change], beforeCache, {
     repo,
+    removed: capturedRemovals(raw),
   });
   const patched = await withLock(sessionDir(config.dataDir, session), async (held) => {
     const current = await readReview(config.dataDir, session);
@@ -691,8 +690,8 @@ async function rescanSession(
   ready?: Ready,
 ): Promise<Rescan> {
   const before = await readDiffCache(config.dataDir, session);
-  const { cache } = await scanReview(config, review.base, review.scope);
-  const reconciled = await reconcileAnchors(config, session, review, cache.repositories, before);
+  const { cache, changes, removed } = await scanReview(config, review.base, review.scope);
+  const reconciled = await reconcileAnchors(config, session, review, changes, before, { removed });
   const outcome: Rescan = {
     cache: {
       ...cache,
