@@ -1,6 +1,6 @@
-# DA-150 · Validate deletion and lock waiter races
+# DA-150 · Validate the deletion lock-waiter ENOTEMPTY race
 
-- **Scope:** linked source scopes; [reference](../../reference/README.md)
+- **Scope:** 03-storage (see [reference](../../reference/README.md))
 - **Created:** 2026-11-01
 - **Dependencies:** retain each source condition below
 - **Cost:** minor
@@ -9,12 +9,11 @@
 
 ## Context
 
-Authorized consolidation of original minor entries. This batch is an execution group, not a declaration of duplicate causes. Deterministic deletion/waiter interleavings with both ENOTEMPTY and EINVAL symptoms, common cause unproven.
+Authorized consolidation of original minor entries. This batch is an execution group, not a declaration of duplicate causes. Deterministic deletion/waiter interleavings for the ENOTEMPTY symptom. DA-121.2 remains an independent open hypothesis: the historical EINVAL symptom was not reproduced, and a common cause is unproven.
 
 ## Work to do
 
 - [DA-40.3 — The deleteSession verdict on a waiter of a deleted session's lock races the removal: ENOTEMPTY](../minor/DA-40.3-delete-waiter-races-rmsync.md)
-- [DA-121.2 — The deleteSession lock race has a second symptom: EINVAL from the waiter's mkdir instead of NoSuchSessionError](../minor/DA-121.2-delete-session-race-einval.md)
 
 Preserve a separate verdict, regression check and evidence for every source ID. Validate each hypothesis before choosing a fix; no reproduction is not refutation. New findings do not expand the authorized set.
 
@@ -80,21 +79,11 @@ test should remove the directory the way `removeSession` does, which is one
 `rename` out of `reviews/`, so that no waiter can make anything inside it.
 
 
-### Retained original DA-121.2
+## Retained independent hypothesis
 
-# DA-121.2 · The deleteSession lock race has a second symptom: EINVAL from the waiter's mkdir instead of NoSuchSessionError
+[DA-121.2](../minor/DA-121.2-delete-session-race-einval.md) is not a donor to this batch. Its original Evidence and separate open status remain intact; a passing ENOTEMPTY regression does not refute EINVAL. No catch-EINVAL production workaround is authorized by this split.
 
-- **Scope:** 03-storage (see [reference](../../reference/README.md))
-- **Created:** 2026-10-03
-- **Parent:** DA-121
-- **Cost:** minor (hypothesis)
-
-## Evidence
-
-Finding discovered while working on DA-121.
-
-Evidence: tests/sessions.test.ts > deleteSession > refuses a writer that waited on the lock of a session deleted meanwhile, and makes no directory: AssertionError expected Error: EINVAL: invalid argument, mkdir … to be an instance of NoSuchSessionError at tests/sessions.test.ts:310:26 — seen twice by the DA-121 approver on 76f2277 and the squashed tree (1 full suite, 1 of 92 file runs), 0 of 212 file runs on a6d2ce8, where the ENOTEMPTY symptom of DA-40.3 reddened 6 of 212; every path 76f2277 changes is Markdown (2026-10-03, macOS, load 30-65 on 8 cores; evidence-approver-adr.md). Unverified that it is the same window as DA-40.3.
 
 ## Execution plan
 
-Storage durability and lock-test track owns atomic.ts, storage-atomic/lock-writers/sessions tests and reference 03. Prefer deterministic filesystem/domain barriers, preserve separate source outcomes and validate hypotheses before changing production locks. Propagate real directory-open durability failures without changing Windows or durable:false policy. Do not implement deferred first-session-directory flush or UI/orphaned features.
+The accepted source must prove the lock-waiter interleaving and preserve the existing NoSuchSessionError verdict and no-recreated-directory check. Use the reviewed storage-track evidence for this source only; unrelated durability work and DA-121.2 are not prerequisites or outcomes of this batch.
