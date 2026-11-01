@@ -134,6 +134,11 @@ directly.
 
 ## The fixture's environment
 
+The comment-gate roots, bare branch remote and empty directory used as `PATH`
+when Git is unavailable have local `finally` or suite teardown cleanup. Each
+removes its own allocated path on success or failure. The Git fixture restores
+`PATH` before deleting its directory, even when the product call throws.
+
 The same argument holds for the data directory, and it is one function rather
 than three copies: `fixtureEnv()` of `src/core/config/index.ts` returns the pair
 every harness runs its fixture under — `DIFFALANCHE_DATA_DIR` empty, which

@@ -37,6 +37,10 @@ and `bun run release` refuses a version that has no section. See
 
 ### Added
 
+- The unit suite checks that the reading probe, card scroll margin and both
+  browser helpers declare the same coordinate, and names any unreadable or
+  disagreeing declaration without fixing the value at one height.
+
 - **`npm run probe`, the mutation probe**. `npm run probe -- <file> --mutate
   's|<regexp>|<replacement>|[flags]' [--run <command>]` applies one
   substitution to one file, runs the command that should turn red, puts the file
@@ -1769,6 +1773,10 @@ and `bun run release` refuses a version that has no section. See
 - Native watcher fault-injection tests install their stubs independently of the
   runtime capability probe. A false Linux or macOS measurement still tries native
   directory watches; polling remains the fallback when those cannot start.
+
+- Unit fixtures remove their temporary comment roots, bare remote and empty Git
+  lookup directory after success or failure; the Git check restores `PATH` first.
+  The arithmetic skeleton is removed; runtime and loopback smoke checks remain.
 
 ## [0.1.0] - 2026-09-05
 

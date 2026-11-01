@@ -13,6 +13,7 @@ import { listBranches } from "../src/server/routes/branches.ts";
 import { makeRoot, REPOS } from "./helpers/fixture-root.ts";
 
 let root: string;
+let bare: string | undefined;
 let config: Config;
 let listed: BranchList;
 
@@ -34,7 +35,7 @@ beforeAll(async () => {
 
   // A bare copy stands in for a remote: the fetch writes `refs/remotes/origin/*` and `set-head`
   // the `origin/HEAD` the route reads, neither of which a `git init` fixture has.
-  const bare = mkdtempSync(join(tmpdir(), "diffalanche-remote-"));
+  bare = mkdtempSync(join(tmpdir(), "diffalanche-remote-"));
   git(join(root, alpha), ["clone", "--bare", "-q", ".", bare]);
   git(join(root, alpha), ["remote", "add", "origin", bare]);
   git(join(root, alpha), ["fetch", "-q", "origin"]);
@@ -50,6 +51,7 @@ beforeAll(async () => {
 
 afterAll(() => {
   rmSync(root, { recursive: true, force: true });
+  if (bare !== undefined) rmSync(bare, { recursive: true, force: true });
 });
 
 describe("the branches of the root", () => {
