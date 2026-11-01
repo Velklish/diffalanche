@@ -743,10 +743,16 @@ export async function rescanRepository(
   const review = await readReview(config.dataDir, session);
   // With hunks: `diff.json` is the only place they live, and anchor capture reads them there
   // (05-watcher.md, "The change-set cache").
-  const raw = await readRepositoryChange(config.root, repo, review.base, { hunks: true });
+  // Both inputs must finish before an error escapes; Git keeps its original error precedence.
+  const [rawRead, beforeRead] = await Promise.allSettled([
+    readRepositoryChange(config.root, repo, review.base, { hunks: true }),
+    readDiffCache(config.dataDir, session),
+  ]);
+  if (rawRead.status === "rejected") throw rawRead.reason;
+  if (beforeRead.status === "rejected") throw beforeRead.reason;
+  const raw = rawRead.value;
+  const beforeCache = beforeRead.value;
   const change = filterChange(review.scope, raw, config.exclude);
-
-  const beforeCache = await readDiffCache(config.dataDir, session);
   const reconciled = await reconcileAnchors(config, session, review, [change], beforeCache, {
     repo,
     removed: capturedRemovals(raw),
