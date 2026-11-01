@@ -23,7 +23,7 @@ const watcher = await startWatcher({ config, scan, bus, activity });
 | `debounceMs` | how long a repository stays quiet before it is rescanned; 100 ms |
 | `pollIntervalMs` | how often a tree is walked where there is no recursive watch; 250 ms |
 | `onRescan` | the session the rescan was about and the change set as it left it, for a caller that keeps it in memory |
-| `onRepositoryChanged` | a repository that moved, **whatever the current task is about**: its change set inside the task's scope, its files outside |
+| `onRepositoryChanged` | a repository and optional reported paths, **whatever the current task is about**; held documents use their own scope to decide whether to invalidate |
 | `sessions` | the tasks windows are open on, asked on every burst of the data directory |
 | `onDataChanged` | the data directory changed — any file of it but the two it leaves out below, about any task — said on the change itself, before the burst's quiet and before anything is read, and on a takeover by the walk; the server marks its held documents with it ([07-server.md](07-server.md)) |
 | `recursive` | `false` walks every tree instead of watching it; the default asks the runtime |
@@ -680,8 +680,7 @@ window open: a repository outside *its* scope is routinely inside the scope of a
 task opened with `?review=`, and a server holding that task's document has to
 know the repository moved ([07-server.md](07-server.md)).
 
-`onRepositoryChanged` therefore fires from **two places, and they do not mean
-quite the same thing**:
+`onRepositoryChanged` therefore reports three cases:
 
 - **Inside the current task's scope**, from within the rescan, beside
   `diff-changed`. The rescan compares the recomputed entry with the cached one,
@@ -690,6 +689,11 @@ quite the same thing**:
   announces nothing. The exception is the first rescan of a repository after
   `current` moves, which reports it here and nowhere else whatever it found: it
   compared with a cache the move's read wrote, which may already hold the edit.
+- **Inside the repository but outside the current task's path scope**, even
+  when the current filtered entry stays the same. Held documents compare the
+  reported paths with their own scope; followed named tasks receive targeted
+  frames from their metadata scope. Current receives no scoped frame, activity
+  or rescan callback for that notification.
 - **Outside it**, from the burst itself, right after the ignore check. Nothing
   reads that repository, so nothing can say whether its content changed; the
   burst is the whole of what is known. A write that changes no line still
