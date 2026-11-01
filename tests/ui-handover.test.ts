@@ -555,3 +555,95 @@ it("does not strand the token handover behind an independent first-run scan", as
     stop();
   }
 });
+
+for (const current of [false, true]) {
+  it(`shares the ${current ? "current" : "named"} handover queue with an already received agent reply`, async () => {
+    globals();
+    useStore.setState({
+      session: documentOf("A").session,
+      reviewName: current ? null : "A",
+      comments: [],
+      documentToken: null,
+      toast: null,
+    });
+    const made: FakeSource[] = [];
+    vi.stubGlobal(
+      "EventSource",
+      class extends FakeSource {
+        constructor(url: string) {
+          super(url);
+          made.push(this);
+        }
+      },
+    );
+    const thread: Comment = {
+      ...comment(),
+      replies: [
+        { id: "r_own", role: "agent", author: "agent", body: "answer", createdAt: "2026-01-01" },
+      ],
+    };
+    let documentAnswer: (response: Response) => void = () => {};
+    let threadAnswer: (response: Response) => void = () => {};
+    let freshAnswer: (response: Response) => void = () => {};
+    let reads = 0;
+    let threads = 0;
+    const originalToast = useStore.getState().setToast;
+    const toasts = vi.fn(originalToast);
+    useStore.setState({ setToast: toasts });
+    vi.stubGlobal("fetch", (url: string) => {
+      if (url.startsWith("/api/review")) {
+        reads += 1;
+        return new Promise<Response>((resolve) => {
+          if (reads === 1) documentAnswer = resolve;
+          else freshAnswer = resolve;
+        });
+      }
+      if (url.startsWith("/api/comments/")) {
+        threads += 1;
+        return new Promise<Response>((resolve) => {
+          threadAnswer = resolve;
+        });
+      }
+      return Promise.resolve(new Response(JSON.stringify(url === "/api/activity" ? [] : {})));
+    });
+    const loading = useStore.getState().loadReview();
+    const stop = startLive();
+    try {
+      made[0]?.deliver("reply-added", {
+        type: "reply-added",
+        session: "A",
+        id: "r_own",
+        commentId: thread.id,
+      });
+      await vi.waitFor(() => expect(threads).toBe(1));
+      documentAnswer(body("A", [], "first-token"));
+      await loading;
+      expect(made).toHaveLength(2);
+      made[1]?.onopen?.();
+      // All immediate response microtasks finish before this timer; the held thread must still own the queue.
+      await new Promise((resolve) => setTimeout(resolve, 0));
+      expect(reads).toBe(1);
+      threadAnswer(new Response(JSON.stringify(thread)));
+      await vi.waitFor(() => expect(useStore.getState().toast?.text).toBe("agent ответил · ревью"));
+      expect(useStore.getState().comments.map((one) => one.id)).toEqual([thread.id]);
+      expect(toasts.mock.calls.filter(([text]) => text === "agent ответил · ревью")).toHaveLength(
+        1,
+      );
+      await vi.waitFor(() => expect(reads).toBe(2));
+      freshAnswer(body("A", [thread], "later-token"));
+      await vi.waitFor(() => expect(useStore.getState().documentToken).toBe("later-token"));
+      expect(made).toHaveLength(2);
+      expect(threads).toBe(1);
+      expect(useStore.getState().counters.counters.awaiting).toBe(1);
+      expect(toasts.mock.calls.filter(([text]) => text === "agent ответил · ревью")).toHaveLength(
+        1,
+      );
+    } finally {
+      threadAnswer(new Response(JSON.stringify(thread)));
+      freshAnswer(body("A", [thread], "cleanup-token"));
+      stop();
+      await new Promise((resolve) => setTimeout(resolve, 0));
+      useStore.setState({ setToast: originalToast });
+    }
+  });
+}

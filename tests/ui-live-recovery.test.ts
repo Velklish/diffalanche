@@ -69,6 +69,9 @@ describe("an error on the stream", () => {
     try {
       source.readyState = 1;
       source.onopen?.();
+      // Start its activity request before reconnect closes it; the refetch is still queued behind it.
+      await Promise.resolve();
+      expect(fetched.filter((url) => url === "/api/activity")).toHaveLength(1);
 
       // Not retried, so not `reconnecting`: no frame will come again (DA-96.1).
       source.readyState = FakeSource.CLOSED;
