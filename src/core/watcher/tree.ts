@@ -1,7 +1,7 @@
 /** One directory tree: the recursive `fs.watch` where the runtime has it, a walk on a timer where
  * not (05-watcher.md, "What it watches…"). Paths are relative, with forward slashes. */
 import type { Dirent, FSWatcher } from "node:fs";
-import { watch } from "node:fs";
+import { mkdirSync, watch, writeFileSync } from "node:fs";
 import { lstat, mkdir, mkdtemp, readdir, readlink, rm, stat, writeFile } from "node:fs/promises";
 import { join } from "node:path";
 
@@ -514,7 +514,6 @@ export async function probeRecursiveWatch(
       let source: TreeSource | null = null;
       let finished = false;
       let creating = false;
-      let nestedReady = false;
       const done = (answer: boolean): void => {
         if (finished) return;
         finished = true;
@@ -529,21 +528,20 @@ export async function probeRecursiveWatch(
       // Written again and again: a watch that arms a moment after `watch` returns, as Bun's does,
       // misses a single write and would answer "cannot recurse" for the whole run.
       const writing = setInterval(() => {
-        const path = nestedReady ? join(nested, "deep") : join(watched, "armed");
-        void write(path, `probe ${Date.now()}`).catch(() => undefined);
+        if (!creating)
+          void write(join(watched, "armed"), `probe ${Date.now()}`).catch(() => undefined);
       }, PROBE_WRITE_MS);
       // Root delivery precedes creating the directory: initial recursion alone does not prove lifecycle.
       const onChange = (name: string): void => {
         if (finished) return;
         if (name === "armed" && !creating) {
           creating = true;
-          void mkdir(nested, { recursive: true })
-            .then(async () => {
-              if (finished) return;
-              nestedReady = true;
-              await write(join(nested, "deep"), "probe");
-            })
-            .catch(() => done(false));
+          try {
+            mkdirSync(nested, { recursive: true });
+            writeFileSync(join(nested, "deep"), "probe");
+          } catch {
+            done(false);
+          }
         }
         if (name === "nested/created/deep") done(true);
       };
