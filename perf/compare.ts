@@ -53,7 +53,16 @@ async function main(): Promise<void> {
   for (let round = 0; round < options.runs; round += 1) {
     const order = round % 2 === 0 ? (["base", "branch"] as const) : (["branch", "base"] as const);
     for (const side of order) {
-      const measurement = measureOnce(options.fixture, GATE_VARIANT.name, trees[side]);
+      let measurement: Measurement;
+      try {
+        measurement = measureOnce(options.fixture, GATE_VARIANT.name, trees[side]);
+      } catch (error) {
+        throw new Error(
+          `${side} repetition ${samples[side].length + 1}/${options.runs} failed: ` +
+            `${error instanceof Error ? error.message : String(error)} The comparison is incomplete; earlier samples remain on stderr.`,
+          { cause: error },
+        );
+      }
       samples[side].push(measurement);
       process.stderr.write(
         `${side} ${samples[side].length}/${options.runs}: ${JSON.stringify(measurement)}; ` +

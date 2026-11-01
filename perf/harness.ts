@@ -1,7 +1,9 @@
 /** The performance harness of `docs/SPEC.md` section 6: headless Chromium over the synthetic
  * review, reporting the budget table's numbers (11-perf.md, "The measurement harness"). */
 import { execFileSync } from "node:child_process";
+import { closeSync, mkdtempSync, openSync, readFileSync, rmSync } from "node:fs";
 import { appendFile, readFile, rm, writeFile } from "node:fs/promises";
+import { tmpdir } from "node:os";
 import { join } from "node:path";
 import type { Page } from "@playwright/test";
 import { chromium } from "@playwright/test";
@@ -271,6 +273,9 @@ async function taskDuration(cdp: { send: (method: "Performance.getMetrics") => P
   return metric.value;
 }
 
+/** Ready (120 s), three update waits (60 s each), and five minutes for the remaining work. */
+const REPETITION_TIMEOUT_MS = 10 * 60_000;
+
 /** One repetition is one `perf/run.ts` process in the tree it measures: Bun closes a closed browser's
  * pipes again once the next browser holds their numbers (DA-82.2, 11-perf.md "The gate"). */
 export function measureOnce(
@@ -278,14 +283,37 @@ export function measureOnce(
   variant: string,
   cwd = process.cwd(),
   lag: Options["lag"] = null,
+  timeoutMs = REPETITION_TIMEOUT_MS,
 ): Measurement {
-  // The environment is passed, not assigned: Bun hands a child the env the process started with.
-  const stdout = execFileSync("bun", repetitionArgs(fixture, variant, lag), {
-    cwd,
-    stdio: ["ignore", "pipe", "inherit"],
-    encoding: "utf8",
-    env: { ...process.env, ...fixtureEnv() },
-  });
+  const output = mkdtempSync(join(tmpdir(), "diffalanche-perf-output-"));
+  const path = join(output, "measurement.json");
+  let fd: number | undefined;
+  let stdout: string;
+  try {
+    fd = openSync(path, "wx");
+    // A file cannot hold the synchronous wait open when a descendant inherits stdout.
+    execFileSync("bun", repetitionArgs(fixture, variant, lag), {
+      cwd,
+      stdio: ["ignore", fd, "inherit"],
+      env: { ...process.env, ...fixtureEnv() },
+      timeout: timeoutMs,
+      killSignal: "SIGKILL",
+    });
+    stdout = readFileSync(path, "utf8");
+  } catch (error) {
+    const failure = error as { code?: unknown };
+    const reason =
+      failure.code === "ETIMEDOUT"
+        ? `timed out after ${timeoutMs} ms`
+        : `failed: ${error instanceof Error ? error.message : String(error)}`;
+    throw new Error(
+      `performance repetition for variant ${variant} in ${cwd} ${reason}. No measurement was recorded.`,
+      { cause: error },
+    );
+  } finally {
+    if (fd !== undefined) closeSync(fd);
+    rmSync(output, { recursive: true, force: true });
+  }
   const results = JSON.parse(stdout) as Measurement[];
   const measurement = results[0];
   if (results.length !== 1 || measurement === undefined) {

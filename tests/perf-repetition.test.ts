@@ -1,4 +1,12 @@
-import { mkdirSync, mkdtempSync, readFileSync, rmSync, writeFileSync } from "node:fs";
+import {
+  existsSync,
+  mkdirSync,
+  mkdtempSync,
+  readdirSync,
+  readFileSync,
+  rmSync,
+  writeFileSync,
+} from "node:fs";
 import { tmpdir } from "node:os";
 import { join } from "node:path";
 import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
@@ -17,18 +25,28 @@ function alive(pid: number): boolean {
 
 describe("one performance repetition", () => {
   let tree: string;
+  let outputs: string[];
+  const outputFiles = () =>
+    readdirSync(tmpdir())
+      .filter((name) => name.startsWith("diffalanche-perf-output-"))
+      .sort();
 
   beforeEach(() => {
+    outputs = outputFiles();
     tree = mkdtempSync(join(tmpdir(), "diffalanche-repetition-test-"));
     mkdirSync(join(tree, "perf"));
   });
 
   afterEach(() => {
     rmSync(tree, { recursive: true, force: true });
+    expect(outputFiles()).toEqual(outputs);
   });
 
   it("reads one measurement from a successful repetition", () => {
-    writeFileSync(join(tree, "perf/run.ts"), `console.log(${JSON.stringify(JSON.stringify([sample]))});`);
+    writeFileSync(
+      join(tree, "perf/run.ts"),
+      `console.log(${JSON.stringify(JSON.stringify([sample]))});`,
+    );
     expect(measureOnce("fixture", "default", tree)).toEqual(sample);
   });
 
@@ -40,18 +58,21 @@ describe("one performance repetition", () => {
   });
 
   it.skipIf(process.platform === "win32")(
-    "bounds a stalled repetition and removes its own child even while stdout is inherited",
+    "bounds a stalled repetition while a finite child retains stdout",
     async () => {
-      writeFileSync(join(tree, "perf/run.ts"), `
+      writeFileSync(
+        join(tree, "perf/run.ts"),
+        `
 import { spawn } from "node:child_process";
 import { writeFileSync } from "node:fs";
 process.on("SIGTERM", () => {});
-const child = spawn(process.execPath, ["-e", "setTimeout(() => {}, 1500)"], {
+const child = spawn(process.execPath, ["-e", "setTimeout(() => require('node:fs').writeFileSync('child-finished', 'done'), 1500)"], {
   stdio: ["ignore", "inherit", "inherit"],
 });
 writeFileSync("ownership.json", JSON.stringify({ parent: process.pid, child: child.pid }));
 setTimeout(() => console.log(${JSON.stringify(JSON.stringify([sample]))}), 1200);
-`);
+`,
+      );
       let failure: unknown;
       try {
         measureOnce("fixture", "default", tree, null, 300);
@@ -68,18 +89,29 @@ setTimeout(() => console.log(${JSON.stringify(JSON.stringify([sample]))}), 1200)
         expect((failure as Error).message).toContain("variant default");
         expect((failure as Error).message).toContain("timed out after 300 ms");
         expect((failure as Error).message).toContain(tree);
-        await vi.waitFor(() => {
-          expect(alive(owned.parent)).toBe(false);
-          expect(alive(owned.child)).toBe(false);
-        }, { timeout: 500, interval: 20 });
-        process.stderr.write(`repetition cleanup: ${JSON.stringify(owned)} both absent\n`);
+        const cause = (failure as Error).cause as { pid: number; code: string; signal: string };
+        expect(cause.pid).toBe(owned.parent);
+        expect(cause.code).toBe("ETIMEDOUT");
+        process.stderr.write(
+          `repetition timeout: ${JSON.stringify({ pid: cause.pid, code: cause.code, signal: cause.signal })}\n`,
+        );
+        expect(alive(owned.parent)).toBe(false);
+        expect(alive(owned.child)).toBe(true);
+        expect(existsSync(join(tree, "child-finished"))).toBe(false);
+        process.stderr.write(
+          `deadline returned before finite child ended: ${JSON.stringify(owned)}\n`,
+        );
       } finally {
-        // This fixture ends by itself on the old code too; cleanup touches only recorded children.
-        for (const pid of [owned.child, owned.parent]) {
-          if (alive(pid)) process.kill(pid, "SIGKILL");
-        }
+        // Only this fixture's finite child is awaited; the deadline never waits on its stdout.
+        await vi.waitFor(
+          () => {
+            expect(existsSync(join(tree, "child-finished"))).toBe(true);
+            expect(alive(owned.child)).toBe(false);
+          },
+          { timeout: 3000, interval: 20 },
+        );
+        process.stderr.write(`repetition cleanup: ${JSON.stringify(owned)} both absent\n`);
       }
     },
   );
-
 });
