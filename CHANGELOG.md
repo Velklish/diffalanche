@@ -15,6 +15,9 @@ and `bun run release` refuses a version that has no section. See
 
 ### Fixed
 
+- Native directory watchers compare file stamps on events, so a save renamed
+  through an ignored temporary name still refreshes its target under Bun.
+
 - The polling watcher reports symbolic link creation, deletion and retargeting,
   including dangling links, without traversing targets outside the watched tree.
 

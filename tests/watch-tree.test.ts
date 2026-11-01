@@ -399,8 +399,34 @@ it("documents the native directory watches and the platform of lifecycle measure
   );
   expect(reference).not.toContain("nothing in it has gone\nquiet under Bun's runner");
   expect(reference).toContain(
+    "An ignored temporary name can therefore still report the target replaced by",
+  );
+  expect(reference).toContain(
     "including dangling links. It never follows a link into a target directory",
   );
+});
+
+describe("a native save through an ignored temporary name", () => {
+  it("reports the rename target three times without relying on the event name", async () => {
+    const dir = mkdtempSync(join(tmpdir(), "diffalanche-tree-rename-"));
+    writeFileSync(join(dir, "file.ts"), "before");
+    const tree = start(dir, (path) => path.endsWith(".tmp"));
+    try {
+      await arm(tree, dir);
+      for (let round = 0; round < 3; round += 1) {
+        const from = tree.heard.length;
+        sh(
+          `printf 'save-${round}' > "${dir}/file.ts.tmp" && mv "${dir}/file.ts.tmp" "${dir}/file.ts"`,
+        );
+        await heardAfter(tree, from, "file.ts");
+      }
+      expect(tree.tree.polling()).toBe(false);
+      expect(tree.fellBack()).toBe(0);
+    } finally {
+      tree.tree.close();
+      rmSync(dir, { recursive: true, force: true });
+    }
+  });
 });
 
 describe("symbolic links in the polling tree", () => {

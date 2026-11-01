@@ -140,6 +140,7 @@ function perDirectory(options: TreeWatcherOptions, onFailure: () => void): TreeS
   const watches = new Map<string, FSWatcher>();
   // Which directory each watch is on: one removed and made again under its name is another.
   const identities = new Map<string, Identity>();
+  const files = new Map<string, Map<string, string>>();
   // Birth times count once one differs from its change time: without statx libuv reports the
   // change time in its place, which moves with every entry (05-watcher.md).
   let births = false;
@@ -157,6 +158,7 @@ function perDirectory(options: TreeWatcherOptions, onFailure: () => void): TreeS
     closed = true;
     for (const watcher of watches.values()) watcher.close();
     watches.clear();
+    files.clear();
   };
 
   const fail = (): void => {
@@ -206,6 +208,7 @@ function perDirectory(options: TreeWatcherOptions, onFailure: () => void): TreeS
         watcher.close();
         watches.delete(path);
         identities.delete(path);
+        files.delete(path);
       }
     }
   };
@@ -255,21 +258,20 @@ function perDirectory(options: TreeWatcherOptions, onFailure: () => void): TreeS
       forget(relative);
       return;
     }
+    const baseline = await entrySnapshot(options.dir, relative, entries, options.ignore);
+    if (!files.has(relative)) files.set(relative, baseline);
     const below: Promise<void>[] = [];
     for (const entry of entries) {
       if (closed) break;
       const path = within(relative, entry.name);
       if (entry.isDirectory()) {
         if (!watches.has(path) && !options.ignore(path, "dir")) below.push(arm(path, fresh));
-      } else if (
-        fresh &&
-        (entry.isFile() || entry.isSymbolicLink()) &&
-        !options.ignore(path, "file")
-      ) {
-        options.onChange(path);
       }
     }
     await Promise.all(below);
+    if (fresh && !closed) {
+      for (const path of baseline.keys()) options.onChange(path);
+    }
   }
 
   /** A watched directory that is gone, or another under its name, is watched again from scratch. */
@@ -279,7 +281,12 @@ function perDirectory(options: TreeWatcherOptions, onFailure: () => void): TreeS
     if (closed || !watches.has(path) || known === undefined) return;
     if (id !== null) {
       learn(id);
-      if (same(id, known)) return;
+      if (same(id, known)) {
+        identities.set(path, id);
+        // A parent event can arrive before this directory's own event, so changed entries are read now.
+        if (id.change !== known.change) await relist(path);
+        return;
+      }
     }
     forget(path);
     if (id !== null) await arm(path, true);
@@ -288,6 +295,7 @@ function perDirectory(options: TreeWatcherOptions, onFailure: () => void): TreeS
   /** Finds the directories that came, went or were replaced: by listing and by identity rather
    * than by the event's name, which Bun drops when several changes share one read (05-watcher.md). */
   async function listOnce(relative: string): Promise<void> {
+    const previous = files.get(relative);
     let entries: Dirent[];
     try {
       entries = await readdir(join(options.dir, relative), { withFileTypes: true });
@@ -295,6 +303,7 @@ function perDirectory(options: TreeWatcherOptions, onFailure: () => void): TreeS
       forget(relative);
       return;
     }
+    const next = await entrySnapshot(options.dir, relative, entries, options.ignore);
     const present = new Set<string>();
     const checks: Promise<void>[] = [];
     for (const entry of entries) {
@@ -306,6 +315,16 @@ function perDirectory(options: TreeWatcherOptions, onFailure: () => void): TreeS
       checks.push(watches.has(path) ? recheck(path) : arm(path, true));
     }
     await Promise.all(checks);
+    if (closed || files.get(relative) !== previous) return;
+    if (previous !== undefined) {
+      for (const [path, stamp] of next) {
+        if (previous.get(path) !== stamp) options.onChange(path);
+      }
+      for (const path of previous.keys()) {
+        if (!next.has(path)) options.onChange(path);
+      }
+    }
+    files.set(relative, next);
     for (const path of [...watches.keys()]) {
       const parent = path.slice(0, Math.max(0, path.lastIndexOf("/")));
       if (path !== relative && parent === relative && !present.has(path)) forget(path);
@@ -333,9 +352,8 @@ function perDirectory(options: TreeWatcherOptions, onFailure: () => void): TreeS
 
   function onEvent(relative: string, event: string, name: string | null): void {
     if (closed) return;
-    if (name !== null && name !== "") {
-      const path = within(relative, String(name));
-      if (!options.ignore(path, "file")) report(path);
+    const path = name === null || name === "" ? null : within(relative, String(name));
+    if (path !== null) {
       // A rename naming a watched directory made or removed that name: its watch is renewed
       // whatever the identity says, which a filesystem without a birth time cannot tell.
       if (event === "rename" && watches.has(path)) {
@@ -344,6 +362,7 @@ function perDirectory(options: TreeWatcherOptions, onFailure: () => void): TreeS
       }
     }
     track(relist(relative));
+    if (path !== null && !options.ignore(path, "file")) report(path);
   }
 
   try {
@@ -396,7 +415,7 @@ function polling(options: TreeWatcherOptions): TreeSource {
   };
 }
 
-/** Every file of the tree with the stamp a change moves: modification time and size. */
+/** Every file and link entry of the tree with its no-follow stamp. */
 async function snapshot(dir: string, ignore: Ignore): Promise<Map<string, string>> {
   const files = new Map<string, string>();
   const pending: string[] = [""];
@@ -412,22 +431,35 @@ async function snapshot(dir: string, ignore: Ignore): Promise<Map<string, string
     }
     for (const entry of entries) {
       const path = relative === "" ? entry.name : `${relative}/${entry.name}`;
-      if (entry.isDirectory()) {
-        if (!ignore(path, "dir")) pending.push(path);
-        continue;
-      }
-      // A link is an entry of the tree; only its target string is read, never the target itself.
-      if ((!entry.isFile() && !entry.isSymbolicLink()) || ignore(path, "file")) continue;
-      try {
-        const info = await lstat(join(dir, path));
-        const stamp = info.isSymbolicLink()
-          ? `link:${await readlink(join(dir, path))}`
-          : `${info.mtimeMs}:${info.size}`;
-        files.set(path, stamp);
-      } catch {
-        // Gone between the listing and the stat; the walk that sees it missing
-        // reports it as a change.
-      }
+      if (entry.isDirectory() && !ignore(path, "dir")) pending.push(path);
+    }
+    for (const [path, stamp] of await entrySnapshot(dir, relative, entries, ignore)) {
+      files.set(path, stamp);
+    }
+  }
+  return files;
+}
+
+/** A directory's file and link entries, without reading file content or following link targets. */
+async function entrySnapshot(
+  dir: string,
+  relative: string,
+  entries: Dirent[],
+  ignore: Ignore,
+): Promise<Map<string, string>> {
+  const files = new Map<string, string>();
+  for (const entry of entries) {
+    const path = relative === "" ? entry.name : `${relative}/${entry.name}`;
+    if ((!entry.isFile() && !entry.isSymbolicLink()) || ignore(path, "file")) continue;
+    try {
+      const absolute = join(dir, path);
+      const info = await lstat(absolute);
+      const stamp = info.isSymbolicLink()
+        ? `link:${await readlink(absolute)}`
+        : `${info.mtimeMs}:${info.size}:${info.ino}:${info.ctimeMs}`;
+      files.set(path, stamp);
+    } catch {
+      // An entry gone between the listing and its metadata read is absent from this snapshot.
     }
   }
   return files;

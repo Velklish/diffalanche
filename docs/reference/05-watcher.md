@@ -115,7 +115,8 @@ Windows that watch is `fs.watch` with `recursive: true`, where the runtime
 honours it; on Linux and macOS it is one non-recursive `fs.watch` per directory, which the
 tree takes itself ([One watch per directory on
 Linux](#one-watch-per-directory-on-linux)); where neither is there, the same
-interface walks the tree on a timer and compares modification time and size. Symbolic links are
+interface walks the tree on a timer and compares modification time, size, inode
+and change time. Symbolic links are
 entries too: the walk compares their target strings using `lstat` and `readlink`,
 including dangling links. It never follows a link into a target directory or
 reads target content, so changing an outside target alone produces no change. A watch that **dies after it started** says so once,
@@ -198,25 +199,21 @@ every repository it writes into before it measures anything: a
 `no diff-changed within 20000 ms` there was never a slow machine, it was a write
 nobody was listening for.
 
-**Bun's own test runner is the one place where the recursive watch is not used
-here.** Under `bun run test:bun` a watch goes quiet after its first events, so
-the suite's watcher in `tests/watcher.test.ts` walks there, and under Node the
-same tests exercise the watch. It passes `recursive: true` with `native:
-spiedTree`, which builds each tree itself — the walk on Bun, the watch on Node —
-and records what the tree reports ([What the unit tests
-hold](#what-the-unit-tests-hold)). So that watcher never asks
-`supportsRecursiveWatch` on Node, and on Bun it takes the path of a runtime that
-walks from the start: `fellBack` is set before any tree can fail and `onWalk`
-would be called, which means an `onFallback` given to it could never fire there.
-The default path — the probe, `recursive: false`, the takeover — is held by the
-watchers the other tests start themselves. Native fault-injection cases force
-`recursive: true` and assert registration before failing their stub: a real probe
-returning false must not bypass the injected native watch. The capability case
-accepts either boolean and checks that false selects polling while true selects
-the native adapter. A server under Bun is not
-affected — four consecutive edits against `bun src/cli/index.ts serve` on the
-synthetic review each produced their event — and every other test in the suite
-runs the same on both runtimes.
+**The main watcher suite deliberately polls under Bun's Vitest runner.**
+Earlier Bun 1.3 measurements under Vitest saw native watches go quiet after
+initial events, so `tests/watcher.test.ts` keeps its suite watcher on polling
+under Bun and native watching under Node. It passes `recursive: true` with
+`native: spiedTree`, which chooses that source and records its paths
+([What the unit tests hold](#what-the-unit-tests-hold)). The suite watcher does
+not ask `supportsRecursiveWatch`; the dedicated capability case checks both
+possible selections. Native fault-injection cases force `recursive: true` and
+assert registration before failing their stub, so a real false probe cannot
+bypass the stub. Dedicated native tree and rename-save cases keep their native
+assertions on both runtimes, including zero startup walks and zero takeovers.
+
+Earlier server measurements of four consecutive edits under Bun each produced
+an event. They covered edits in existing directories, not the new-directory
+lifecycle failure described in the native tests section.
 
 macOS coalesces the changes of one directory into a single notification, and a
 runtime is free to report any of the names involved: Node reports the file, Bun
@@ -356,21 +353,27 @@ directory's, which outlives every rename into it.
   Those cost no watch at all, where Node's emulation took one per file inside
   them. `ready` resolves once that listing has taken every watch.
 - **Following changes.** A directory's event names the entry, and the tree
-  reports it. Then it lists that directory again, to watch a directory that
-  appeared and drop the watches of one that went. It lists instead of trusting
+  reports it after listing that directory again, to watch a directory that
+  appeared and drop the watches of one that went. Each listing also compares
+  no-follow file stamps and link target strings with that directory's baseline.
+  An ignored temporary name can therefore still report the target replaced by
+  its rename. The cost is metadata reads for the files of the listed directory
+  and one retained stamp per file; queued listings still share that work. It lists instead of trusting
   the name because Bun reports one name per read of the descriptor: a new
   directory named in the same read as a sibling's write would never be watched.
   A listing asked for while one runs shares the single one queued after it, so
   a directory written into without a pause is listed at most twice at a time.
-- **A directory found after the start** reports every file already in it,
-  since they may have been written before its watch existed.
+- **A directory found after the start** reports every file and link entry already
+  in it, since they may have been written before its watch existed. A known
+  directory whose change time moved is listed too: its parent notification can
+  arrive before its own, and a later root marker must wait for those entries.
 - **In the order of the writes.** Those files come out of a listing, later
   than an event would carry them. So a name an event carries is reported only
   once every listing and arm the tree had started and not finished when the
   event came has finished, anywhere in the tree, and whatever they find, which
-  was written before it, is said first. A name that comes while nothing is
-  under way is reported at once. A name never waits for work started after its
-  event, so a stream of events cannot starve it. It can wait for a slow listing
+  was written before it, is said first. The listing triggered by that event is
+  included. A name never waits for work started after that listing and its
+  prerequisite work, so a stream of events cannot starve it. It can wait for a slow listing
   of another directory that was already under way.
 
   Each piece of work is tracked once, and chained into one promise that an event
@@ -378,11 +381,11 @@ directory's, which outlives every rename into it.
   on every event instead, and every event of a stream added one entry to that
   set. A burst of 5000 files in one directory, which libuv delivers in one
   synchronous loop, took 13.0 s, a 7.4 s stall of the event loop and 1406 MB of
-  heap on Node, and 20000 files ended the process out of heap. Now 5000 take
-  1.6 s and 12 MB, and 20000 take 2.3 s and 10 MB, the same as `ff0dc4b`. Of
-  those 20000 the tree hears 16384, the kernel's default `max_queued_events`,
-  as `ff0dc4b` did; the rescan reads the repository whole, so a lost name is
-  not a lost change.
+  heap on Node, and 20000 files ended the process out of heap. At `956c10a`,
+  before file-stamp comparison, 5000 took 1.6 s and 12 MB, and 20000 took
+  2.3 s and 10 MB, the same as `ff0dc4b`. Of those 20000 the native events
+  named 16384, the kernel's default `max_queued_events`. Snapshot comparison
+  also reports entries whose names the native stream omitted.
 - **A directory removed and made again under its name** — `rm -rf dist &&
   mkdir dist`, `mv tmp dist`, a `git checkout` between branches that differ
   in `src/gen` — keeps a watch on the directory that is gone, and nothing
@@ -439,15 +442,16 @@ directory's, which outlives every rename into it.
 
 What it costs:
 
-- **Descriptors.** Every watch of the process shares one inotify descriptor on
+- **Descriptors on Linux.** Every watch of the process shares one inotify descriptor on
   both runtimes: two thousand directory watches opened one descriptor in each.
   The kernel's per-user watch count is spent per directory the rules let in,
   where the emulation spent it per path.
 - **The update path.** It adds, per event, one `readdir` of the directory the
-  event names and one `stat` of each watched directory inside it. A name is
-  held back only while listings or arms are under way, and an edit into a
-  quiet tree finds none and is reported at once. Measured on the 4-core
-  container of 2026-09-29, not on the development machine, with nine a side of
+  event names, no-follow metadata reads for its file entries, and one `stat`
+  of each watched directory inside it. A child whose directory change time
+  moved is reconciled too. Names wait for this work before being reported.
+  The following measurements predate file-stamp comparison and were taken on
+  the 4-core container of 2026-09-29, not on the development machine, with nine a side of
   `bun perf/compare.ts` against `f7b57b8`. The gate's server runs on Bun, so
   each run compares Bun's recursive watch with the watch per directory.
   - `26556f5`, 06:08–06:14 UTC, one-minute loads 0.85–3.02: update after an
@@ -526,6 +530,23 @@ say `.git/index` or `.git/HEAD`, never the lock. A reader that looks up what
 was named finds the lock gone by then, and the symbol index took a name that
 was not there for a reason to read the repository whole
 ([09-ml.md](09-ml.md#the-symbol-index)).
+
+### Editor temporary names
+
+The watcher does not maintain a list of editor names. A directory snapshot
+compares the resulting entries even when the only native event names an ignored
+source. The editor mechanisms below differ:
+
+| Editor | Names and save behavior |
+|---|---|
+| JetBrains IDEs, `Safe write` | `file___jb_tmp___` holds the save, `file___jb_old___` holds the previous file, and the temporary file replaces the original ([staff explanation](https://intellij-support.jetbrains.com/hc/en-us/community/posts/115000240484-Cannot-Save-File-when-running-a-watcher)) |
+| Emacs, `file-precious-flag` | `file.tmp` plus a generated suffix is renamed over the file; `#file#` auto-save and `.#file` lock names are separate mechanisms ([save implementation](https://github.com/emacs-mirror/emacs/blob/master/lisp/files.el), [auto-save manual](https://www.gnu.org/software/emacs/manual/html_node/emacs/Auto-Save-Files.html)) |
+| Vim, `backupcopy=no` | The original is renamed to a backup, whose default suffix is `~`, then a replacement is written. This is a different sequence from renaming a temporary file over the target ([options](https://github.com/vim/vim/blob/master/runtime/doc/options.txt)) |
+| VS Code internal state | The state service uses `.vsctmp` for atomic writes. This establishes an internal state-file name, not a universal working-tree buffer-save name ([state service](https://github.com/microsoft/vscode/blob/main/src/vs/platform/state/node/stateService.ts)) |
+
+The native regression simulates an ignored `.tmp` save three times and checks the
+target notification and `diff-changed` cache readback each time. It does not
+exercise editor executables.
 
 ## Events
 

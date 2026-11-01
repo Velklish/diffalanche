@@ -1075,6 +1075,81 @@ describe("watching a tree", () => {
     }
   });
 
+  it("announces three native rename saves through a Git-ignored temporary name", async () => {
+    const dataDir = mkdtempSync(join(tmpdir(), "diffalanche-native-rename-"));
+    const ignorePath = join(root, REPO, ".gitignore");
+    const ignoreBefore = existsSync(ignorePath) ? readFileSync(ignorePath) : null;
+    const file = join(root, REPO, "rename-observed.ts");
+    writeFileSync(ignorePath, `${ignoreBefore?.toString() ?? ""}\n*.tmp\n`);
+    mkdirSync(join(dataDir, "reviews", SESSION), { recursive: true });
+    for (const name of ["review.json", "comments.json", "diff.json"]) {
+      copyFileSync(
+        join(config.dataDir, "reviews", SESSION, name),
+        join(dataDir, "reviews", SESSION, name),
+      );
+    }
+    writeFileSync(join(dataDir, "current"), `${SESSION}\n`);
+    const own = createEventBus();
+    let changed = 0;
+    let walks = 0;
+    let fallbacks = 0;
+    own.subscribe((event) => {
+      if (event.type === "diff-changed" && event.repo === REPO) changed += 1;
+    });
+    const native = await startWatcher({
+      config: { ...config, dataDir },
+      scan: found,
+      bus: own,
+      activity: createActivityLog(),
+      recursive: true,
+      debounceMs: 10,
+      onWalk: () => {
+        walks += 1;
+      },
+      onFallback: () => {
+        fallbacks += 1;
+      },
+    });
+    const cached = async (): Promise<string> => {
+      const cache = await readDiffCache(dataDir, SESSION);
+      return (
+        cache?.repositories
+          .find((repo) => repo.path === REPO)
+          ?.files.find((entry) => entry.path === "rename-observed.ts")?.patch ?? ""
+      );
+    };
+    try {
+      const deadline = performance.now() + 20_000;
+      while (!(await cached()).includes("native-armed")) {
+        if (performance.now() > deadline) throw new Error("native rename watch never armed");
+        writeFileSync(file, "native-armed");
+        await new Promise((done) => setTimeout(done, 50));
+      }
+      for (let round = 0; round < 3; round += 1) {
+        const before = changed;
+        writeFileSync(`${file}.tmp`, `native-save-${round}`);
+        renameSync(`${file}.tmp`, file);
+        const until = performance.now() + 20_000;
+        while (changed === before || !(await cached()).includes(`native-save-${round}`)) {
+          if (performance.now() > until)
+            throw new Error(`no diff-changed for native save ${round}`);
+          await new Promise((done) => setTimeout(done, 5));
+        }
+        expect(await cached()).toContain(`+native-save-${round}`);
+      }
+      expect(walks).toBe(0);
+      expect(fallbacks).toBe(0);
+    } finally {
+      await native.close();
+      rmSync(file, { force: true });
+      rmSync(`${file}.tmp`, { force: true });
+      if (ignoreBefore === null) rmSync(ignorePath, { force: true });
+      else writeFileSync(ignorePath, ignoreBefore);
+      rmSync(dataDir, { recursive: true, force: true });
+      await settle();
+    }
+  });
+
   it("uses the runtime's measured recursive capability, including a false answer", async () => {
     const recursive = await supportsRecursiveWatch(config.dataDir);
     let nativeUsed = false;
