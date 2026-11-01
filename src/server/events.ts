@@ -57,7 +57,7 @@ export function createEventStream(
   capacity: number = REPLAY_CAPACITY,
   left?: (session: string) => void,
   current: () => string | null = () => null,
-  served?: (name: string, token: string) => void,
+  joined?: (name: string, token?: string) => void,
 ): EventStream {
   const ring: EventFrame[] = [];
   const clients = new Set<Client>();
@@ -114,7 +114,7 @@ export function createEventStream(
     },
     subscribe(client) {
       const name = client.session ?? current();
-      if (name !== null && client.served !== undefined) served?.(name, client.served);
+      if (name !== null) joined?.(name, client.served);
       clients.add(client);
       return () => {
         // Asked twice, by the abort and by the loop's end; only the first is the window going.

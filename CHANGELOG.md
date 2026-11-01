@@ -13,6 +13,8 @@ and `bun run release` refuses a version that has no section. See
 
 ## [Unreleased]
 
+- A named stream reads its actual path scope on joining, so its first edit is delivered even when its held document creates no data-directory burst.
+
 - Path-scoped repository signals retain their paths through a pending document build, so an unrelated file does not evict that document.
 
 - New live streams refresh after subscription and make at most one token handover for an incoming document. Connection-owned reads cancel cleanly while valid queued threads and agent reply toasts survive the handover.

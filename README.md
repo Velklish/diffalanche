@@ -401,7 +401,8 @@ needing to close and reopen the menu.
 
 Named tasks receive edits inside their own path scope even when current covers
 other files in the same repository. That notification leaves current's unchanged
-review and activity alone.
+review and activity alone. Each new subscription reads its actual metadata scope
+before later repository rescans, including a reconnect without a usable document token.
 
 The CLI stream test captures its cursor before writing and matches the exact reply
 and thread, including delivery before the CLI exits. See [suite waits](docs/reference/11-perf.md#waits-in-the-suites).

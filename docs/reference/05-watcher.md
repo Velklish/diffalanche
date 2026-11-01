@@ -91,7 +91,7 @@ and an `onError` that throws is caught too, because reporting a failure must not
 become one.
 
 `watcher.served(name, review, comments)` returns a token for exactly that document.
-`watcher.follow(name, token)` consumes it when the matching stream subscribes and
+`watcher.follow(name, token?)` consumes it when the matching stream subscribes and
 registers its baseline for the first followed burst. `watcher.left(name)` drops a
 consumed baseline when the last window leaves; it cannot erase another pending
 document token ([Events](#events), where the followed sessions are).
@@ -760,9 +760,14 @@ instead, which says that the data directory changed and nothing about what
 
 The cost is bounded by the number of open windows rather than by the number of
 sessions in the data directory: `comments.json` is read for the followed ones
-only. `review.json` costs nothing extra at all — the session listing reads every
-one of them on the same burst anyway, and that single read is now handed to both
-the metadata comparison and the listing.
+only. On a data burst, the session listing's `review.json` read is shared by the
+metadata comparison and the listing. Every new stream also queues one read of
+its task's `review.json` before later repository rescans, even without a usable
+document token. That supplies the actual path scope when its post-open document
+read uses a held body and creates no data burst. It reads no Git or change set.
+An unreadable or no-longer-followed task supplies no routing permission; a late
+read cannot outlive the queue's next join and repository rescan. A served body's
+metadata comparison baseline stays separate from this fresh routing scope.
 
 Comment events come from reading `comments.json` and comparing it with the last
 read, so a write from the UI, from one `diffalanche reply`, or from twenty of

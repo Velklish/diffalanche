@@ -104,8 +104,8 @@ export type Watcher = {
   /** A window was served that task: its comments and `review.json` are what the burst that
    * starts following it compares with ([05-watcher.md](../../../docs/reference/05-watcher.md)). */
   served: (name: string, review: Review, comments: readonly Comment[]) => string;
-  /** Consumes the baseline of exactly the document this stream names. */
-  follow: (name: string, token: string) => boolean;
+  /** Reads joined scope before later rescans; consumes a valid document baseline when supplied. */
+  follow: (name: string, token?: string) => boolean;
   /** The last window on that task went away: what it was served goes with it, whether or not a
    * burst ever followed the task meanwhile (05-watcher.md). */
   left: (name: string) => void;
@@ -532,6 +532,22 @@ export async function startWatcher(options: WatcherOptions): Promise<Watcher> {
     }
   }
 
+  /** A held document may cost its new stream no data burst; routing still needs its actual scope. */
+  async function readJoinedScope(name: string): Promise<void> {
+    if (!followedSessions().includes(name)) return;
+    const review = await readSessionOrNull(config, name);
+    if (!followedSessions().includes(name)) return;
+    const before = metadata.get(name);
+    const candidate = served.get(name);
+    const taken = candidate?.createdAt === review?.createdAt ? candidate : undefined;
+    // Keep the comparison baseline: a metadata change since the served body remains an event.
+    const baseline = before === undefined ? taken?.metadata : before.value;
+    metadata.set(name, {
+      value: review === null ? null : baseline === undefined ? metadataOf(review) : baseline,
+      scope: review?.scope ?? null,
+    });
+  }
+
   // Before any tree is watched, so a lock that comes later is measured against the files as they were.
   await Promise.all(
     scan.repositories.flatMap((repository) =>
@@ -630,6 +646,8 @@ export async function startWatcher(options: WatcherOptions): Promise<Watcher> {
       return token;
     },
     follow: (name, token) => {
+      enqueue(() => readJoinedScope(name));
+      if (token === undefined) return false;
       const document = documents.get(token);
       if (document === undefined) return false;
       if (document.expires <= Date.now()) {

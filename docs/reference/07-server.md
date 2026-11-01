@@ -653,8 +653,11 @@ same. A token for a cached payload describes that exact cached body, including
 its comments, rather than a newer storage read.
 
 The page sends the header token as `?served=<token>` when opening its stream.
-The stream subscribes before anything is awaited and hands the token with its
-resolved task name to `watcher.follow`. The watcher consumes only a valid token
+The stream subscribes before anything is awaited and hands every join, with its
+resolved task name and optional token, to `watcher.follow`. The watcher queues
+one fresh metadata-only read before later repository rescans, so even a held
+document and a reconnect without a usable token have a known routing scope.
+The watcher consumes only a valid token
 for that name. A stream without a usable token keeps its silent baseline, and
 the page reads the review after confirmed stream open to cover the gap. Later
 document reads alone do not reconnect the stream.
