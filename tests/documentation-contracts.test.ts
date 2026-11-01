@@ -38,4 +38,13 @@ describe("current documentation contracts", () => {
     expect(prose("docs/reference/README.md")).toContain("generative model and insights belong to Phase 4");
   });
 
+
+  it("keeps the dated serve measurements below the 768 MiB ceiling", () => {
+    const adr = prose("docs/adr/adr-016-model-in-a-process-of-its-own.md");
+    expect(adr).toContain("803 MiB on 2026-09-23");
+    expect(adr).toContain("stayed below it at 742 and 764 MiB on 2026-09-24");
+    expect(adr).toContain("4 MiB of headroom in the higher run");
+    expect(adr).not.toContain("found both crossing the ceiling");
+  });
+
 });

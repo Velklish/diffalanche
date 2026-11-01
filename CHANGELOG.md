@@ -15,6 +15,9 @@ and `bun run release` refuses a version that has no section. See
 
 ### Fixed
 
+- ADR-016 describes the dated 742/764 MiB server measurements as below the
+  768 MiB ceiling, preserving the measured query crossing and server headroom.
+
 - Phase 2 summaries distinguish implemented capabilities from phase acceptance
   and outstanding quiet-machine embedding performance evidence.
 
