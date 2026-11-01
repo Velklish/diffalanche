@@ -392,6 +392,12 @@ became the followed one while its build ran").
 
 ### Keeping a held document honest
 
+Repository signals keep their reported paths while a document is building.
+After the scope is known, the pending build uses the same path check as a held
+document. An unrelated path in the same repository therefore costs neither a
+cache eviction nor a second build. A repository control path remains a signal
+for the whole repository.
+
 A held document's change set ages, because only the followed session's is
 refreshed by a rescan, and what it carries of its task's own files ages when a
 terminal writes them. Each has its signal.

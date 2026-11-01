@@ -13,6 +13,8 @@ and `bun run release` refuses a version that has no section. See
 
 ## [Unreleased]
 
+- Path-scoped repository signals retain their paths through a pending document build, so an unrelated file does not evict that document.
+
 - New live streams refresh after subscription and make at most one token handover for an incoming document. Connection-owned reads cancel cleanly while valid queued threads and agent reply toasts survive the handover.
 
 - Review responses identify their exact document with a bounded ephemeral header token. Streams consume their matching baseline, keeping abandoned responses and late old disconnects separate.

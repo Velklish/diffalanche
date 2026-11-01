@@ -19,7 +19,7 @@ import {
 } from "../core/domain/index.ts";
 import { pathInScope } from "../core/domain/scope.ts";
 import { readRepositoryChange, scan } from "../core/index.ts";
-import type { Base, DiffCache, Review } from "../core/storage/index.ts";
+import type { Base, DiffCache, Review, Scope } from "../core/storage/index.ts";
 import {
   readDiffCache,
   readReview,
@@ -123,7 +123,7 @@ type Held = {
   adopted: DiffCache | null;
   /** Repositories that changed while this session's document was being built, judged
    * against its scope when the build resolves and it has one. */
-  signalled: string[];
+  signalled: { repo: string; files: readonly string[] | undefined }[];
   /** The write this session's comments, or its `review.json`, were last known to be behind. */
   commentsWritten: number;
   /** The write the held comments and session are known to cover, taken when the read was asked for. */
@@ -236,7 +236,9 @@ export function createReviewService(
           // not about must not cost it its place (07-server.md, "Keeping a held document honest").
           const touched = entry.signalled;
           entry.signalled = [];
-          const stale = touched.some((repo) => repositoryInScope(settled.session.scope, repo));
+          const stale = touched.some(({ repo, files }) =>
+            coversChange(settled.session.scope, repo, files),
+          );
           if (entry.version === started && !stale) {
             entry.document = settled;
             entry.payload = null;
@@ -339,21 +341,10 @@ export function createReviewService(
         if (document === null) {
           // A build in flight has no scope to judge by yet, so the name is kept
           // and the question asked again when it resolves.
-          if (entry.pending !== null) entry.signalled.push(repo);
+          if (entry.pending !== null) entry.signalled.push({ repo, files });
           continue;
         }
-        if (!repositoryInScope(document.session.scope, repo)) continue;
-        if (
-          files !== undefined &&
-          files.length > 0 &&
-          !files.some(
-            (path) =>
-              path === ".git" ||
-              path.startsWith(".git/") ||
-              pathInScope(document.session.scope, repo, path),
-          )
-        )
-          continue;
+        if (!coversChange(document.session.scope, repo, files)) continue;
         entry.version += 1;
         entry.document = null;
         entry.payload = null;
@@ -376,6 +367,18 @@ export function createReviewService(
     summary: async () => summarise(config),
     candidates: async (session) => candidatesOf(config, session),
   };
+}
+
+/** A pending and a built document judge the same signal once their scope is known. */
+function coversChange(scope: Scope, repo: string, files?: readonly string[]): boolean {
+  return (
+    repositoryInScope(scope, repo) &&
+    (files === undefined ||
+      files.length === 0 ||
+      files.some(
+        (path) => path === ".git" || path.startsWith(".git/") || pathInScope(scope, repo, path),
+      ))
+  );
 }
 
 /** Drops the least recently asked-for sessions until the map is inside the limit;

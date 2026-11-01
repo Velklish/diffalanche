@@ -406,6 +406,35 @@ describe("review document and stream handover", () => {
     }
   });
 
+  for (const path of ["A.ts", "B.ts", ".git/HEAD"]) {
+    it(`keeps pending B documents only when the reported path is unrelated: ${path}`, async () => {
+      const run = await fixture();
+      try {
+        let signalled = false;
+        let service: ReturnType<typeof createReviewService>;
+        const config = new Proxy(run.config, {
+          get: (target, key, receiver) => {
+            if (key === "exclude" && !signalled) {
+              signalled = true;
+              if (!path.startsWith(".git/"))
+                writeFileSync(join(run.root, REPO, path), "export const changed = 2;\n");
+              service.repositoryChanged(REPO, [path]);
+            }
+            return Reflect.get(target, key, receiver);
+          },
+        });
+        service = createReviewService(config, { watched: () => CURRENT });
+        const built = await service.document(NAMED);
+        expect(signalled).toBe(true);
+        const reread = await service.document(NAMED);
+        if (path === "A.ts") expect(reread).toBe(built);
+        else expect(reread).not.toBe(built);
+      } finally {
+        await run.close();
+      }
+    });
+  }
+
   it("names a disappeared task so another window can remove its open history row", async () => {
     const run = await fixture();
     try {
