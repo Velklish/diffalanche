@@ -1130,3 +1130,83 @@ it("cleans captured mapping scratch on a Git failure without changing the saved 
   ).toEqual([]);
   expect(await get(f.config.dataDir, "work", f.comment.id)).toEqual(f.comment);
 });
+
+describe("second review regressions", () => {
+  it("keeps expanded range lineage across a second refresh with duplicated spans", async () => {
+    const f = await fixture();
+    writeFileSync(f.file, "A\nTARGET\nB\nA\nTARGET\nB\n");
+    f.git("add", "a.ts");
+    f.git("commit", "-qm", "range identity source");
+    await writeDiffCache(
+      f.config.dataDir,
+      "work",
+      (await scanReview(f.config, { mode: "head" })).cache,
+    );
+    f.comment = await addComment(
+      f.config.dataDir,
+      "work",
+      {
+        repo: "repo",
+        path: "a.ts",
+        line: 1,
+        endLine: 3,
+        severity: "nit",
+        body: "range lineage",
+        author: "human",
+        role: "human",
+      },
+      { source: fileSourceAt(f.root, f.config.dataDir) },
+    );
+    expect(f.comment.anchor?.revision).toMatchObject({ line: 1, endLine: 3 });
+    writeFileSync(f.file, "A\nX\nTARGET\nB\nA\nX\nTARGET\nB\n");
+    const first = await refresh(f);
+    expect(first).toMatchObject({ status: "open", line: 1, endLine: 4 });
+    const second = await refresh(f);
+    expect(second).toMatchObject({ status: "open", line: 1, endLine: 4 });
+    expect(second.originalAnchor).toEqual(first.originalAnchor);
+  });
+
+  it("skips a null safe read after a captured empty diff while preserving Ready and cache", async () => {
+    const f = await fixture();
+    writeFileSync(f.file, f.text);
+    const source = fileSourceAt(f.root, f.config.dataDir);
+    let reads = 0;
+    vi.spyOn(fileSources, "fileSourceAt").mockReturnValue(async (repo, path, rev) => {
+      if (rev === "worktree") {
+        reads += 1;
+        return null;
+      }
+      return source(repo, path, rev);
+    });
+    let readyStatus = "";
+    let readyRepositories = -1;
+    try {
+      await rescanRepository(f.config, "work", "repo", ({ cache }) => {
+        readyStatus = JSON.parse(readFileSync(commentsPath(f.config.dataDir, "work"), "utf8"))
+          .comments[0].status;
+        readyRepositories = cache.repositories.length;
+      });
+    } finally {
+      vi.restoreAllMocks();
+    }
+    expect(reads).toBe(1);
+    expect(readFileSync(f.file, "utf8")).toBe(f.text);
+    expect(readyStatus).toBe("open");
+    expect(readyRepositories).toBe(0);
+    const stored = await get(f.config.dataDir, "work", f.comment.id);
+    expect(stored).toMatchObject({ status: "open", line: 2 });
+    expect(stored.anchor).toEqual(f.comment.anchor);
+    expect((await readDiffCache(f.config.dataDir, "work"))?.repositories).toEqual([]);
+  });
+
+  it("marks a captured committed deletion orphaned even when the HEAD diff is empty", async () => {
+    const f = await fixture();
+    f.git("rm", "-f", "a.ts");
+    f.git("commit", "-qm", "committed deletion");
+    expect(await refresh(f)).toMatchObject({
+      status: "orphaned",
+      line: 2,
+      anchor: f.comment.anchor,
+    });
+  });
+});
