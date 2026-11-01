@@ -168,7 +168,7 @@ export function captureFromFile(
   return { lineContent: found, hunk, before, after };
 }
 
-export type AnchorMatch =
+type AnchorMatch =
   | { kind: "matched"; line: number; endLine: number | null; anchor: Anchor }
   | { kind: "orphaned" };
 
