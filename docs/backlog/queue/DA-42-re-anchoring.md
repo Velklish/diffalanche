@@ -5,6 +5,11 @@
 - **Created:** 2026-09-05
 - **Dependencies:** DA-12
 
+
+## Execution authorization — 2026-11-01
+
+The owner approved this original item for the current local implementation run, including investigation when labelled hypothesis. Earlier registration-only and per-item-approval wording records the creation boundary; it does not add another approval gate. Preserve original Evidence, AC, Verification and scope. New minor findings are registration only; deferred functions are not included. Independent review and all mandatory checks precede acceptance. No push, release or tag is authorized.
+
 ## Context
 
 `docs/SPEC.md` section 5 Phase 3: after code edits, comments stay on their lines; a comment whose place cannot be found is marked `orphaned` and kept. `docs/design/HANDOFF.md` "Orphaned": three levels — `git blame --reverse` from the base commit to the working tree, then fuzzy match on the stored `lineContent` / `before` / `after`, and only then a model proposal that a human confirms; a comment never moves on its own.

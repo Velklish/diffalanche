@@ -8,6 +8,11 @@
 - **Audit priority:** P3
 - **Evidence status:** confirmed_static
 
+
+## Execution authorization — 2026-11-01
+
+The owner approved this original item for the current local implementation run, including investigation when labelled hypothesis. Earlier registration-only and per-item-approval wording records the creation boundary; it does not add another approval gate. Preserve original Evidence, AC, Verification and scope. New minor findings are registration only; deferred functions are not included. Independent review and all mandatory checks precede acceptance. No push, release or tag is authorized.
+
 ## Context
 
 Several test fixtures allocate temporary directories outside the main test root and never remove them. Repeated runs accumulate owned files even when the tests pass.
