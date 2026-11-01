@@ -13,6 +13,22 @@ and `bun run release` refuses a version that has no section. See
 
 ## [Unreleased]
 
+- Named-task notifications also survive a subscription arriving during an already running repository rescan, without leaking paths outside its fresh scope.
+
+- A named stream reads its actual path scope on joining, so its first edit is delivered even when its held document creates no data-directory burst.
+
+- Path-scoped repository signals retain their paths through a pending document build, so an unrelated file does not evict that document.
+
+- New live streams refresh after subscription and make at most one token handover for an incoming document. Connection-owned reads cancel cleanly while valid queued threads and agent reply toasts survive the handover.
+
+- Review responses identify their exact document with a bounded ephemeral header token. Streams consume their matching baseline, keeping abandoned responses and late old disconnects separate.
+
+- An open task history removes a task deleted elsewhere while preserving the current window's task and menu.
+
+- Named task windows receive path edits outside current's scope without refreshing current's unchanged review. Scoped repository notifications keep their target on reconnect and when current moves.
+
+- The CLI reply stream check accepts its exact reply before child exit without accepting historical or unrelated frames. The cause of the historical loaded timeout remains unknown.
+
 ### Fixed
 
 - Directory watches retain child names in the parent's baseline, so a removed

@@ -178,6 +178,8 @@ type ReviewSlice = {
   reviewName: string | null;
   /** Advances only when a review document is applied. */
   documentRevision: number;
+  /** The response body's first-follow baseline token, carried outside its cached JSON. */
+  documentToken: string | null;
   root: string;
   repositories: RepositoryChange[];
   /** Every file of the change set, flattened in the order the centre panel renders. */
@@ -192,7 +194,7 @@ type ReviewSlice = {
   threadsByFile: Map<string, Comment[]>;
   /** `user` of `config.json`: what a comment written here is signed with. */
   user: string;
-  loadReview: () => Promise<void>;
+  loadReview: (signal?: AbortSignal) => Promise<void>;
   /** The address bar changed under the page — `Back` — so the window follows it. */
   syncTaskFromUrl: () => Promise<void>;
 };
@@ -249,7 +251,7 @@ type SessionsSlice = {
    * elsewhere: a mark and nothing else, cleared by opening the menu (DA-56). */
   historyMark: boolean;
   /** A `sessions-changed` frame that is not this window's own doing. */
-  noteHistory: (name: string) => void;
+  noteHistory: (name: string, removed?: boolean) => void;
   /** The create form of handoff section 7. */
   newName: string;
   newBase: string;
@@ -560,6 +562,8 @@ export type Store = ReviewSlice &
 /** Bumped by every read of the review, so a response for a task the window has
  * left is dropped instead of applied ([08-ui.md](../../docs/reference/08-ui.md)). */
 let reading = 0;
+let manualReading = 0;
+let appliedReading = 0;
 
 export const useStore = create<Store>()((set, get) => ({
   // review
@@ -567,6 +571,7 @@ export const useStore = create<Store>()((set, get) => ({
   failure: null,
   reviewName: taskInUrl(),
   documentRevision: 0,
+  documentToken: null,
   root: "",
   repositories: [],
   files: [],
@@ -576,22 +581,29 @@ export const useStore = create<Store>()((set, get) => ({
   repoCounts: new Map(),
   threadsByFile: new Map(),
   user: "",
-  loadReview: async () => {
+  loadReview: async (signal) => {
+    if (signal?.aborted) return;
     // A response for a task the window has left is dropped: `switching` gates the menu, nothing
     // gates `syncTaskFromUrl` or the stream (08-ui.md, "The task this window is on").
     reading += 1;
     const generation = reading;
+    if (signal === undefined) manualReading = generation;
+    const stale = () =>
+      signal?.aborted === true || generation < manualReading || generation < appliedReading;
     try {
-      const response = await fetch(onTask("/api/review"));
-      if (generation !== reading) return;
+      const url = onTask("/api/review");
+      const response = await (signal === undefined ? fetch(url) : fetch(url, { signal }));
+      if (stale()) return;
       if (!response.ok) {
         const refused = await refusal(response);
-        if (generation !== reading) return;
+        if (stale()) return;
         // A root nobody has opened a session in is not a failure: it is the
         // first-run screen, and the scan behind its metrics is asked for here.
         if (refused.code === "no-current-session") {
+          appliedReading = generation;
           set({ status: "no-session", failure: null });
-          await get().loadScan();
+          if (signal === undefined) await get().loadScan();
+          else void get().loadScan();
           return;
         }
         // The task this window was showing was deleted elsewhere: it goes where `current` points, as
@@ -614,11 +626,12 @@ export const useStore = create<Store>()((set, get) => ({
         throw new Error(refused.message);
       }
       const document = (await response.json()) as ReviewDocument;
-      if (generation !== reading) return;
+      if (stale()) return;
       // Stamped here, not after the render: the harness measures from the moment
       // the response was parsed to the frame that showed it.
       perf.responseAt = performance.now();
       const held = get();
+      appliedReading = generation;
       set({
         ...fromDocument(
           document,
@@ -628,18 +641,23 @@ export const useStore = create<Store>()((set, get) => ({
           held.repositories,
         ),
         documentRevision: held.documentRevision + 1,
+        documentToken: response.headers.get("X-Diffalanche-Document"),
       });
     } catch (error) {
-      if (generation !== reading) return;
+      if (stale()) return;
       set({ status: "failed", failure: reason(error) });
       return;
     }
     // After the review and not with it: only an unsent reply shows the name, and the first
     // render is measured from the review's own response.
     try {
-      const response = await fetch("/api/config");
-      if (!response.ok) return;
+      if (signal?.aborted) return;
+      const response = await (signal === undefined
+        ? fetch("/api/config")
+        : fetch("/api/config", { signal }));
+      if (signal?.aborted || !response.ok) return;
       const config = (await response.json()) as { user?: unknown };
+      if (signal?.aborted) return;
       if (typeof config.user === "string") set({ user: config.user });
     } catch {
       // The page works unsigned; the server signs what it writes anyway.
@@ -752,10 +770,19 @@ export const useStore = create<Store>()((set, get) => ({
   sessions: [],
   sessionMenuOpen: false,
   historyMark: false,
-  noteHistory: (name) => {
+  noteHistory: (name, removed = false) => {
     // A task this window made, closed or reopened is not news to it: the list was read again on
     // the spot, and the mark would be about the reader's own press.
-    if (get().claimSelf("history", name)) return;
+    const mine = get().claimSelf("history", name);
+    if (removed) {
+      const state = get();
+      set({
+        sessions: state.sessions.filter((one) => one.name !== name),
+        historyMark: state.historyMark || (!mine && !state.sessionMenuOpen),
+      });
+      return;
+    }
+    if (mine) return;
     // The mark and nothing else, and the list is not read again under an open menu: the mark is
     // what says it is stale (DA-56).
     set({ historyMark: true });

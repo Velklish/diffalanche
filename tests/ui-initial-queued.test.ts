@@ -74,11 +74,17 @@ for (const kind of ["comment-added", "reply-added", "comment-status"] as const) 
         });
         let answerDocument: (response: Response) => void = () => {};
         let answerActivity: (response: Response) => void = () => {};
+        let documentReads = 0;
         const fetcher = vi.fn((url: string) => {
-          if (url.startsWith("/api/review"))
-            return new Promise<Response>((resolve) => {
-              answerDocument = resolve;
-            });
+          if (url.startsWith("/api/review")) {
+            documentReads += 1;
+            // The required post-open read gets the same captured empty body; the frame still repairs it.
+            return documentReads === 1
+              ? new Promise<Response>((resolve) => {
+                  answerDocument = resolve;
+                })
+              : Promise.resolve(documentFor());
+          }
           if (url === "/api/activity")
             return new Promise<Response>((resolve) => {
               answerActivity = resolve;
@@ -96,7 +102,11 @@ for (const kind of ["comment-added", "reply-added", "comment-status"] as const) 
           const source = FakeSource.last;
           if (source === null) throw new Error("no stream");
           source.onopen?.();
-          await vi.waitFor(() => expect(fetcher).toHaveBeenCalledWith("/api/activity"));
+          await vi.waitFor(() =>
+            expect(fetcher).toHaveBeenCalledWith("/api/activity", {
+              signal: expect.any(AbortSignal),
+            }),
+          );
           const deliver = () => {
             source.deliver(kind, {
               type: kind,

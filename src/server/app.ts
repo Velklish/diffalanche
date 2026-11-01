@@ -155,7 +155,9 @@ export function createApp({
   // Serialised once per change, not per request: the review is megabytes; `?review=` is the
   // task an agent printed a link to ([ADR-010](../../docs/adr/adr-010-review-task-scope.md)).
   app.get("/api/review", async (c) => {
-    const payload = await review.payload(named(c));
+    const payload = await review.payload(named(c), (token) =>
+      c.header("X-Diffalanche-Document", token),
+    );
     // The symbol index is read in the background once a review is open, not on the first question
     // (ADR-015); the document is the one just served, held.
     void review.document(named(c)).then(

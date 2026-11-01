@@ -27,6 +27,7 @@ type Anchor = { element: Element; top: number; scrollY: number } | null;
 
 export function startLive(): () => void {
   let generation = 0;
+  let queue: Promise<void> = Promise.resolve();
   let target = useStore.getState().reviewName ?? useStore.getState().session?.name ?? null;
   let switching = useStore.getState().session === null;
   const currentGeneration = () => generation;
@@ -37,16 +38,36 @@ export function startLive(): () => void {
     if (useStore.getState().reviewName !== null || target === name) return;
     target = name;
     switching = true;
+    queue = Promise.resolve();
     invalidate();
   };
-  let stop = connect(false, currentGeneration, followCurrent);
+  const run = (task: () => Promise<void>): void => {
+    const origin = generation;
+    queue = queue.then(task).catch((error: unknown) => {
+      if (origin === generation)
+        useStore.getState().setToast(error instanceof Error ? error.message : String(error));
+    });
+  };
+  const tokenForTask = () => {
+    const state = useStore.getState();
+    const matches =
+      state.reviewName === null
+        ? !switching && target === state.session?.name
+        : state.reviewName === state.session?.name;
+    return matches ? state.documentToken : null;
+  };
+  let needsDocument = tokenForTask() === null;
+  let stop = connect(currentGeneration, followCurrent, run, tokenForTask());
   // A stream keeps the address it was made with: a task switch needs a new one, and so does the
   // footer's `reconnect` for a stream the browser gave up on.
   const unsubscribe = useStore.subscribe((state, before) => {
     if (state.reviewName !== before.reviewName) {
+      // A different task keeps no wait behind the previous task's in-flight request.
+      queue = Promise.resolve();
       invalidate();
       target = state.reviewName;
       switching = target === null || target !== (state.session?.name ?? null);
+      needsDocument = tokenForTask() === null;
     } else if (
       switching &&
       target === null &&
@@ -71,9 +92,16 @@ export function startLive(): () => void {
       }
     }
     const asked = state.reconnects !== before.reconnects;
-    if (state.reviewName === before.reviewName && !asked) return;
+    const handover =
+      needsDocument &&
+      state.documentRevision !== before.documentRevision &&
+      state.documentToken !== null &&
+      state.session?.name === target;
+    if (state.reviewName === before.reviewName && !asked && !handover) return;
+    // Cleared before reconnect: its own refetch changes the token too, but never reconnects again.
+    if (handover) needsDocument = false;
     stop();
-    stop = connect(asked, currentGeneration, followCurrent);
+    stop = connect(currentGeneration, followCurrent, run, tokenForTask());
   });
   return () => {
     unsubscribe();
@@ -81,36 +109,36 @@ export function startLive(): () => void {
   };
 }
 
-/** `behind`: the page missed frames while it had no stream, and a new one has no `Last-Event-ID`
- * to replay them by, so the review is read again once it is open (08-ui.md, DA-96.1). */
+/** Every new stream reads once after confirmed subscription; a token handover shares its queue. */
 function connect(
-  behind: boolean,
   generation: () => number,
   followCurrent: (name: string) => void,
+  run: (task: () => Promise<void>) => void,
+  token: string | null,
 ): () => void {
   const store = () => useStore.getState();
-  // The task this window is on, so the server knows whose comments to follow: a registry and not
-  // a filter, the frames are one broadcast ([07-server.md](../../docs/reference/07-server.md)).
-  const source = new EventSource(onTask("/api/events"));
-
-  // One queue: a patch that read the store while another was halfway through it would write
-  // back a state that never existed.
-  let queue: Promise<void> = Promise.resolve();
-  const run = (task: () => Promise<void>): void => {
-    queue = queue.then(task).catch((error: unknown) => {
-      // A fetch that failed is a frame lost, not a page lost: the stream is
-      // still open and the next event patches over it.
-      store().setToast(error instanceof Error ? error.message : String(error));
-    });
-  };
+  const gone = new AbortController();
+  const address = onTask("/api/events");
+  const source = new EventSource(
+    token === null
+      ? address
+      : `${address}${address.includes("?") ? "&" : "?"}served=${encodeURIComponent(token)}`,
+  );
 
   // The stream answers with a comment line as soon as it subscribes, so this fires on connect and
   // not with the first heartbeat fifteen seconds later (07-server.md).
-  let missed = behind;
+  let missed = true;
   source.onopen = () => {
     store().setConnection("watching");
-    run(readActivity);
-    if (missed) run(() => store().loadReview());
+    run(async () => {
+      if (gone.signal.aborted) return;
+      try {
+        await readActivity(gone.signal);
+      } catch (error) {
+        if (!gone.signal.aborted) throw error;
+      }
+    });
+    if (missed) run(() => store().loadReview(gone.signal));
     missed = false;
   };
   // `EventSource` reconnects on its own; the state says so while it does, and
@@ -177,7 +205,7 @@ function connect(
   // A task appeared, was closed or reopened: news about the history, answered with a mark in the
   // header and nothing else (08-ui.md, "Closing a task, and what the mark in the header is").
   on<Extract<WatcherEvent, { type: "sessions-changed" }>>("sessions-changed", (event) => {
-    store().noteHistory(event.name);
+    store().noteHistory(event.name, event.status === null);
   });
   on<Extract<WatcherEvent, { type: "warnings" }>>("warnings", (event) => {
     store().setWarnings(event.list);
@@ -190,6 +218,7 @@ function connect(
   on<{ reason: string }>("reload", () => store().loadReview());
 
   return () => {
+    gone.abort();
     source.close();
     store().setConnection("connecting");
   };
@@ -204,10 +233,11 @@ function onScreen(session: string): boolean {
 
 /** The feed as the server has it, merged by id, so a reconnect's replay of a line it already
  * holds is still one line ([05-watcher.md](../../docs/reference/05-watcher.md)). */
-async function readActivity(): Promise<void> {
-  const response = await fetch("/api/activity");
-  if (!response.ok) return;
-  useStore.getState().pushActivity((await response.json()) as ActivityEvent[]);
+async function readActivity(signal: AbortSignal): Promise<void> {
+  const response = await fetch("/api/activity", { signal });
+  if (signal.aborted || !response.ok) return;
+  const activity = (await response.json()) as ActivityEvent[];
+  if (!signal.aborted) useStore.getState().pushActivity(activity);
 }
 
 /** One repository's change set as it stands; a 404, `no-such-repository` once it has no changes

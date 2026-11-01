@@ -5,7 +5,7 @@ import { streamSSE } from "hono/streaming";
 import type { ActivityEvent, EventBus, WatcherEvent } from "../core/watcher/index.ts";
 
 /** One frame on the wire: the id the client sends back, the name, and its JSON. */
-type EventFrame = { id: number; event: string; data: string };
+type EventFrame = { id: number; event: string; data: string; session?: string };
 
 /** How many frames a client can miss and still be caught up rather than reloaded. */
 const REPLAY_CAPACITY = 200;
@@ -29,6 +29,7 @@ type Client = {
   /** The task this window is on, `null` for the current session. A **registry**
    * and not a filter: every client still gets every frame (07-server.md). */
   session: string | null;
+  served?: string;
 };
 
 /** What a reconnecting client is owed: the frames it missed, or the one frame that says to read
@@ -37,9 +38,9 @@ type Replay = { frames: EventFrame[]; reload: EventFrame | null };
 
 export type EventStream = {
   /** Puts an event on the stream and keeps it for a client that reconnects. */
-  emit: (event: string, data: unknown) => EventFrame;
+  emit: (event: string, data: unknown, session?: string) => EventFrame;
   /** What the client that last saw `id` has missed. */
-  since: (id: number) => Replay;
+  since: (id: number, session?: string | null) => Replay;
   /** Everything from now on. The returned call stops the subscription. */
   subscribe: (client: Client) => () => void;
   /** How many streams are open; the tests and the shutdown ask. */
@@ -55,29 +56,49 @@ export type EventStream = {
 export function createEventStream(
   capacity: number = REPLAY_CAPACITY,
   left?: (session: string) => void,
+  current: () => string | null = () => null,
+  joined?: (name: string, token?: string) => void,
 ): EventStream {
   const ring: EventFrame[] = [];
   const clients = new Set<Client>();
   let nextId = 1;
 
   return {
-    emit(event, data) {
-      const frame: EventFrame = { id: nextId, event, data: JSON.stringify(data) };
+    emit(event, data, session) {
+      const frame: EventFrame = {
+        id: nextId,
+        event,
+        data: JSON.stringify(data),
+        ...(session === undefined ? {} : { session }),
+      };
       nextId += 1;
       ring.push(frame);
       if (ring.length > capacity) ring.splice(0, ring.length - capacity);
       // Over a copy: a client that ends while an event is delivered — a stream
       // the browser just dropped — must not shorten the set under the loop.
-      for (const client of [...clients]) client.send(frame);
+      for (const client of [...clients]) {
+        if (frame.session !== undefined && frame.session !== (client.session ?? current()))
+          continue;
+        client.send(frame);
+      }
       return frame;
     },
-    since(id) {
+    since(id, session) {
       // Caught up from `oldest - 1` to `newest`; an id ahead of the newest is a browser that
       // kept its `Last-Event-ID` across a restart of the server.
       const oldest = ring[0]?.id ?? nextId;
       const newest = ring.at(-1)?.id ?? nextId - 1;
       if (id >= oldest - 1 && id <= newest) {
-        return { frames: ring.filter((frame) => frame.id > id), reload: null };
+        return {
+          frames: ring.filter(
+            (frame) =>
+              frame.id > id &&
+              (frame.session === undefined ||
+                session === undefined ||
+                frame.session === (session ?? current())),
+          ),
+          reload: null,
+        };
       }
       return {
         frames: [],
@@ -92,6 +113,8 @@ export function createEventStream(
       };
     },
     subscribe(client) {
+      const name = client.session ?? current();
+      if (name !== null) joined?.(name, client.served);
       clients.add(client);
       return () => {
         // Asked twice, by the abort and by the loop's end; only the first is the window going.
@@ -118,7 +141,7 @@ export function createEventStream(
  * included, so a client can listen by name or read them all off one handler. */
 export function forwardEvents(bus: EventBus, stream: EventStream): () => void {
   return bus.subscribe((event: WatcherEvent) => {
-    stream.emit(event.type, event);
+    stream.emit(event.type, event, event.type === "diff-changed" ? event.session : undefined);
   });
 }
 
@@ -151,8 +174,10 @@ export function streamEvents(events: EventStream, heartbeatMs: number = HEARTBEA
         return queue;
       };
 
+      const token = c.req.query("served");
       const client: Client = {
         session: c.req.query("review") || null,
+        ...(token === undefined ? {} : { served: token }),
         send: (frame) => {
           void write(() =>
             stream.writeSSE({ id: String(frame.id), event: frame.event, data: frame.data }),
@@ -170,7 +195,8 @@ export function streamEvents(events: EventStream, heartbeatMs: number = HEARTBEA
       // The ring is read and the client subscribed with nothing awaited between, so no frame
       // falls into the gap or arrives out of order; a new client asks for nothing.
       const seen = lastEventId(c);
-      const missed: Replay = seen === null ? { frames: [], reload: null } : events.since(seen);
+      const missed: Replay =
+        seen === null ? { frames: [], reload: null } : events.since(seen, client.session);
       const unsubscribe = events.subscribe(client);
       stream.onAbort(() => {
         closed = true;

@@ -405,6 +405,28 @@ has them. What they promise and how they are shipped is in
 
 ## Development
 
+A new live stream reads the review once after confirmed subscription. A stream
+opened before its document becomes available makes at most one token-bound
+handover; later document refreshes do not reconnect it. Received valid thread
+frames and agent reply toasts remain ordered across that handover.
+
+Each stream can name its served document with an ephemeral token. Abandoned
+responses and late old disconnects cannot become or erase another window's
+first-follow baseline.
+
+An open task history removes rows deleted in another window or terminal without
+needing to close and reopen the menu.
+
+Named tasks receive edits inside their own path scope even when current covers
+other files in the same repository. That notification leaves current's unchanged
+review and activity alone. Each new subscription reads its actual metadata scope
+before later repository rescans, including a reconnect without a usable document token.
+When a subscription overlaps a running rescan, its targeted notice waits for
+those metadata reads and rechecks the task's current scope before delivery.
+
+The CLI stream test captures its cursor before writing and matches the exact reply
+and thread, including delivery before the CLI exits. See [suite waits](docs/reference/11-perf.md#waits-in-the-suites).
+
 Bun is the toolchain; the server and the CLI run on Node >= 22 as well and use
 only APIs shared by both runtimes. That is the published package's floor: the
 bundle is plain JavaScript. Development needs Node >= 22.18, because the tests

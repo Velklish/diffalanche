@@ -17,6 +17,7 @@ import type { RepositoryChange, ScanWarning } from "../src/core/types.ts";
 import { createEventStream, HEARTBEAT_MS, streamEvents } from "../src/server/events.ts";
 import type { ReviewServer } from "../src/server/serve.ts";
 import { startReviewServer } from "../src/server/serve.ts";
+import { type Reader, read as readEvents, writtenReply } from "./helpers/event-reader.ts";
 import { needsTypeScript } from "./helpers/typescript.ts";
 
 const run = promisify(execFile);
@@ -35,100 +36,17 @@ let root: string;
 let config: Config;
 let server: ReviewServer;
 
-/** One frame as it arrived: `event`, `id`, the data still unparsed, and when it came. */
-type Frame = { event: string; id: string; data: string; at: number };
-
 /** The waits that ran out of their deadline, told apart once the file is done (11-perf.md). */
 const overdue: { event: string; from: number }[] = [];
 
 /** Every frame of the file, for telling an overdue wait's frame late from never. */
 let observer: Reader | null = null;
 
-type Reader = {
-  frames: Frame[];
-  /** Waits for the first frame of a name that arrives after this call. */
-  next: (event: string, timeoutMs?: number) => Promise<Frame>;
-  /** Waits for a frame of that name, one that already arrived included. */
-  waitFor: (event: string, timeoutMs?: number) => Promise<Frame>;
-  /** Every comment line, the heartbeat among them. */
-  comments: string[];
-  close: () => Promise<void>;
-};
-
-/** Reads a live stream as frames, the way `EventSource` would. It makes the request, so `close`
- * aborts it: under Bun a cancelled body leaves the stream subscribed (11-perf.md). */
-async function read(
+const read = (
   url: string,
   init: RequestInit = {},
-  request: (url: string, init: RequestInit) => Response | Promise<Response> = fetch,
-): Promise<Reader> {
-  const gone = new AbortController();
-  const response = await request(url, { ...init, signal: gone.signal });
-  const frames: Frame[] = [];
-  const comments: string[] = [];
-  const reader = (response.body as ReadableStream<Uint8Array>).getReader();
-  const decoder = new TextDecoder();
-  let buffer = "";
-  void (async () => {
-    try {
-      for (;;) {
-        const { done, value } = await reader.read();
-        if (done) break;
-        buffer += decoder.decode(value, { stream: true });
-        let end = buffer.indexOf("\n\n");
-        while (end !== -1) {
-          const chunk = buffer.slice(0, end);
-          buffer = buffer.slice(end + 2);
-          if (chunk.startsWith(":")) comments.push(chunk);
-          else {
-            const frame: Frame = { event: "message", id: "", data: "", at: Date.now() };
-            for (const line of chunk.split("\n")) {
-              const [field, ...rest] = line.split(": ");
-              const value = rest.join(": ");
-              if (field === "event") frame.event = value;
-              if (field === "id") frame.id = value;
-              if (field === "data") frame.data = value;
-            }
-            frames.push(frame);
-          }
-          end = buffer.indexOf("\n\n");
-        }
-      }
-    } catch {
-      // The stream was cancelled or the server stopped: both end the reading.
-    }
-  })();
-
-  return {
-    frames,
-    comments,
-    next: async (event, timeoutMs = DEADLINE_MS) => {
-      const from = frames.length;
-      const started = Date.now();
-      const deadline = started + timeoutMs;
-      for (;;) {
-        const hit = frames.slice(from).find((frame) => frame.event === event);
-        if (hit) return hit;
-        if (Date.now() > deadline) throw overran(event, started, timeoutMs);
-        await new Promise((done) => setTimeout(done, 5));
-      }
-    },
-    waitFor: async (event, timeoutMs = DEADLINE_MS) => {
-      const started = Date.now();
-      const deadline = started + timeoutMs;
-      for (;;) {
-        const hit = frames.find((frame) => frame.event === event);
-        if (hit) return hit;
-        if (Date.now() > deadline) throw overran(event, started, timeoutMs);
-        await new Promise((done) => setTimeout(done, 5));
-      }
-    },
-    close: async () => {
-      gone.abort();
-      await reader.cancel().catch(() => undefined);
-    },
-  };
-}
+  request: Parameters<typeof readEvents>[2] = fetch,
+) => readEvents(url, init, request, overran);
 
 /** A wait at the deadline is kept for the report; one with a shorter limit of its own, like
  * `arm`'s, expects to run out. */
@@ -254,27 +172,30 @@ describe("the live stream", () => {
       comments.find((one) => one.repo === REPO) ?? (comments[0] as (typeof comments)[0]);
     const stream = await read(`${server.url}/api/events`);
     try {
-      await run(process.execPath, [
-        cli,
-        "reply",
-        target.id,
-        "--body",
-        "fixed in the working tree",
-        "--author",
-        "claude",
-        "--data-dir",
-        config.dataDir,
-      ]);
+      let completed = 0;
+      const frame = await writtenReply(stream, target.id, async () => {
+        const { stdout } = await run(process.execPath, [
+          cli,
+          "reply",
+          target.id,
+          "--body",
+          "fixed in the working tree",
+          "--author",
+          "claude",
+          "--data-dir",
+          config.dataDir,
+        ]);
+        completed = Date.now();
+        return stdout.trim().split(" ")[0] ?? "";
+      });
 
-      // Timed from the CLI's write, not its spawn: a Node process in a full parallel suite can take
-      // seconds to start, which is not the watcher's latency, so the wait is generous (DA-31.1).
-      const written = Date.now();
-      const frame = await stream.next("reply-added");
+      // Child exit is observable; the storage write is not. A negative value means the frame
+      // reached this reader before the child finished, not negative watcher latency.
       const data = JSON.parse(frame.data) as { id: string; commentId: string };
       expect(data.commentId).toBe(target.id);
       // Printed, not held: no budget of `docs/SPEC.md` section 6 is about a comment frame, and the
       // deadline above is what says it came at all.
-      process.stderr.write(`reply written to reply-added: ${Date.now() - written} ms\n`);
+      process.stderr.write(`CLI completion to reply-added: ${frame.at - completed} ms\n`);
 
       // The activity line is emitted with the event, so it may already be here.
       const activity = await stream.waitFor("activity");

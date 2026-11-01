@@ -599,6 +599,7 @@ describe("starting the server", () => {
       expect(server.url).toBe(`http://127.0.0.1:${server.port}`);
       const response = await fetch(`${server.url}/api/review`);
       expect(response.status).toBe(200);
+      expect(response.headers.get("X-Diffalanche-Document")).toMatch(/^[0-9a-f-]{36}$/);
       expect(((await response.json()) as ReviewDocument).totals.repositories).toBe(SMALL.repos);
     } finally {
       await server.close();
@@ -1217,6 +1218,16 @@ describe("a held document of a task nobody follows", () => {
       }
     }
 
+    async function servedDocument(
+      url: string,
+    ): Promise<{ document: ReviewDocument; token: string }> {
+      const response = await fetch(`${url}/api/review?review=${NAMED}`);
+      const token = response.headers.get("X-Diffalanche-Document");
+      expect(token).toMatch(/^[0-9a-f-]{36}$/);
+      if (token === null) throw new Error("the review response has no document token");
+      return { document: (await response.json()) as ReviewDocument, token };
+    }
+
     /** `started`, and a window served `NAMED` whose stream is open: nothing written into the task
      * since `prepare`. */
     async function opened(prepare?: (dataDir: string) => Promise<void>): Promise<{
@@ -1228,9 +1239,11 @@ describe("a held document of a task nobody follows", () => {
       const run = await started(prepare);
       // The order a page keeps, the document before the stream, with a burst between the two: the
       // document's own lock is one, and it must not stand in for the write under test.
-      await reviewOf(run.server.url, NAMED);
+      const served = await servedDocument(run.server.url);
       await barrier(run.dataDir, run.current, "served");
-      const window = await listen(`${run.server.url}/api/events?review=${NAMED}`);
+      const window = await listen(
+        `${run.server.url}/api/events?review=${NAMED}&served=${served.token}`,
+      );
       await counted(run.server, true);
       return {
         dataDir: run.dataDir,
@@ -1316,14 +1329,16 @@ describe("a held document of a task nobody follows", () => {
       const run = await started();
       let window: Listener | null = null;
       try {
-        await reviewOf(run.server.url, NAMED);
+        const earlier = await servedDocument(run.server.url);
         await barrier(run.dataDir, run.current, "served");
         const between = await addComment(run.dataDir, NAMED, { ...note, body: "between the two" });
         await barrier(run.dataDir, run.current, "written");
         // The second window's document has the comment; the first one's does not.
         const later = await reviewOf(run.server.url, NAMED);
         expect(later.comments.map((one) => one.id)).toContain(between.id);
-        window = await listen(`${run.server.url}/api/events?review=${NAMED}`);
+        window = await listen(
+          `${run.server.url}/api/events?review=${NAMED}&served=${earlier.token}`,
+        );
         await counted(run.server, true);
         await barrier(run.dataDir, run.current, "read");
         expect(window.said(between.id)).toBe(true);
@@ -1364,11 +1379,13 @@ describe("a held document of a task nobody follows", () => {
       const run = await started();
       let window: Listener | null = null;
       try {
-        await reviewOf(run.server.url, NAMED);
+        const served = await servedDocument(run.server.url);
         await barrier(run.dataDir, run.current, "served");
         // A window served the task, its stream opened and closed in a quiet moment: no burst ever
         // followed the task, so only the stream's end can say the window is gone.
-        const first = await listen(`${run.server.url}/api/events?review=${NAMED}`);
+        const first = await listen(
+          `${run.server.url}/api/events?review=${NAMED}&served=${served.token}`,
+        );
         await counted(run.server, true);
         await first.close();
         await counted(run.server, false);

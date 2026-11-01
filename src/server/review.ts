@@ -17,8 +17,9 @@ import {
   repositoryInScope,
   resolveSessionName,
 } from "../core/domain/index.ts";
+import { pathInScope } from "../core/domain/scope.ts";
 import { readRepositoryChange, scan } from "../core/index.ts";
-import type { Base, DiffCache, Review } from "../core/storage/index.ts";
+import type { Base, DiffCache, Review, Scope } from "../core/storage/index.ts";
 import {
   readDiffCache,
   readReview,
@@ -81,7 +82,7 @@ export type ReviewService = {
   document: (session?: string) => Promise<ReviewDocument>;
   /** The same document serialised: one per session, serialised once per change
    * ([07-server.md](../../docs/reference/07-server.md)). */
-  payload: (session?: string) => Promise<string>;
+  payload: (session?: string, served?: (token: string) => void) => Promise<string>;
   /** One repository of that task's change set, `null` without changes; a named task is read from
    * git unless it is the session the watcher rescans (`watched()`) (07-server.md, DA-56.6). */
   repository: (repo: string, session?: string) => Promise<RepositoryChange | null>;
@@ -97,7 +98,7 @@ export type ReviewService = {
   sessionsRead: (reviews: ReadonlyMap<string, Review | null>) => void;
   /** A repository under the root changed: every held document that could show it,
    * bar the followed session's, is dropped ([07-server.md](../../docs/reference/07-server.md)). */
-  repositoryChanged: (repo: string) => void;
+  repositoryChanged: (repo: string, files?: readonly string[]) => void;
   /** Only the comments of that session changed: a small file, where rebuilding the
    * document would charge the next reader for the whole change set. */
   invalidateComments: (session: string) => void;
@@ -122,7 +123,7 @@ type Held = {
   adopted: DiffCache | null;
   /** Repositories that changed while this session's document was being built, judged
    * against its scope when the build resolves and it has one. */
-  signalled: string[];
+  signalled: { repo: string; files: readonly string[] | undefined }[];
   /** The write this session's comments, or its `review.json`, were last known to be behind. */
   commentsWritten: number;
   /** The write the held comments and session are known to cover, taken when the read was asked for. */
@@ -139,7 +140,7 @@ type ReviewServiceOptions = {
   watched?: () => string | null;
   /** A window is served this document, before it is serialised: the watcher's baseline of a
    * task it starts following for that window ([07-server.md](../../docs/reference/07-server.md)). */
-  served?: (session: string, document: ReviewDocument) => void;
+  served?: (session: string, document: ReviewDocument) => string | undefined;
 };
 
 export function createReviewService(
@@ -235,7 +236,9 @@ export function createReviewService(
           // not about must not cost it its place (07-server.md, "Keeping a held document honest").
           const touched = entry.signalled;
           entry.signalled = [];
-          const stale = touched.some((repo) => repositoryInScope(settled.session.scope, repo));
+          const stale = touched.some(({ repo, files }) =>
+            coversChange(settled.session.scope, repo, files),
+          );
           if (entry.version === started && !stale) {
             entry.document = settled;
             entry.payload = null;
@@ -259,11 +262,12 @@ export function createReviewService(
       const asked = writes;
       return documentOf(await resolveSessionName(config.dataDir, session), asked);
     },
-    payload: async (session) => {
+    payload: async (session, served) => {
       const asked = writes;
       const name = await resolveSessionName(config.dataDir, session);
       const document = await documentOf(name, asked);
-      options.served?.(name, document);
+      const token = options.served?.(name, document);
+      if (typeof token === "string") served?.(token);
       const entry = sessions.get(name);
       // A document an invalidation kept out of the cache is serialised for the
       // request that asked and not kept.
@@ -328,7 +332,7 @@ export function createReviewService(
         }
       }
     },
-    repositoryChanged: (repo) => {
+    repositoryChanged: (repo, files) => {
       const followed = watched();
       for (const [name, entry] of sessions) {
         // The followed session's document is patched by the rescan itself.
@@ -337,10 +341,11 @@ export function createReviewService(
         if (document === null) {
           // A build in flight has no scope to judge by yet, so the name is kept
           // and the question asked again when it resolves.
-          if (entry.pending !== null) entry.signalled.push(repo);
+          if (entry.pending !== null)
+            entry.signalled.push({ repo, files: files === undefined ? undefined : [...files] });
           continue;
         }
-        if (!repositoryInScope(document.session.scope, repo)) continue;
+        if (!coversChange(document.session.scope, repo, files)) continue;
         entry.version += 1;
         entry.document = null;
         entry.payload = null;
@@ -363,6 +368,18 @@ export function createReviewService(
     summary: async () => summarise(config),
     candidates: async (session) => candidatesOf(config, session),
   };
+}
+
+/** A pending and a built document judge the same signal once their scope is known. */
+function coversChange(scope: Scope, repo: string, files?: readonly string[]): boolean {
+  return (
+    repositoryInScope(scope, repo) &&
+    (files === undefined ||
+      files.length === 0 ||
+      files.some(
+        (path) => path === ".git" || path.startsWith(".git/") || pathInScope(scope, repo, path),
+      ))
+  );
 }
 
 /** Drops the least recently asked-for sessions until the map is inside the limit;
