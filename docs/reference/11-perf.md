@@ -1613,18 +1613,22 @@ is a red that no longer means anything, so each number has one owner:
 | The five budgets of `docs/SPEC.md` section 6 | `bun run perf` | the median of five repetitions, times `RUNNER_ALLOWANCE` on a runner, declined on a busy machine |
 | 300 ms on top of one rescan: the watcher's own share of an update | `tests/watcher.test.ts`, "rescans the edited repository alone and has the new hunk in diff.json in time" | the median of three edits, each less one rescan of that repository timed beside it once the watcher's write has landed; only where the tree is watched |
 | One frame for a jump from the tree | `e2e/sidebar.spec.ts`, "choosing a file brings its card into view on the frame the click produced" | the card is in view on the frame the click produced; the 50 ms is the gate's |
-| 750 ms from a task made elsewhere to the header mark | `e2e/history.spec.ts`, `MARK_CEILING_MS` | one sample, 2.5 times the 300 ms of a live update; no gate line measures the mark, for the reason below |
+| 300 ms × `RUNNER_ALLOWANCE` from a task made elsewhere to the header mark | `e2e/history.spec.ts`, `MARK_CEILING_MS` | one sample, 630 ms at the 2.1 allowance; no gate line measures the mark, for the reason below |
 | `HEARTBEAT_MS`, 15 s, for the head of the live stream | `tests/events.test.ts`, "answers as soon as it is subscribed, without waiting for a heartbeat" | the head arrives before a heartbeat is due and its first bytes are not one |
 
 **The header mark's ceiling.** `MARK_CEILING_MS` is how long a task made
 outside the window may take to raise the quiet mark in the header, and it is
-the only ceiling the mark has. It is 2.5 times the 300 ms `docs/SPEC.md`
-section 6 gives a live update, because a strict 300 on a loaded machine would
-fail on the machine rather than on the code. 2.5 was `RUNNER_ALLOWANCE` of
-`perf/budgets.ts` when the ceiling was set; the allowance has been 2.1 since
-the CPU-per-frame budget change tuned it to that line ([the gate](#the-gate)).
-The mark's ceiling did not move with it; whether it should move remains open.
-The perf gate does not measure
+the only ceiling the mark has. This suite deadline follows the 300 ms
+`docs/SPEC.md` section 6 gives a live update, times `RUNNER_ALLOWANCE` imported
+from `perf/budgets.ts`: 630 ms at 2.1. The allowance keeps a single sample on
+a loaded runner from being held to the strict development budget. The deadline
+moves with that constant rather than retaining its former 750 ms product:
+
+<!-- quote:../../e2e/history.spec.ts -->
+const MARK_CEILING_MS = 300 * RUNNER_ALLOWANCE;
+<!-- /quote -->
+
+This is a suite deadline, not a new performance budget. The perf gate does not measure
 the mark: `BUDGETS` has no line for it, and the nearest one, `updateMs`, times
 an edit in a repository reaching the card of that file — the `diff-changed`
 path, which shares nothing with this one but the stream itself. A line for it

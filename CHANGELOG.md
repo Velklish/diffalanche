@@ -1816,6 +1816,10 @@ and `bun run release` refuses a version that has no section. See
   window returns to `current` before its destination is known or opens its
   first review document.
 
+- The history suite derives its header-mark deadline from 300 ms times the
+  runner allowance: 630 ms at 2.1, replacing the old fixed 750 ms. It remains
+  a suite deadline rather than a performance budget.
+
 ## [0.1.0] - 2026-09-05
 
 ### Changed

@@ -454,6 +454,8 @@ suite runs in CI too. Off CI it first asks the load precondition `bun run perf`
 asks, and on a machine that stays busy it says `unable to measure` without
 building or running anything; a red run that ended on a busy machine says so
 under the report ([reference/08-ui.md](docs/reference/08-ui.md#ui-tests)).
+The history suite's header mark has a separate deadline: 300 ms times
+`RUNNER_ALLOWANCE`, 630 ms at 2.1 ([reason](docs/reference/11-perf.md#waits-in-the-suites)).
 
 `bun run test:e2e` is the other Playwright suite: the acceptance criteria of the
 specification, one named test each, run against the binary rather than the

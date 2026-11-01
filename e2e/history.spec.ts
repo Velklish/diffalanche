@@ -4,6 +4,7 @@ import { join } from "node:path";
 import { fileURLToPath } from "node:url";
 import type { APIRequestContext, Page } from "@playwright/test";
 import { expect, test } from "@playwright/test";
+import { RUNNER_ALLOWANCE } from "../perf/budgets.ts";
 import { dataDirOf } from "../src/core/storage/index.ts";
 
 /** The task history (DA-56): the menu's two groups, a row's scope, close and reopen, and the mark a
@@ -16,9 +17,9 @@ const SESSION = "synth";
  * configuration that could have named another one (DA-54.1). */
 const DATA = dataDirOf(join(root, FIXTURE));
 
-/** The mark's only ceiling, 2.5 times the 300 ms of a live update; no gate line measures it
+/** The mark's suite deadline follows the runner allowance on 300 ms; no gate line measures it
  * ([11-perf.md](../docs/reference/11-perf.md), "The header mark's ceiling"). */
-const MARK_CEILING_MS = 750;
+const MARK_CEILING_MS = 300 * RUNNER_ALLOWANCE;
 
 function cli(...args: string[]): string {
   return execFileSync("bun", ["run", "src/cli/index.ts", ...args, "--root", FIXTURE], {
