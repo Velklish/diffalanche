@@ -1,6 +1,5 @@
 # DA-134 · Expose the language of Russian and English interface text
 
-- **Order:** 990
 - **Scope:** [08-ui](../../reference/08-ui.md)
 - **Created:** 2026-11-01
 - **Dependencies:** none
@@ -8,6 +7,8 @@
 - **Audit finding:** PQA-204
 - **Audit priority:** P2
 - **Evidence status:** confirmed_markup
+- **Previous order:** 990
+- **Taken:** 2026-11-01
 
 
 ## Execution authorization — 2026-11-01
