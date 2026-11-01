@@ -1267,3 +1267,119 @@ it("does not reread an empty captured repository after its target changes before
   });
   expect((await readDiffCache(f.config.dataDir, "work"))?.repositories).toEqual([]);
 });
+
+it("CLI diff keeps an empty captured repository when its target changes before reconciliation", async () => {
+  const f = await fixture();
+  writeFileSync(f.file, f.text);
+  const realRead = repositoryReads.readRepositoryChange;
+  let calls = 0;
+  let capturedSha = "";
+  let out = "";
+  let err = "";
+  vi.spyOn(repositoryReads, "readRepositoryChange").mockImplementation(async (...args) => {
+    const change = await realRead(...args);
+    calls += 1;
+    if (calls === 1) {
+      expect(change.files).toEqual([]);
+      capturedSha = change.base?.sha ?? "";
+      writeFileSync(f.file, `${prefix}${f.text}`);
+    }
+    return change;
+  });
+  try {
+    const code = await run(
+      ["diff", "--root", f.root, "--data-dir", f.config.dataDir, "--review", "work", "--json"],
+      { read: async () => null },
+      {
+        out: (text) => {
+          out += text;
+        },
+        err: (text) => {
+          err += text;
+        },
+        input: async () => "",
+      },
+    );
+    expect(code, err).toBe(0);
+  } finally {
+    vi.restoreAllMocks();
+  }
+  expect(capturedSha).toBe(f.git("rev-parse", "HEAD").trim());
+  expect(await get(f.config.dataDir, "work", f.comment.id)).toMatchObject({
+    line: 2,
+    status: "open",
+    anchor: f.comment.anchor,
+  });
+  expect(JSON.parse(out).repositories).toEqual([]);
+  expect(JSON.parse(out)).not.toHaveProperty("changes");
+  expect(JSON.parse(out)).not.toHaveProperty("removed");
+  expect((await readDiffCache(f.config.dataDir, "work"))?.repositories).toEqual([]);
+  expect(calls).toBe(1);
+});
+
+describe("staged rename with a recreated source path", () => {
+  it("follows a historical verified comment to the staged rename instead of the recreated copy", async () => {
+    const f = await fixture();
+    expect(f.comment.anchor?.revision?.path).toBe("a.ts");
+    f.git("mv", "a.ts", "b.ts");
+    writeFileSync(f.file, f.text);
+    expect(await refresh(f)).toMatchObject({
+      path: "b.ts",
+      line: 2,
+      status: "open",
+      originalAnchor: { path: "a.ts", line: 2 },
+    });
+  });
+
+  it("keeps a new comment on the recreated added path after a staged rename", async () => {
+    const f = await fixture();
+    f.git("mv", "a.ts", "b.ts");
+    writeFileSync(f.file, f.text);
+    await writeDiffCache(
+      f.config.dataDir,
+      "work",
+      (await scanReview(f.config, { mode: "head" })).cache,
+    );
+    f.comment = await addComment(
+      f.config.dataDir,
+      "work",
+      {
+        repo: "repo",
+        path: "a.ts",
+        line: 2,
+        severity: "nit",
+        body: "new copy comment",
+        author: "human",
+        role: "human",
+      },
+      { source: fileSourceAt(f.root, f.config.dataDir) },
+    );
+    expect(f.comment.anchor).not.toHaveProperty("revision");
+    expect(await refresh(f)).toMatchObject({ path: "a.ts", line: 2, status: "open" });
+  });
+
+  it.each(["scope", "exclude"])(
+    "keeps the historical anchor orphaned when its staged rename target is filtered by %s",
+    async (filter) => {
+      const f = await fixture();
+      if (filter === "scope") {
+        await updateSession(f.config.dataDir, "work", (draft) => {
+          draft.review.scope = [{ repo: "repo", paths: ["a.ts"] }];
+        });
+      } else f.config.exclude = ["b.ts"];
+      f.git("mv", "a.ts", "b.ts");
+      writeFileSync(f.file, f.text);
+      expect(await refresh(f)).toMatchObject({
+        path: "a.ts",
+        line: 2,
+        status: "orphaned",
+        anchor: f.comment.anchor,
+      });
+      expect(await list(f.config.dataDir, "work", { status: "all" })).toHaveLength(1);
+      expect((await createReviewService(f.config).document("work")).warnings).toContainEqual({
+        path: "repo",
+        message: "1 comments lost their anchor in repo",
+      });
+    },
+  );
+});
