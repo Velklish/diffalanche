@@ -55,11 +55,12 @@ Any other errno from the socket is rethrown as it is and keeps the stack trace
 and exit code 2: those two sentences are the whole of what this file words, and
 an `EPERM` is exactly what the tool did not expect.
 
-**Which of the two a privileged port gets depends on the runtime.** Binding port
-1 as an ordinary user is `EACCES` under Node and `EADDRINUSE` under Bun, so the
-same command answers "is not allowed for this user" on one channel and "is
-already in use" on the other. Both are a `ListenError` and both exit 1; the
-errno is the runtime's and is not translated.
+**Privileged-port policy depends on the host and runtime.**
+A non-root identity does not establish whether a privileged port is allowed.
+A host may permit the bind; a refused bind may report `EACCES` or `EADDRINUSE`.
+The errno actually returned selects the sentence above. Tests inject `EACCES`
+at the runtime interface and check allowed binds separately, with awaited
+server and watcher cleanup.
 
 With `--verbose` every request is one line on stderr — method, path, status,
 duration. Without it the server writes nothing but its own failures.

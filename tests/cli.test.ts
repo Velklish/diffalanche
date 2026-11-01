@@ -686,21 +686,6 @@ describe("a listening socket the environment refuses", () => {
       await new Promise<void>((closed) => held.close(() => closed()));
     }
   }, 60_000);
-
-  it("says the same about a port this user may not have", async (context) => {
-    // Before the call, not after it: root binds port 1, and the run would then
-    // leave a socket and a watcher behind with nothing asserted.
-    if (process.getuid?.() === 0) {
-      context.skip("this run is root, which may bind port 1, so nothing refuses it here");
-    }
-    const refused = await inRoot("serve", "--port", "1");
-    expect(refused.code).toBe(1);
-    // Node says EACCES for a privileged port and Bun EADDRINUSE, so the shape
-    // is what this pins rather than which of the two sentences (07-server.md).
-    expect(refused.err).toMatch(
-      /^diffalanche: port 1 (is not allowed for this user: run with --port <n> above 1023|is already in use: stop the diffalanche that holds it, or run with --port <n>)\n$/,
-    );
-  }, 60_000);
 });
 
 describe("a data directory that cannot be written", () => {

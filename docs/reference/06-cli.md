@@ -554,6 +554,13 @@ can show, two processes on one data directory, is in
 `tests/scope.test.ts` call `run` the same way, so the help text the README is
 held to is the text both delivery channels print.
 
+`tests/cli-listen.test.ts` injects a listen-permission refusal at the runtime
+interface: `EACCES` must print one diagnostic and return 1 without leaving its
+watcher running. Separate allowed-bind cases close the server and watcher in
+`finally`, including when the fixture fails, then bind the same loopback port
+again. No case infers a port policy from the process identity
+([07-server.md](07-server.md)).
+
 `tests/readme-cli.test.ts` holds the README's CLI reference to the CLI's own
 `--help`. Both are written by hand, in different files, and the one that goes
 stale is the README: a reader who trusts it types a flag that does not exist.
