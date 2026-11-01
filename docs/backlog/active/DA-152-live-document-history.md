@@ -50,7 +50,7 @@ what the window was served. A task the watcher already follows — the current
 one, or one another window is on — keeps its own snapshot, and what was served
 of it is dropped by the next burst that follows it:
 
-<!-- quote:../../../src/core/watcher/index.ts -->
+<!-- quote:before:../../../src/core/watcher/index.ts -->
 ```ts
     reloadMetadata(followed, reviews);
     for (const name of followed) served.delete(name);
@@ -198,7 +198,7 @@ CLI or by a third window. The watcher compares the statuses of the sessions it l
 session that is no longer listed produces no frame, because `sessions-changed` carries a
 `status` and there is none for "gone":
 
-<!-- quote:../../../src/core/watcher/index.ts -->
+<!-- quote:before:../../../src/core/watcher/index.ts -->
     for (const [name, status] of next) {
       if (sessions.get(name) !== status) bus.emit({ type: "sessions-changed", name, status });
     }

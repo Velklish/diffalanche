@@ -28,12 +28,13 @@ The polling fallback drops symbolic links from its snapshot even though Git diff
 ## Work to do
 
 - Include symlink directory entries in polling and relevant per-directory snapshots using no-follow metadata/target semantics.
-- Detect create, delete, and target replacement without traversing target directories or reading target content. Correct the misleading comment that links are not part of the tree.
+- Detect create, delete, and target replacement using no-follow entry metadata. Do not traverse stable link targets or read their content. Reject detected path replacements before publication under the concurrency limitation approved below. Correct the misleading comment that links are not part of the tree.
 
 ## Acceptance criteria
 
 - With recursive:false, link creation, deletion, and retarget each produce the expected path notification and refreshed Git patch.
-- Changes to an outside target alone do not cause traversal or disclose target content.
+- Changes to a stable outside target alone do not traverse it or disclose its content.
+- When concurrent path replacement is detected, discard the affected enumeration before publishing its paths. Internal directory-name enumeration during a replacement race is permitted; atomic zero-enumeration is not required.
 - Dangling links remain observable and ordinary file snapshot behavior is preserved.
 
 ## Verification
@@ -52,3 +53,7 @@ Audit finding PQA-102; evidence snapshot `087d3330128f8762ff88b0a9f7a7151dca8db0
 ## Next step
 
 The owner reviews and approves this item individually before it is queued for implementation. Creating this card does not authorize product changes.
+
+## Owner decision — 2026-11-01 (interactive execution)
+
+The owner selected “Принять явное ограничение” in the completed interactive question. The accepted contract is ordinary no-follow link handling plus rejection of detected replacement before publication. A racing replacement can cause internal directory-name enumeration; document that limit explicitly. Do not claim an atomic no-traversal guarantee, and do not add a native/OS layer in this run. The original evidence is retained; the previous strict race interpretation is superseded by this explicit decision. Regression checks must still prove detected-replacement rejection and the stable-link behavior, with meaningful mutation sensitivity.
