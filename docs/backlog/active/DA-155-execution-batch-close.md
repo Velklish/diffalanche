@@ -1,9 +1,10 @@
 # DA-155 · Bring documentation current for the authorized execution range
 
-- **Order:** 1290
 - **Scope:** changed source scopes; [reference](../../reference/README.md)
 - **Created:** 2026-11-01
 - **Dependencies:** the final implementation candidate is frozen
+- **Previous order:** 1290
+- **Taken:** 2026-11-01
 
 ## Context
 
