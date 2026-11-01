@@ -410,6 +410,10 @@ it("documents the native directory watches and the platform of lifecycle measure
   expect(reference).toContain(
     "including dangling links. It never follows a link into a target directory",
   );
+  expect(reference).toContain("The explicitly named root may itself be a link.");
+  expect(reference).toContain(
+    "components are checked with `lstat` before watching, listing and reporting their",
+  );
 });
 
 it("selects a native backend that reports a new-directory burst", async () => {
@@ -463,6 +467,39 @@ describe("a native save through an ignored temporary name", () => {
       rmSync(dir, { recursive: true, force: true });
     }
   });
+});
+
+it("does not enter a watched directory replaced by a link, through an explicit root link", async () => {
+  const fixture = mkdtempSync(join(tmpdir(), "diffalanche-tree-link-replacement-"));
+  const realRoot = join(fixture, "root");
+  const dir = join(fixture, "named-root");
+  const outside = join(fixture, "outside");
+  mkdirSync(join(realRoot, "d", "sub"), { recursive: true });
+  mkdirSync(join(outside, "sub"), { recursive: true });
+  writeFileSync(join(outside, "secret.txt"), "outside content");
+  writeFileSync(join(outside, "sub", "secret.txt"), "outside child content");
+  symlinkSync(realRoot, dir);
+  const tree = start(dir, () => false, 250, perDirectory);
+  try {
+    await arm(tree, dir);
+    await write(tree, dir, "d/sub/armed");
+    const from = tree.heard.length;
+    rmSync(join(dir, "d"), { recursive: true });
+    symlinkSync(outside, join(dir, "d"));
+    await write(tree, dir, "marker-replaced");
+    expect(tree.heard.slice(from)).toContain("d");
+    expect(tree.heard.slice(from).some((path) => path.includes("secret"))).toBe(false);
+
+    writeFileSync(join(outside, "late-secret.txt"), "later outside content");
+    writeFileSync(join(outside, "sub", "late-secret.txt"), "later child content");
+    await write(tree, dir, "marker-later");
+    expect(tree.heard.slice(from).some((path) => path.includes("secret"))).toBe(false);
+    expect(tree.tree.polling()).toBe(false);
+    expect(tree.fellBack()).toBe(0);
+  } finally {
+    tree.tree.close();
+    rmSync(fixture, { recursive: true, force: true });
+  }
 });
 
 describe("symbolic links in the polling tree", () => {

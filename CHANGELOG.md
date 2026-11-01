@@ -20,13 +20,16 @@ and `bun run release` refuses a version that has no section. See
 
 - The polling watcher reports symbolic link creation, deletion and retargeting,
   including dangling links, without traversing targets outside the watched tree.
+  Directory snapshots reject a watched child replaced by a link; an explicitly
+  named root may itself be a link.
 
 - macOS checks recursive delivery after directory creation and chooses directory
   watches when that lifecycle probe fails. A working recursive backend keeps its
   original path; Bun continues hearing directories created or replaced later.
 
 - Native watcher fault-injection tests install their stubs independently of the
-  runtime capability probe. A measured false capability keeps its polling path.
+  runtime capability probe. A false macOS measurement selects native directory
+  watches first; polling remains the fallback when those cannot start.
 
 ### Added
 

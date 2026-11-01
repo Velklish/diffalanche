@@ -120,7 +120,11 @@ interface walks the tree on a timer and compares modification time, size, inode
 and change time. Symbolic links are
 entries too: the walk compares their target strings using `lstat` and `readlink`,
 including dangling links. It never follows a link into a target directory or
-reads target content, so changing an outside target alone produces no change. A watch that **dies after it started** says so once,
+reads target content, so changing an outside target alone produces no change.
+The explicitly named root may itself be a link. Below that root, directory
+components are checked with `lstat` before watching, listing and reporting their
+entries; a watched directory replaced by a link loses its descendant watches.
+An entry removed and restored between checks is not detected by that check. A watch that **dies after it started** says so once,
 through `onFallback`. A session that **walks from the start** says so once too,
 through `onWalk`: the probe below found no supported native path, or
 `watch` itself refused one tree when it was built — Node's
@@ -453,8 +457,10 @@ What it costs:
   The kernel's per-user watch count is spent per directory the rules let in,
   where the emulation spent it per path.
 - **The update path.** It adds, per event, one `readdir` of the directory the
-  event names, no-follow metadata reads for its file entries, and one `stat`
-  of each watched directory inside it. A child whose directory change time
+  event names and no-follow metadata reads for its file entries. Directory
+  identity checks read the named root with `stat` and each component below it
+  with `lstat`, before and after listings and before reporting discovered entries.
+  A child whose directory change time
   moved is reconciled too. Names wait for this work before being reported.
   The following measurements predate file-stamp comparison and were taken on
   the 4-core container of 2026-09-29, not on the development machine, with nine a side of

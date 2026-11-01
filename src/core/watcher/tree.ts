@@ -134,9 +134,18 @@ function skipped(error: unknown): boolean {
 /** A directory's inode with its birth and change times, or `null` when it is gone. */
 type Identity = { ino: bigint; birth: bigint; change: bigint };
 
-async function identity(path: string): Promise<Identity | null> {
+async function identity(dir: string, relative: string): Promise<Identity | null> {
   try {
-    const info = await stat(path, { bigint: true });
+    // The named root may itself be a link; every component below it must be a real directory.
+    let path = dir;
+    let info = await stat(path, { bigint: true });
+    for (const part of relative.split("/")) {
+      if (part === "") continue;
+      path = join(path, part);
+      info = await lstat(path, { bigint: true });
+      if (!info.isDirectory()) return null;
+    }
+    if (!info.isDirectory()) return null;
     return { ino: info.ino, birth: info.birthtimeNs, change: info.ctimeNs };
   } catch {
     return null;
@@ -256,7 +265,7 @@ export function perDirectory(
    * since they may have been written before its watch existed. */
   async function arm(relative: string, fresh: boolean): Promise<void> {
     // Read before the watch is taken: a replacement in between is then seen as one later.
-    const id = await identity(join(options.dir, relative));
+    const id = await identity(options.dir, relative);
     if (id === null || closed) return;
     const taken = take(relative);
     if (taken === "skipped") return;
@@ -267,6 +276,11 @@ export function perDirectory(
     try {
       entries = await readdir(join(options.dir, relative), { withFileTypes: true });
     } catch {
+      forget(relative);
+      return;
+    }
+    const current = await identity(options.dir, relative);
+    if (current === null || !same(id, current)) {
       forget(relative);
       return;
     }
@@ -281,14 +295,14 @@ export function perDirectory(
       }
     }
     await Promise.all(below);
-    if (fresh && !closed) {
+    if (fresh && !closed && (await identity(options.dir, relative)) !== null) {
       for (const path of baseline.keys()) options.onChange(path);
     }
   }
 
   /** A watched directory that is gone, or another under its name, is watched again from scratch. */
   async function recheck(path: string): Promise<void> {
-    const id = await identity(join(options.dir, path));
+    const id = await identity(options.dir, path);
     const known = identities.get(path);
     if (closed || !watches.has(path) || known === undefined) return;
     if (id !== null) {
@@ -307,11 +321,19 @@ export function perDirectory(
   /** Finds the directories that came, went or were replaced: by listing and by identity rather
    * than by the event's name, which Bun drops when several changes share one read (05-watcher.md). */
   async function listOnce(relative: string): Promise<void> {
+    if ((await identity(options.dir, relative)) === null) {
+      forget(relative);
+      return;
+    }
     const previous = files.get(relative);
     let entries: Dirent[];
     try {
       entries = await readdir(join(options.dir, relative), { withFileTypes: true });
     } catch {
+      forget(relative);
+      return;
+    }
+    if ((await identity(options.dir, relative)) === null) {
       forget(relative);
       return;
     }
@@ -328,6 +350,10 @@ export function perDirectory(
     }
     await Promise.all(checks);
     if (closed || files.get(relative) !== previous) return;
+    if ((await identity(options.dir, relative)) === null) {
+      forget(relative);
+      return;
+    }
     if (previous !== undefined) {
       for (const [path, stamp] of next) {
         if (previous.get(path) !== stamp) options.onChange(path);
@@ -433,6 +459,7 @@ async function snapshot(dir: string, ignore: Ignore): Promise<Map<string, string
   const pending: string[] = [""];
   while (pending.length > 0) {
     const relative = pending.pop() as string;
+    if ((await identity(dir, relative)) === null) continue;
     let entries: Dirent[];
     try {
       entries = await readdir(join(dir, relative), { withFileTypes: true });
@@ -441,11 +468,14 @@ async function snapshot(dir: string, ignore: Ignore): Promise<Map<string, string
       // not an error: the next walk will not have it either.
       continue;
     }
+    if ((await identity(dir, relative)) === null) continue;
     for (const entry of entries) {
       const path = relative === "" ? entry.name : `${relative}/${entry.name}`;
       if (entry.isDirectory() && !ignore(path, "dir")) pending.push(path);
     }
-    for (const [path, stamp] of await entrySnapshot(dir, relative, entries, ignore)) {
+    const entriesNow = await entrySnapshot(dir, relative, entries, ignore);
+    if ((await identity(dir, relative)) === null) continue;
+    for (const [path, stamp] of entriesNow) {
       files.set(path, stamp);
     }
   }
