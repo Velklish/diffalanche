@@ -1743,6 +1743,24 @@ and `bun run release` refuses a version that has no section. See
 - **An overlay no longer sends the draft behind it.** `⌘⏎` and `Ctrl+Enter`
   leave the composer intact until the overlay is closed.
 
+- Native directory watchers compare file stamps on events, so a save renamed
+  through an ignored temporary name still refreshes its target under Bun.
+
+- The polling watcher reports symbolic link creation, deletion and retargeting,
+  including dangling links, without traversing targets outside the watched tree.
+  Directory snapshots reject a watched child replaced by a link; an explicitly
+  named root may itself be a link.
+
+- macOS checks recursive delivery after directory creation and chooses directory
+  watches when that lifecycle probe fails. A working recursive backend keeps its
+  original path; Bun continues hearing directories created or replaced later.
+  Explicit directory adapters use a proven recursive registration on macOS and
+  keep non-recursive registrations when that measurement is false.
+
+- Native watcher fault-injection tests install their stubs independently of the
+  runtime capability probe. A false Linux or macOS measurement still tries native
+  directory watches; polling remains the fallback when those cannot start.
+
 ## [0.1.0] - 2026-09-05
 
 ### Changed

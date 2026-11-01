@@ -1,8 +1,8 @@
 /** One directory tree: the recursive `fs.watch` where the runtime has it, a walk on a timer where
  * not (05-watcher.md, "What it watches…"). Paths are relative, with forward slashes. */
 import type { Dirent, FSWatcher } from "node:fs";
-import { watch } from "node:fs";
-import { mkdir, mkdtemp, readdir, rm, stat, writeFile } from "node:fs/promises";
+import { mkdirSync, watch, writeFileSync } from "node:fs";
+import { lstat, mkdir, mkdtemp, readdir, readlink, rm, stat, writeFile } from "node:fs/promises";
 import { join } from "node:path";
 
 /** Whether a path is a directory to walk into or a file to report. */
@@ -86,9 +86,19 @@ export function watchTree(options: TreeWatcherOptions): TreeWatcher {
 }
 
 function native(options: TreeWatcherOptions, onFailure: () => void): TreeSource | null {
-  // inotify does not recurse, and Node 22 emulates it per inode, losing a file replaced by rename
-  // after the first time (05-watcher.md, "One watch per directory on Linux").
-  if (process.platform === "linux") return perDirectory(options, onFailure);
+  // A failed macOS recursive lifecycle probe selects directory watches; Linux always uses them.
+  if (
+    process.platform === "linux" ||
+    (process.platform === "darwin" &&
+      capability !== null &&
+      "recursive" in capability &&
+      !capability.recursive)
+  )
+    return perDirectory(options, onFailure);
+  return recursiveNative(options, onFailure);
+}
+
+function recursiveNative(options: TreeWatcherOptions, onFailure: () => void): TreeSource | null {
   try {
     const watcher = watch(
       options.dir,
@@ -124,21 +134,39 @@ function skipped(error: unknown): boolean {
 /** A directory's inode with its birth and change times, or `null` when it is gone. */
 type Identity = { ino: bigint; birth: bigint; change: bigint };
 
-async function identity(path: string): Promise<Identity | null> {
+async function identity(dir: string, relative: string): Promise<Identity | null> {
   try {
-    const info = await stat(path, { bigint: true });
+    // The named root may itself be a link; every component below it must be a real directory.
+    let path = dir;
+    let info = await stat(path, { bigint: true });
+    for (const part of relative.split("/")) {
+      if (part === "") continue;
+      path = join(path, part);
+      info = await lstat(path, { bigint: true });
+      if (!info.isDirectory()) return null;
+    }
+    if (!info.isDirectory()) return null;
     return { ino: info.ino, birth: info.birthtimeNs, change: info.ctimeNs };
   } catch {
     return null;
   }
 }
 
-/** One non-recursive watch per directory the ignore rules let in, taken by the tree itself: a
+/** One watch per directory the ignore rules let in, taken by the tree itself: a
  * directory's inode outlives every rename into it (05-watcher.md, "One watch per directory…"). */
-function perDirectory(options: TreeWatcherOptions, onFailure: () => void): TreeSource | null {
+export function perDirectory(
+  options: TreeWatcherOptions,
+  onFailure: () => void,
+): TreeSource | null {
+  const recursive =
+    process.platform === "darwin" &&
+    capability !== null &&
+    "recursive" in capability &&
+    capability.recursive;
   const watches = new Map<string, FSWatcher>();
   // Which directory each watch is on: one removed and made again under its name is another.
   const identities = new Map<string, Identity>();
+  const files = new Map<string, Map<string, string>>();
   // Birth times count once one differs from its change time: without statx libuv reports the
   // change time in its place, which moves with every entry (05-watcher.md).
   let births = false;
@@ -156,6 +184,7 @@ function perDirectory(options: TreeWatcherOptions, onFailure: () => void): TreeS
     closed = true;
     for (const watcher of watches.values()) watcher.close();
     watches.clear();
+    files.clear();
   };
 
   const fail = (): void => {
@@ -205,6 +234,7 @@ function perDirectory(options: TreeWatcherOptions, onFailure: () => void): TreeS
         watcher.close();
         watches.delete(path);
         identities.delete(path);
+        files.delete(path);
       }
     }
   };
@@ -217,7 +247,7 @@ function perDirectory(options: TreeWatcherOptions, onFailure: () => void): TreeS
     try {
       watcher = watch(
         join(options.dir, relative),
-        { persistent: false, encoding: "utf8" },
+        { recursive, persistent: false, encoding: "utf8" },
         (event, name) => onEvent(relative, event, name),
       );
     } catch (error) {
@@ -236,14 +266,24 @@ function perDirectory(options: TreeWatcherOptions, onFailure: () => void): TreeS
     return "taken";
   };
 
+  async function heldDirectory(relative: string, watcher: FSWatcher | undefined): Promise<boolean> {
+    if (watcher === undefined) return false;
+    const id = await identity(options.dir, relative);
+    if (closed || watches.get(relative) !== watcher) return false;
+    if (id !== null) return true;
+    forget(relative);
+    return false;
+  }
+
   /** Watches a directory and every one below it; one found after the start reports its files,
    * since they may have been written before its watch existed. */
   async function arm(relative: string, fresh: boolean): Promise<void> {
     // Read before the watch is taken: a replacement in between is then seen as one later.
-    const id = await identity(join(options.dir, relative));
+    const id = await identity(options.dir, relative);
     if (id === null || closed) return;
     const taken = take(relative);
     if (taken === "skipped") return;
+    const watching = watches.get(relative);
     learn(id);
     // Only the call that took the watch says what it is on; another arm read a later directory.
     if (taken === "taken") identities.set(relative, id);
@@ -251,30 +291,45 @@ function perDirectory(options: TreeWatcherOptions, onFailure: () => void): TreeS
     try {
       entries = await readdir(join(options.dir, relative), { withFileTypes: true });
     } catch {
-      forget(relative);
+      if (watches.get(relative) === watching) forget(relative);
       return;
     }
+    const current = await identity(options.dir, relative);
+    if (closed || watches.get(relative) !== watching) return;
+    if (current === null || !same(id, current)) {
+      if (taken === "taken" && identities.get(relative) === id) forget(relative);
+      return;
+    }
+    const baseline = await entrySnapshot(options.dir, relative, entries, options.ignore);
+    if (!(await heldDirectory(relative, watching))) return;
+    if (!files.has(relative)) files.set(relative, baseline);
     const below: Promise<void>[] = [];
     for (const entry of entries) {
       if (closed) break;
       const path = within(relative, entry.name);
       if (entry.isDirectory()) {
         if (!watches.has(path) && !options.ignore(path, "dir")) below.push(arm(path, fresh));
-      } else if (fresh && entry.isFile() && !options.ignore(path, "file")) {
-        options.onChange(path);
       }
     }
     await Promise.all(below);
+    if (fresh && (await heldDirectory(relative, watching))) {
+      for (const path of baseline.keys()) options.onChange(path);
+    }
   }
 
   /** A watched directory that is gone, or another under its name, is watched again from scratch. */
   async function recheck(path: string): Promise<void> {
-    const id = await identity(join(options.dir, path));
+    const id = await identity(options.dir, path);
     const known = identities.get(path);
     if (closed || !watches.has(path) || known === undefined) return;
     if (id !== null) {
       learn(id);
-      if (same(id, known)) return;
+      if (same(id, known)) {
+        identities.set(path, id);
+        // A parent event can arrive before this directory's own event, so changed entries are read now.
+        if (id.change !== known.change) await relist(path);
+        return;
+      }
     }
     forget(path);
     if (id !== null) await arm(path, true);
@@ -283,13 +338,18 @@ function perDirectory(options: TreeWatcherOptions, onFailure: () => void): TreeS
   /** Finds the directories that came, went or were replaced: by listing and by identity rather
    * than by the event's name, which Bun drops when several changes share one read (05-watcher.md). */
   async function listOnce(relative: string): Promise<void> {
+    const watching = watches.get(relative);
+    if (!(await heldDirectory(relative, watching))) return;
+    const previous = files.get(relative);
     let entries: Dirent[];
     try {
       entries = await readdir(join(options.dir, relative), { withFileTypes: true });
     } catch {
-      forget(relative);
+      if (watches.get(relative) === watching) forget(relative);
       return;
     }
+    if (!(await heldDirectory(relative, watching))) return;
+    const next = await entrySnapshot(options.dir, relative, entries, options.ignore);
     const present = new Set<string>();
     const checks: Promise<void>[] = [];
     for (const entry of entries) {
@@ -301,6 +361,17 @@ function perDirectory(options: TreeWatcherOptions, onFailure: () => void): TreeS
       checks.push(watches.has(path) ? recheck(path) : arm(path, true));
     }
     await Promise.all(checks);
+    if (closed || files.get(relative) !== previous) return;
+    if (!(await heldDirectory(relative, watching))) return;
+    if (previous !== undefined) {
+      for (const [path, stamp] of next) {
+        if (previous.get(path) !== stamp) options.onChange(path);
+      }
+      for (const path of previous.keys()) {
+        if (!next.has(path)) options.onChange(path);
+      }
+    }
+    files.set(relative, next);
     for (const path of [...watches.keys()]) {
       const parent = path.slice(0, Math.max(0, path.lastIndexOf("/")));
       if (path !== relative && parent === relative && !present.has(path)) forget(path);
@@ -327,10 +398,10 @@ function perDirectory(options: TreeWatcherOptions, onFailure: () => void): TreeS
   }
 
   function onEvent(relative: string, event: string, name: string | null): void {
-    if (closed) return;
-    if (name !== null && name !== "") {
-      const path = within(relative, String(name));
-      if (!options.ignore(path, "file")) report(path);
+    // Recursive registrations report only immediate names; each child owns its events.
+    if (closed || (recursive && name?.includes("/"))) return;
+    const path = name === null || name === "" ? null : within(relative, String(name));
+    if (path !== null) {
       // A rename naming a watched directory made or removed that name: its watch is renewed
       // whatever the identity says, which a filesystem without a birth time cannot tell.
       if (event === "rename" && watches.has(path)) {
@@ -339,6 +410,7 @@ function perDirectory(options: TreeWatcherOptions, onFailure: () => void): TreeS
       }
     }
     track(relist(relative));
+    if (path !== null && !options.ignore(path, "file")) report(path);
   }
 
   try {
@@ -391,12 +463,13 @@ function polling(options: TreeWatcherOptions): TreeSource {
   };
 }
 
-/** Every file of the tree with the stamp a change moves: modification time and size. */
+/** Every file and link entry of the tree with its no-follow stamp. */
 async function snapshot(dir: string, ignore: Ignore): Promise<Map<string, string>> {
   const files = new Map<string, string>();
   const pending: string[] = [""];
   while (pending.length > 0) {
     const relative = pending.pop() as string;
+    if ((await identity(dir, relative)) === null) continue;
     let entries: Dirent[];
     try {
       entries = await readdir(join(dir, relative), { withFileTypes: true });
@@ -405,22 +478,40 @@ async function snapshot(dir: string, ignore: Ignore): Promise<Map<string, string
       // not an error: the next walk will not have it either.
       continue;
     }
+    if ((await identity(dir, relative)) === null) continue;
     for (const entry of entries) {
       const path = relative === "" ? entry.name : `${relative}/${entry.name}`;
-      if (entry.isDirectory()) {
-        if (!ignore(path, "dir")) pending.push(path);
-        continue;
-      }
-      // Symbolic links are not followed, the way the scanner does not follow
-      // them: a link out of the tree is not part of it.
-      if (!entry.isFile() || ignore(path, "file")) continue;
-      try {
-        const info = await stat(join(dir, path));
-        files.set(path, `${info.mtimeMs}:${info.size}`);
-      } catch {
-        // Gone between the listing and the stat; the walk that sees it missing
-        // reports it as a change.
-      }
+      if (entry.isDirectory() && !ignore(path, "dir")) pending.push(path);
+    }
+    const entriesNow = await entrySnapshot(dir, relative, entries, ignore);
+    if ((await identity(dir, relative)) === null) continue;
+    for (const [path, stamp] of entriesNow) {
+      files.set(path, stamp);
+    }
+  }
+  return files;
+}
+
+/** A directory's file and link entries, without reading file content or following link targets. */
+async function entrySnapshot(
+  dir: string,
+  relative: string,
+  entries: Dirent[],
+  ignore: Ignore,
+): Promise<Map<string, string>> {
+  const files = new Map<string, string>();
+  for (const entry of entries) {
+    const path = relative === "" ? entry.name : `${relative}/${entry.name}`;
+    if ((!entry.isFile() && !entry.isSymbolicLink()) || ignore(path, "file")) continue;
+    try {
+      const absolute = join(dir, path);
+      const info = await lstat(absolute);
+      const stamp = info.isSymbolicLink()
+        ? `link:${await readlink(absolute)}`
+        : `${info.mtimeMs}:${info.size}:${info.ino}:${info.ctimeMs}`;
+      files.set(path, stamp);
+    } catch {
+      // An entry gone between the listing and its metadata read is absent from this snapshot.
     }
   }
   return files;
@@ -431,12 +522,19 @@ async function snapshot(dir: string, ignore: Ignore): Promise<Map<string, string
 export async function supportsRecursiveWatch(dir: string): Promise<boolean> {
   // The answer is the runtime's, not the directory's, so it is asked once and
   // every watcher after the first gets it without writing anything.
-  probed ??= probeRecursiveWatch(dir);
-  return probed;
+  if (capability === null) {
+    const pending = probeRecursiveWatch(dir).then((answer) => {
+      capability = { recursive: answer };
+      return answer;
+    });
+    capability = { pending };
+  }
+  return "pending" in capability ? capability.pending : capability.recursive;
 }
 
 /** The answer of this process, once it has one. */
-let probed: Promise<boolean> | null = null;
+type Capability = { pending: Promise<boolean> } | { recursive: boolean };
+let capability: Capability | null = null;
 
 /** How the probe writes. A test that has to make the write fail brings its own. */
 type ProbeWrite = (path: string, data: string) => Promise<void>;
@@ -450,12 +548,15 @@ export async function probeRecursiveWatch(
   try {
     await mkdir(dir, { recursive: true });
     probe = await mkdtemp(join(dir, ".watch-probe-"));
-    const nested = join(probe, "nested");
-    await mkdir(nested);
+    const nested = join(probe, "nested", "created");
     const watched = probe;
     return await new Promise<boolean>((resolve) => {
       let source: TreeSource | null = null;
+      let finished = false;
+      let creating = false;
       const done = (answer: boolean): void => {
+        if (finished) return;
+        finished = true;
         clearTimeout(timer);
         clearInterval(writing);
         source?.close();
@@ -467,20 +568,32 @@ export async function probeRecursiveWatch(
       // Written again and again: a watch that arms a moment after `watch` returns, as Bun's does,
       // misses a single write and would answer "cannot recurse" for the whole run.
       const writing = setInterval(() => {
-        void write(join(nested, "deep"), `probe ${Date.now()}`).catch(() => undefined);
+        if (!creating)
+          void write(join(watched, "armed"), `probe ${Date.now()}`).catch(() => undefined);
       }, PROBE_WRITE_MS);
-      // The watch the trees take, so the answer is about the one that will run.
+      // Root delivery precedes creating the directory: initial recursion alone does not prove lifecycle.
       const onChange = (name: string): void => {
-        if (name.includes("deep")) done(true);
+        if (finished) return;
+        if (name === "armed" && !creating) {
+          creating = true;
+          try {
+            mkdirSync(nested, { recursive: true });
+            writeFileSync(join(nested, "deep"), "probe");
+          } catch {
+            done(false);
+          }
+        }
+        if (name === "nested/created/deep") done(true);
       };
-      source = native({ dir: watched, ignore: () => false, onChange }, () => done(false));
+      const take = process.platform === "darwin" ? recursiveNative : native;
+      source = take({ dir: watched, ignore: () => false, onChange }, () => done(false));
       if (source === null) {
         done(false);
         return;
       }
       // A filesystem already refusing writes answers now rather than after the
       // timeout, and the probe still returns a boolean instead of throwing.
-      void write(join(nested, "deep"), "probe").catch(() => done(false));
+      void write(join(watched, "armed"), "probe").catch(() => done(false));
     });
   } catch {
     return false;

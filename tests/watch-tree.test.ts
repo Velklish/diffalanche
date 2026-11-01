@@ -1,15 +1,25 @@
 /** The watch per directory of `src/core/watcher/tree.ts` on its own: directories that come, go and
  * come back, one it may not read, and a watch the kernel refuses (05-watcher.md, "One watch…"). */
 import { execFile, execFileSync } from "node:child_process";
-import { chmodSync, mkdirSync, mkdtempSync, rmSync, writeFileSync } from "node:fs";
+import {
+  chmodSync,
+  mkdirSync,
+  mkdtempSync,
+  readFileSync,
+  renameSync,
+  rmSync,
+  symlinkSync,
+  unlinkSync,
+  writeFileSync,
+} from "node:fs";
 import { tmpdir } from "node:os";
 import { join } from "node:path";
 import { fileURLToPath } from "node:url";
 import { promisify } from "node:util";
-import { describe, expect, it, vi } from "vitest";
+import { beforeAll, describe, expect, it, vi } from "vitest";
 import { repositoryIgnore } from "../src/core/watcher/index.ts";
-import type { Ignore, TreeWatcher } from "../src/core/watcher/tree.ts";
-import { watchTree } from "../src/core/watcher/tree.ts";
+import type { Ignore, TreeWatcher, TreeWatcherOptions } from "../src/core/watcher/tree.ts";
+import { perDirectory, supportsRecursiveWatch, watchTree } from "../src/core/watcher/tree.ts";
 import { needsTypeScript } from "./helpers/typescript.ts";
 
 const run = promisify(execFile);
@@ -21,8 +31,7 @@ const refusal = vi.hoisted(() => ({ left: Number.POSITIVE_INFINITY }));
 vi.mock("node:fs", async (importOriginal) => {
   const real = await importOriginal<typeof import("node:fs")>();
   const watch = ((...args: Parameters<typeof real.watch>) => {
-    const options = args[1] as { recursive?: boolean } | undefined;
-    if (options?.recursive !== true) {
+    if (Number.isFinite(refusal.left)) {
       if (refusal.left <= 0) {
         throw Object.assign(new Error("ENOSPC: System limit for number of file watchers reached"), {
           code: "ENOSPC",
@@ -35,14 +44,28 @@ vi.mock("node:fs", async (importOriginal) => {
   return { ...real, default: { ...real, watch }, watch };
 });
 
-const LINUX = process.platform === "linux";
+const DIRS = process.platform === "linux" || process.platform === "darwin";
 
 /** Whether every change is reported by name: Node's watch does, Bun's names one per read. */
 const NATIVE_NAMES = process.env.DIFFALANCHE_TEST_RUNTIME !== "bun";
 
+beforeAll(async () => {
+  const dir = mkdtempSync(join(tmpdir(), "diffalanche-tree-capability-"));
+  try {
+    await supportsRecursiveWatch(dir);
+  } finally {
+    rmSync(dir, { recursive: true, force: true });
+  }
+});
+
 type Tree = { tree: TreeWatcher; heard: string[]; fellBack: () => number };
 
-function start(dir: string, ignore: Ignore = () => false, pollIntervalMs = 250): Tree {
+function start(
+  dir: string,
+  ignore: Ignore = () => false,
+  pollIntervalMs = 250,
+  native: TreeWatcherOptions["native"] = DIRS ? perDirectory : undefined,
+): Tree {
   const heard: string[] = [];
   let fellBack = 0;
   const tree = watchTree({
@@ -53,6 +76,7 @@ function start(dir: string, ignore: Ignore = () => false, pollIntervalMs = 250):
       fellBack += 1;
     },
     pollIntervalMs,
+    ...(native === undefined ? {} : { native }),
   });
   return { tree, heard, fellBack: () => fellBack };
 }
@@ -319,30 +343,27 @@ function dropsCapabilities(): boolean {
 }
 
 describe("a watch the kernel refuses", () => {
-  it.skipIf(!LINUX)(
-    "walks a root it cannot take, and hears it once the root is there",
-    async () => {
-      const parent = mkdtempSync(join(tmpdir(), "diffalanche-tree-noroot-"));
-      const dir = join(parent, "root");
-      const tree = start(dir, () => false, 20);
-      try {
-        await tree.tree.ready;
-        expect(tree.tree.polling()).toBe(true);
-        mkdirSync(dir);
-        await write(tree, dir, "a.ts");
-      } finally {
-        tree.tree.close();
-        rmSync(parent, { recursive: true, force: true });
-      }
-    },
-  );
+  it.skipIf(!DIRS)("walks a root it cannot take, and hears it once the root is there", async () => {
+    const parent = mkdtempSync(join(tmpdir(), "diffalanche-tree-noroot-"));
+    const dir = join(parent, "root");
+    const tree = start(dir, () => false, 20, perDirectory);
+    try {
+      await tree.tree.ready;
+      expect(tree.tree.polling()).toBe(true);
+      mkdirSync(dir);
+      await write(tree, dir, "a.ts");
+    } finally {
+      tree.tree.close();
+      rmSync(parent, { recursive: true, force: true });
+    }
+  });
 
   // `fs.watch` is refused past a count, the way inotify refuses once the user's watches run out.
-  it.skipIf(!LINUX)("hands the tree to the walk when the start runs out of watches", async () => {
+  it.skipIf(!DIRS)("hands the tree to the walk when the start runs out of watches", async () => {
     const dir = mkdtempSync(join(tmpdir(), "diffalanche-tree-enospc-"));
     for (let one = 0; one < 6; one += 1) mkdirSync(join(dir, `d${one}`, "e"), { recursive: true });
     refusal.left = 3;
-    const tree = start(dir, () => false, 20);
+    const tree = start(dir, () => false, 20, perDirectory);
     try {
       const deadline = performance.now() + 20_000;
       while (tree.fellBack() === 0) {
@@ -359,10 +380,10 @@ describe("a watch the kernel refuses", () => {
     }
   });
 
-  it.skipIf(!LINUX)("hands the tree to the walk when a new directory runs it out", async () => {
+  it.skipIf(!DIRS)("hands the tree to the walk when a new directory runs it out", async () => {
     const dir = mkdtempSync(join(tmpdir(), "diffalanche-tree-enospc-late-"));
     mkdirSync(join(dir, "a"));
-    const tree = start(dir, () => false, 20);
+    const tree = start(dir, () => false, 20, perDirectory);
     try {
       await arm(tree, dir);
       refusal.left = 1;
@@ -378,6 +399,163 @@ describe("a watch the kernel refuses", () => {
       refusal.left = Number.POSITIVE_INFINITY;
       tree.tree.close();
       rmSync(dir, { recursive: true, force: true });
+    }
+  });
+});
+
+it("documents the native directory watches and the platform of lifecycle measurements", () => {
+  const reference = readFileSync(
+    new URL("../docs/reference/05-watcher.md", import.meta.url),
+    "utf8",
+  );
+  expect(reference).toContain(
+    "On macOS the lifecycle probe chooses recursive or per-directory native watching.",
+  );
+  expect(reference).not.toContain("nothing in it has gone\nquiet under Bun's runner");
+  expect(reference).toContain(
+    "An ignored temporary name can therefore still report the target replaced by",
+  );
+  expect(reference).toContain(
+    "including dangling links. It never follows a link into a target directory",
+  );
+  expect(reference).toContain("The explicitly named root may itself be a link.");
+  expect(reference).toContain("A false Linux or macOS result still tries native directory watches");
+  expect(reference).toContain(
+    "components are checked with `lstat` before watching, listing and reporting their",
+  );
+});
+
+it("selects a native backend that reports a new-directory burst", async () => {
+  const dir = mkdtempSync(join(tmpdir(), "diffalanche-tree-selected-"));
+  const heard: string[] = [];
+  let fellBack = 0;
+  try {
+    await supportsRecursiveWatch(dir);
+    const tree = watchTree({
+      dir,
+      ignore: () => false,
+      onChange: (path) => heard.push(path),
+      onFallback: () => {
+        fellBack += 1;
+      },
+    });
+    const observed = { tree, heard, fellBack: () => fellBack };
+    try {
+      await arm(observed, dir);
+      const from = heard.length;
+      sh(`mkdir -p "${dir}/made/deep" && printf x > "${dir}/made/deep/first.ts"`);
+      await heardAfter(observed, from, "made/deep/first.ts");
+      expect(tree.polling()).toBe(false);
+      expect(fellBack).toBe(0);
+    } finally {
+      tree.close();
+    }
+  } finally {
+    rmSync(dir, { recursive: true, force: true });
+  }
+});
+
+describe("a native save through an ignored temporary name", () => {
+  it("reports the rename target three times without relying on the event name", async () => {
+    const dir = mkdtempSync(join(tmpdir(), "diffalanche-tree-rename-"));
+    writeFileSync(join(dir, "file.ts"), "before");
+    const tree = start(dir, (path) => path.endsWith(".tmp"));
+    try {
+      await arm(tree, dir);
+      for (let round = 0; round < 3; round += 1) {
+        const from = tree.heard.length;
+        sh(
+          `printf 'save-${round}' > "${dir}/file.ts.tmp" && mv "${dir}/file.ts.tmp" "${dir}/file.ts"`,
+        );
+        await heardAfter(tree, from, "file.ts");
+      }
+      expect(tree.tree.polling()).toBe(false);
+      expect(tree.fellBack()).toBe(0);
+    } finally {
+      tree.tree.close();
+      rmSync(dir, { recursive: true, force: true });
+    }
+  });
+});
+
+it("does not enter a watched directory replaced by a link, through an explicit root link", async () => {
+  const fixture = mkdtempSync(join(tmpdir(), "diffalanche-tree-link-replacement-"));
+  const realRoot = join(fixture, "root");
+  const dir = join(fixture, "named-root");
+  const outside = join(fixture, "outside");
+  mkdirSync(join(realRoot, "d", "sub"), { recursive: true });
+  mkdirSync(join(outside, "sub"), { recursive: true });
+  writeFileSync(join(outside, "secret.txt"), "outside content");
+  writeFileSync(join(outside, "sub", "secret.txt"), "outside child content");
+  symlinkSync(realRoot, dir);
+  const tree = start(dir, () => false, 250, perDirectory);
+  try {
+    await arm(tree, dir);
+    await write(tree, dir, "d/sub/armed");
+    const from = tree.heard.length;
+    rmSync(join(dir, "d"), { recursive: true });
+    symlinkSync(outside, join(dir, "d"));
+    await write(tree, dir, "marker-replaced");
+    expect(tree.heard.slice(from)).toContain("d");
+    expect(tree.heard.slice(from).some((path) => path.includes("secret"))).toBe(false);
+
+    writeFileSync(join(outside, "late-secret.txt"), "later outside content");
+    writeFileSync(join(outside, "sub", "late-secret.txt"), "later child content");
+    await write(tree, dir, "marker-later");
+    expect(tree.heard.slice(from).some((path) => path.includes("secret"))).toBe(false);
+    expect(tree.tree.polling()).toBe(false);
+    expect(tree.fellBack()).toBe(0);
+  } finally {
+    tree.tree.close();
+    rmSync(fixture, { recursive: true, force: true });
+  }
+});
+
+describe("symbolic links in the polling tree", () => {
+  it("reports link entries without following their targets, including dangling links", async () => {
+    const dir = mkdtempSync(join(tmpdir(), "diffalanche-tree-links-"));
+    const outside = mkdtempSync(join(tmpdir(), "diffalanche-tree-target-"));
+    const heard: string[] = [];
+    const tree = watchTree({
+      dir,
+      ignore: () => false,
+      recursive: false,
+      pollIntervalMs: 10,
+      onChange: (path) => heard.push(path),
+    });
+    const observed = { tree, heard, fellBack: () => 0 };
+    let marker = 0;
+    const barrier = async (): Promise<void> => {
+      await write(observed, dir, `marker-${marker++}`);
+    };
+    try {
+      await tree.ready;
+      let from = heard.length;
+      symlinkSync(outside, join(dir, "link"));
+      await barrier();
+      expect(heard.slice(from)).toContain("link");
+
+      from = heard.length;
+      writeFileSync(join(outside, "secret.txt"), "outside content");
+      await barrier();
+      await barrier();
+      expect(heard.slice(from).filter((path) => !path.startsWith("marker-"))).toEqual([]);
+
+      from = heard.length;
+      symlinkSync("missing-target", join(dir, "next"));
+      renameSync(join(dir, "next"), join(dir, "link"));
+      await barrier();
+      expect(heard.slice(from)).toContain("link");
+
+      from = heard.length;
+      unlinkSync(join(dir, "link"));
+      await barrier();
+      expect(heard.slice(from)).toContain("link");
+      expect(heard.some((path) => path.includes("secret"))).toBe(false);
+    } finally {
+      tree.close();
+      rmSync(dir, { recursive: true, force: true });
+      rmSync(outside, { recursive: true, force: true });
     }
   });
 });

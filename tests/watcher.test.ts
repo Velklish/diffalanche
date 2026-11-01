@@ -9,6 +9,8 @@ import {
   readFileSync,
   renameSync,
   rmSync,
+  symlinkSync,
+  unlinkSync,
   writeFileSync,
 } from "node:fs";
 import { readFile, rm, writeFile } from "node:fs/promises";
@@ -353,9 +355,17 @@ beforeAll(async () => {
     },
   });
 
-  // Both trees the tests below write into, and before any of them measures.
+  // Every tree the tests below write into proves delivery before any case measures it.
   await arm(REPO);
   await arm(OTHER_REPO);
+  const deadline = performance.now() + 20_000;
+  for (let attempt = 0; ; attempt += 1) {
+    if (reported.some((one) => one.dir === config.dataDir && one.path.startsWith("armed-data-")))
+      break;
+    if (performance.now() > deadline) throw new Error("the data directory watch never armed");
+    await writeFile(join(config.dataDir, `armed-data-${attempt}`), "");
+    await new Promise((done) => setTimeout(done, 50));
+  }
 }, 120_000);
 
 afterAll(async () => {
@@ -1001,10 +1011,174 @@ describe("what a repository's watch reports", () => {
 });
 
 describe("watching a tree", () => {
-  it("finds that this runtime's recursive watch really recurses", async () => {
-    // Node from 20.13 and Bun from 1.1 recurse on macOS, Linux, and Windows; a
-    // runtime that does not is what the probe exists to catch.
-    expect(await supportsRecursiveWatch(config.dataDir)).toBe(true);
+  it("refreshes the Git patch when polling creates, retargets and deletes a link", async () => {
+    const dataDir = mkdtempSync(join(tmpdir(), "diffalanche-poll-link-"));
+    const outside = mkdtempSync(join(tmpdir(), "diffalanche-poll-outside-"));
+    mkdirSync(join(dataDir, "reviews", SESSION), { recursive: true });
+    for (const name of ["review.json", "comments.json", "diff.json"]) {
+      copyFileSync(
+        join(config.dataDir, "reviews", SESSION, name),
+        join(dataDir, "reviews", SESSION, name),
+      );
+    }
+    writeFileSync(join(dataDir, "current"), `${SESSION}\n`);
+    const own = createEventBus();
+    let changed = 0;
+    own.subscribe((event) => {
+      if (event.type === "diff-changed" && event.repo === REPO) changed += 1;
+    });
+    const walking = await startWatcher({
+      config: { ...config, dataDir },
+      scan: found,
+      bus: own,
+      activity: createActivityLog(),
+      recursive: false,
+      pollIntervalMs: 10,
+      debounceMs: 10,
+    });
+    const link = join(root, REPO, "observed-link");
+    let linked = false;
+    const patch = async (after: number, target: string | null): Promise<string> => {
+      const deadline = performance.now() + 20_000;
+      let result: string | undefined;
+      do {
+        const cache = await readDiffCache(dataDir, SESSION);
+        result = cache?.repositories
+          .find((repo) => repo.path === REPO)
+          ?.files.find((file) => file.path === "observed-link")?.patch;
+        if (
+          changed > after &&
+          (target === null ? result === undefined : result?.includes(`+${target}`))
+        )
+          return result ?? "";
+        await new Promise((done) => setTimeout(done, 5));
+      } while (performance.now() < deadline);
+      throw new Error(`link patch did not refresh for ${target}`);
+    };
+    try {
+      const target = join(outside, "secret.txt");
+      writeFileSync(target, "SECRET-OUTSIDE-CONTENT");
+      let before = changed;
+      symlinkSync(target, link);
+      linked = true;
+      const created = await patch(before, target);
+      expect(created).toContain("new file mode 120000");
+      expect(created).not.toContain("SECRET-OUTSIDE-CONTENT");
+
+      before = changed;
+      symlinkSync("missing-target", `${link}.next`);
+      renameSync(`${link}.next`, link);
+      expect(await patch(before, "missing-target")).toContain("new file mode 120000");
+
+      before = changed;
+      unlinkSync(link);
+      linked = false;
+      expect(await patch(before, null)).toBe("");
+    } finally {
+      await walking.close();
+      if (linked) unlinkSync(link);
+      rmSync(dataDir, { recursive: true, force: true });
+      rmSync(outside, { recursive: true, force: true });
+      await settle();
+    }
+  });
+
+  it("announces three native rename saves through a Git-ignored temporary name", async () => {
+    const dataDir = mkdtempSync(join(tmpdir(), "diffalanche-native-rename-"));
+    const ignorePath = join(root, REPO, ".gitignore");
+    const ignoreBefore = existsSync(ignorePath) ? readFileSync(ignorePath) : null;
+    const file = join(root, REPO, "rename-observed.ts");
+    writeFileSync(ignorePath, `${ignoreBefore?.toString() ?? ""}\n*.tmp\n`);
+    mkdirSync(join(dataDir, "reviews", SESSION), { recursive: true });
+    for (const name of ["review.json", "comments.json", "diff.json"]) {
+      copyFileSync(
+        join(config.dataDir, "reviews", SESSION, name),
+        join(dataDir, "reviews", SESSION, name),
+      );
+    }
+    writeFileSync(join(dataDir, "current"), `${SESSION}\n`);
+    const own = createEventBus();
+    let changed = 0;
+    let walks = 0;
+    let fallbacks = 0;
+    own.subscribe((event) => {
+      if (event.type === "diff-changed" && event.repo === REPO) changed += 1;
+    });
+    const native = await startWatcher({
+      config: { ...config, dataDir },
+      scan: found,
+      bus: own,
+      activity: createActivityLog(),
+      recursive: true,
+      debounceMs: 10,
+      onWalk: () => {
+        walks += 1;
+      },
+      onFallback: () => {
+        fallbacks += 1;
+      },
+    });
+    const cached = async (): Promise<string> => {
+      const cache = await readDiffCache(dataDir, SESSION);
+      return (
+        cache?.repositories
+          .find((repo) => repo.path === REPO)
+          ?.files.find((entry) => entry.path === "rename-observed.ts")?.patch ?? ""
+      );
+    };
+    try {
+      const deadline = performance.now() + 20_000;
+      while (!(await cached()).includes("native-armed")) {
+        if (performance.now() > deadline) throw new Error("native rename watch never armed");
+        writeFileSync(file, "native-armed");
+        await new Promise((done) => setTimeout(done, 50));
+      }
+      for (let round = 0; round < 3; round += 1) {
+        const before = changed;
+        writeFileSync(`${file}.tmp`, `native-save-${round}`);
+        renameSync(`${file}.tmp`, file);
+        const until = performance.now() + 20_000;
+        while (changed === before || !(await cached()).includes(`native-save-${round}`)) {
+          if (performance.now() > until)
+            throw new Error(`no diff-changed for native save ${round}`);
+          await new Promise((done) => setTimeout(done, 5));
+        }
+        expect(await cached()).toContain(`+native-save-${round}`);
+      }
+      expect(walks).toBe(0);
+      expect(fallbacks).toBe(0);
+    } finally {
+      await native.close();
+      rmSync(file, { force: true });
+      rmSync(`${file}.tmp`, { force: true });
+      if (ignoreBefore === null) rmSync(ignorePath, { force: true });
+      else writeFileSync(ignorePath, ignoreBefore);
+      rmSync(dataDir, { recursive: true, force: true });
+      await settle();
+    }
+  });
+
+  it("uses the runtime's measured recursive capability, including a false answer", async () => {
+    const recursive = await supportsRecursiveWatch(config.dataDir);
+    let nativeUsed = false;
+    const measured = watchTree({
+      dir: config.dataDir,
+      ignore: () => false,
+      onChange: () => undefined,
+      recursive,
+      native: () => {
+        nativeUsed = true;
+        return { polling: false, ready: Promise.resolve(), close: () => undefined };
+      },
+    });
+    try {
+      await measured.ready;
+      expect(typeof recursive).toBe("boolean");
+      expect(nativeUsed).toBe(recursive);
+      expect(measured.polling()).toBe(!recursive);
+    } finally {
+      measured.close();
+    }
   }, 30_000);
 
   it("answers instead of throwing when the probe's first write fails", async () => {
@@ -1352,6 +1526,7 @@ describe("a watcher whose watches die under it", () => {
       onFallback: () => {
         fellBack += 1;
       },
+      recursive: true,
       native: (options, onFailure) => {
         failures.set(options.dir, onFailure);
         return { polling: false, ready: Promise.resolve(), close: () => undefined };
@@ -1371,7 +1546,8 @@ describe("a watcher whose watches die under it", () => {
       // Written while the watch is dying: no name for it is ever delivered, so
       // the rescan of the whole repository is the only thing that can find it.
       await writeFile(file, "export const tookOver = 1;\n");
-      (failures.get(join(root, REPO)) as () => void)();
+      expect(failures.has(join(root, REPO))).toBe(true);
+      failures.get(join(root, REPO))?.();
       await until(REPO);
       expect(changedIn(REPO)).toBe(true);
       expect(fellBack).toBe(1);
@@ -1379,7 +1555,8 @@ describe("a watcher whose watches die under it", () => {
       // A second tree going the same way is the same runtime giving up, so the
       // rescan arrives again and the word about it does not.
       await writeFile(other, "export const tookOver = 2;\n");
-      (failures.get(join(root, OTHER_REPO)) as () => void)();
+      expect(failures.has(join(root, OTHER_REPO))).toBe(true);
+      failures.get(join(root, OTHER_REPO))?.();
       await until(OTHER_REPO);
       expect(changedIn(OTHER_REPO)).toBe(true);
       expect(fellBack).toBe(1);
@@ -1407,6 +1584,7 @@ describe("a watcher whose watches die under it", () => {
         changed += 1;
       },
       // Watches that deliver nothing: the takeover is the only thing here that can speak.
+      recursive: true,
       native: (options, onFailure) => {
         failures.set(options.dir, onFailure);
         return { polling: false, ready: Promise.resolve(), close: () => undefined };
@@ -1416,7 +1594,8 @@ describe("a watcher whose watches die under it", () => {
       expect(changed).toBe(0);
       // A write made while the watch died is in the walk's baseline, so a held document hears
       // of it from the takeover or from nothing.
-      (failures.get(dataDir) as () => void)();
+      expect(failures.has(dataDir)).toBe(true);
+      failures.get(dataDir)?.();
       const deadline = performance.now() + 20_000;
       while (changed === 0 && performance.now() < deadline) {
         await new Promise((done) => setTimeout(done, 5));
@@ -1494,7 +1673,8 @@ describe("a watcher that walks from the start", () => {
     });
     try {
       expect(walks).toBe(1);
-      (failures.get(join(root, OTHER_REPO)) as () => void)();
+      expect(failures.has(join(root, OTHER_REPO))).toBe(true);
+      failures.get(join(root, OTHER_REPO))?.();
       // The takeover's rescan comes after its report, so by then the line was said or not.
       const deadline = performance.now() + 20_000;
       while (!changed.includes(OTHER_REPO) && performance.now() < deadline) {
@@ -1988,6 +2168,7 @@ describe("closing a watcher", () => {
       bus: own,
       activity: createActivityLog(),
       pollIntervalMs: 40,
+      recursive: true,
       native: (options, onFailure) => {
         failing.set(options.dir, onFailure);
         return { polling: false, ready: Promise.resolve(), close: () => undefined };
@@ -1996,7 +2177,8 @@ describe("closing a watcher", () => {
     const file = join(root, REPO, "drained.ts");
     try {
       await writeFile(file, "export const drained = 1;\n");
-      (failing.get(join(root, REPO)) as () => void)();
+      expect(failing.has(join(root, REPO))).toBe(true);
+      failing.get(join(root, REPO))?.();
       const deadline = performance.now() + 20_000;
       while (changed.length === 0 && performance.now() < deadline) {
         await new Promise((done) => setTimeout(done, 1));
