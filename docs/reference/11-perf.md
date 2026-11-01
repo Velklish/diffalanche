@@ -545,7 +545,23 @@ one browser is never hurt by it, because nothing is left to take the old numbers
 but the exit. The server and the CLI give no child process more than the three
 standard descriptors, so the product is not on the path this trace followed —
 as far as the extra-stdio assumption holds, that only a child with more than
-three stdio entries is hit.
+three stdio entries is hit. The historical trace was not retained.
+
+A bounded reproduction on 2026-11-01, Bun 1.3.14 on Linux arm64, used two
+sequential children with five `pipe` stdio slots and no browser. After the
+first child exited, the second reused its extra descriptors 17 and 19.
+Forcing garbage collection made both disappear from the parent and the
+second child report `EPIPE` and exit 23 in two independent trials. Without
+forced collection, and with Node 22.23.2 as the parent, the child exited 0
+and neither descriptor disappeared. These observations reproduce the pipe
+lifetime failure; they do not recover the lost syscall trace.
+
+[The matching Bun report](https://github.com/oven-sh/bun/issues/47561) already
+exists, so another report would duplicate it. Its automated maintainer response
+claims a fix from Bun 1.4.0; that version was not tested here. The pinned runtime
+and one-browser-per-process harness remain in place until the fixed-runtime
+browser loop is verified.
+
 
 `perf/gate.ts` prints one row per budget line and exits 1 when the **median** of any line is
 over its ceiling. Two slow runs do not fail the build; three do. Five and not

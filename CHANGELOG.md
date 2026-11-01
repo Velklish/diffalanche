@@ -759,6 +759,11 @@ and `bun run release` refuses a version that has no section. See
 
 ### Fixed
 
+- The performance reference records the reduced Bun 1.3.14 extra-stdio
+  reproduction and existing upstream report, distinguishing the retained
+  observations from the lost historical trace. Runtime and harness isolation
+  are unchanged.
+
 - The performance reference records a 29.7 ms file-jump median against the
   50 ms budget on an eight-core M1 Pro, measured through the mounted-diff
   reveal path on 2026-11-01 at `8604e919`.

@@ -440,6 +440,9 @@ The recorded file-jump median is 29.7 ms against 50 ms on an eight-core M1 Pro
 trees. Each repetition has a ten-minute hang deadline; a failure identifies
 the repetition, exits 1 and keeps earlier raw samples on stderr without a final
 table ([comparison](docs/reference/11-perf.md#what-the-gate-resolves-and-comparing-two-trees)).
+Each browser remains in a separate process: the pinned Bun 1.3.14 reproduces
+extra-stdio loss after garbage collection; the [upstream report](https://github.com/oven-sh/bun/issues/47561)
+already tracks it. A fixed-runtime browser loop has not been verified here.
 
 The scanner, embedding index and model-delivery permission tests need non-root
 POSIX mode bits for literal `EACCES`; their documented skips and separate
