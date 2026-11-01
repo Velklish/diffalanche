@@ -25,4 +25,17 @@ describe("current documentation contracts", () => {
     expect(ui).not.toContain("the only red primary in the product");
     expect(ui).not.toContain("the only place in the product that destroys review data");
   });
+
+  it("distinguishes Phase 2 implementation from acceptance and Phase 4", () => {
+    for (const file of ["docs/ROADMAP.md", "docs/reference/README.md"]) {
+      const summary = prose(file);
+      expect(summary).toContain("embedding model, index, suggestions");
+      expect(summary).toContain("Phase 2 acceptance remains open");
+      expect(summary).toContain("quiet-machine embedding performance evidence");
+      expect(summary).not.toContain("only the embedding model exists yet");
+      expect(summary).not.toMatch(/Phase 2.*?Offline\. Not started/);
+    }
+    expect(prose("docs/reference/README.md")).toContain("generative model and insights belong to Phase 4");
+  });
+
 });
