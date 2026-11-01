@@ -1809,7 +1809,9 @@ and `bun run release` refuses a version that has no section. See
   through an ignored temporary name still refreshes its target under Bun.
 
 - The polling watcher reports symbolic link creation, deletion and retargeting,
-  including dangling links, without traversing targets outside the watched tree.
+  including dangling links, without following stable targets or reading their content.
+  Detected concurrent replacements discard the affected enumeration before
+  publication; a race can still cause internal directory-name enumeration.
   Directory snapshots reject a watched child replaced by a link; an explicitly
   named root may itself be a link.
 

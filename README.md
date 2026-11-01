@@ -136,6 +136,11 @@ returns to where the reading was. Worktree file reads refuse linked directory
 ancestors and show a direct symlink's target string; the named-root exception and
 concurrent-swap limit are in the [Git reference](docs/reference/02-git.md#browsing-a-repository).
 
+The watcher observes symbolic link entries without following stable targets.
+Detected path replacements are discarded before publication; concurrent
+replacement can still cause internal directory-name enumeration
+([watcher reference](docs/reference/05-watcher.md#what-it-watches-and-what-it-ignores)).
+
 A root with no session is not an error — the server says so and the UI offers to
 create one:
 

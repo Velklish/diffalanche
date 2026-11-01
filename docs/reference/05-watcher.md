@@ -119,11 +119,15 @@ Linux](#one-watch-per-directory-on-linux)); where neither is there, the same
 interface walks the tree on a timer and compares modification time, size, inode
 and change time. Symbolic links are
 entries too: the walk compares their target strings using `lstat` and `readlink`,
-including dangling links. It never follows a link into a target directory or
-reads target content, so changing an outside target alone produces no change.
+including dangling links. Stable links are not followed into target directories
+and target content is not read, so changing an outside target alone produces no change.
 The explicitly named root may itself be a link. Below that root, directory
 components are checked with `lstat` before watching, listing and reporting their
 entries; a watched directory replaced by a link loses its descendant watches.
+When a concurrent path replacement is detected, the affected enumeration is
+discarded before its paths are published. A replacement race can still cause
+internal directory-name enumeration between checks. These checks do not provide
+an atomic zero-enumeration guarantee; no native or OS layer closes that window.
 A listing keeps the watch it started on: stale work cannot close its replacement.
 An entry removed and restored between checks is not detected by that check. A watch that **dies after it started** says so once,
 through `onFallback`. A session that **walks from the start** says so once too,
