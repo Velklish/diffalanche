@@ -15,6 +15,15 @@ and `bun run release` refuses a version that has no section. See
 
 ### Fixed
 
+- CLI standard output and error treat `ENOTCONN`, like `EPIPE`, as an absent
+  reader and stop writing silently. Other stream faults still set exit code 2.
+  The early-reader child fixture uses its own color environment and awaits
+  stream closure, including when both color variables are set in its parent.
+
+- Listen-permission tests inject `EACCES` instead of assuming that a non-root
+  user cannot bind port 1. Allowed-bind fixtures await server and watcher
+  cleanup after both success and fixture failure, then rebind the same port.
+
 - The configuration-refusal regression records `diff-index`, the production
   command, and a permitted read proves the recorder sees it. Assertions and
   positive-control failures both restore `PATH` and remove the temporary shim.

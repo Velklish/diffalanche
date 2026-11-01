@@ -29,7 +29,7 @@ function guarded(stream: Stream, name: string, err: Stream): (text: string) => v
   stream.on("error", (error) => {
     // `diffalanche diff | head` is a normal way to use a CLI: the reader got
     // what it asked for, so there is nothing to report and nothing to fail.
-    if (error.code === "EPIPE") {
+    if (error.code === "EPIPE" || error.code === "ENOTCONN") {
       gone = true;
       return;
     }
