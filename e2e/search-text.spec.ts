@@ -104,29 +104,52 @@ for (const failure of ["http", "network"]) {
 }
 
 test("an obsolete text failure does not replace the new query", async ({ page }) => {
-  let release = () => {};
-  const held = new Promise<void>((resolve) => {
-    release = resolve;
-  });
-  let finished = false;
-  let firstStarted = false;
-  await page.route("**/api/search/text?*", async (route) => {
-    if (new URL(route.request().url()).searchParams.get("q") === "old-query") {
-      firstStarted = true;
-      await held;
-      await route.abort("failed").catch(() => {});
-      finished = true;
-    } else await route.fulfill({ json: { hits: [], next: null, total: 0, capped: false } });
+  await page.addInitScript(() => {
+    const original = window.fetch;
+    window.fetch = (input, init) => {
+      const url = new URL(input instanceof Request ? input.url : String(input), location.href);
+      if (url.pathname !== "/api/search/text") return original(input, init);
+      if (url.searchParams.get("q") === "old-query") {
+        return new Promise((_resolve, reject) => {
+          Reflect.set(window, "rejectOldTextSearch", () => reject(new Error("late failure")));
+        });
+      }
+      return Promise.resolve(
+        new Response(
+          JSON.stringify({
+            hits: [
+              {
+                repo: "repos/a",
+                path: "new-result.ts",
+                line: 1,
+                text: "new-query",
+                before: [],
+                after: [],
+              },
+            ],
+            next: null,
+            total: 1,
+            capped: false,
+          }),
+        ),
+      );
+    };
   });
   await open(page);
   await page.keyboard.press("ControlOrMeta+k");
   const field = page.getByRole("textbox", { name: "search" });
   await field.fill("old-query");
-  await expect.poll(() => firstStarted).toBe(true);
+  await expect
+    .poll(() => page.evaluate(() => typeof Reflect.get(window, "rejectOldTextSearch")))
+    .toBe("function");
   await field.fill("new-query");
-  await expect(page.locator(".palette-empty")).toContainText("new-query");
-  release();
-  await expect.poll(() => finished).toBe(true);
+  const result = page.locator(".palette-hit:has(.palette-tag.text)");
+  await expect(result).toContainText("new-result.ts:1");
+  await page.evaluate(async () => {
+    Reflect.get(window, "rejectOldTextSearch")();
+    await new Promise((resolve) => setTimeout(resolve, 0));
+  });
+  await expect(result).toContainText("new-result.ts:1");
   await expect(page.getByText("Поиск текста не удался.")).toHaveCount(0);
 });
 
