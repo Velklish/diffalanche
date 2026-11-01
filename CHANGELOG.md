@@ -716,6 +716,11 @@ and `bun run release` refuses a version that has no section. See
 
 ### Fixed
 
+- Writer contention tests now observe the intended lock's `EEXIST` before
+  changing scope or restoring a cache. They also cover a delayed scope read and
+  detect a writer that finishes without reaching the lock, without calibrated
+  sleeps or production hooks.
+
 - Directory-open failures such as `EMFILE`, `EACCES` and `EIO` now report the
   durability failure as a `StorageError` after an atomic write. Only `EINVAL`
   and `ENOTSUP` skip the directory flush; the already published replacement

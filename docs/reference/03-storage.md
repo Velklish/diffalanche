@@ -285,6 +285,13 @@ over and the lock comes straight back. The refusal is on the safe side, which is
 the side a check before a write belongs on, but the reason it names is not the
 reason it fired.
 
+The writer contention tests wait for the intended writer's `mkdir` of `.lock`
+to return `EEXIST` while the holder still owns the lock. A delay before the
+scope read or the scan is not evidence of contention. The tests race that
+observation against completion, so a writer that bypasses the lock fails the
+ordering assertion; a writer delayed before its scope read proceeds through
+the same barrier. Every started writer is awaited before fixture cleanup.
+
 ## Read-modify-write
 
 `updateSession(dataDir, name, change, options?)` is **the one write path of a
