@@ -42,8 +42,11 @@ const overdue: { event: string; from: number }[] = [];
 /** Every frame of the file, for telling an overdue wait's frame late from never. */
 let observer: Reader | null = null;
 
-const read = (url: string, init: RequestInit = {}, request = fetch) =>
-  readEvents(url, init, request, overran);
+const read = (
+  url: string,
+  init: RequestInit = {},
+  request: Parameters<typeof readEvents>[2] = fetch,
+) => readEvents(url, init, request, overran);
 
 /** A wait at the deadline is kept for the report; one with a shorter limit of its own, like
  * `arm`'s, expects to run out. */
