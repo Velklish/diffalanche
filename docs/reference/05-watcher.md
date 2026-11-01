@@ -502,10 +502,12 @@ What it costs:
   143.9 ms on the branch.
 - **Failure.** A watch that fails hands the tree to the walk, the way a dying
   recursive watch does: `ENOSPC` when the user's inotify watches run out, at
-  the start or on a directory made later, or an `error` event on a directory
-  that is still there. An `error` on a directory that is gone only drops its
-  watches. The root is taken before the tree is returned, so a runtime that
-  refuses it walks from the start.
+  the start or on a directory made later, or an `error` event on the same
+  directory. A missing or linked descendant drops its watches; a different
+  directory at the same path is reconciled and watched again. A delayed check
+  acts only while its watcher still owns the path. The explicitly named root
+  may itself be a link. The root is taken before the tree is returned, so a
+  runtime that refuses it walks from the start.
 
 The ways not taken:
 

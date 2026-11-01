@@ -255,18 +255,15 @@ export function perDirectory(
       throw error;
     }
     watches.set(relative, watcher);
-    // A directory removed under its watch is not a dead watch; anything else is, and the walk
-    // takes the tree.
+    // A removed or replaced directory is reconciled; an error on the same directory fails the tree.
     watcher.on("error", () => {
-      // The stat may finish after rearm: only the watcher still owning this path may act.
-      void stat(join(options.dir, relative)).then(
-        () => {
-          if (watches.get(relative) === watcher) fail();
-        },
-        () => {
-          if (watches.get(relative) === watcher) forget(relative);
-        },
-      );
+      void identity(options.dir, relative).then((id) => {
+        if (watches.get(relative) !== watcher) return;
+        const known = identities.get(relative);
+        if (id === null) forget(relative);
+        else if (known !== undefined && !same(id, known)) track(recheck(relative));
+        else fail();
+      });
     });
     return "taken";
   };
