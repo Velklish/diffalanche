@@ -98,7 +98,7 @@ async function fixture() {
     dataDone = barrier();
     const path = `reviews/${B}/.lock`;
     const tree = trees.get(config.dataDir);
-    expect(tree?.ignore(path, "directory")).toBe(false);
+    expect(tree?.ignore(path, "dir")).toBe(false);
     tree?.onChange(path);
     await dataDone.promise;
   }

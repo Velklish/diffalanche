@@ -320,8 +320,7 @@ export async function startWatcher(options: WatcherOptions): Promise<Watcher> {
       const covered =
         files.length === 0 ||
         files.some(
-          (path) =>
-            path === ".git" || path.startsWith(".git/") || pathInScope(known, repo, path),
+          (path) => path === ".git" || path.startsWith(".git/") || pathInScope(known, repo, path),
         );
       if (covered) bus.emit({ type: "diff-changed", repo, files, session: name });
     }
