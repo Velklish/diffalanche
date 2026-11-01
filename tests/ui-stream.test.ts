@@ -120,3 +120,178 @@ describe("a comment frame that belongs to another task", () => {
     }
   });
 });
+
+function liveComment() {
+  return {
+    id: "c_one",
+    repo: null,
+    path: null,
+    side: null,
+    line: null,
+    endLine: null,
+    anchor: null,
+    severity: "warning",
+    severitySource: "manual",
+    status: "open",
+    author: "human",
+    role: "human",
+    body: "old",
+    createdAt: "2026-01-01",
+    resolvedAt: null,
+    resolvedBy: null,
+    replies: [
+      { id: "r_one", role: "agent", author: "agent", body: "reply", createdAt: "2026-01-01" },
+    ],
+  };
+}
+
+describe("a thread read across a task switch", () => {
+  const frames = ["comment-added", "reply-added", "comment-status"] as const;
+  for (const frame of frames) {
+    for (const current of [false, true]) {
+      for (const back of [false, true]) {
+        for (const failed of [false, true]) {
+          it(`${frame}: ${current ? "current" : "named"} A → B${back ? " → A" : ""}, ${failed ? "error" : "success"}`, async () => {
+            useStore.setState({
+              session: { name: "A" } as never,
+              reviewName: current ? null : "A",
+              comments: [],
+              toast: null,
+            });
+            vi.stubGlobal("EventSource", FakeSource as unknown as typeof EventSource);
+            vi.stubGlobal("document", {
+              querySelector: () => null,
+              documentElement: { scrollHeight: 0 },
+            });
+            vi.stubGlobal("requestAnimationFrame", (callback: FrameRequestCallback) => {
+              callback(0);
+              return 0;
+            });
+            let answer: (response: Response) => void = () => {};
+            const fetcher = vi.fn(
+              () =>
+                new Promise<Response>((resolve) => {
+                  answer = resolve;
+                }),
+            );
+            vi.stubGlobal("fetch", fetcher);
+            const stop = startLive();
+            try {
+              const source = FakeSource.last as FakeSource;
+              source.deliver(frame, {
+                type: frame,
+                session: "A",
+                id: frame === "reply-added" ? "r_one" : "c_one",
+                commentId: "c_one",
+              });
+              await vi.waitFor(() => expect(fetcher).toHaveBeenCalledTimes(1));
+              useStore.setState({
+                session: { name: "B" } as never,
+                reviewName: current ? null : "B",
+              });
+              if (back)
+                useStore.setState({
+                  session: { name: "A" } as never,
+                  reviewName: current ? null : "A",
+                });
+
+              answer(
+                new Response(JSON.stringify(failed ? { message: "old error" } : liveComment()), {
+                  status: failed ? 500 : 200,
+                }),
+              );
+              await new Promise((resolve) => setTimeout(resolve, 20));
+              expect(useStore.getState().comments).toEqual([]);
+              expect(useStore.getState().toast).toBeNull();
+            } finally {
+              stop();
+            }
+          });
+        }
+      }
+    }
+  }
+});
+
+describe("a current thread read", () => {
+  it("invalidates a pending read when current changes before the queued review read", async () => {
+    useStore.setState({
+      session: { name: "A" } as never,
+      reviewName: null,
+      comments: [],
+      toast: null,
+    });
+    vi.stubGlobal("EventSource", FakeSource as unknown as typeof EventSource);
+    let answer: (response: Response) => void = () => {};
+    const fetcher = vi
+      .fn()
+      .mockImplementationOnce(
+        () =>
+          new Promise<Response>((resolve) => {
+            answer = resolve;
+          }),
+      )
+      .mockImplementationOnce(() => new Promise<Response>(() => {}));
+    vi.stubGlobal("fetch", fetcher);
+    const stop = startLive();
+    try {
+      const source = FakeSource.last as FakeSource;
+      source.deliver("reply-added", {
+        type: "reply-added",
+        session: "A",
+        id: "r_one",
+        commentId: "c_one",
+      });
+      await vi.waitFor(() => expect(fetcher).toHaveBeenCalledTimes(1));
+      source.deliver("current-changed", { type: "current-changed", name: "B" });
+      answer(new Response(JSON.stringify(liveComment())));
+      await vi.waitFor(() => expect(fetcher).toHaveBeenCalledTimes(2));
+      expect(useStore.getState().comments).toEqual([]);
+      expect(useStore.getState().toast).toBeNull();
+    } finally {
+      stop();
+    }
+  });
+
+  it("keeps valid updates and counters after a same-task refresh, and processes the next frame", async () => {
+    useStore.setState({
+      session: { name: "A" } as never,
+      reviewName: null,
+      comments: [],
+      toast: null,
+    });
+    vi.stubGlobal("EventSource", FakeSource as unknown as typeof EventSource);
+    vi.stubGlobal("document", { querySelector: () => null, documentElement: { scrollHeight: 0 } });
+    vi.stubGlobal("requestAnimationFrame", (callback: FrameRequestCallback) => {
+      callback(0);
+      return 0;
+    });
+    let answer: (response: Response) => void = () => {};
+    const fetcher = vi
+      .fn()
+      .mockImplementationOnce(
+        () =>
+          new Promise<Response>((resolve) => {
+            answer = resolve;
+          }),
+      )
+      .mockResolvedValue(new Response(JSON.stringify({ ...liveComment(), status: "resolved" })));
+    vi.stubGlobal("fetch", fetcher);
+    const stop = startLive();
+    try {
+      const source = FakeSource.last as FakeSource;
+      source.deliver("comment-added", { type: "comment-added", session: "A", id: "c_one" });
+      await vi.waitFor(() => expect(fetcher).toHaveBeenCalledTimes(1));
+      useStore.setState({ session: { name: "A" } as never });
+      source.deliver("comment-status", { type: "comment-status", session: "A", id: "c_one" });
+      expect(fetcher).toHaveBeenCalledTimes(1);
+      answer(new Response(JSON.stringify(liveComment())));
+      await vi.waitFor(() => expect(fetcher).toHaveBeenCalledTimes(2));
+      await vi.waitFor(() => expect(useStore.getState().comments[0]?.status).toBe("resolved"));
+      expect(useStore.getState().comments).toHaveLength(1);
+      expect(useStore.getState().counters.counters.resolved).toBe(1);
+    } finally {
+      stop();
+    }
+  });
+});

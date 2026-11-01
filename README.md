@@ -92,6 +92,9 @@ file tree, collapsed by default, is the feed of what the server noticed while
 it has been running. The sidebar footer says `watching` while the stream is
 open and `reconnecting` while it is not.
 
+A thread read started for a task is discarded if the window switches tasks
+before it finishes, even if it has since returned to the same task.
+
 The keyboard follows the design handoff:
 
 | Key | What it does |

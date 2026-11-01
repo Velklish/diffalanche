@@ -15,6 +15,9 @@ and `bun run release` refuses a version that has no section. See
 
 ### Fixed
 
+- Late thread reads and their errors no longer update a window that has
+  switched review tasks, including a switch away and back.
+
 - CLI standard output and error treat `ENOTCONN`, like `EPIPE`, as an absent
   reader and stop writing silently. Other stream faults still set exit code 2.
   The early-reader child fixture uses its own color environment and awaits

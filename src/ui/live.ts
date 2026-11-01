@@ -26,14 +26,22 @@ const PROBE_STEP = 12;
 type Anchor = { element: Element; top: number; scrollY: number } | null;
 
 export function startLive(): () => void {
-  let stop = connect(false);
+  let generation = 0;
+  const currentGeneration = () => generation;
+  const invalidate = () => {
+    generation += 1;
+  };
+  let stop = connect(false, currentGeneration, invalidate);
   // A stream keeps the address it was made with: a task switch needs a new one, and so does the
   // footer's `reconnect` for a stream the browser gave up on.
   const unsubscribe = useStore.subscribe((state, before) => {
+    if (state.reviewName !== before.reviewName || state.session?.name !== before.session?.name) {
+      invalidate();
+    }
     const asked = state.reconnects !== before.reconnects;
     if (state.reviewName === before.reviewName && !asked) return;
     stop();
-    stop = connect(asked);
+    stop = connect(asked, currentGeneration, invalidate);
   });
   return () => {
     unsubscribe();
@@ -43,7 +51,7 @@ export function startLive(): () => void {
 
 /** `behind`: the page missed frames while it had no stream, and a new one has no `Last-Event-ID`
  * to replay them by, so the review is read again once it is open (08-ui.md, DA-96.1). */
-function connect(behind: boolean): () => void {
+function connect(behind: boolean, generation: () => number, invalidate: () => void): () => void {
   const store = () => useStore.getState();
   // The task this window is on, so the server knows whose comments to follow: a registry and not
   // a filter, the frames are one broadcast ([07-server.md](../../docs/reference/07-server.md)).
@@ -77,9 +85,14 @@ function connect(behind: boolean): () => void {
     );
   };
 
-  const on = <T>(name: string, handle: (data: T) => Promise<void> | void) => {
+  const on = <T>(
+    name: string,
+    handle: (data: T) => Promise<void> | void,
+    received?: (data: T) => void,
+  ) => {
     source.addEventListener(name, (event) => {
       const data = JSON.parse((event as MessageEvent<string>).data) as T;
+      received?.(data);
       run(async () => {
         await handle(data);
       });
@@ -92,13 +105,13 @@ function connect(behind: boolean): () => void {
   // A comment frame names its thread's task and a window drops the others: reading one would answer
   // `no-such-comment` and raise a toast for somebody else's write.
   on<Extract<WatcherEvent, { type: "comment-added" }>>("comment-added", (event) =>
-    onScreen(event.session) ? thread(event.id) : undefined,
+    onScreen(event.session) ? thread(event.id, generation) : undefined,
   );
   on<Extract<WatcherEvent, { type: "reply-added" }>>("reply-added", (event) =>
-    onScreen(event.session) ? thread(event.commentId, event.id) : undefined,
+    onScreen(event.session) ? thread(event.commentId, generation, event.id) : undefined,
   );
   on<Extract<WatcherEvent, { type: "comment-status" }>>("comment-status", (event) =>
-    onScreen(event.session) ? thread(event.id) : undefined,
+    onScreen(event.session) ? thread(event.id, generation) : undefined,
   );
   // A task's metadata changed; only the window showing it re-reads, as megabytes for another task
   // would take the reader's own review away and put it back (ADR-010).
@@ -111,11 +124,17 @@ function connect(behind: boolean): () => void {
   });
   // A window with no `?review=` shows and writes where `current` points, so it follows the pointer;
   // a window on a task of its own does not, which is what the address is for (08-ui.md).
-  on<Extract<WatcherEvent, { type: "current-changed" }>>("current-changed", (event) => {
-    if (store().reviewName !== null) return;
-    if (store().claimSelf("review", event.name)) return;
-    return store().loadReview();
-  });
+  on<Extract<WatcherEvent, { type: "current-changed" }>>(
+    "current-changed",
+    (event) => {
+      if (store().reviewName !== null) return;
+      if (store().claimSelf("review", event.name)) return;
+      return store().loadReview();
+    },
+    (event) => {
+      if (store().reviewName === null && store().session?.name !== event.name) invalidate();
+    },
+  );
   // A task appeared, was closed or reopened: news about the history, answered with a mark in the
   // header and nothing else (08-ui.md, "Closing a task, and what the mark in the header is").
   on<Extract<WatcherEvent, { type: "sessions-changed" }>>("sessions-changed", (event) => {
@@ -174,12 +193,20 @@ async function diffChanged(repo: string): Promise<void> {
 
 /** One thread, whichever event named it; `replyId` is the reply that arrived, so an agent's answer,
  * and only an agent's, is a toast as well as a line in the rail. */
-async function thread(id: string, replyId?: string): Promise<void> {
-  const response = await fetch(onTask(`/api/comments/${id}`));
-  if (!response.ok) {
-    throw new Error(`the thread ${id} could not be read: ${(await refusal(response)).message}`);
+async function thread(id: string, generation: () => number, replyId?: string): Promise<void> {
+  const asked = generation();
+  let comment: Comment;
+  try {
+    const response = await fetch(onTask(`/api/comments/${id}`));
+    if (!response.ok) {
+      throw new Error(`the thread ${id} could not be read: ${(await refusal(response)).message}`);
+    }
+    comment = (await response.json()) as Comment;
+  } catch (error) {
+    if (asked === generation()) throw error;
+    return;
   }
-  const comment = (await response.json()) as Comment;
+  if (asked !== generation()) return;
   const anchor = capture();
   const store = useStore.getState();
   store.patchThread(comment);
