@@ -144,7 +144,7 @@ describe("scan of a hand-made root", () => {
     );
     // A symbolic link to a repository, which the walk must not follow.
     symlinkSync(join(root, "repos/group/api"), join(root, "repos/group/link"));
-    mkdirSync(join(root, "repos/closed"), { recursive: true });
+    mkdirSync(join(root, "repos/closed/hidden/.git"), { recursive: true });
     chmodSync(join(root, "repos/closed"), 0o000);
   });
 
@@ -233,12 +233,30 @@ describe("scan of a hand-made root", () => {
     ]);
   });
 
-  // Root reads a directory whatever its mode, so the case cannot be staged there.
+  it("warns about a root that is a file and continues with the other roots", async () => {
+    const blocked = join(root, "not-a-directory");
+    writeFileSync(blocked, "a file, not a directory\n");
+    try {
+      const result = await scan(root, {
+        ...FULL_SCAN,
+        roots: ["not-a-directory", "repos/group/api"],
+      });
+      expect(result.warnings).toEqual([
+        { path: "not-a-directory", message: "directory cannot be read: ENOTDIR" },
+      ]);
+      expect(result.repositories.map((repo) => repo.path)).toEqual(["repos/group/api"]);
+    } finally {
+      rmSync(blocked);
+    }
+  });
+
+  // Root bypasses mode bits; the ENOTDIR case above holds the generic listing refusal there.
   it.skipIf(process.getuid?.() === 0)("warns about a directory it cannot read", async () => {
     const result = await scan(root, FULL_SCAN);
     const warning = result.warnings.find((one) => one.path === "repos/closed");
-    expect(warning?.message).toContain("directory cannot be read");
+    expect(warning?.message).toBe("directory cannot be read: EACCES");
     // The scan carries on: an unreadable directory costs its own subtree, nothing else.
     expect(result.repositories.map((repo) => repo.path)).toContain("repos/group/api");
+    expect(result.repositories.map((repo) => repo.path)).not.toContain("repos/closed/hidden");
   });
 });

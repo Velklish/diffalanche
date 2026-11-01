@@ -15,6 +15,15 @@ and `bun run release` refuses a version that has no section. See
 
 ### Fixed
 
+- Performance repetitions have a ten-minute outer deadline, including a stalled
+  child holding stdout. Comparison failures name the side and repetition, keep
+  earlier samples on stderr and exit 1 without a final comparison table.
+
+- Scanner listing-refusal coverage also runs as root through an explicit file
+  root. The real permission cases retain their OS-specific skips with the
+  reasons documented; index permission refusal also holds retained entries,
+  no new embeddings and unchanged index bytes and timestamp.
+
 - CLI standard output and error treat `ENOTCONN`, like `EPIPE`, as an absent
   reader and stop writing silently. Other stream faults still set exit code 2.
   The early-reader child fixture uses its own color environment and awaits

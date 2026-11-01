@@ -1,10 +1,11 @@
 # DA-152 · Reconcile review documents, streams and history deletion
 
-- **Order:** 880
 - **Scope:** linked source scopes; [reference](../../reference/README.md)
 - **Created:** 2026-11-01
 - **Dependencies:** retain each source condition below
 - **Cost:** minor
+- **Previous order:** 880
+- **Taken:** 2026-11-01
 
 ## Context
 

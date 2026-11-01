@@ -1403,7 +1403,22 @@ than touching it — then asks the load precondition as the gate does, builds th
 UI in both trees, and runs one `perf/run.ts` process of each tree in turn, the
 order turning every round (base, branch, branch, base, …) so a machine drifting
 one way loads both sides alike. Every sample goes to stderr with the load
-beside it. The table holds, for every measured line, both medians, the
+beside it. Each repetition has an outer ten-minute `execFileSync` deadline:
+120 seconds for ready, three 60-second update waits, and five minutes for
+startup, scrolling, session switches and cleanup. This is a hang deadline,
+not a performance budget; the recorded normal repetition is about 9 seconds.
+A deadline kills the direct repetition process with `SIGKILL`. A failed
+repetition names the side,
+its number, variant, tree and reason on stderr, exits 1 and prints no final
+table. Earlier samples remain on stderr as partial evidence. The tests shorten
+only the function's internal test bound, without a CLI or environment override,
+and use a finite child retaining stdout: the deadline must return before that
+child ends, then test cleanup waits for its actual exit. This does not promise
+that Chromium descendants stop on timeout. Bun 1.3.14 on macOS arm64 did not
+create a separate group for synchronous `detached: true`; group cleanup is not
+used. The inherited-stdout child test is POSIX-only.
+
+The table holds, for every measured line, both medians, the
 difference, and what **this run** resolves: the difference of medians that a
 random split of its own eighteen samples into two sides of nine exceeds once in
 a hundred splits, from a seeded generator so the same samples always answer the

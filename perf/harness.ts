@@ -271,6 +271,9 @@ async function taskDuration(cdp: { send: (method: "Performance.getMetrics") => P
   return metric.value;
 }
 
+/** Ready (120 s), three update waits (60 s each), and five minutes for the remaining work. */
+const REPETITION_TIMEOUT_MS = 10 * 60_000;
+
 /** One repetition is one `perf/run.ts` process in the tree it measures: Bun closes a closed browser's
  * pipes again once the next browser holds their numbers (DA-82.2, 11-perf.md "The gate"). */
 export function measureOnce(
@@ -278,14 +281,30 @@ export function measureOnce(
   variant: string,
   cwd = process.cwd(),
   lag: Options["lag"] = null,
+  timeoutMs = REPETITION_TIMEOUT_MS,
 ): Measurement {
-  // The environment is passed, not assigned: Bun hands a child the env the process started with.
-  const stdout = execFileSync("bun", repetitionArgs(fixture, variant, lag), {
-    cwd,
-    stdio: ["ignore", "pipe", "inherit"],
-    encoding: "utf8",
-    env: { ...process.env, ...fixtureEnv() },
-  });
+  let stdout: string;
+  try {
+    // The environment is passed, not assigned: Bun gives a child its original environment.
+    stdout = execFileSync("bun", repetitionArgs(fixture, variant, lag), {
+      cwd,
+      stdio: ["ignore", "pipe", "inherit"],
+      encoding: "utf8",
+      env: { ...process.env, ...fixtureEnv() },
+      timeout: timeoutMs,
+      killSignal: "SIGKILL",
+    });
+  } catch (error) {
+    const failure = error as { code?: unknown };
+    const reason =
+      failure.code === "ETIMEDOUT"
+        ? `timed out after ${timeoutMs} ms`
+        : `failed: ${error instanceof Error ? error.message : String(error)}`;
+    throw new Error(
+      `performance repetition for variant ${variant} in ${cwd} ${reason}. No measurement was recorded.`,
+      { cause: error },
+    );
+  }
   const results = JSON.parse(stdout) as Measurement[];
   const measurement = results[0];
   if (results.length !== 1 || measurement === undefined) {
