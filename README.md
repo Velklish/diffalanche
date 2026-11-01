@@ -114,7 +114,9 @@ tab lists every file of each repository, the unchanged ones marked: one opens
 whole, read-only and numbered from 1, at the working tree or at the base, and a
 comment on its lines lands in the same session as any other. `Browse repo` on a
 file card and `B` open the file being read the same way; `← back to review`
-returns to where the reading was.
+returns to where the reading was. Worktree file reads refuse linked directory
+ancestors and show a direct symlink's target string; the named-root exception and
+concurrent-swap limit are in the [Git reference](docs/reference/02-git.md#browsing-a-repository).
 
 A root with no session is not an error — the server says so and the UI offers to
 create one:

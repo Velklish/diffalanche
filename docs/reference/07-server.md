@@ -588,8 +588,11 @@ route already answers: no base resolves, no files come back, and that is the
 404 below. It compares paths and does not resolve symlinks, so a symlink inside
 the root that points out of it is still followed by this route. An untracked
 symbolic link inside that repository is reported as mode `120000`, with its
-target path read by `readlink`; the target's contents are never followed
-([02-git.md](02-git.md)).
+target path read by `readlink`; the target's contents are never followed.
+Worktree file reads refuse linked directory ancestors below the named repository
+root, while this route's named-root policy remains as described above. The
+portable reader checks replacements but has a residual concurrent-swap limitation
+([02-git.md](02-git.md#browsing-a-repository)).
 
 The refusal is the answer the route already gives — `404` with
 `error: "no-such-repository"` — rather than a code of its own: from outside, a
