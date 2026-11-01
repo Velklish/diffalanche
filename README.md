@@ -93,6 +93,8 @@ with the reading position where it was. The **agent activity** panel under the
 file tree, collapsed by default, is the feed of what the server noticed while
 it has been running. The sidebar footer says `watching` while the stream is
 open and `reconnecting` while it is not.
+The footer stays above the status bar, including when warnings are shown at the
+top of the page.
 
 The interface marks Russian text for assistive technology. User-authored
 comment and reply bodies expose an unknown language rather than guessing it.

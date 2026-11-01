@@ -4,6 +4,22 @@ import { describe, expect, it } from "vitest";
 const prose = (file: string) => readFileSync(file, "utf8").replace(/\s+/g, " ");
 
 describe("current documentation contracts", () => {
+  it("describes suggestion provenance and the visible sidebar footer", () => {
+    const ui = prose("docs/reference/08-ui.md");
+    expect(ui).toContain("A row taken from the panel keeps `auto` when its source was `auto`");
+    expect(ui).not.toContain("so is a row taken from the panel");
+    expect(ui).toContain("The sidebar measures its available height beneath its current top");
+    expect(ui).toContain(
+      "Comment and reply bodies are user-authored and are not language-detected",
+    );
+    expect(prose("docs/reference/09-ml.md")).toContain(
+      "The table labels an unconfirmed model severity `(auto)`",
+    );
+    expect(prose("docs/reference/06-cli.md")).toContain(
+      "an unconfirmed model severity is labelled `(auto)`",
+    );
+  });
+
   it("names the installed renderer, task files and top-only Escape behavior", () => {
     const handoff = prose("docs/design/HANDOFF.md");
     const pkg = JSON.parse(readFileSync("package.json", "utf8"));

@@ -1,4 +1,4 @@
-import { type KeyboardEvent, useEffect, useMemo, useRef } from "react";
+import { type KeyboardEvent, useEffect, useLayoutEffect, useMemo, useRef } from "react";
 import { byCodePoint } from "../../core/order.ts";
 import type { FileChange, RepositoryChange } from "../../core/types.ts";
 import { revealCard, revealFile } from "../reveal.ts";
@@ -13,6 +13,7 @@ import { SidebarSkeleton } from "./Skeleton.tsx";
 /** The 308 px navigation of handoff section 1.3 and its three tabs; what each shows is in
  * [08-ui.md](../../../docs/reference/08-ui.md), "Navigation" and "Browse mode". */
 export function Sidebar() {
+  const sidebar = useRef<HTMLElement>(null);
   const status = useStore((store) => store.status);
   const query = useStore((store) => store.query);
   const setQuery = useStore((store) => store.setQuery);
@@ -28,6 +29,33 @@ export function Sidebar() {
   const matches = tree.reduce((sum, entry) => sum + (entry.rows ?? entry.files).length, 0);
   const select = tab === "select";
 
+  useLayoutEffect(() => {
+    const panel = sidebar.current;
+    if (panel === null) return;
+    let frame = 0;
+    const measure = () => {
+      frame = 0;
+      panel.style.height = `${Math.max(0, window.innerHeight - 30 - panel.getBoundingClientRect().top)}px`;
+    };
+    const schedule = () => {
+      if (!frame) frame = requestAnimationFrame(measure);
+    };
+    const observer = new ResizeObserver(schedule);
+    const app = document.querySelector(".app");
+    if (app) observer.observe(app);
+    const warnings = document.querySelector(".warnings");
+    if (warnings) observer.observe(warnings);
+    window.addEventListener("scroll", schedule, { passive: true });
+    window.addEventListener("resize", schedule);
+    measure();
+    return () => {
+      observer.disconnect();
+      window.removeEventListener("scroll", schedule);
+      window.removeEventListener("resize", schedule);
+      cancelAnimationFrame(frame);
+    };
+  }, []);
+
   // The trees are read when the tab asks for them, and again after every read of the review.
   useEffect(() => {
     if (!all || status !== "ready") return;
@@ -38,7 +66,7 @@ export function Sidebar() {
   }, [all, status, repositories]);
 
   return (
-    <nav className="sidebar" aria-label="navigation">
+    <nav ref={sidebar} className="sidebar" aria-label="navigation">
       <div className="sidebar-tabs">
         <Tab tab="changes" />
         <Tab tab="all" />
@@ -117,7 +145,9 @@ function SelectBar() {
 
   return (
     <div className="select-bar">
-      <span className="select-count">{empty ? "ничего не выбрано" : scopeLabel(counted)}</span>
+      <span className="select-count" lang={empty ? "ru" : "en"}>
+        {empty ? "ничего не выбрано" : scopeLabel(counted)}
+      </span>
       <span className="spacer" />
       {empty ? null : (
         <button type="button" className="ghost small" onClick={clearSelection}>
@@ -246,7 +276,9 @@ function RepoBranch({
           {collapsed ? "▸" : "▾"}
         </span>
         {select ? <Tick mark={mark} /> : null}
-        <span className="repo-name">{repo.path}</span>
+        <span className="repo-name" lang="">
+          {repo.path}
+        </span>
         <Counter count={count} />
         <span className="repo-files">· {(rows ?? repo.files).length} files</span>
       </button>
@@ -307,7 +339,9 @@ function FileRow({
       }}
     >
       {select ? <Tick mark={picked ? "on" : "off"} /> : null}
-      <span className="file-name">{file.path}</span>
+      <span className="file-name" lang="">
+        {file.path}
+      </span>
       <span className="spacer" />
       <span className="add">+{file.additions}</span>
       <span className="del">−{file.deletions}</span>

@@ -52,6 +52,71 @@ async function open(page: Page) {
   await expect(page.locator(".sidebar-foot")).toContainText("watching");
 }
 
+test("the connection footer is above the status bar at scroll zero", async ({ page }) => {
+  await open(page);
+  await page.evaluate(() => window.scrollTo(0, 0));
+  const bounds = await page.evaluate(() => {
+    const foot = document.querySelector(".sidebar-foot")?.getBoundingClientRect();
+    const status = document.querySelector(".status-bar")?.getBoundingClientRect();
+    if (!foot || !status) throw new Error("footer or status bar missing");
+    return {
+      scrollY: window.scrollY,
+      footTop: foot.top,
+      footBottom: foot.bottom,
+      statusTop: status.top,
+      statusBottom: status.bottom,
+    };
+  });
+  console.log("footer geometry", JSON.stringify(bounds));
+  expect(bounds.scrollY).toBe(0);
+  expect(bounds.footBottom).toBeLessThanOrEqual(bounds.statusTop);
+  await page.screenshot({ path: test.info().outputPath("scroll0.png") });
+  await page.locator(".sidebar-foot").focus();
+  await expect(page.locator(".sidebar-foot")).toBeFocused();
+  const last = page.locator(".tree .file-row").last();
+  await page.locator(".tree .file-row").nth(-2).focus();
+  await page.keyboard.press("Tab");
+  await expect(last).toBeFocused();
+  const lastBox = await last.boundingBox();
+  expect(lastBox).not.toBeNull();
+  expect((lastBox?.y ?? 0) + (lastBox?.height ?? 0)).toBeLessThanOrEqual(bounds.footTop);
+  await page.evaluate(() => window.scrollTo(0, 400));
+  const scrolled = await page.evaluate(() => ({
+    footBottom: document.querySelector(".sidebar-foot")?.getBoundingClientRect().bottom,
+    statusTop: document.querySelector(".status-bar")?.getBoundingClientRect().top,
+  }));
+  expect(scrolled.footBottom).toBeLessThanOrEqual(scrolled.statusTop ?? 0);
+  await page.evaluate(() => {
+    window.scrollTo(0, 0);
+    const list = document.querySelector(".warnings ul");
+    if (!list) throw new Error("warnings missing");
+    for (let i = 0; i < 5; i++) {
+      const item = document.createElement("li");
+      item.textContent = `additional warning ${i}`;
+      list.append(item);
+    }
+  });
+  await page.setViewportSize({ width: 1800, height: 1000 });
+  await expect
+    .poll(async () => {
+      const foot = await page.locator(".sidebar-foot").boundingBox();
+      const status = await page.locator(".status-bar").boundingBox();
+      return Math.round((foot?.y ?? 0) + (foot?.height ?? 0) - (status?.y ?? 0));
+    })
+    .toBeLessThanOrEqual(0);
+  await last.focus();
+  const lastAfterResize = await last.boundingBox();
+  const footAfterResize = await page.locator(".sidebar-foot").boundingBox();
+  expect((lastAfterResize?.y ?? 0) + (lastAfterResize?.height ?? 0)).toBeLessThanOrEqual(
+    footAfterResize?.y ?? 0,
+  );
+  await page.getByRole("button", { name: "light theme" }).click();
+  await page.screenshot({ path: test.info().outputPath("wide-light.png") });
+  const lightFoot = await page.locator(".sidebar-foot").boundingBox();
+  const lightStatus = await page.locator(".status-bar").boundingBox();
+  expect((lightFoot?.y ?? 0) + (lightFoot?.height ?? 0)).toBeLessThanOrEqual(lightStatus?.y ?? 0);
+});
+
 function review(page: Page): Promise<Review> {
   return page.evaluate(async () => (await (await fetch("/api/review")).json()) as Review);
 }
