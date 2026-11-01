@@ -1,10 +1,11 @@
 # DA-151 · Reliable CLI broken-reader handling and stderr fixtures
 
-- **Order:** 870
 - **Scope:** linked source scopes; [reference](../../reference/README.md)
 - **Created:** 2026-11-01
 - **Dependencies:** retain each source condition below
 - **Cost:** minor
+- **Previous order:** 870
+- **Taken:** 2026-11-01
 
 ## Context
 
@@ -53,7 +54,7 @@ AssertionError: expected 'diffalanche: standard output: write E…' to be '' // 
 
 It passed alone twice on `8689795`, twice on `cd3debe`, and ten more times in a row on `8689795` right after (exit 0 each), so it is rare. The code says why it can happen at all: the guard on the CLI's streams treats only `EPIPE` as a reader that went away, and reports anything else with exit code 2.
 
-<!-- quote:../../../src/cli/output.ts -->
+<!-- quote:before:../../../src/cli/output.ts -->
 ```ts
     if (error.code === "EPIPE") {
       gone = true;
@@ -103,3 +104,7 @@ $ env -u FORCE_COLOR NO_COLOR=1 bunx vitest run tests/cli.test.ts   # exit 0
 
 A session whose harness sets both variables sees `bun run test` red on an
 unchanged tree.
+
+## Execution plan
+
+CLI reliability track owns output stream error handling and focused CLI/listen reporting regressions. Reproduce each hypothesis before choosing a production change. Use a deterministic existing ListenError seam or owned child fixture, close every resource on both outcomes, and preserve real error diagnostics. Isolate color environment only in the owned stderr fixture; retain negative controls for other output errors. Keep separate original DA-115.2 and DA-119.1 outcomes and preserve the historical before quote. No host port-policy changes or deferred implementation.
