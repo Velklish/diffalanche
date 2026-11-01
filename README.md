@@ -386,6 +386,9 @@ has them. What they promise and how they are shipped is in
 
 ## Development
 
+The CLI stream test captures its cursor before writing and matches the exact reply
+and thread, including delivery before the CLI exits. See [suite waits](docs/reference/11-perf.md#waits-in-the-suites).
+
 Bun is the toolchain; the server and the CLI run on Node >= 22 as well and use
 only APIs shared by both runtimes. That is the published package's floor: the
 bundle is plain JavaScript. Development needs Node >= 22.18, because the tests

@@ -1532,6 +1532,15 @@ behind it simply never ran, and it prints green. So every wait in `tests/`,
   floor (`tests/lock-writers.test.ts`). The residual is honest: the multiple is
   a heuristic, not a bound.
 
+The CLI reply reader takes a frame cursor before starting the child process, then
+matches both the reply id printed by the child and its comment id. A frame may
+arrive before child exit; a matching frame before that cursor is still history
+and cannot satisfy the wait. The printed `CLI completion to reply-added` interval
+can be negative and measures ordering against observed exit, not storage-write
+latency. A deterministic in-memory stream checks early and late arrival, missing
+frames, and unrelated identities. The historical loaded reply timeout has no
+established cause.
+
 **A window the server has to see go away is closed with an abort.** Under Bun,
 cancelling a response body does not close the connection: the server keeps the
 stream subscribed and counts the window among the tasks the watcher follows.
@@ -1618,7 +1627,7 @@ specification, which is a change to the contract. So the spec prints the
 measurement on every run, `task created to header mark: <n> ms`, and a
 regression is at least visible: 246 ms and 234 ms when the ceiling was written.
 
-A number printed and not held — `edit to diff-changed`, `reply written to
+A number printed and not held — `edit to diff-changed`, `CLI completion to
 reply-added`, `check-ignore over 50 paths`, `file jump, one frame` — is there to
 be read, and a latency with no owner in that table is printed rather than held.
 

@@ -13,6 +13,8 @@ and `bun run release` refuses a version that has no section. See
 
 ## [Unreleased]
 
+- The CLI reply stream check accepts its exact reply before child exit without accepting historical or unrelated frames. The cause of the historical loaded timeout remains unknown.
+
 ### Fixed
 
 - A comment received through live updates before its save response appears
