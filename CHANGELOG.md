@@ -759,6 +759,10 @@ and `bun run release` refuses a version that has no section. See
 
 ### Fixed
 
+- The performance reference records a 29.7 ms file-jump median against the
+  50 ms budget on an eight-core M1 Pro, measured through the mounted-diff
+  reveal path on 2026-11-01 at `8604e919`.
+
 - Deletion contention tests now exercise the production rename with a waiter
   paused before `mkdir` or after `EEXIST`, preserving the missing-session
   refusal and checking that no directory is recreated. A controlled in-place

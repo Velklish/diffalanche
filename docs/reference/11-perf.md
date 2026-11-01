@@ -895,23 +895,28 @@ throws where it can be named instead of standing in as `0`. The two reds are
 different and the gate says which — `over budget: …` and `not measured: …`.
 
 ```
-| Metric | Budget | Median of 3 | |
+| Metric | Budget | Recorded median | |
 |---|---|---|---|
 | First render of the review after the server responds | 500 ms | 32.3 ms | ok |
 | Scrolling the diff: long tasks | 0 tasks | 0 tasks | ok |
 | Scrolling the diff: CPU per frame | 9.5 ms | 8.7 ms | ok |
 | Opening the comment form | 50 ms | 13.9 ms | ok |
-| Jumping to a file from the navigation | 50 ms | — | not re-measured since the file-jump harness change |
+| Jumping to a file from the navigation | 50 ms | 29.7 ms | ok |
 | Switching review sessions | 100 ms | 70.9 ms | ok |
 | Update after an edit in one repository | 300 ms | 221 ms | ok |
 ```
 
-The switch row is from the run that made that line warm; the rest of
-the sample is the older capture it was written with, and the two are not one
-run. The CPU-per-frame reading, 8.7 ms, was taken at 60 Hz before the unpaced
+The jump row is a median of five processes on 2026-11-01 (Apple M1 Pro,
+eight cores, source `8604e919e3ea35f4b23142db88be6c2eec4a51a7`): 30.1,
+29.3, 29.6, 29.7 and 31.4 ms. The configured `bun run perf` passed all seven
+lines with exit 0, with the development load guard active and no concurrent
+heavy tests. The enclosing eight-gate run exited 1; this sample is performance
+evidence, not acceptance. The switch row is from the run that made that line
+warm; the other rows are medians of three from the older capture. These rows
+are not one run. The CPU-per-frame reading, 8.7 ms, was taken at 60 Hz before the unpaced
 harness change, so it is not comparable with one taken now. The jump row read
-7.7 ms in that capture, and it measured a different window; it waits for a
-reading on the development machine.
+7.7 ms in that capture and measured a different window; the five-process
+reading above measures the mounted diff through the tree's own reveal path.
 
 **Jumping to a file** is the tree's own path after the file-jump harness
 change. `perf.jumpToFile` calls `revealFile` — the function a row of the tree
