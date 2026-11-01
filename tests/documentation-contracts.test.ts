@@ -47,4 +47,23 @@ describe("current documentation contracts", () => {
     expect(adr).not.toContain("found both crossing the ceiling");
   });
 
+
+  it("separates bare windows, named windows and the CLI default", () => {
+    for (const file of ["README.md", "docs/SPEC.md", "skills/diffalanche-apply/SKILL.md"]) {
+      const selection = prose(file);
+      expect(selection).toContain("bare");
+      expect(selection).toContain("`current`");
+      expect(selection).toContain("named `?review=<name>` window stays on its task");
+      expect(selection).toContain("--review");
+      expect(selection).not.toContain("switches both the UI and the CLI");
+      expect(selection).not.toContain("change what the human's UI is looking at");
+    }
+    const readme = prose("README.md");
+    expect(readme).toContain("CLI commands without `--review` use `current` as their default");
+    expect(readme).toContain("`review new --no-use` creates a task without moving `current`");
+    const apply = prose("skills/diffalanche-apply/SKILL.md");
+    expect(apply).toContain("It does not create or switch review sessions");
+    expect(apply).toContain("Do not change selection without an explicit request");
+  });
+
 });

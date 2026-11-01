@@ -193,7 +193,9 @@ a lock on the session, so two agents replying at the same moment both land.
 - It does not open new findings. That is [diffalanche-review](../diffalanche-review/SKILL.md).
 - It does not resolve, reopen, or delete anything.
 - It does not create or switch review sessions: `review new` and `review use`
-  change what the human's UI is looking at. Use `--review <name>` instead if you
+  change the CLI default selection and a bare human window that follows
+  `current`; a named `?review=<name>` window stays on its task. Do not change
+  selection without an explicit request. Use `--review <name>` instead if you
   need a session that is not the current one.
 
 [ADR-004]: https://github.com/Velklish/diffalanche/blob/main/docs/adr/adr-004-agent-contract.md

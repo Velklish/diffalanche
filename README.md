@@ -124,8 +124,12 @@ diffalanche 0.1.0 on http://127.0.0.1:4880
   no current review session: create one with `diffalanche review new <name>`
 ```
 
-Sessions are history: `review list` shows them, `review use <name>` switches both
-the UI and the CLI, and each keeps its own base and its own comments.
+Sessions are history: `review list` shows them, and each keeps its own base and
+comments. `review use <name>` changes `current`: a bare window without
+`?review=` follows it, while a named `?review=<name>` window stays on its task.
+CLI commands without `--review` use `current` as their default; pass
+`--review <name>` to select a task for one command. `review new --no-use`
+creates a task without moving `current` and prints its named address.
 
 ## Where the data lives
 

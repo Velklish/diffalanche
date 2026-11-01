@@ -244,7 +244,7 @@ Every command accepts `--review <name>` (default: the current session) and `--da
 | `review scope remove [--repo <path>]… [--path <repo>:<file>]… [--drop-comments]` | narrow it; without `--drop-comments`, and with comments under what is being removed, exit code 1, nothing written, the message naming the count and the ids |
 | `review close [<name>] --role human [--author]`, `review reopen [<name>] --role human [--author]` | set `status`; `closedBy` comes from `--author` and `closedAt` from the clock; any other role is refused with exit code 1, as it is for `resolve` |
 | `review delete <name> --role human [--yes]` | delete a session with its comments (Phase 2); any other role is refused with exit code 1; without `--yes` it asks on the terminal, and with no terminal it refuses; a deleted current session moves `current` to the session updated last, or clears it |
-| `diff [--repo] [--json\|--patch]` | the current change set, the same one the UI shows |
+| `diff [--repo] [--json\|--patch]` | the selected session's change set, the same one a window on that session shows |
 | `list [--status open\|resolved\|all] [--repo] [--severity] [--unanswered] [--json]` | comments; `--unanswered` — the last message of the thread is from a human |
 | `show <id> [--json]` | one comment with its thread and anchor |
 | `reply <id> --body <text\|-> [--author] [--role] [--confirm-severity]` | reply in a thread; `-` reads stdin; `--confirm-severity` agrees with a severity the tool chose, and is refused with exit code 1 on any other |
@@ -284,7 +284,7 @@ An agent that has just written code proposes the review of it: `review new <name
 - A comment created in the UI appears in `diffalanche list --json` without a restart. A reply made with `reply` appears in the UI without a manual refresh.
 - `resolve` from the UI removes the comment from `list --status open`. `resolve` from the CLI without `--role human` fails and changes nothing.
 - A reply made with `reply` shows up in the activity feed with the agent's `--author`.
-- `review use` switches both the UI and the CLI without `--review`.
+- `review use` changes `current`: a bare window without `?review=` follows it, a named `?review=<name>` window stays on its task, and CLI commands without `--review` use it as their default.
 - `review new t --repo <one> --path <other>:<file> --no-use` leaves `current` where it was, and `diff --json --review t` answers with the changed files of `<one>` and that one path of `<other>`, and nothing else.
 - A task over two repositories of the synthetic review starts no git process for the other nineteen, counted rather than timed.
 - `review scope remove` with a comment under what it removes exits 1 and writes nothing; with `--drop-comments` the comment is gone and the scope is narrower.

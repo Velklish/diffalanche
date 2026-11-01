@@ -15,6 +15,10 @@ and `bun run release` refuses a version that has no section. See
 
 ### Fixed
 
+- Session-selection guidance separates bare windows that follow `current`, named
+  windows that keep their task, and the CLI default. The apply skill retains
+  its prohibition on unsolicited selection changes.
+
 - ADR-016 describes the dated 742/764 MiB server measurements as below the
   768 MiB ceiling, preserving the measured query crossing and server headroom.
 
