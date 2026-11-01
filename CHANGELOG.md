@@ -31,6 +31,12 @@ and `bun run release` refuses a version that has no section. See
 
 ### Fixed
 
+- Reviews with many line comments reconcile independent anchors concurrently,
+  with a limit of eight comments per repository. Failed passes finish their
+  reads before returning and persist no partial anchor changes. Repository
+  rescans also overlap the Git read with the previous-cache read while retaining
+  the cache reread under the writer lock.
+
 - Directory watches retain child names in the parent's baseline, so a removed
   directory is reported even when its watch closes before an unnamed parent event.
 
