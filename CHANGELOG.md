@@ -13,6 +13,8 @@ and `bun run release` refuses a version that has no section. See
 
 ## [Unreleased]
 
+- New live streams refresh after subscription and make at most one token handover for an incoming document. Connection-owned reads cancel cleanly while valid queued threads and agent reply toasts survive the handover.
+
 - Review responses identify their exact document with a bounded ephemeral header token. Streams consume their matching baseline, keeping abandoned responses and late old disconnects separate.
 
 - An open task history removes a task deleted elsewhere while preserving the current window's task and menu.

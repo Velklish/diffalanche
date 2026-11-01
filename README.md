@@ -387,6 +387,11 @@ has them. What they promise and how they are shipped is in
 
 ## Development
 
+A new live stream reads the review once after confirmed subscription. A stream
+opened before its document becomes available makes at most one token-bound
+handover; later document refreshes do not reconnect it. Received valid thread
+frames and agent reply toasts remain ordered across that handover.
+
 Each stream can name its served document with an ephemeral token. Abandoned
 responses and late old disconnects cannot become or erase another window's
 first-follow baseline.

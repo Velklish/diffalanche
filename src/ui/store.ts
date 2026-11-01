@@ -173,6 +173,8 @@ type ReviewSlice = {
   reviewName: string | null;
   /** Advances only when a review document is applied. */
   documentRevision: number;
+  /** The response body's first-follow baseline token, carried outside its cached JSON. */
+  documentToken: string | null;
   root: string;
   repositories: RepositoryChange[];
   /** Every file of the change set, flattened in the order the centre panel renders. */
@@ -187,7 +189,7 @@ type ReviewSlice = {
   threadsByFile: Map<string, Comment[]>;
   /** `user` of `config.json`: what a comment written here is signed with. */
   user: string;
-  loadReview: () => Promise<void>;
+  loadReview: (signal?: AbortSignal) => Promise<void>;
   /** The address bar changed under the page — `Back` — so the window follows it. */
   syncTaskFromUrl: () => Promise<void>;
 };
@@ -553,6 +555,8 @@ export type Store = ReviewSlice &
 /** Bumped by every read of the review, so a response for a task the window has
  * left is dropped instead of applied ([08-ui.md](../../docs/reference/08-ui.md)). */
 let reading = 0;
+let manualReading = 0;
+let appliedReading = 0;
 
 export const useStore = create<Store>()((set, get) => ({
   // review
@@ -560,6 +564,7 @@ export const useStore = create<Store>()((set, get) => ({
   failure: null,
   reviewName: taskInUrl(),
   documentRevision: 0,
+  documentToken: null,
   root: "",
   repositories: [],
   files: [],
@@ -569,20 +574,26 @@ export const useStore = create<Store>()((set, get) => ({
   repoCounts: new Map(),
   threadsByFile: new Map(),
   user: "",
-  loadReview: async () => {
+  loadReview: async (signal) => {
+    if (signal?.aborted) return;
     // A response for a task the window has left is dropped: `switching` gates the menu, nothing
     // gates `syncTaskFromUrl` or the stream (08-ui.md, "The task this window is on").
     reading += 1;
     const generation = reading;
+    if (signal === undefined) manualReading = generation;
+    const stale = () =>
+      signal?.aborted === true || generation < manualReading || generation < appliedReading;
     try {
-      const response = await fetch(onTask("/api/review"));
-      if (generation !== reading) return;
+      const url = onTask("/api/review");
+      const response = await (signal === undefined ? fetch(url) : fetch(url, { signal }));
+      if (stale()) return;
       if (!response.ok) {
         const refused = await refusal(response);
-        if (generation !== reading) return;
+        if (stale()) return;
         // A root nobody has opened a session in is not a failure: it is the
         // first-run screen, and the scan behind its metrics is asked for here.
         if (refused.code === "no-current-session") {
+          appliedReading = generation;
           set({ status: "no-session", failure: null });
           await get().loadScan();
           return;
@@ -601,11 +612,12 @@ export const useStore = create<Store>()((set, get) => ({
         throw new Error(refused.message);
       }
       const document = (await response.json()) as ReviewDocument;
-      if (generation !== reading) return;
+      if (stale()) return;
       // Stamped here, not after the render: the harness measures from the moment
       // the response was parsed to the frame that showed it.
       perf.responseAt = performance.now();
       const held = get();
+      appliedReading = generation;
       set({
         ...fromDocument(
           document,
@@ -615,18 +627,23 @@ export const useStore = create<Store>()((set, get) => ({
           held.repositories,
         ),
         documentRevision: held.documentRevision + 1,
+        documentToken: response.headers.get("X-Diffalanche-Document"),
       });
     } catch (error) {
-      if (generation !== reading) return;
+      if (stale()) return;
       set({ status: "failed", failure: reason(error) });
       return;
     }
     // After the review and not with it: only an unsent reply shows the name, and the first
     // render is measured from the review's own response.
     try {
-      const response = await fetch("/api/config");
-      if (!response.ok) return;
+      if (signal?.aborted) return;
+      const response = await (signal === undefined
+        ? fetch("/api/config")
+        : fetch("/api/config", { signal }));
+      if (signal?.aborted || !response.ok) return;
       const config = (await response.json()) as { user?: unknown };
+      if (signal?.aborted) return;
       if (typeof config.user === "string") set({ user: config.user });
     } catch {
       // The page works unsigned; the server signs what it writes anyway.
