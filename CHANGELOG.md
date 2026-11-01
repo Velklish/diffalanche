@@ -50,6 +50,8 @@ and `bun run release` refuses a version that has no section. See
   reconciles against that same captured scan. Historical comments follow staged
   renames even when the old name is recreated; new comments on that copy do not
   inherit the historical file's committed identity.
+  Edits to that new copy also re-anchor before the staged rename is committed;
+  snapshot verification treats its whole-file addition as having an empty base.
   Renames that also edit content retain the old path for anchoring. Model
   proposals and their UI remain deferred.
 

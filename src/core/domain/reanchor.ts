@@ -228,7 +228,7 @@ export async function reconcileAnchors(
         }
         if (text !== null) {
           const base =
-            change.base === null
+            change.base === null || file?.status === "added"
               ? null
               : await read(file?.oldPath ?? identityPath, { sha: change.base.sha });
           if (!agreesWithScan(file, base, text)) continue;

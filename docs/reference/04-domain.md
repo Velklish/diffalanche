@@ -466,6 +466,11 @@ scan before filtering; it does not expose excluded targets or bypass safe reads.
 CLI diff, watcher refresh and server rebuild all pass the internal captured
 records, including empty ones, so reconciliation never substitutes a later scan
 for a repository missing from the public cache.
+An added record has an empty old side when verifying its captured patch, even
+if its pathname exists in historical HEAD as the source of a staged rename.
+Renamed records still use their captured old path; modified records use their
+pinned base blob. The full target must agree with the captured patch before
+either Git mapping or unique text matching can move a comment.
 
 The file source captures committed provenance at creation only for rows that
 inverse-map through the pinned HEAD/captured-target patch and match the committed
