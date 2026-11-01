@@ -123,7 +123,9 @@ export async function startWatcher(options: WatcherOptions): Promise<Watcher> {
     options.recursive === undefined || (macOS && options.recursive && options.native === undefined)
       ? await supportsRecursiveWatch(config.dataDir)
       : false;
-  const recursive = options.recursive ?? (measured || (macOS && options.native === undefined));
+  const recursive =
+    options.recursive ??
+    (measured || ((macOS || process.platform === "linux") && options.native === undefined));
   let session = await readCurrent(config.dataDir);
   // Per session, because a window open on a task hears about that task's
   // comments and not only about the current one's (DA-55.1).

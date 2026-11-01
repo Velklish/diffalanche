@@ -16,7 +16,7 @@ import { tmpdir } from "node:os";
 import { join } from "node:path";
 import { fileURLToPath } from "node:url";
 import { promisify } from "node:util";
-import { describe, expect, it, vi } from "vitest";
+import { beforeAll, describe, expect, it, vi } from "vitest";
 import { repositoryIgnore } from "../src/core/watcher/index.ts";
 import type { Ignore, TreeWatcher, TreeWatcherOptions } from "../src/core/watcher/tree.ts";
 import { perDirectory, supportsRecursiveWatch, watchTree } from "../src/core/watcher/tree.ts";
@@ -31,8 +31,7 @@ const refusal = vi.hoisted(() => ({ left: Number.POSITIVE_INFINITY }));
 vi.mock("node:fs", async (importOriginal) => {
   const real = await importOriginal<typeof import("node:fs")>();
   const watch = ((...args: Parameters<typeof real.watch>) => {
-    const options = args[1] as { recursive?: boolean } | undefined;
-    if (options?.recursive !== true) {
+    if (Number.isFinite(refusal.left)) {
       if (refusal.left <= 0) {
         throw Object.assign(new Error("ENOSPC: System limit for number of file watchers reached"), {
           code: "ENOSPC",
@@ -49,6 +48,15 @@ const DIRS = process.platform === "linux" || process.platform === "darwin";
 
 /** Whether every change is reported by name: Node's watch does, Bun's names one per read. */
 const NATIVE_NAMES = process.env.DIFFALANCHE_TEST_RUNTIME !== "bun";
+
+beforeAll(async () => {
+  const dir = mkdtempSync(join(tmpdir(), "diffalanche-tree-capability-"));
+  try {
+    await supportsRecursiveWatch(dir);
+  } finally {
+    rmSync(dir, { recursive: true, force: true });
+  }
+});
 
 type Tree = { tree: TreeWatcher; heard: string[]; fellBack: () => number };
 
@@ -411,6 +419,7 @@ it("documents the native directory watches and the platform of lifecycle measure
     "including dangling links. It never follows a link into a target directory",
   );
   expect(reference).toContain("The explicitly named root may itself be a link.");
+  expect(reference).toContain("A false Linux or macOS result still tries native directory watches");
   expect(reference).toContain(
     "components are checked with `lstat` before watching, listing and reporting their",
   );

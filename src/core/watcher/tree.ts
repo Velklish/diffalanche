@@ -152,12 +152,17 @@ async function identity(dir: string, relative: string): Promise<Identity | null>
   }
 }
 
-/** One non-recursive watch per directory the ignore rules let in, taken by the tree itself: a
+/** One watch per directory the ignore rules let in, taken by the tree itself: a
  * directory's inode outlives every rename into it (05-watcher.md, "One watch per directory…"). */
 export function perDirectory(
   options: TreeWatcherOptions,
   onFailure: () => void,
 ): TreeSource | null {
+  const recursive =
+    process.platform === "darwin" &&
+    capability !== null &&
+    "recursive" in capability &&
+    capability.recursive;
   const watches = new Map<string, FSWatcher>();
   // Which directory each watch is on: one removed and made again under its name is another.
   const identities = new Map<string, Identity>();
@@ -242,7 +247,7 @@ export function perDirectory(
     try {
       watcher = watch(
         join(options.dir, relative),
-        { persistent: false, encoding: "utf8" },
+        { recursive, persistent: false, encoding: "utf8" },
         (event, name) => onEvent(relative, event, name),
       );
     } catch (error) {
@@ -393,7 +398,8 @@ export function perDirectory(
   }
 
   function onEvent(relative: string, event: string, name: string | null): void {
-    if (closed) return;
+    // Recursive registrations report only immediate names; each child owns its events.
+    if (closed || (recursive && name?.includes("/"))) return;
     const path = name === null || name === "" ? null : within(relative, String(name));
     if (path !== null) {
       // A rename naming a watched directory made or removed that name: its watch is renewed

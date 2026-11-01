@@ -156,8 +156,8 @@ first repeats a root-file write every fifty milliseconds until delivery is
 proven, then synchronously creates two nested directories and their file in one
 burst. That file is written only once: repeating it would hide loss of the
 initial creation event. Delivery proves the lifecycle case; the whole probe has a half-second
-deadline. A false macOS result chooses directory watches, whose own refusal can
-still select polling. An injected native adapter remains independent when
+deadline. A false Linux or macOS result still tries native directory watches,
+whose own refusal can select polling. An injected native adapter remains independent when
 `recursive: true` is supplied. Writing once is not enough — Bun's watch arms a moment
 after `watch` returns, and a single write lands before it does, which would
 answer "this runtime cannot recurse" for the rest of the run. It runs once per
@@ -354,9 +354,12 @@ release branches v22.x, v24.x and v25.x of Node still carry that code. Node's
 `main`, read on 2026-09-29, has moved Linux to one watch per directory for the
 same reason, and that is not in a release `engines` accepts.
 
-Linux always takes one non-recursive watch per directory. macOS takes that
-path when the recursive lifecycle probe fails. In this path, and the inode it watches is the
-directory's, which outlives every rename into it.
+Linux always takes one non-recursive watch per directory. macOS takes directory
+watches when the recursive lifecycle probe fails. A directory adapter selected
+explicitly on macOS uses recursive registrations only when that same measurement
+proved them available; descendant names are filtered so each child owns its
+events. With a false measurement it keeps non-recursive registrations. The
+watched inode is the directory's, which outlives every rename into it.
 
 - **Taking the watches.** It lists the tree once at the start, the way the walk
   does, and prunes what the ignore rules leave out as a directory:
@@ -450,6 +453,11 @@ directory's, which outlives every rename into it.
 - **Events about a directory itself**, such as a `chmod` or its removal, come
   back from Node under the directory's own name, as `a/a` for `a`. Such a path
   is an ordinary change, and it costs at most one `check-ignore`.
+
+The directory algorithm tests first measure capability in an owned temporary
+directory, then select this adapter explicitly. The same native kernel-refusal
+seam applies to either registration mode. Default backend selection has its own
+new-directory burst and Git rename-save integration checks.
 
 What it costs:
 

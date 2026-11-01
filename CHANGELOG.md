@@ -26,10 +26,12 @@ and `bun run release` refuses a version that has no section. See
 - macOS checks recursive delivery after directory creation and chooses directory
   watches when that lifecycle probe fails. A working recursive backend keeps its
   original path; Bun continues hearing directories created or replaced later.
+  Explicit directory adapters use a proven recursive registration on macOS and
+  keep non-recursive registrations when that measurement is false.
 
 - Native watcher fault-injection tests install their stubs independently of the
-  runtime capability probe. A false macOS measurement selects native directory
-  watches first; polling remains the fallback when those cannot start.
+  runtime capability probe. A false Linux or macOS measurement still tries native
+  directory watches; polling remains the fallback when those cannot start.
 
 ### Added
 
