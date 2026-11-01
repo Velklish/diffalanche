@@ -2,7 +2,7 @@ import { execFileSync } from "node:child_process";
 import { mkdirSync, mkdtempSync, readFileSync, rmSync, writeFileSync } from "node:fs";
 import { tmpdir } from "node:os";
 import { join } from "node:path";
-import { afterEach, describe, expect, it } from "vitest";
+import { afterEach, describe, expect, it, vi } from "vitest";
 import { run } from "../src/cli/run.ts";
 import { scanReview } from "../src/core/change-set.ts";
 import { loadConfig } from "../src/core/config/index.ts";
@@ -19,7 +19,9 @@ import {
 } from "../src/core/domain/index.ts";
 import { commentWarnings, reconcileAnchors } from "../src/core/domain/reanchor.ts";
 import { reverseAnchor } from "../src/core/git/anchors.ts";
+import * as fileSources from "../src/core/git/browse.ts";
 import { fileSourceAt } from "../src/core/git/browse.ts";
+import * as gitCalls from "../src/core/git/run.ts";
 import { scan } from "../src/core/scanner/index.ts";
 import {
   commentsPath,
@@ -856,5 +858,243 @@ describe("rename and legacy identity", () => {
       line: 1,
     });
     expect(locateAnchor(saved, "abcdefghijklmnopqrXY\n")).toEqual({ kind: "orphaned" });
+  });
+});
+
+describe("review regressions", () => {
+  it.each(["new", "old"] as const)(
+    "keeps committed rename identity on the %s side when HEAD has no diff",
+    async (side) => {
+      const f = await fixture();
+      f.comment = await addComment(
+        f.config.dataDir,
+        "work",
+        {
+          repo: "repo",
+          path: "a.ts",
+          side,
+          line: 2,
+          severity: "nit",
+          body: "identity",
+          author: "human",
+          role: "human",
+        },
+        { source: fileSourceAt(f.root) },
+      );
+      f.git("mv", "a.ts", "b.ts");
+      f.git("commit", "-qam", "committed rename");
+      expect(await refresh(f)).toMatchObject({
+        path: "b.ts",
+        line: 2,
+        side,
+        status: "open",
+        originalAnchor: { path: "a.ts" },
+      });
+      expect(await refresh(f)).toMatchObject({ path: "b.ts", line: 2, side, status: "open" });
+    },
+  );
+
+  it("keeps committed rename identity when the old path is recreated with copied text", async () => {
+    const f = await fixture();
+    f.git("mv", "a.ts", "b.ts");
+    f.git("commit", "-qam", "committed rename");
+    writeFileSync(f.file, f.text);
+    expect(await refresh(f)).toMatchObject({ path: "b.ts", line: 2, status: "open" });
+  });
+
+  it.each(["refresh", "CLI diff"])(
+    "retains a scoped comment when its rename target is outside the scope through %s",
+    async (mode) => {
+      const f = await fixture();
+      const scope = [{ repo: "repo", paths: ["a.ts"] }];
+      await updateSession(f.config.dataDir, "work", (draft) => {
+        draft.review.scope = scope;
+      });
+      f.git("mv", "a.ts", "b.ts");
+      if (mode === "refresh") await refresh(f);
+      else {
+        let err = "";
+        const code = await run(
+          ["diff", "--root", f.root, "--data-dir", f.config.dataDir, "--review", "work", "--json"],
+          { read: async () => null },
+          {
+            out: () => undefined,
+            err: (text) => {
+              err += text;
+            },
+            input: async () => "",
+          },
+        );
+        expect(code, err).toBe(0);
+      }
+      expect((await readComments(f.config.dataDir, "work"))[0]).toMatchObject({
+        path: "a.ts",
+        line: 2,
+        status: "orphaned",
+      });
+      expect(await list(f.config.dataDir, "work", { status: "all" })).toHaveLength(1);
+      expect((await get(f.config.dataDir, "work", f.comment.id)).path).toBe("a.ts");
+      expect((await readReview(f.config.dataDir, "work")).scope).toEqual(scope);
+      expect((await createReviewService(f.config).document("work")).warnings).toContainEqual({
+        path: "repo",
+        message: "1 comments lost their anchor in repo",
+      });
+    },
+  );
+
+  it("retains the original anchor when a fallback read sees a config-excluded rename target", async () => {
+    const f = await fixture();
+    f.config.exclude = ["b.ts"];
+    f.git("mv", "a.ts", "b.ts");
+    await refresh(f);
+    expect(await get(f.config.dataDir, "work", f.comment.id)).toMatchObject({
+      path: "a.ts",
+      line: 2,
+      status: "orphaned",
+    });
+    expect((await readDiffCache(f.config.dataDir, "work"))?.repositories).toEqual([]);
+  });
+
+  it.each([null, 3])(
+    "does not invent legacy old-side identity or range body without a previous cache (end=%s)",
+    async (endLine) => {
+      const f = await fixture();
+      writeFileSync(f.file, "A\nTARGET\nB\nTARGET\nC\n");
+      f.git("add", "a.ts");
+      f.git("commit", "-qm", "unknown legacy base");
+      await updateComments(f.config.dataDir, "work", (comments) => {
+        const c = comments[0];
+        if (c) {
+          c.side = "old";
+          c.line = 2;
+          c.endLine = endLine;
+          c.anchor = { lineContent: "TARGET", before: [], after: [], hunk: "" };
+          delete c.originalAnchor;
+        }
+      });
+      rmSync(join(f.config.dataDir, "reviews", "work", "diff.json"));
+      await createReviewService(f.config).document("work");
+      const stored = await get(f.config.dataDir, "work", f.comment.id);
+      expect(stored).toMatchObject({ line: 2, endLine, status: "orphaned" });
+      expect(stored.anchor).not.toHaveProperty("revision");
+      expect(stored.anchor).not.toHaveProperty("rangeContent");
+    },
+  );
+
+  it("retains committed CRLF identity with duplicate spans through two public refreshes", async () => {
+    const f = await fixture();
+    writeFileSync(f.file, "A\r\nTARGET\r\nB\r\nA\r\nTARGET\r\nB\r\n");
+    f.git("add", "a.ts");
+    f.git("commit", "-qm", "committed CRLF duplicates");
+    await writeDiffCache(
+      f.config.dataDir,
+      "work",
+      (await scanReview(f.config, { mode: "head" })).cache,
+    );
+    f.comment = await addComment(
+      f.config.dataDir,
+      "work",
+      {
+        repo: "repo",
+        path: "a.ts",
+        line: 2,
+        severity: "nit",
+        body: "CRLF identity",
+        author: "human",
+        role: "human",
+      },
+      { source: fileSourceAt(f.root) },
+    );
+    expect(await refresh(f)).toMatchObject({ line: 2, status: "open" });
+    expect(await refresh(f)).toMatchObject({ line: 2, status: "open" });
+    expect((await get(f.config.dataDir, "work", f.comment.id)).anchor?.revision?.sha).toBe(
+      f.git("rev-parse", "HEAD").trim(),
+    );
+  });
+
+  it("keeps persisted anchor and Ready cache on the captured T1 during a T1 to T2 to T1 mapping race", async () => {
+    const f = await fixture();
+    const base = "A\nTARGET\nB\nTARGET\nC\n";
+    writeFileSync(f.file, base);
+    f.git("add", "a.ts");
+    f.git("commit", "-qm", "duplicate identity source");
+    await writeDiffCache(
+      f.config.dataDir,
+      "work",
+      (await scanReview(f.config, { mode: "head" })).cache,
+    );
+    f.comment = await addComment(
+      f.config.dataDir,
+      "work",
+      {
+        repo: "repo",
+        path: "a.ts",
+        line: 2,
+        severity: "nit",
+        body: "race identity",
+        author: "human",
+        role: "human",
+      },
+      { source: fileSourceAt(f.root) },
+    );
+    const t1 = `${base}D\n`;
+    const t2 = `X\nY\n${t1}`;
+    writeFileSync(f.file, t1);
+    const source = fileSourceAt(f.root);
+    const realGit = gitCalls.git;
+    const realGitLines = gitCalls.gitLines;
+    let captured = false;
+    let mapped = 0;
+    const restoreT1 = (args: string[]) => {
+      if (
+        (args[0] === "diff-index" && args.includes("-U0")) ||
+        (args[0] === "diff" && args.includes("--no-index"))
+      ) {
+        expect(readFileSync(f.file, "utf8")).toBe(t2);
+        mapped += 1;
+        writeFileSync(f.file, t1);
+      }
+    };
+    vi.spyOn(fileSources, "fileSourceAt").mockReturnValue(async (...args) => {
+      const text = await source(...args);
+      if (!captured && args[2] === "worktree") {
+        captured = true;
+        expect(text).toBe(t1);
+        writeFileSync(f.file, t2);
+      }
+      return text;
+    });
+    vi.spyOn(gitCalls, "git").mockImplementation(async (cwd, args, overrides) => {
+      const raw = await realGit(cwd, args, overrides);
+      restoreT1(args);
+      return raw;
+    });
+    vi.spyOn(gitCalls, "gitLines").mockImplementation(async (cwd, args, take, overrides) => {
+      const result = await realGitLines(cwd, args, take, overrides);
+      restoreT1(args);
+      return result;
+    });
+    let readyLine: number | null = null;
+    let readyPatch = "";
+    try {
+      await rescanRepository(f.config, "work", "repo", ({ cache }) => {
+        readyLine = JSON.parse(
+          readFileSync(commentsPath(f.config.dataDir, "work"), "utf8"),
+        ).comments.find((c: { id: string }) => c.id === f.comment.id).line;
+        readyPatch = cache.repositories[0]?.files[0]?.patch ?? "";
+      });
+    } finally {
+      vi.restoreAllMocks();
+    }
+    expect(captured).toBe(true);
+    expect(mapped).toBe(1);
+    expect(readFileSync(f.file, "utf8")).toBe(t1);
+    expect(readyLine).toBe(2);
+    expect((await get(f.config.dataDir, "work", f.comment.id)).line).toBe(2);
+    expect(readyPatch).toContain("+D");
+    expect(readyPatch).not.toContain("+X");
+    expect((await readDiffCache(f.config.dataDir, "work"))?.repositories[0]?.files[0]?.patch).toBe(
+      readyPatch,
+    );
   });
 });
