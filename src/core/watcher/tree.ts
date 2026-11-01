@@ -87,7 +87,13 @@ export function watchTree(options: TreeWatcherOptions): TreeWatcher {
 
 function native(options: TreeWatcherOptions, onFailure: () => void): TreeSource | null {
   // A failed macOS recursive lifecycle probe selects directory watches; Linux always uses them.
-  if (process.platform === "linux" || (process.platform === "darwin" && recursiveSupport === false))
+  if (
+    process.platform === "linux" ||
+    (process.platform === "darwin" &&
+      capability !== null &&
+      "recursive" in capability &&
+      !capability.recursive)
+  )
     return perDirectory(options, onFailure);
   return recursiveNative(options, onFailure);
 }
@@ -476,16 +482,19 @@ async function entrySnapshot(
 export async function supportsRecursiveWatch(dir: string): Promise<boolean> {
   // The answer is the runtime's, not the directory's, so it is asked once and
   // every watcher after the first gets it without writing anything.
-  probed ??= probeRecursiveWatch(dir).then((answer) => {
-    recursiveSupport = answer;
-    return answer;
-  });
-  return probed;
+  if (capability === null) {
+    const pending = probeRecursiveWatch(dir).then((answer) => {
+      capability = { recursive: answer };
+      return answer;
+    });
+    capability = { pending };
+  }
+  return "pending" in capability ? capability.pending : capability.recursive;
 }
 
 /** The answer of this process, once it has one. */
-let probed: Promise<boolean> | null = null;
-let recursiveSupport: boolean | null = null;
+type Capability = { pending: Promise<boolean> } | { recursive: boolean };
+let capability: Capability | null = null;
 
 /** How the probe writes. A test that has to make the write fail brings its own. */
 type ProbeWrite = (path: string, data: string) => Promise<void>;
@@ -499,7 +508,7 @@ export async function probeRecursiveWatch(
   try {
     await mkdir(dir, { recursive: true });
     probe = await mkdtemp(join(dir, ".watch-probe-"));
-    const nested = join(probe, "nested");
+    const nested = join(probe, "nested", "created");
     const watched = probe;
     return await new Promise<boolean>((resolve) => {
       let source: TreeSource | null = null;
@@ -528,7 +537,7 @@ export async function probeRecursiveWatch(
         if (finished) return;
         if (name === "armed" && !creating) {
           creating = true;
-          void mkdir(nested)
+          void mkdir(nested, { recursive: true })
             .then(async () => {
               if (finished) return;
               nestedReady = true;
@@ -536,7 +545,7 @@ export async function probeRecursiveWatch(
             })
             .catch(() => done(false));
         }
-        if (name.includes("deep")) done(true);
+        if (name === "nested/created/deep") done(true);
       };
       const take = process.platform === "darwin" ? recursiveNative : native;
       source = take({ dir: watched, ignore: () => false, onChange }, () => done(false));

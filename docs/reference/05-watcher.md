@@ -147,8 +147,8 @@ takes the option and watches only the top directory would leave a silent dead
 watcher — so the answer comes from a probe rather than from a version table: `supportsRecursiveWatch(dataDir)`
 creates a temporary directory inside the data directory, watches it with the
 recursive watch on macOS and Windows, or the directory watches on Linux. It
-first repeats a root-file write until delivery is proven, then creates a nested
-directory and repeats its file write every fifty milliseconds. Delivery of that
+first repeats a root-file write until delivery is proven, then creates two nested
+directories together and repeats the innermost file write every fifty milliseconds. Delivery of that
 file proves recursion after directory creation; the whole probe has a half-second
 deadline. A false macOS result chooses directory watches, whose own refusal can
 still select polling. An injected native adapter remains independent when
