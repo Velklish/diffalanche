@@ -436,6 +436,9 @@ first waits up to five minutes for the load averages to settle, and says
 ([11-perf.md](docs/reference/11-perf.md#the-gate)).
 The recorded file-jump median is 29.7 ms against 50 ms on an eight-core M1 Pro
 (2026-11-01, source `8604e919`); it is a dated sample, not a guarantee for another machine.
+The first CI reading after the unpaced harness change was 16.2 ms CPU/frame,
+but its 600-frame scroll still took about ten seconds. The reference keeps the
+allowance at 2.1 pending a qualified unpaced runner reading.
 `bun perf/compare.ts --base <dir>` alternates samples between two prepared
 trees. Each repetition has a ten-minute hang deadline; a failure identifies
 the repetition, exits 1 and keeps earlier raw samples on stderr without a final

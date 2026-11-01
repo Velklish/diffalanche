@@ -402,8 +402,8 @@ afterwards, so the fixture is what it was.
 
 The scroll is one pass over the whole review at up to 600 frames, so the step is
 `scrollHeight / 600` — far faster than a person scrolls, which is the point: it
-is the stress case, not the typical one. **The frames are not paced**:
-Chromium is launched with `--disable-frame-rate-limit`, so a frame starts as
+is the stress case, not the typical one. **On the development machine the
+frames are not paced**: Chromium is launched with `--disable-frame-rate-limit`, so a frame starts as
 soon as the one before it is done instead of on a 60 Hz tick, and the pass takes
 what its 600 frames cost — about 5 s on an M1 Pro — rather than 600 × 16.7 ms.
 The same holds for every other line, since each ends at `afterPaint`, the next
@@ -600,16 +600,22 @@ runner ceiling from 20.8 to 23.8 against the same measured 17.3 and turned
 fifteen percent of headroom into thirty-eight, letting a regression the size
 of the runner's own reading pass on CI unnoticed.
 
-**The unpaced harness change left the budget and multiplier in place, and the
-runner reading behind them is a 60 Hz one.** The owner kept 9.5 and 2.1 on
-2026-09-24, so the rule above is not triggered. But the first runner reading
-of 17.3 ms came from the 60 Hz harness, and nobody has run the unpaced one on
-`ubuntu-latest`: this repository's runs are local until a push. If a runner
-comes down in this machine's proportion, 0.92–0.94, to about 16 ms, the CI
-ceiling of about 20 is about 24 % over it instead of fifteen — the looser gate
-the multiplier rule guards against. That is an assumption from one machine's
-shift, not a reading. The first `perf` job with the unpaced harness will provide
-the reading; recomputing the multiplier from it by the rule remains open.
+**The first runner measurement after the unpaced harness change is not a
+qualified unpaced calibration.** The owner kept 9.5 and 2.1 on 2026-09-24.
+The `perf` job of [CI run 41254238515](https://github.com/Velklish/diffalanche/actions/runs/41254238515/job/124693902655),
+source `279e818b5f9ed4c1c8d07c81f6b92bb2fd5d2e8c`, ran on 2026-10-31
+with Bun 1.3.14 on `ubuntu-latest` (image `ubuntu-24.04`). Its median CPU
+per frame was 16.2 ms, but the five `wall per step` scroll readings were
+9757, 10071, 10036, 10232 and 9664 ms for 600 frames: about ten seconds,
+close to a 60 Hz pass. The source passes `--disable-frame-rate-limit` to
+Chromium; the log does not establish that the scroll ran unpaced. Whether
+Linux ignored the flag or the frame work itself took that long remains a
+hypothesis requiring frame-timing evidence.
+
+The budget stays 9.5 and the multiplier stays 2.1, still based on the older
+17.3 ms runner reading. Applying the fifteen-percent rule to 16.2 would give
+about 2.0, but that is not a qualified unpaced calibration. Recomputing the
+multiplier remains open until a runner reading meets that condition.
 
 **What `bun run perf` means off a runner, and when it declines to say.** Off a
 runner, and only there: `GITHUB_ACTIONS=true` turns the precondition off
