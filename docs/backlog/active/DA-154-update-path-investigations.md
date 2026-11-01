@@ -187,3 +187,9 @@ tree-sitter on the server's event loop:
 Candidate: `diff-changed` only marks the files stale, and the next symbol question reads them.
 What settles it: the update line on a quiet machine, the tip against the same with the
 subscription removed, three runs a side.
+
+## Predeclared DA-76.4 baseline verification — 2026-11-01
+
+Before collecting any new baseline readings, the first baseline process from each side is excluded from the comparison as warm-up; its raw reading is retained. Collect six fresh processes per side, alternating `8db629b8b01dd83ff92918769e4490b35f5aae64` (A) and `e69f21f428ee392cd381376ea06f21b3bf5e01ac` (B) in order A1 B1 B2 A2 A3 B3 B4 A4 A5 B5 B6 A6. Compare the remaining five `baseline()` medians per side. Complete separation means max(A2..A6) < min(B2..B6), together with a positive difference of means. Otherwise the previously suggested complete separation did not hold in this declared experiment; that result does not prove all parser cost absent. Instrument only the baseline stderr observation, preserving the original assertion. Run the declared direct parseDiff microbenchmark first. No other exclusion or extra run is chosen after seeing data. Full plan and source hashes are retained under workers/perf-investigations/EXPERIMENT-PLAN-v2.md in this execution's evidence.
+
+Pre-data plan SHA256: `efcf7e542235b41fe44496ee5343d49ddbf48553ade089a4a171ccd1bb50a190`. No readings had been collected when this criterion was committed.
