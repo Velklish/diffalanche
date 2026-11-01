@@ -203,10 +203,33 @@ test("40.2: CLI deletion removes another task's row while its menu stays open", 
   page,
 }, info) => {
   const name = `handover-delete-${Date.now().toString(36)}`;
-  cli("review", "new", name, "--base", "head", "--no-use");
   await page.goto("/");
   await expect(page.locator(".pill-name").first()).toHaveText("synth");
   await expect(page.locator(".sidebar-foot")).toContainText("watching");
+  await page.evaluate(
+    () =>
+      new Promise<void>((opened) => {
+        const listed: string[] = [];
+        (window as unknown as { __handoverListed: string[] }).__handoverListed = listed;
+        const source = new EventSource("/api/events");
+        source.addEventListener("sessions-changed", (frame) => {
+          listed.push((JSON.parse((frame as MessageEvent<string>).data) as { name: string }).name);
+        });
+        source.onopen = () => opened();
+      }),
+  );
+  cli("review", "new", name, "--base", "head", "--no-use");
+  await expect
+    .poll(
+      () =>
+        page.evaluate(
+          (task) =>
+            (window as unknown as { __handoverListed: string[] }).__handoverListed.includes(task),
+          name,
+        ),
+      { timeout: 20_000 },
+    )
+    .toBe(true);
   await page.locator(".pill").first().click();
   const menu = page.locator('.menu[aria-label="review sessions"]');
   const row = menu.locator(".session-row").filter({ has: page.getByText(name, { exact: true }) });
