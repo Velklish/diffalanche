@@ -1,6 +1,5 @@
 # DA-145 · Make the comment gate distinguish source comments from string data
 
-- **Order:** 1060
 - **Scope:** [11-perf](../../reference/11-perf.md)
 - **Created:** 2026-11-01
 - **Dependencies:** none
@@ -8,6 +7,8 @@
 - **Audit finding:** PQA-003
 - **Audit priority:** P3
 - **Evidence status:** confirmed
+- **Previous order:** 1060
+- **Taken:** 2026-11-01
 
 
 ## Execution authorization — 2026-11-01
@@ -50,3 +51,7 @@ Audit finding PQA-003; evidence snapshot `087d3330128f8762ff88b0a9f7a7151dca8db0
 ## Next step
 
 The owner reviews and approves this item individually before it is queued for implementation. Creating this card does not authorize product changes.
+
+## Execution plan
+
+Own scripts/check-comments.ts, tests/check-comments.test.ts, the comment-gate section of reference 11 and any strictly necessary ADR-011 consistency correction. Honor the stronger every-comment contract from AGENTS and ADR-011; do not preserve a stale trailing-comment exclusion by weakening detection. Preserve runtime smoke and unrelated test fixture cleanup for their separate tasks. Validate false-positive and false-negative sensitivity with semantic mutation probes after committing. No parser framework or new dependency without demonstrated need.
