@@ -70,7 +70,7 @@ review writes it too ([11-perf.md](11-perf.md)).
 | `sessionExists(dataDir, name)` | whether `review.json` is there, whatever is in it |
 | `listSessionNames(dataDir)` | `{ names, warnings }` |
 
-Every file is written as JSON with `"version": 2`, two-space indentation, and a
+Every file is written as JSON with `"version": 3`, two-space indentation, and a
 trailing newline — the format the spec asks for so the files stay readable and
 diffable by hand.
 
@@ -532,16 +532,27 @@ into the cache scan the whole scope instead, and that scan writes the field.
 ## Schema versions
 
 `SCHEMA_VERSION` is what a write puts in a file; `READABLE_VERSIONS` is what a
-read accepts. They are 2 and `[1, 2]`.
+read accepts. They are 3 and `[1, 2, 3]`.
 
 A `review.json` or `comments.json` of version 1 predates the scope of a review
 task: it is read as a task over the whole root that is still open — which is
 what such a session has always meant — and what the caller holds is the current
-shape, so the next write puts the file on version 2. A data directory therefore
+shape, so the next write puts the file on version 3. A data directory therefore
 upgrades itself as it is used, and nothing has to walk it. A version that is
-neither of the two is refused whole, before any field of the file is read: a
+outside that list is refused whole, before any field of the file is read: a
 person wrote what is in these two, and half-reading that is worse than saying
 no.
+
+Version 2 metadata and comments also remain readable. Version 3 adds the
+`orphaned` comment status and optional `anchor.rangeContent`, `anchor.revision`
+and `originalAnchor`. The parser retains these fields and leaves absent legacy
+fields absent. A revision names a full commit id and a positive inclusive range. Optional
+`revision.content` stores one verified row per source line when the current
+range has expanded; legacy revisions without it remain readable.
+Source provenance is assigned only from a verified committed span; a missing
+legacy source is not replaced by the current target revision.
+The original snapshot is set before the first automatic mutation and is retained
+through subsequent moves and failed matches.
 
 **`diff.json` is not in that list.** A version this build does not know is
 discarded and the caller scans again, the same answer a cache with no `base` or

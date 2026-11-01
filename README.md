@@ -161,6 +161,14 @@ CLI commands without `--review` use `current` as their default; pass
 `--review <name>` to select a task for one command. `review new --no-use`
 creates a task without moving `current` and prints its named address.
 
+After code edits, unique Git or text matches move comment anchors automatically.
+A lost or ambiguous anchor keeps its saved text and becomes `orphaned`.
+Read these threads with `list --status orphaned`; edit their anchors in
+`comments.json` and use `reopen ID --role human` to return them to open.
+Warnings count lost anchors per repository inside the session scope. Model
+proposals and their UI remain deferred. See
+[automatic re-anchoring](docs/reference/04-domain.md#automatic-re-anchoring).
+
 ## Where the data lives
 
 Everything is under `.diffalanche/` in the root — the only place the tool
@@ -294,7 +302,7 @@ flags, and `tests/readme-cli.test.ts` fails if the two ever disagree.
 | `review reopen [<name>] --role human [--author <name>]` | open a closed review session again; `--role human` is required |
 | `review delete <name> --role human [--yes]` | delete a review session with its comments; `--role human` is required, and without `--yes` it asks on the terminal and refuses when there is none |
 | `diff [--repo <path>] [--json] [--patch]` | the change set of the review session; rewrites `diff.json` |
-| `list [--status <open\|resolved\|all>] [--repo <path>] [--severity <critical\|warning\|nit\|question>] [--unanswered] [--json]` | the comments of the review session |
+| `list [--status <open\|resolved\|orphaned\|all>] [--repo <path>] [--severity <critical\|warning\|nit\|question>] [--unanswered] [--json]` | the comments of the review session |
 | `show <id> [--json]` | one comment with its thread and its anchor |
 | `reply <id> --body <text\|-> [--author <name>] [--role <human\|agent>] [--confirm-severity]` | reply in a thread; `--confirm-severity` agrees with a severity the model chose, and the thread then reads `labelled by <author>` |
 | `comment [--repo <path>] [--path <path>] [--line <n>] [--end-line <n>] [--side <new\|old>] --severity <critical\|warning\|nit\|question> --body <text\|-> [--author <name>] [--role <human\|agent>]` | open a comment on a line, a file, a repository, or the review |

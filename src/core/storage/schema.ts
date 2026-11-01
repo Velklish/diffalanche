@@ -106,6 +106,63 @@ function parseAnchor(file: string, field: string, value: unknown): Anchor | null
     hunk: asString(file, `${field}.hunk`, raw.hunk),
     before: asStrings(file, `${field}.before`, raw.before),
     after: asStrings(file, `${field}.after`, raw.after),
+    ...(raw.rangeContent === undefined
+      ? {}
+      : {
+          rangeContent: asStrings(file, `${field}.rangeContent`, raw.rangeContent),
+        }),
+    ...(raw.revision === undefined
+      ? {}
+      : { revision: parseRevision(file, `${field}.revision`, raw.revision) }),
+  };
+}
+
+function parseRevision(
+  file: string,
+  field: string,
+  value: unknown,
+): NonNullable<Anchor["revision"]> {
+  const raw = asObject(file, field, value);
+  const line = asNullableNumber(file, `${field}.line`, raw.line);
+  const endLine = asNullableNumber(file, `${field}.endLine`, raw.endLine);
+  if (
+    line === null ||
+    endLine === null ||
+    !Number.isInteger(line) ||
+    !Number.isInteger(endLine) ||
+    line < 1 ||
+    endLine < line
+  ) {
+    return fail(file, field, "expected a positive line range");
+  }
+  const sha = asString(file, `${field}.sha`, raw.sha);
+  if (!/^[a-f0-9]{40,64}$/.test(sha))
+    return fail(file, `${field}.sha`, "expected a full commit id");
+  const content =
+    raw.content === undefined ? undefined : asStrings(file, `${field}.content`, raw.content);
+  if (content !== undefined && content.length !== endLine - line + 1)
+    return fail(file, `${field}.content`, "expected one saved row per source line");
+  return {
+    sha,
+    path: asString(file, `${field}.path`, raw.path),
+    line,
+    endLine,
+    ...(content === undefined ? {} : { content }),
+  };
+}
+
+function parseOriginal(
+  file: string,
+  field: string,
+  value: unknown,
+): NonNullable<Comment["originalAnchor"]> {
+  const raw = asObject(file, field, value);
+  return {
+    path: asNullableString(file, `${field}.path`, raw.path),
+    side: asNullableOneOf(file, `${field}.side`, raw.side, SIDES),
+    line: asNullableNumber(file, `${field}.line`, raw.line),
+    endLine: asNullableNumber(file, `${field}.endLine`, raw.endLine),
+    anchor: parseAnchor(file, `${field}.anchor`, raw.anchor),
   };
 }
 
@@ -141,6 +198,9 @@ function parseComment(file: string, field: string, value: unknown): Comment {
     line: asNullableNumber(file, `${field}.line`, raw.line),
     endLine: asNullableNumber(file, `${field}.endLine`, raw.endLine),
     anchor: parseAnchor(file, `${field}.anchor`, raw.anchor),
+    ...(raw.originalAnchor === undefined
+      ? {}
+      : { originalAnchor: parseOriginal(file, `${field}.originalAnchor`, raw.originalAnchor) }),
     severity: asOneOf(file, `${field}.severity`, raw.severity, SEVERITIES),
     severitySource: parseSeveritySource(file, `${field}.severitySource`, raw.severitySource),
     status: asOneOf(file, `${field}.status`, raw.status, COMMENT_STATUSES),
@@ -157,7 +217,7 @@ function parseComment(file: string, field: string, value: unknown): Comment {
 }
 
 /** A version 1 file lacks the four fields of DA-53 and reads as an open task over the whole
- * root; the next write puts it on version 2. */
+ * root; the next write puts it on version 3. */
 export function parseReview(file: string, text: string): Review {
   const raw = asObject(file, null, parseJson(file, text));
   return {

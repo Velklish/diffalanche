@@ -17,6 +17,7 @@ import {
   repositoryInScope,
   resolveSessionName,
 } from "../core/domain/index.ts";
+import { commentWarnings, reconcileAnchors } from "../core/domain/reanchor.ts";
 import { changedPathsInScope } from "../core/domain/scope.ts";
 import { readRepositoryChange, scan } from "../core/index.ts";
 import type { Base, DiffCache, Review, Scope } from "../core/storage/index.ts";
@@ -202,7 +203,13 @@ export function createReviewService(
       // An invalidation that landed during the read threw this document away,
       // and a re-read of its comments must not put it back.
       if (entry.version !== started) {
-        return { ...cached, session: review, comments, counters: countReview(comments) };
+        return {
+          ...cached,
+          session: review,
+          comments,
+          counters: countReview(comments),
+          warnings: commentWarnings(cached.warnings, comments, review.scope),
+        };
       }
       // What is held now, which a rescan may have patched while the files were read.
       const held = entry.document ?? cached;
@@ -213,7 +220,13 @@ export function createReviewService(
       if (asked > entry.staleComments) entry.staleComments = asked;
       // A burst about another task leaves this one's bytes, and their serialisation, alone.
       if (sameJson(review, held.session) && sameJson(comments, held.comments)) return held;
-      const reread = { ...held, session: review, comments, counters: countReview(comments) };
+      const reread = {
+        ...held,
+        session: review,
+        comments,
+        counters: countReview(comments),
+        warnings: commentWarnings(held.warnings, comments, review.scope),
+      };
       entry.document = reread;
       entry.payload = null;
       return reread;
@@ -405,7 +418,7 @@ function withAdopted(document: ReviewDocument, entry: Held): ReviewDocument {
     ...document,
     repositories: cache.repositories,
     totals: cache.totals,
-    warnings: cache.warnings,
+    warnings: commentWarnings(cache.warnings, document.comments, document.session.scope),
   };
 }
 
@@ -422,7 +435,7 @@ async function build(
     root: config.root,
     repositories: cache.repositories.map(withoutHunks),
     totals: cache.totals,
-    warnings: cache.warnings,
+    warnings: commentWarnings(cache.warnings, comments, review.scope),
     session: review,
     comments,
     counters: countReview(comments),
@@ -452,7 +465,9 @@ async function changeSet(
 /** Reads every repository of the scope and writes `diff.json`; the hunks stay in the
  * file, where anchor capture is the one reader that needs them. */
 async function rebuild(config: Config, session: string, review: Review): Promise<DiffCache> {
-  const { cache } = await scanReview(config, review.base, review.scope);
+  const before = await readDiffCache(config.dataDir, session);
+  const { cache, changes, removed } = await scanReview(config, review.base, review.scope);
+  await reconcileAnchors(config, session, review, changes, before, { removed });
   await withLock(sessionDir(config.dataDir, session), async (held) => {
     await held.assertHeld();
     await writeDiffCache(config.dataDir, session, cache);

@@ -3,8 +3,17 @@
 import { randomUUID } from "node:crypto";
 import { stat } from "node:fs/promises";
 import { join, relative } from "node:path";
-import { filterChange, patchable, replaceRepository, scanReview } from "../change-set.ts";
+import {
+  capturedRemovals,
+  filterChange,
+  patchable,
+  replaceRepository,
+  sameBase,
+  sameScope,
+  scanReview,
+} from "../change-set.ts";
 import type { Config } from "../config/index.ts";
+import { commentWarnings, reconcileAnchors } from "../domain/reanchor.ts";
 import { changedPathsInScope, commentInScope, repositoryInScope } from "../domain/scope.ts";
 import { checkIgnore, readRepositoryChange } from "../git/index.ts";
 import { byCodePoint } from "../order.ts";
@@ -512,6 +521,15 @@ export async function startWatcher(options: WatcherOptions): Promise<Watcher> {
       }
     }
     comments.set(name, snapshotOf(list));
+    if (
+      name === session &&
+      list.some((comment) => baseline.get(comment.id)?.status !== comment.status)
+    ) {
+      const cache = await readDiffCache(config.dataDir, name);
+      const review = await readReview(config.dataDir, name);
+      if (cache !== null)
+        bus.emit({ type: "warnings", list: commentWarnings(cache.warnings, list, review.scope) });
+    }
   }
 
   /** Every comment write bumps `updatedAt` in `review.json`; only a change to what the review is —
@@ -725,28 +743,48 @@ export async function rescanRepository(
   const review = await readReview(config.dataDir, session);
   // With hunks: `diff.json` is the only place they live, and anchor capture reads them there
   // (05-watcher.md, "The change-set cache").
-  const change = filterChange(
-    review.scope,
-    await readRepositoryChange(config.root, repo, review.base, { hunks: true }),
-    config.exclude,
-  );
+  const raw = await readRepositoryChange(config.root, repo, review.base, { hunks: true });
+  const change = filterChange(review.scope, raw, config.exclude);
 
+  const beforeCache = await readDiffCache(config.dataDir, session);
+  const reconciled = await reconcileAnchors(config, session, review, [change], beforeCache, {
+    repo,
+    removed: capturedRemovals(raw),
+  });
   const patched = await withLock(sessionDir(config.dataDir, session), async (held) => {
+    const current = await readReview(config.dataDir, session);
+    if (!sameBase(review.base, current.base) || !sameScope(review.scope, current.scope))
+      return null;
     const cached = await readDiffCache(config.dataDir, session);
     // A cache for another base or scope answers a different question; the full scan that replaces
     // it runs outside the lock, since it takes as long as every repository takes.
     if (!patchable(cached, review.base, review.scope)) return null;
 
     const before = cached.repositories.find((one) => one.path === repo) ?? null;
-    if (sameChange(before, change)) {
-      return { cache: cached, changed: false, warningsChanged: false };
+    if (sameChange(before, change) && !reconciled.changed) {
+      return {
+        cache: {
+          ...cached,
+          warnings: commentWarnings(cached.warnings, reconciled.comments, review.scope),
+        },
+        changed: false,
+        warningsChanged: false,
+      };
     }
 
     const cache = replaceRepository(cached, change);
     const outcome: Rescan = {
-      cache,
+      cache: {
+        ...cache,
+        warnings: commentWarnings(cache.warnings, reconciled.comments, review.scope),
+      },
       changed: true,
-      warningsChanged: !sameWarnings(cached.warnings, cache.warnings),
+      warningsChanged:
+        reconciled.changed ||
+        !sameWarnings(
+          cached.warnings,
+          commentWarnings(cache.warnings, reconciled.comments, review.scope),
+        ),
     };
     ready?.(outcome);
     await held.assertHeld();
@@ -765,10 +803,21 @@ async function rescanSession(
   review: Review,
   ready?: Ready,
 ): Promise<Rescan> {
-  const { cache } = await scanReview(config, review.base, review.scope);
-  const outcome: Rescan = { cache, changed: true, warningsChanged: true };
-  ready?.(outcome);
+  const before = await readDiffCache(config.dataDir, session);
+  const { cache, changes, removed } = await scanReview(config, review.base, review.scope);
+  const reconciled = await reconcileAnchors(config, session, review, changes, before, { removed });
+  const outcome: Rescan = {
+    cache: {
+      ...cache,
+      warnings: commentWarnings(cache.warnings, reconciled.comments, review.scope),
+    },
+    changed: true,
+    warningsChanged: true,
+  };
   await withLock(sessionDir(config.dataDir, session), async (held) => {
+    const current = await readReview(config.dataDir, session);
+    if (!sameBase(review.base, current.base) || !sameScope(review.scope, current.scope)) return;
+    ready?.(outcome);
     await held.assertHeld();
     await writeDiffCache(config.dataDir, session, cache);
   });

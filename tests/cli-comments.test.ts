@@ -298,6 +298,12 @@ describe("comment on a line the change set does not carry", () => {
       hunk: "@@ -1,4 +1,4 @@",
       before: [],
       after: ["two", "three", "four"],
+      revision: {
+        sha: expect.stringMatching(/^[a-f0-9]{40}$/),
+        path: "file.txt",
+        line: 1,
+        endLine: 1,
+      },
     });
   });
 

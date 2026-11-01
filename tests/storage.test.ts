@@ -189,13 +189,13 @@ describe("reading", () => {
 
   it("refuses a file of an unknown schema version", async () => {
     await makeSession(dataDir, "one");
-    writeFileSync(reviewPath(dataDir, "one"), JSON.stringify({ ...review("one"), version: 3 }));
+    writeFileSync(reviewPath(dataDir, "one"), JSON.stringify({ ...review("one"), version: 99 }));
     await expect(readReview(dataDir, "one")).rejects.toThrow(
-      /version: expected one of 1, 2, got 3/,
+      /version: expected one of 1, 2, 3, got 99/,
     );
   });
 
-  it("reads a version 1 review as a task over the whole root, and writes it back as 2", async () => {
+  it("reads a version 1 review as a task over the whole root, and writes it back as 3", async () => {
     await makeSession(dataDir, "one");
     // What a session written before DA-53 looks like: no scope, no status, and
     // the four fields of version 2 nowhere in the file.
@@ -464,4 +464,77 @@ describe("withLock", () => {
     await expect(withLock(dir, async () => "taken", { timeoutMs: 1_000 })).resolves.toBe("taken");
     expect(readdirSync(dir)).not.toContain(".lock");
   });
+});
+
+describe("orphaned schema and legacy reads", () => {
+  it.each([1, 2])(
+    "reads version %i comments without inventing optional anchor metadata",
+    async (version) => {
+      await makeSession(dataDir, "legacy", []);
+      const saved = comment("c_legacy");
+      writeFileSync(
+        commentsPath(dataDir, "legacy"),
+        JSON.stringify({ version, comments: [saved] }),
+      );
+      const read = await readComments(dataDir, "legacy");
+      expect(read).toEqual([saved]);
+      expect(read[0]).not.toHaveProperty("originalAnchor");
+      expect(read[0]?.anchor).not.toHaveProperty("revision");
+      expect(read[0]?.anchor).not.toHaveProperty("rangeContent");
+      await updateComments(dataDir, "legacy", () => undefined);
+      expect(JSON.parse(readFileSync(commentsPath(dataDir, "legacy"), "utf8")).version).toBe(3);
+    },
+  );
+
+  it("round-trips orphaned status, original text, range and verified revision", async () => {
+    const anchor = {
+      lineContent: "first",
+      hunk: "@@ -1,2 +1,2 @@",
+      before: [],
+      after: ["second"],
+      rangeContent: ["first", "second"],
+      revision: { sha: "a".repeat(40), path: "src/a.ts", line: 1, endLine: 2 },
+    };
+    const saved = comment("c_lost", {
+      status: "orphaned",
+      anchor,
+      originalAnchor: { path: "src/a.ts", side: "new", line: 1, endLine: 2, anchor },
+    });
+    await makeSession(dataDir, "lost", [saved]);
+    expect(await readComments(dataDir, "lost")).toEqual([saved]);
+    await updateComments(dataDir, "lost", (comments) => {
+      comments[0]?.replies.push({
+        id: "r_1",
+        author: "human",
+        role: "human",
+        body: "retained",
+        createdAt: "now",
+      });
+    });
+    expect((await readComments(dataDir, "lost"))[0]).toMatchObject({
+      ...saved,
+      replies: [{ id: "r_1", body: "retained" }],
+    });
+  });
+});
+
+it("round-trips optional committed source rows and refuses a mismatched source span", async () => {
+  const saved = comment("c_source", {
+    anchor: {
+      lineContent: "A",
+      hunk: "",
+      before: [],
+      after: [],
+      rangeContent: ["A", "X", "B"],
+      revision: { sha: "a".repeat(40), path: "src/a.ts", line: 1, endLine: 2, content: ["A", "B"] },
+    },
+  });
+  await makeSession(dataDir, "source", [saved]);
+  expect(await readComments(dataDir, "source")).toEqual([saved]);
+  const raw = JSON.parse(readFileSync(commentsPath(dataDir, "source"), "utf8"));
+  raw.comments[0].anchor.revision.content = ["A"];
+  writeFileSync(commentsPath(dataDir, "source"), JSON.stringify(raw));
+  await expect(readComments(dataDir, "source")).rejects.toThrow(
+    "expected one saved row per source line",
+  );
 });

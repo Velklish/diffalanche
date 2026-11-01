@@ -20,6 +20,7 @@ type Comment = {
   path: string | null;
   line: number | null;
   status: string;
+  role: string;
   body: string;
   replies: { author: string; role: string; body: string }[];
 };
@@ -33,14 +34,22 @@ function cli(...args: string[]): string {
   });
 }
 
-/** The last open thread on a line: the writing specs take the first on the shared fixture, and two
- * specs writing into one thread is one failing on the other's work. */
+/** An unanswered line thread after the first: the writing specs reserve that first thread,
+ * and another agent reply in an already-awaiting thread cannot increase the awaiting counter. */
 function lastThread(): Comment {
   const anchored = comments("open").filter(
     (comment) => comment.repo !== null && comment.path !== null && comment.line !== null,
   );
   if (anchored.length < 2) throw new Error("the fixture has fewer than two open threads on a line");
-  return anchored.at(-1) as Comment;
+  const thread = anchored
+    .slice(1)
+    .filter((comment) => (comment.replies.at(-1)?.role ?? comment.role) === "human")
+    .at(-1);
+  if (thread === undefined)
+    throw new Error(
+      "the fixture has no unanswered open line thread after its first anchored thread",
+    );
+  return thread;
 }
 
 async function open(page: Page) {

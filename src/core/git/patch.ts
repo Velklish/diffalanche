@@ -207,6 +207,7 @@ function headerPaths(patch: string): PatchPaths {
     else if (line.startsWith("new file mode ")) status = "added";
     else if (line.startsWith("deleted file mode ")) status = "deleted";
   }
+  if (from !== undefined && to !== undefined) status = "renamed";
   if (old !== undefined || renamed !== undefined) {
     return { old: old ?? null, new: renamed ?? null, status };
   }
@@ -273,7 +274,7 @@ const ESCAPES: Record<string, number> = {
 
 /** Undoes git's `quote_c_style`: octal escapes are bytes of the name, collected as bytes and
  * decoded as UTF-8 at the end (02-git.md, "Paths"). An unquoted token is already the path. */
-function unquote(value: string): string {
+export function unquote(value: string): string {
   if (!value.startsWith('"') || !value.endsWith('"') || value.length < 2) return value;
   const body = value.slice(1, -1);
   const bytes: number[] = [];

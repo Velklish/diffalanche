@@ -59,6 +59,7 @@ function write(path: string, lines: string[]): void {
 let root: string;
 let dir: string;
 let head: string;
+let renamedHead: string;
 let config: Config;
 let app: Hono;
 
@@ -93,6 +94,7 @@ beforeAll(async () => {
   git(two, "init", "-q", "-b", "main");
   git(two, "add", "-A");
   git(two, "-c", "user.email=f@example.com", "-c", "user.name=f", "commit", "-qm", "init");
+  renamedHead = git(two, "rev-parse", "HEAD").trim();
   git(two, "mv", "old.txt", "new.txt");
 
   config = await loadConfig({ root });
@@ -396,6 +398,7 @@ describe("a comment outside the change set", () => {
       hunk: "@@ -2,7 +2,7 @@",
       before: ["keep 2", "keep 3", "keep 4"],
       after: ["keep 6", "keep 7", "keep 8"],
+      revision: { sha: head, path: "keep.txt", line: 5, endLine: 5 },
     });
   });
 
@@ -408,6 +411,7 @@ describe("a comment outside the change set", () => {
       hunk: "@@ -1,4 +1,4 @@",
       before: [],
       after: ["keep 2", "keep 3", "keep 4"],
+      revision: { sha: head, path: "keep.txt", line: 1, endLine: 1 },
     });
   });
 
@@ -419,6 +423,7 @@ describe("a comment outside the change set", () => {
       hunk: "@@ -15,7 +17,7 @@",
       before: ["edit 15", "edit 16", "edit 17"],
       after: ["edit 19", "edit 20", "edit 21"],
+      revision: { sha: head, path: "edit.txt", line: 18, endLine: 18 },
     });
   });
 
@@ -430,6 +435,7 @@ describe("a comment outside the change set", () => {
       hunk: "@@ -3,7 +5,7 @@",
       before: ["edit 3", "edit 4", "edit 5"],
       after: ["edit 7", "edit 8", "edit 9"],
+      revision: { sha: head, path: "edit.txt", line: 6, endLine: 6 },
     });
     const onOld = (await (
       await comment({ path: "edit.txt", line: 6, side: "old" })
@@ -439,6 +445,7 @@ describe("a comment outside the change set", () => {
       hunk: "@@ -3,7 +5,7 @@",
       before: ["edit 3", "edit 4", "edit 5"],
       after: ["edit 7", "edit 8", "edit 9"],
+      revision: { sha: head, path: "edit.txt", line: 6, endLine: 6 },
     });
   });
 
@@ -450,6 +457,7 @@ describe("a comment outside the change set", () => {
       hunk: "@@ -2,7 +2,7 @@",
       before: ["old 2", "old 3", "old 4"],
       after: ["old 6", "old 7", "old 8"],
+      revision: { sha: renamedHead, path: "old.txt", line: 5, endLine: 5 },
     });
   });
 

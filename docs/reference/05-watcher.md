@@ -5,8 +5,29 @@ reviewed repositories and the data directory, rescans one repository when its
 files change, rewrites that repository's entry in `diff.json`, and puts what
 happened on an event bus other parts of the process listen to
 ([ADR-005](../adr/adr-005-live-update.md)). It reads repositories and writes
-nothing into them; the only file it writes is the change-set cache of the data
-directory.
+nothing into them. Rescans write the data directory's change-set cache and
+persist automatic comment re-anchoring through the domain.
+
+## Re-anchoring before events
+
+Repository rescans and full refreshes await `reconcileAnchors` before the
+synchronous `Ready` callback and corresponding `diff-changed` frame. The comment
+write happens outside the cache lock; the cache writer rechecks the captured
+base and scope under its lock. `onRescan` and the event still precede the costly
+`diff.json` write. Full refresh and session-switch reads use the same path.
+Internal scan results retain filtered empty repository records and captured
+old-path removals from the same raw read. Reconciliation consumes these records
+without a second mutable repository read. Removed paths never enter the public
+cache or HTTP response; they distinguish proved removal from an unavailable
+safe read of an unchanged file.
+
+Empty or Git metadata wake paths and files returned to base still reconcile the
+repository's in-scope comments rather than treating wake paths as diff entries.
+
+Orphan warnings are derived from saved comments at the document/event layer,
+including status changes such as human reopen. They survive unrelated rescans
+and restart without entering filesystem `rootWarnings`. See
+[automatic re-anchoring](04-domain.md#automatic-re-anchoring).
 
 ## Starting it
 

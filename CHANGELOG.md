@@ -83,6 +83,25 @@ and `bun run release` refuses a version that has no section. See
 
 ### Added
 
+- Unique Git and text matches re-anchor line comments and ranges after code
+  edits. Lost or ambiguous anchors retain their saved text as `orphaned`;
+  `list --status orphaned` and session warnings expose them. Human reopen
+  follows a manual anchor edit. Schema 3 retains readable versions 1 and 2.
+  Committed renames retain file identity even after the old path is recreated;
+  moves respect scope and exclusions. Mapping uses captured bytes so concurrent
+  edits cannot supply coordinates from another snapshot. Legacy source identity
+  is conservative, and committed CRLF anchors retain provenance. Expanded
+  ranges keep their verified source rows across repeated refreshes. A transient
+  null read after an empty diff does not create a sticky lost anchor. CLI diff
+  reconciles against that same captured scan. Historical comments follow staged
+  renames even when the old name is recreated; new comments on that copy do not
+  inherit the historical file's committed identity.
+  Edits to that new copy also re-anchor before the staged rename is committed;
+  snapshot verification treats its whole-file addition as having an empty base.
+  Renames that also edit content retain the old path for anchoring. Model
+  proposals and their UI remain deferred.
+
+
 - The unit suite checks that the reading probe, card scroll margin and both
   browser helpers declare the same coordinate, and names any unreadable or
   disagreeing declaration without fixing the value at one height.

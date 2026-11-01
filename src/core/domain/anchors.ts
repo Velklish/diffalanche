@@ -81,10 +81,12 @@ export function captureAnchor(
     const found = onSide[index];
     if (found === undefined) continue;
     return {
-      lineContent: found.content,
+      lineContent: normalizeLine(found.content),
       hunk: hunk.header,
-      before: onSide.slice(Math.max(0, index - CONTEXT), index).map((one) => one.content),
-      after: onSide.slice(index + 1, index + 1 + CONTEXT).map((one) => one.content),
+      before: onSide
+        .slice(Math.max(0, index - CONTEXT), index)
+        .map((one) => normalizeLine(one.content)),
+      after: onSide.slice(index + 1, index + 1 + CONTEXT).map((one) => normalizeLine(one.content)),
     };
   }
 
@@ -145,8 +147,7 @@ export function captureFromFile(
   file: FileChange | null,
   name: string,
 ): Anchor {
-  const lines = text.split("\n");
-  if (lines.at(-1) === "") lines.pop();
+  const lines = fileLines(text);
   const index = line - 1;
   const found = lines[index];
   if (found === undefined) {
@@ -165,4 +166,109 @@ export function captureFromFile(
       ? `@@ -${other},${count} +${start},${count} @@`
       : `@@ -${start},${count} +${other},${count} @@`;
   return { lineContent: found, hunk, before, after };
+}
+
+type AnchorMatch =
+  | { kind: "matched"; line: number; endLine: number | null; anchor: Anchor }
+  | { kind: "orphaned" };
+
+export function normalizeLine(line: string): string {
+  return line.replace(/\r$/, "");
+}
+
+export function fileLines(text: string): string[] {
+  const lines = text.replace(/\r\n/g, "\n").split("\n");
+  if (lines.at(-1) === "") lines.pop();
+  return lines;
+}
+
+function similarity(left: string, right: string): number {
+  const a = left.trim();
+  const b = right.trim();
+  if (a === b) return 1;
+  if (a.length < 2 || b.length < 2) return 0;
+  const pairs = new Map<string, number>();
+  for (let i = 0; i < a.length - 1; i += 1) {
+    const pair = a.slice(i, i + 2);
+    pairs.set(pair, (pairs.get(pair) ?? 0) + 1);
+  }
+  let shared = 0;
+  for (let i = 0; i < b.length - 1; i += 1) {
+    const pair = b.slice(i, i + 2);
+    const count = pairs.get(pair) ?? 0;
+    if (count > 0) {
+      shared += 1;
+      pairs.set(pair, count - 1);
+    }
+  }
+  return (2 * shared) / (a.length + b.length - 2);
+}
+
+/** A verified git span has priority; the text fallback accepts exactly one qualifying span. */
+export function locateAnchor(
+  saved: { anchor: Anchor; endLine: number | null },
+  text: string,
+  mapped?: { lines: number[]; content: string[] },
+): AnchorMatch {
+  const lines = fileLines(text);
+  const body =
+    saved.anchor.rangeContent?.map(normalizeLine) ??
+    (saved.endLine === null ? [normalizeLine(saved.anchor.lineContent)] : null);
+  if (body === null || body.length === 0) return { kind: "orphaned" };
+  const finish = (start: number, end: number): AnchorMatch => ({
+    kind: "matched",
+    line: start,
+    endLine: saved.endLine === null ? null : end,
+    anchor: {
+      ...captureFromFile(text, "new", start, null, "anchor target"),
+      ...(saved.endLine === null ? {} : { rangeContent: lines.slice(start - 1, end) }),
+    },
+  });
+  if (
+    mapped !== undefined &&
+    mapped.lines.length > 0 &&
+    mapped.lines.length === mapped.content.length &&
+    mapped.lines.every(
+      (at, i) =>
+        at > 0 &&
+        (i === 0 || at > (mapped.lines[i - 1] ?? 0)) &&
+        lines[at - 1] === normalizeLine(mapped.content[i] ?? ""),
+    )
+  ) {
+    const first = mapped.lines[0];
+    const last = mapped.lines.at(-1);
+    if (first !== undefined && last !== undefined) return finish(first, last);
+  }
+  let candidate: number | null = null;
+  for (let start = 0; start + body.length <= lines.length; start += 1) {
+    const core =
+      body.reduce((sum, value, i) => sum + similarity(value, lines[start + i] ?? ""), 0) /
+      body.length;
+    const context = [
+      ...saved.anchor.before.map((value, i) => ({
+        value,
+        at: start - saved.anchor.before.length + i,
+      })),
+      ...saved.anchor.after.map((value, i) => ({ value, at: start + 1 + i })),
+    ];
+    const contextScore =
+      context.length === 0
+        ? core
+        : context.reduce(
+            (sum, { value, at }) =>
+              sum + (lines[at] === undefined ? 0 : similarity(value, lines[at] ?? "")),
+            0,
+          ) / context.length;
+    const score = context.length === 0 ? core : 0.8 * core + 0.2 * contextScore;
+    const weak = body.every((value) => !/[\p{L}\p{N}_]/u.test(value));
+    if (
+      core < 0.85 ||
+      score < 0.9 ||
+      (weak && (context.length === 0 || contextScore !== 1 || core !== 1))
+    )
+      continue;
+    if (candidate !== null) return { kind: "orphaned" };
+    candidate = start;
+  }
+  return candidate === null ? { kind: "orphaned" } : finish(candidate + 1, candidate + body.length);
 }

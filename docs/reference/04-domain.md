@@ -323,7 +323,7 @@ the session ([Scope](#scope)), filtered by:
 
 | Filter | Values |
 |---|---|
-| `status` | `open`, `resolved`, `all` — the domain's default is `all`; the CLI picks its own |
+| `status` | `open`, `resolved`, `orphaned`, `all` — the domain's default is `all`; the CLI picks its own |
 | `repo` | a repository path |
 | `severity` | one severity |
 | `unanswered` | `true` keeps only unanswered threads, `false` drops them |
@@ -350,7 +350,7 @@ the level rule belongs to the comment, not to one entry point.
 
 A line comment stores the line's own text, the header of the hunk it sits in,
 and **three lines of context on each side**, taken from the change set when the
-comment is written. This is the input Phase 3 re-anchors from.
+comment is written. Re-anchoring uses this saved context.
 
 The context is the neighbourhood in the file the comment is about, so it is
 taken from the lines the anchored side has: `context` and `insert` for `new`,
@@ -449,6 +449,85 @@ domain, not the skill, for the reason the role check is. It does not look at
 the role: the marker names the author, and whoever it is, the label is theirs
 to agree with.
 
+### Automatic re-anchoring
+
+`reconcileAnchors` reads the in-scope line comments for the repository pass,
+reads each side/path/revision once, verifies the full target against the captured
+diff and base blob, computes matches outside the session lock,
+and persists proposals through `updateSession`. Under that lock it checks the
+session identity, base, scope and each comment's anchor/status fingerprint.
+Concurrent replies survive; a concurrent status or anchor edit rejects that
+proposal. A pass with no changes writes nothing. A target inconsistent with the
+captured diff is skipped so the next queued read can retry it. A null safe read
+after an empty diff is also skipped when the captured base still has that file.
+Captured deletions, omitted files and old paths proved removed by a hidden
+rename still become orphaned. That removal evidence comes from the same raw
+scan before filtering; it does not expose excluded targets or bypass safe reads.
+CLI diff, watcher refresh and server rebuild all pass the internal captured
+records, including empty ones, so reconciliation never substitutes a later scan
+for a repository missing from the public cache.
+An added record has an empty old side when verifying its captured patch, even
+if its pathname exists in historical HEAD as the source of a staged rename.
+Renamed records still use their captured old path; modified records use their
+pinned base blob. The full target must agree with the captured patch before
+either Git mapping or unique text matching can move a comment.
+
+The file source captures committed provenance at creation only for rows that
+inverse-map through the pinned HEAD/captured-target patch and match the committed
+blob exactly. Inserted or replaced rows have no committed identity, including
+copies of existing text. The optional revision callback receives `base.path: null`
+for a captured addition. When that base is the pinned HEAD, equal bytes at a
+recreated old path cannot give the new copy the historical file's identity.
+Custom file sources can omit this capability; legacy new-side comments use the
+conservative unique text fallback.
+
+The Git matcher uses a verified committed span and pinned target commit,
+then maps surviving HEAD rows through a diff of the pinned HEAD blob and
+immutable captured target bytes for `new`. The porcelain filename carries
+committed rename identity, even when HEAD has no changes. A recreated old path
+cannot replace that target. For a staged rename, a verified historical span
+follows the entry whose old path carries that identity, ahead of a new addition
+at the recreated name. A filtered rename leaves the historical comment orphaned
+at its saved path, even if a new copy exists there. A new comment on that copy
+keeps its own path and does not follow the historical rename.
+Both scanning and proposed path changes share the
+scope/exclusion predicate; a refused target leaves the saved path available.
+The `old` side reads the resolved base and the rename's old path, never the
+working tree. Captured ranges map every selected row; insertions between
+surviving rows expand the range. When the current body differs from the source
+span, `revision.content` retains its verified original selected rows. Later
+refreshes check these rows against the pinned blob and mapped target, while
+`rangeContent` remains the complete current range; unique text fallback is not
+weakened. Legacy old-side source identity requires a
+trusted previous cache, never the
+new target commit as a substitute for the past. A body-less legacy range with no
+previous snapshot is orphaned conservatively rather than filled from a copy.
+
+Captured rows and context use the same CRLF line-ending normalization as blob
+and mapped-row verification. Original snapshots of existing data are preserved.
+
+The text fallback searches the whole target file, including untracked or
+uncommitted lines. Case-sensitive character bigram Dice similarity trims line
+whitespace and normalizes CRLF. A candidate needs core similarity at least
+0.85 and total similarity at least 0.90 (80% core, 20% saved context). With no
+context, the core is the score. Blank and punctuation-only anchors need exact
+context. Exactly one qualifying span is accepted; distance never breaks a tie.
+A Git candidate must still match its saved selected rows in the target text.
+
+A successful match refreshes coordinates and context. The first mutation saves
+`originalAnchor`; failure retains the previous coordinates and context. Missing,
+binary and oversized targets become orphaned; process failures propagate.
+Orphaned status is sticky. Edit the anchor in `comments.json`, then use human
+`reopen` to return it to open; agents retain the existing role refusal. Reopening
+an orphan discards stale committed provenance so it cannot undo the manual
+anchor choice. Coordinates, saved text and `originalAnchor` remain intact.
+
+The status and warning contract from [the specification](../SPEC.md):
+
+<!-- quote:../SPEC.md -->
+A unique automatic Git or text match updates the line or range and its context. Ambiguous or missing matches keep the saved anchor and set `orphaned`. Orphaned comments stay orphaned until a human edits the anchor in `comments.json` and calls `reopen --role human`. They count as neither open nor resolved. Warnings report `N comments lost their anchor in <repo>` inside the session scope. The model proposal and its confirmation UI remain deferred.
+<!-- /quote -->
+
 ### Derived state
 
 | Name | Meaning |
@@ -457,7 +536,7 @@ to agree with.
 | `awaiting` | an **open** comment whose last message is from an agent: nobody has verified it |
 
 The last message of a thread is its last reply, or the comment itself when
-there are none. A resolved thread is neither.
+there are none. A resolved or orphaned thread is neither.
 
 `countReview(comments)` gives the counters of the whole review, of every
 repository that carries comments, and of every file inside them: `total`,
@@ -526,8 +605,5 @@ reader can paste back into `review base`.
 - The counters of `listSessions` are over the whole `comments.json` and not
   inside the scope. Nothing can write a comment outside a task's scope, so the
   two agree unless the file was edited by hand.
-- Re-anchoring and the `orphaned` status (Phase 3). An anchor is captured once
-  and never checked again, so a comment whose line has moved keeps the old
-  text.
 - Nothing re-reads `diff.json` while a comment is being written: the anchor is
   taken from the cache as it stood, so a scan that runs in between is not seen.

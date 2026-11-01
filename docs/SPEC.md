@@ -26,9 +26,9 @@ None of them combines many repositories in one review with on-disk comments and 
 3. **Root and repositories.** The root is the directory diffalanche runs in; `--root` overrides it. A repository is any directory containing `.git` (a directory or a worktree file) found at most `depth` levels below each entry of `roots`. A found repository is not scanned inside, so nested submodules and worktrees under it are not listed. A repository is identified by its path relative to the root — including the `roots` entry it was found under, so with `roots: ["repos"]` the id is `repos/group/service-api`, and with the default `roots: ["."]` it is `group/service-api`.
 4. **Diff base.** Three modes. A review session has one mode; the tool applies it to every repository separately. `head`: working tree against HEAD. `branch`: working tree against the merge base of HEAD and a branch — the remote default branch unless the session names one (`base.branch`, for example `origin/develop`); a repository where the named branch does not resolve uses its remote default branch with a warning; without a remote it behaves like `head`. `ref`: an explicit ref; repositories where it does not resolve are skipped with a warning. Untracked files are part of the diff. The tool reads git and never changes a repository's index, working tree, or history.
 5. **Storage.** `<root>/.diffalanche/`, overridable with `--data-dir` for one command, or for good with `DIFFALANCHE_DATA_DIR` or `dataDir` in the user config `$XDG_CONFIG_HOME/diffalanche/config.json` (`~/.config` without the variable); flag over variable over file over default, and everything but the flag relative to the root. One review session is one directory with three JSON files: session metadata, comments, and a cache of the last scanned diff. Metadata and comments are readable and editable by hand; the diff cache is written only by the tool. Sessions are never deleted automatically. Concurrent writes from the UI and the CLI lose no data.
-6. **Comment anchors.** A comment attaches to a line, a line range, a file, a repository, or the whole review. A line comment stores the line text and surrounding context, which is the input for re-anchoring in Phase 3.
+6. **Comment anchors.** A comment attaches to a line, a line range, a file, a repository, or the whole review. A line comment stores the line text and surrounding context, which is the input for automatic re-anchoring.
 7. **Severity.** `critical | warning | nit | question`.
-8. **Status and roles.** `open | resolved`; Phase 3 adds `orphaned`. A human opens comments; from the MVP on, agents can open them too through the CLI. An agent answers inside the thread in at most three sentences: one when it fixed the issue, three when it declines. Only a human sets `resolved`: the CLI refuses `resolve` and `reopen` unless the caller passes `--role human`. Every message carries `author` and `role: human | agent`.
+8. **Status and roles.** `open | resolved | orphaned`. A human opens comments; from the MVP on, agents can open them too through the CLI. An agent answers inside the thread in at most three sentences: one when it fixed the issue, three when it declines. Only a human sets `resolved`: the CLI refuses `resolve` and `reopen` unless the caller passes `--role human`. Every message carries `author` and `role: human | agent`.
 9. **Agent interface.** The CLI is the only contract for agent skills. The HTTP API exists for the UI and is not a contract. The JSON files remain a second way to read the data.
 10. **Suggestions from history.** A multilingual embedding model ships with the tool (118M parameters, about 120 MB in int8) and works offline with nothing to install. Server and CLI callers run embedding in a child process; the parent keeps the index, its update and its search. Process placement is decided in [ADR-016](adr/adr-016-model-in-a-process-of-its-own.md). The binary embeds the model and the runtime's native files; the npm package downloads both into the user cache on first use. Intel Macs (darwin-x64) get no model, so suggestions are not available there. The model, its runtime and the delivery are decided in [ADR-014](adr/adr-014-embedding-model-and-npm-delivery.md). A generative 0.5B model (about 400 MB quantized) is downloaded on demand with `model pull`. There is no fine-tuning: "in your style" comes from retrieving similar past comments and using them as examples.
 11. **Code navigation for any language.** Three tiers. Tier 1: text search and symbol-by-name search — any language, across repositories, no dependencies. Tier 2: a symbol index built with tree-sitter; grammars for popular languages ship with the tool, others are added through config. Tier 3: LSP through a config table `language → server command`; the tool finds servers on PATH and prints the install command for missing ones. No language is hard-coded.
@@ -107,6 +107,8 @@ flowchart LR
 - Go to definition and find references through a language server when one is configured and installed.
 - After code edits, comments stay on their lines. A comment whose place cannot be found is marked `orphaned` and kept.
 
+A unique automatic Git or text match updates the line or range and its context. Ambiguous or missing matches keep the saved anchor and set `orphaned`. Orphaned comments stay orphaned until a human edits the anchor in `comments.json` and calls `reopen --role human`. They count as neither open nor resolved. Warnings report `N comments lost their anchor in <repo>` inside the session scope. The model proposal and its confirmation UI remain deferred.
+
 ### Phase 4 — generative model
 
 - The user turns a short note into a comment written in their own style.
@@ -149,7 +151,7 @@ A review session is the directory `reviews/<name>/` with three files. `review.js
 
 ```json
 {
-  "version": 2,
+  "version": 3,
   "name": "ls-240372",
   "title": "Cargo flags across services",
   "base": { "mode": "branch", "branch": "origin/develop" },
@@ -171,7 +173,7 @@ A review session is the directory `reviews/<name>/` with three files. `review.js
 
 ```json
 {
-  "version": 2,
+  "version": 3,
   "comments": [
     {
       "id": "c_7f3k2q",
@@ -209,13 +211,15 @@ A review session is the directory `reviews/<name>/` with three files. `review.js
 }
 ```
 
+`anchor.rangeContent` optionally stores every selected range line. `anchor.revision` optionally records a verified committed span as `{sha,path,line,endLine}` with optional `content` containing the verified source rows when the current range differs; worktree-only spans have no fabricated revision. `originalAnchor` optionally preserves the earliest stored `{path,side,line,endLine,anchor}` before automatic mutation. Absent optional fields remain absent when legacy comments are read.
+
 Anchor levels: `repo: null` — the whole review; `path: null` — a repository; `line: null` — a file; `endLine` is optional. `base.mode` is `head`, `branch` with an optional `branch` field, or `ref` with a `ref` field.
 
 `severitySource` says who chose `severity`: `manual` — whoever wrote the comment; `auto` — the tool, from the proposal of similar past comments at the moment the comment was sent, or `warning` when it had none; `confirmed:<author>` — the tool, and then the agent named, which agreed with it in a reply. Only `auto` becomes `confirmed:<author>`, and only a reply makes it so. A comment without the field is `manual`: every comment written before the field existed had its severity chosen by its writer. The field did not raise the schema version, and that has a price: a build from before it reads a `comments.json` that carries the field, and its next write of that file drops the field from every comment, which reads as `manual` afterwards — the labels are lost, the severities stay. A new version would have had every such build refuse the whole file instead, and a server of one build with a command of another on one data directory is the ordinary case, not the exception.
 
 `diff.json` is a cache of the last scan: the repositories with changes, each with its branch, resolved base and merge base, and its file diffs — the same set that `diff --json` prints. It records the base **and the scope** it was computed for, and a cache computed for either of another value is read again rather than trusted: it answers a different question. Beside the full list of `warnings` it keeps `rootWarnings`, the ones about the root and the scope rather than about what one repository's diff says, so a change set rewritten one repository at a time keeps them; a cache without that field is still read, and is scanned again whole rather than rewritten one repository at a time. The tool overwrites it on every scan; git stays the source of truth, and hand edits to this file are lost. It lets the UI open instantly and lets an agent read the change set without a running server.
 
-**Schema versions.** Every file of the data directory carries `version`, and the current one is 2. `review.json` and `comments.json` of version 1 are read — a version 1 review is `scope: null`, `status: "open"` — and written back as version 2 by the next write, so a data directory upgrades itself as it is used. A version this build does not know is refused for those two files, because a person wrote what is in them; `diff.json` of an unknown version is discarded and scanned again, because the tool wrote it and can write it again.
+**Schema versions.** Every file of the data directory carries `version`, and the current one is 3. `review.json` and `comments.json` of versions 1 and 2 are read — a version 1 review is `scope: null`, `status: "open"` — and written back as version 3 by the next write, so a data directory upgrades itself as it is used. A version this build does not know is refused for those two files, because a person wrote what is in them; `diff.json` of an unknown version is discarded and scanned again, because the tool wrote it and can write it again.
 
 A write to `review.json` or `comments.json` replaces the whole file at once, and a transient `.lock` directory inside the session directory marks a write in progress; writers from the UI and from several CLI processes wait for it, so no message is lost. Next to the sessions live the `current` pointer and the embedding index over all sessions, `index/index.bin`: a cache like `diff.json`, written only by the tool, brought up to date by whatever reads it, and rebuilt when it was built by another model, runtime, or platform. Its first line is JSON carrying `version`; the vectors after it are raw floats.
 
@@ -260,7 +264,7 @@ Every command accepts `--review <name>` (default: the current session) and `--da
 | `review close [<name>] --role human [--author]`, `review reopen [<name>] --role human [--author]` | set `status`; `closedBy` comes from `--author` and `closedAt` from the clock; any other role is refused with exit code 1, as it is for `resolve` |
 | `review delete <name> --role human [--yes]` | delete a session with its comments (Phase 2); any other role is refused with exit code 1; without `--yes` it asks on the terminal, and with no terminal it refuses; a deleted current session moves `current` to the session updated last, or clears it |
 | `diff [--repo] [--json\|--patch]` | the selected session's change set, the same one a window on that session shows |
-| `list [--status open\|resolved\|all] [--repo] [--severity] [--unanswered] [--json]` | comments; `--unanswered` — the last message of the thread is from a human |
+| `list [--status open\|resolved\|orphaned\|all] [--repo] [--severity] [--unanswered] [--json]` | comments; `--unanswered` — the last message of the thread is from a human |
 | `show <id> [--json]` | one comment with its thread and anchor |
 | `reply <id> --body <text\|-> [--author] [--role] [--confirm-severity]` | reply in a thread; `-` reads stdin; `--confirm-severity` agrees with a severity the tool chose, and is refused with exit code 1 on any other |
 | `comment --repo R [--path P] [--line N] [--end-line M] [--side new\|old] --severity S --body <text\|-> [--author] [--role]` | new comment; the tool fills the anchor from the current diff, or from the file for a line the diff does not carry |
@@ -304,7 +308,7 @@ An agent that has just written code proposes the review of it: `review new <name
 - A task over two repositories of the synthetic review starts no git process for the other nineteen, counted rather than timed.
 - `review scope remove` with a comment under what it removes exits 1 and writes nothing; with `--drop-comments` the comment is gone and the scope is narrower.
 - `review close` marks the task closed and `resolve`, `reply`, and `comment` still work on it; both `review close` and `review reopen` refuse a role that is not `human`.
-- A `review.json` of version 1 is read as the whole root and open, and is on disk as version 2 after the next write.
+- A `review.json` of version 1 is read as the whole root and open, and is on disk as version 3 after the next write.
 - Two CLI processes replying to different comments at the same moment both land in `comments.json`.
 - The performance test on the synthetic review stays within the budget table.
 - CI is green on Node and Bun; binaries build for all six targets.
