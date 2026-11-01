@@ -296,6 +296,7 @@ export function perDirectory(
       return;
     }
     const baseline = await entrySnapshot(options.dir, relative, entries, options.ignore);
+    if (!(await heldDirectory(relative, watching))) return;
     if (!files.has(relative)) files.set(relative, baseline);
     const below: Promise<void>[] = [];
     for (const entry of entries) {
