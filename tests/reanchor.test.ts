@@ -7,6 +7,7 @@ import { scanReview } from "../src/core/change-set.ts";
 import { loadConfig } from "../src/core/config/index.ts";
 import { addComment, createSession, get } from "../src/core/domain/index.ts";
 import { fileSourceAt } from "../src/core/git/browse.ts";
+import { scan } from "../src/core/scanner/index.ts";
 import { writeDiffCache } from "../src/core/storage/index.ts";
 import { createActivityLog, createEventBus, startWatcher } from "../src/core/watcher/index.ts";
 
@@ -47,7 +48,7 @@ describe("re-anchoring through public refresh", () => {
   it("moves an existing comment five lines before refresh resolves", async () => {
     const f = await fixture();
     const watching = await startWatcher({
-      config: f.config, scan: f.scanned.scan, bus: createEventBus(), activity: createActivityLog(),
+      config: f.config, scan: await scan(f.root, { roots: [f.root], depth: 2, exclude: [] }), bus: createEventBus(), activity: createActivityLog(),
       recursive: true,
       native: () => ({ polling: false, ready: Promise.resolve(), close: () => undefined }),
     });
