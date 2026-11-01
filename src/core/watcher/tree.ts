@@ -2,7 +2,7 @@
  * not (05-watcher.md, "What it watches…"). Paths are relative, with forward slashes. */
 import type { Dirent, FSWatcher } from "node:fs";
 import { watch } from "node:fs";
-import { mkdir, mkdtemp, readdir, rm, stat, writeFile } from "node:fs/promises";
+import { lstat, mkdir, mkdtemp, readdir, readlink, rm, stat, writeFile } from "node:fs/promises";
 import { join } from "node:path";
 
 /** Whether a path is a directory to walk into or a file to report. */
@@ -261,7 +261,11 @@ function perDirectory(options: TreeWatcherOptions, onFailure: () => void): TreeS
       const path = within(relative, entry.name);
       if (entry.isDirectory()) {
         if (!watches.has(path) && !options.ignore(path, "dir")) below.push(arm(path, fresh));
-      } else if (fresh && entry.isFile() && !options.ignore(path, "file")) {
+      } else if (
+        fresh &&
+        (entry.isFile() || entry.isSymbolicLink()) &&
+        !options.ignore(path, "file")
+      ) {
         options.onChange(path);
       }
     }
@@ -412,12 +416,14 @@ async function snapshot(dir: string, ignore: Ignore): Promise<Map<string, string
         if (!ignore(path, "dir")) pending.push(path);
         continue;
       }
-      // Symbolic links are not followed, the way the scanner does not follow
-      // them: a link out of the tree is not part of it.
-      if (!entry.isFile() || ignore(path, "file")) continue;
+      // A link is an entry of the tree; only its target string is read, never the target itself.
+      if ((!entry.isFile() && !entry.isSymbolicLink()) || ignore(path, "file")) continue;
       try {
-        const info = await stat(join(dir, path));
-        files.set(path, `${info.mtimeMs}:${info.size}`);
+        const info = await lstat(join(dir, path));
+        const stamp = info.isSymbolicLink()
+          ? `link:${await readlink(join(dir, path))}`
+          : `${info.mtimeMs}:${info.size}`;
+        files.set(path, stamp);
       } catch {
         // Gone between the listing and the stat; the walk that sees it missing
         // reports it as a change.

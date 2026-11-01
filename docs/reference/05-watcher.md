@@ -115,7 +115,10 @@ Windows that watch is `fs.watch` with `recursive: true`, where the runtime
 honours it; on Linux and macOS it is one non-recursive `fs.watch` per directory, which the
 tree takes itself ([One watch per directory on
 Linux](#one-watch-per-directory-on-linux)); where neither is there, the same
-interface walks the tree on a timer and compares modification time and size. A watch that **dies after it started** says so once,
+interface walks the tree on a timer and compares modification time and size. Symbolic links are
+entries too: the walk compares their target strings using `lstat` and `readlink`,
+including dangling links. It never follows a link into a target directory or
+reads target content, so changing an outside target alone produces no change. A watch that **dies after it started** says so once,
 through `onFallback`. A session that **walks from the start** says so once too,
 through `onWalk`: the probe below answered that the runtime cannot recurse, or
 `watch` itself refused one tree when it was built — Node's

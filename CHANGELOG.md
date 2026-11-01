@@ -15,6 +15,9 @@ and `bun run release` refuses a version that has no section. See
 
 ### Fixed
 
+- The polling watcher reports symbolic link creation, deletion and retargeting,
+  including dangling links, without traversing targets outside the watched tree.
+
 - macOS watches each directory directly, so Bun continues hearing files in
   directories created or replaced after startup.
 

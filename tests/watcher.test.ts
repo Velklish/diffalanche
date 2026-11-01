@@ -9,6 +9,8 @@ import {
   readFileSync,
   renameSync,
   rmSync,
+  symlinkSync,
+  unlinkSync,
   writeFileSync,
 } from "node:fs";
 import { readFile, rm, writeFile } from "node:fs/promises";
@@ -1001,6 +1003,78 @@ describe("what a repository's watch reports", () => {
 });
 
 describe("watching a tree", () => {
+  it("refreshes the Git patch when polling creates, retargets and deletes a link", async () => {
+    const dataDir = mkdtempSync(join(tmpdir(), "diffalanche-poll-link-"));
+    const outside = mkdtempSync(join(tmpdir(), "diffalanche-poll-outside-"));
+    mkdirSync(join(dataDir, "reviews", SESSION), { recursive: true });
+    for (const name of ["review.json", "comments.json", "diff.json"]) {
+      copyFileSync(
+        join(config.dataDir, "reviews", SESSION, name),
+        join(dataDir, "reviews", SESSION, name),
+      );
+    }
+    writeFileSync(join(dataDir, "current"), `${SESSION}\n`);
+    const own = createEventBus();
+    let changed = 0;
+    own.subscribe((event) => {
+      if (event.type === "diff-changed" && event.repo === REPO) changed += 1;
+    });
+    const walking = await startWatcher({
+      config: { ...config, dataDir },
+      scan: found,
+      bus: own,
+      activity: createActivityLog(),
+      recursive: false,
+      pollIntervalMs: 10,
+      debounceMs: 10,
+    });
+    const link = join(root, REPO, "observed-link");
+    let linked = false;
+    const patch = async (after: number, target: string | null): Promise<string> => {
+      const deadline = performance.now() + 20_000;
+      let result: string | undefined;
+      do {
+        const cache = await readDiffCache(dataDir, SESSION);
+        result = cache?.repositories
+          .find((repo) => repo.path === REPO)
+          ?.files.find((file) => file.path === "observed-link")?.patch;
+        if (
+          changed > after &&
+          (target === null ? result === undefined : result?.includes(`+${target}`))
+        )
+          return result ?? "";
+        await new Promise((done) => setTimeout(done, 5));
+      } while (performance.now() < deadline);
+      throw new Error(`link patch did not refresh for ${target}`);
+    };
+    try {
+      const target = join(outside, "secret.txt");
+      writeFileSync(target, "SECRET-OUTSIDE-CONTENT");
+      let before = changed;
+      symlinkSync(target, link);
+      linked = true;
+      const created = await patch(before, target);
+      expect(created).toContain("new file mode 120000");
+      expect(created).not.toContain("SECRET-OUTSIDE-CONTENT");
+
+      before = changed;
+      symlinkSync("missing-target", `${link}.next`);
+      renameSync(`${link}.next`, link);
+      expect(await patch(before, "missing-target")).toContain("new file mode 120000");
+
+      before = changed;
+      unlinkSync(link);
+      linked = false;
+      expect(await patch(before, null)).toBe("");
+    } finally {
+      await walking.close();
+      if (linked) unlinkSync(link);
+      rmSync(dataDir, { recursive: true, force: true });
+      rmSync(outside, { recursive: true, force: true });
+      await settle();
+    }
+  });
+
   it("uses the runtime's measured recursive capability, including a false answer", async () => {
     const recursive = await supportsRecursiveWatch(config.dataDir);
     let nativeUsed = false;

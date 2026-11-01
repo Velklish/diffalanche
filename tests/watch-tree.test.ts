@@ -1,7 +1,17 @@
 /** The watch per directory of `src/core/watcher/tree.ts` on its own: directories that come, go and
  * come back, one it may not read, and a watch the kernel refuses (05-watcher.md, "One watch…"). */
 import { execFile, execFileSync } from "node:child_process";
-import { chmodSync, mkdirSync, mkdtempSync, readFileSync, rmSync, writeFileSync } from "node:fs";
+import {
+  chmodSync,
+  mkdirSync,
+  mkdtempSync,
+  readFileSync,
+  renameSync,
+  rmSync,
+  symlinkSync,
+  unlinkSync,
+  writeFileSync,
+} from "node:fs";
 import { tmpdir } from "node:os";
 import { join } from "node:path";
 import { fileURLToPath } from "node:url";
@@ -319,23 +329,20 @@ function dropsCapabilities(): boolean {
 }
 
 describe("a watch the kernel refuses", () => {
-  it.skipIf(!DIRS)(
-    "walks a root it cannot take, and hears it once the root is there",
-    async () => {
-      const parent = mkdtempSync(join(tmpdir(), "diffalanche-tree-noroot-"));
-      const dir = join(parent, "root");
-      const tree = start(dir, () => false, 20);
-      try {
-        await tree.tree.ready;
-        expect(tree.tree.polling()).toBe(true);
-        mkdirSync(dir);
-        await write(tree, dir, "a.ts");
-      } finally {
-        tree.tree.close();
-        rmSync(parent, { recursive: true, force: true });
-      }
-    },
-  );
+  it.skipIf(!DIRS)("walks a root it cannot take, and hears it once the root is there", async () => {
+    const parent = mkdtempSync(join(tmpdir(), "diffalanche-tree-noroot-"));
+    const dir = join(parent, "root");
+    const tree = start(dir, () => false, 20);
+    try {
+      await tree.tree.ready;
+      expect(tree.tree.polling()).toBe(true);
+      mkdirSync(dir);
+      await write(tree, dir, "a.ts");
+    } finally {
+      tree.tree.close();
+      rmSync(parent, { recursive: true, force: true });
+    }
+  });
 
   // `fs.watch` is refused past a count, the way inotify refuses once the user's watches run out.
   it.skipIf(!DIRS)("hands the tree to the walk when the start runs out of watches", async () => {
@@ -391,4 +398,56 @@ it("documents the native directory watches and the platform of lifecycle measure
     "On Linux and macOS the tree takes one non-recursive watch per directory.",
   );
   expect(reference).not.toContain("nothing in it has gone\nquiet under Bun's runner");
+  expect(reference).toContain(
+    "including dangling links. It never follows a link into a target directory",
+  );
+});
+
+describe("symbolic links in the polling tree", () => {
+  it("reports link entries without following their targets, including dangling links", async () => {
+    const dir = mkdtempSync(join(tmpdir(), "diffalanche-tree-links-"));
+    const outside = mkdtempSync(join(tmpdir(), "diffalanche-tree-target-"));
+    const heard: string[] = [];
+    const tree = watchTree({
+      dir,
+      ignore: () => false,
+      recursive: false,
+      pollIntervalMs: 10,
+      onChange: (path) => heard.push(path),
+    });
+    const observed = { tree, heard, fellBack: () => 0 };
+    let marker = 0;
+    const barrier = async (): Promise<void> => {
+      await write(observed, dir, `marker-${marker++}`);
+    };
+    try {
+      await tree.ready;
+      let from = heard.length;
+      symlinkSync(outside, join(dir, "link"));
+      await barrier();
+      expect(heard.slice(from)).toContain("link");
+
+      from = heard.length;
+      writeFileSync(join(outside, "secret.txt"), "outside content");
+      await barrier();
+      await barrier();
+      expect(heard.slice(from).filter((path) => !path.startsWith("marker-"))).toEqual([]);
+
+      from = heard.length;
+      symlinkSync("missing-target", join(dir, "next"));
+      renameSync(join(dir, "next"), join(dir, "link"));
+      await barrier();
+      expect(heard.slice(from)).toContain("link");
+
+      from = heard.length;
+      unlinkSync(join(dir, "link"));
+      await barrier();
+      expect(heard.slice(from)).toContain("link");
+      expect(heard.some((path) => path.includes("secret"))).toBe(false);
+    } finally {
+      tree.close();
+      rmSync(dir, { recursive: true, force: true });
+      rmSync(outside, { recursive: true, force: true });
+    }
+  });
 });
