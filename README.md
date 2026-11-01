@@ -19,6 +19,9 @@ and later are in [docs/SPEC.md](docs/SPEC.md) section 10.
 
 ## Install
 
+Git 2.32 or newer must be on `PATH`; the reader does not check its version at
+runtime. See the [Git configuration policy](docs/reference/02-git.md#what-the-reader-trusts).
+
 From the first release on (**the package is not on npm yet**; how a release is
 made is under [Releases](#releases)), the npm channel needs no install of its
 own:

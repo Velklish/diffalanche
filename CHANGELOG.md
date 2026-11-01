@@ -15,6 +15,11 @@ and `bun run release` refuses a version that has no section. See
 
 ### Fixed
 
+- Read-only Git processes explicitly disable system configuration. The Git
+  reference states the required Git 2.32 minimum, absence of a runtime version
+  check, and the default user ignore file boundary when global configuration
+  is isolated.
+
 - Configuration file exclusions now apply to tracked and untracked files in
   initial, per-repository, named and scoped reads, and in live cache refreshes.
   Directory exclusions and scope continue to match current paths on renames.

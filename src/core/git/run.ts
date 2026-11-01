@@ -20,6 +20,7 @@ function readOnlyEnv(): Record<string, string | undefined> {
   }
   env.GIT_CONFIG_GLOBAL = GIT_NULL;
   env.GIT_CONFIG_SYSTEM = GIT_NULL;
+  env.GIT_CONFIG_NOSYSTEM = "1";
   return env;
 }
 

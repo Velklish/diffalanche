@@ -7,12 +7,18 @@ ever written (`docs/SPEC.md` section 11).
 
 ## What the reader trusts
 
+The reader requires Git 2.32 or newer and does not check the version at runtime.
+Git 2.32 introduced `GIT_CONFIG_GLOBAL` and `GIT_CONFIG_SYSTEM`
+([release notes](https://github.com/git/git/blob/v2.32.0/Documentation/RelNotes/2.32.0.txt));
+older versions do not provide the configuration isolation described here.
+
 Neither the repository it reads nor the environment it was started in
 ([ADR-012](../adr/adr-012-git-trust-model.md)).
 
 - **The environment is built rather than inherited.** `readOnlyEnv` in
   `src/core/git/run.ts` copies `process.env` without a single `GIT_*` key and
-  puts back `GIT_CONFIG_GLOBAL` and `GIT_CONFIG_SYSTEM` at the null device,
+  puts back `GIT_CONFIG_NOSYSTEM=1` to disable system configuration, and
+  `GIT_CONFIG_GLOBAL` and `GIT_CONFIG_SYSTEM` at the null device,
   spelled `/dev/null` on every platform (`GIT_NULL`). Node's `os.devNull` is
   `\\.\nul` on Windows, which git refuses with `unable to access '//./nul'`.
   Git for Windows reads `/dev/null` as `nul` rather than as a
@@ -432,8 +438,12 @@ reason for having no content is unknown, having none is the part that is true.
 `checkIgnore(cwd, paths)` in `run.ts` is the watcher's question
 ([05-watcher.md](05-watcher.md)): which of a burst's paths git ignores, asked
 with `check-ignore --stdin -z` in one process for the whole list. The rules are
-git's own — `.gitignore` at every level, `.git/info/exclude`, and the user's
-ignore file — and the index is read, so a tracked file is never reported: it is
+git's own — `.gitignore` at every level, `.git/info/exclude`, and the default
+user ignore file at `$XDG_CONFIG_HOME/git/ignore` (otherwise
+`$HOME/.config/git/ignore`). A `core.excludesFile` set only in global configuration is not read
+because the reader isolates global configuration; a repository-local setting
+still applies and replaces the default user ignore file. The same environment
+is used for untracked-file listing. The index is read, so a tracked file is never reported: it is
 in the diff whatever a pattern says about it. `check-ignore` writes nothing,
 which is why it is the question asked; `git status` would answer it too, and
 refreshes the index on the way (`docs/SPEC.md` section 11).
