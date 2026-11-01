@@ -1790,7 +1790,9 @@ and `bun run release` refuses a version that has no section. See
   `ForbiddenError` doc of `src/server/errors.ts` went with the sweep.
 
 - **The base picker exposes its selection.** Mode and branch buttons report
-  their pressed state in the accessibility tree.
+  their pressed state in the accessibility tree. Selection verification uses
+  automated DOM, accessibility-tree, and keyboard checks; manual VoiceOver or
+  other screen-reader verification is not required, and no reader run is claimed.
 
 - **Search finds comments at every anchor level.** Review and repository
   comments show their scope and body, and choosing a comment reveals its thread,

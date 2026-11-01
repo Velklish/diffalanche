@@ -58,6 +58,11 @@ diffalanche review new cargo-flags --base branch --title "Cargo flags across ser
 diffalanche serve --open
 ```
 
+The base picker exposes its selected mode and branch in the accessibility tree.
+Automated DOM, accessibility-tree, and keyboard checks cover that selection;
+manual screen-reader verification is not required
+([UI reference](docs/reference/08-ui.md)).
+
 `review new` creates a **review session** and makes it current; `--base branch`
 says the change set of each repository is its branch against the merge base with
 that repository's remote default branch. `--base head` — the default — is the
