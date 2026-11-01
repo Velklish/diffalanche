@@ -1,9 +1,11 @@
 # DA-42 · Re-anchoring after code edits and orphaned status
 
-- **Order:** 800
 - **Scope:** 04-domain, 05-watcher (see [reference](../../reference/README.md))
 - **Created:** 2026-09-05
 - **Dependencies:** DA-12
+- **Cost:** major
+- **Previous order:** 800
+- **Taken:** 2026-11-01
 
 
 ## Execution authorization — 2026-11-01
@@ -33,3 +35,7 @@ The owner approved this original item for the current local implementation run, 
 - **Deferred:** 2026-09-05
 - **Reason:** Phase 3 of `docs/SPEC.md` section 10; depends on Phase 1 and Phase 2 artifacts.
 - **Return condition:** DA-32 (Phase 1 acceptance) is archived and the Phase 2 queue is under way; the cut is revisited there.
+
+## Execution plan
+
+Domain re-anchoring track owns automatic unique git/text matching, persisted orphaned status and CLI/warning contracts. The cost is major because this changes persisted comment status/schema and filter behavior. Apply the explicit automatic matching work above; human confirmation remains a requirement for the deferred model proposal, which is outside this task. Preserve existing anchor text on failure, legacy readability, old/new-side semantics, manual reopen authorization and concurrent comment edits. Prefer a small matcher/coordinator and the existing trusted Git/file/storage seams; no model, new UI or unrelated refactor. Coordinate watcher integration and the shared change-set/server warning paths with their frozen incoming tracks. Full checks and fresh review precede acceptance.
