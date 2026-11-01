@@ -373,10 +373,13 @@ watched inode is the directory's, which outlives every rename into it.
 - **Following changes.** A directory's event names the entry, and the tree
   reports it after listing that directory again, to watch a directory that
   appeared and drop the watches of one that went. Each listing also compares
-  no-follow file stamps and link target strings with that directory's baseline.
+  no-follow file stamps, link target strings and non-ignored directory names
+  with that directory's baseline. The parent keeps those names even if a
+  child's watch closes first, so an unnamed or coalesced parent event can still
+  report a removed directory.
   An ignored temporary name can therefore still report the target replaced by
   its rename. The cost is metadata reads for the files of the listed directory
-  and one retained stamp per file; queued listings still share that work. It lists instead of trusting
+  and one retained stamp per entry; queued listings still share that work. It lists instead of trusting
   the name because Bun reports one name per read of the descriptor: a new
   directory named in the same read as a sibling's write would never be watched.
   A listing asked for while one runs shares the single one queued after it, so

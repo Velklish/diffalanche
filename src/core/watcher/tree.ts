@@ -309,13 +309,17 @@ export function perDirectory(
     for (const entry of entries) {
       if (closed) break;
       const path = within(relative, entry.name);
-      if (entry.isDirectory()) {
-        if (!watches.has(path) && !options.ignore(path, "dir")) below.push(arm(path, fresh));
+      if (entry.isDirectory() && !options.ignore(path, "dir")) {
+        // Parent history survives a child forgetting its own watch before the parent event arrives.
+        baseline.set(path, "dir");
+        if (!watches.has(path)) below.push(arm(path, fresh));
       }
     }
     await Promise.all(below);
     if (fresh && (await heldDirectory(relative, watching))) {
-      for (const path of baseline.keys()) options.onChange(path);
+      for (const [path, stamp] of baseline) {
+        if (stamp !== "dir") options.onChange(path);
+      }
     }
   }
 
@@ -360,6 +364,7 @@ export function perDirectory(
       const path = within(relative, entry.name);
       present.add(path);
       if (options.ignore(path, "dir")) continue;
+      next.set(path, "dir");
       checks.push(watches.has(path) ? recheck(path) : arm(path, true));
     }
     await Promise.all(checks);
