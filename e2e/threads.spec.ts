@@ -428,7 +428,12 @@ test("a thread on the old side sits under the deleted line it names", async ({ p
     ...["--repo", at.repo, "--path", at.path, "--line", String(at.line)],
     ...["--side", "old", "--severity", "question"],
   ]);
+  let companion: Awaited<ReturnType<typeof written>> | undefined;
   try {
+    companion = await written(page, [
+      ...["--repo", at.repo, "--path", at.path, "--line", String(at.line)],
+      ...["--side", "new", "--severity", "critical"],
+    ]);
     await open(page);
     await page.locator(".rail-tabs .tab").nth(1).click();
     await page.locator(`.rail-list [data-thread="${id}"] .thread-focus`).click();
@@ -451,12 +456,13 @@ test("a thread on the old side sits under the deleted line it names", async ({ p
       };
     });
     expect(placed).toEqual({ above: `D${at.line}`, oldCell: true, across: true });
-    // And the bar in the thread's colour is on the old side's gutter, the row's first cell.
+    await expect(page.locator(`[data-thread-anchor="${companion.id}"]`)).toHaveCount(1);
+    expect((await placement(page, companion.id)).key).toBe(`D${at.line}`);
+    // The split row uses the worst severity of both sides, with a bar on the old gutter.
     const card = page.locator(`.file-card[data-file="${at.repo}/${at.path}"]`);
-    const marked = card.locator(
-      `tr.diff-line.marked.question:has(td[data-change-key="D${at.line}"])`,
-    );
+    const marked = card.locator(`tr.diff-line.marked:has(td[data-change-key="D${at.line}"])`);
     await expect(marked).toHaveClass(/\bon-old\b/);
+    await expect(marked).toHaveClass(/\bcritical\b/);
     expect(
       await marked
         .locator("td")
@@ -467,6 +473,7 @@ test("a thread on the old side sits under the deleted line it names", async ({ p
     // The unified view has one column: the widget follows the deleted row, and so does the bar.
     await card.getByRole("button", { name: "unified" }).click();
     await expect(widget).toBeVisible();
+    await expect(marked).toHaveClass(/\bquestion\b/);
     expect(
       await widget.evaluate((element) =>
         element
@@ -482,7 +489,11 @@ test("a thread on the old side sits under the deleted line it names", async ({ p
         .evaluate((cell) => getComputedStyle(cell).boxShadow),
     ).toContain("inset");
   } finally {
-    done();
+    try {
+      companion?.done();
+    } finally {
+      done();
+    }
   }
 });
 
