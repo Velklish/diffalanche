@@ -22,6 +22,7 @@ type Comment = {
   status: string;
   severity: string;
   author: string;
+  role: string;
   replies: { author: string; role: string; body: string }[];
 };
 
@@ -83,16 +84,45 @@ test("the file tab lists this file's threads and the review tab lists them all",
 });
 
 test("the unanswered chip keeps the threads no agent has answered", async ({ page }) => {
+  const agent = execFileSync(
+    "bun",
+    [
+      "run",
+      "src/cli/index.ts",
+      "comment",
+      "--severity",
+      "nit",
+      "--body",
+      "unanswered role control",
+      "--root",
+      FIXTURE,
+    ],
+    { cwd: root, encoding: "utf8" },
+  )
+    .trim()
+    .split(" ")[0];
   await focusOneThread(page);
   const bundle = await review(page);
+  expect(bundle.comments.find((comment) => comment.id === agent)).toMatchObject({
+    role: "agent",
+    status: "open",
+    replies: [],
+  });
   const unanswered = bundle.comments.filter(
-    (comment) => comment.status === "open" && (comment.replies.at(-1)?.role ?? "human") === "human",
+    (comment) =>
+      comment.status === "open" && (comment.replies.at(-1)?.role ?? comment.role) === "human",
   );
   expect(unanswered.length).toBeGreaterThan(0);
 
   await page.getByRole("button", { name: "unanswered" }).click();
 
   await expect(page.locator(".rail-list .thread")).toHaveCount(unanswered.length);
+  expect(
+    await page
+      .locator(".rail-list .thread")
+      .evaluateAll((threads) => threads.map((thread) => thread.getAttribute("data-thread")).sort()),
+  ).toEqual(unanswered.map((comment) => comment.id).sort());
+  await expect(page.locator(`.rail-list [data-thread="${agent}"]`)).toHaveCount(0);
 });
 
 test("a card and its anchor point at each other", async ({ page }) => {

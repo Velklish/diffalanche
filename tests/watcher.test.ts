@@ -1693,8 +1693,10 @@ describe("the repository signal", () => {
   it("names a repository outside the task, and does not rescan it", async () => {
     // A watcher of its own, on a session scoped to one repository: the suite's
     // watcher is about the whole root and could not tell the two apart.
-    const changed: string[] = [];
+    const changed: { repo: string; files: readonly string[] | undefined }[] = [];
     const own = createEventBus();
+    const ownActivity = createActivityLog();
+    let rescans = 0;
     const seenHere: WatcherEvent[] = [];
     own.subscribe((event) => seenHere.push(event));
     const dataDir = mkdtempSync(join(tmpdir(), "diffalanche-signal-"));
@@ -1715,8 +1717,12 @@ describe("the repository signal", () => {
       scan: found,
       ...(NATIVE_WATCH ? {} : { recursive: false, pollIntervalMs: 40 }),
       bus: own,
-      activity: createActivityLog(),
-      onRepositoryChanged: (repo) => changed.push(repo),
+      activity: ownActivity,
+      onRescan: () => {
+        rescans += 1;
+      },
+      onRepositoryChanged: (repo, files) =>
+        changed.push({ repo, files: files === undefined ? undefined : [...files] }),
       onError: () => undefined,
     });
     const outside = join(root, OTHER_REPO, "signal-outside.ts");
@@ -1760,8 +1766,8 @@ describe("the repository signal", () => {
       // Outside the scope: announced, and no rescan — the signal exists so a
       // window on another task hears about it (07-server.md).
       await writeFile(outside, "export const outside = 1;\n");
-      await until(() => changed.includes(OTHER_REPO));
-      expect(changed).toContain(OTHER_REPO);
+      await until(() => changed.some((one) => one.repo === OTHER_REPO));
+      expect(changed.map((one) => one.repo)).toContain(OTHER_REPO);
       expect(
         seenHere.some((event) => event.type === "diff-changed" && event.repo === OTHER_REPO),
       ).toBe(false);
@@ -1772,18 +1778,31 @@ describe("the repository signal", () => {
       await until(() =>
         seenHere.some((event) => event.type === "diff-changed" && event.repo === REPO),
       );
-      expect(changed).toContain(REPO);
+      expect(changed.map((one) => one.repo)).toContain(REPO);
 
-      // What the two call sites exist for: rewriting a file's own bytes moves no line and announces
-      // nothing; counted, not looked for, since "nothing arrived" is an answer once something has.
-      const settledCount = changed.filter((repo) => repo === REPO).length;
+      // An accepted same-file burst still invalidates other tasks' documents; current's public
+      // events, adopted cache and activity must stay unchanged after that burst is processed.
+      const mark = changed.length;
+      const currentChanges = () =>
+        seenHere.filter(
+          (event) => event.type === "diff-changed" && event.repo === REPO && !event.session,
+        );
+      expect(currentChanges().length).toBeGreaterThan(0);
+      expect(rescans).toBeGreaterThan(0);
+      expect(ownActivity.recent().length).toBeGreaterThan(0);
+      const settledCount = currentChanges().length;
+      const settledRescans = rescans;
+      const settledActivity = ownActivity.recent();
       await writeFile(inside, "export const inside = 1;\n");
-      // The barrier: a write in the other repository, whose signal comes from the burst and so
-      // always comes; waiting for it makes the count below a verdict instead of a race.
-      const barrier = changed.filter((repo) => repo === OTHER_REPO).length;
-      await writeFile(outside, "export const outside = 2;\n");
-      await until(() => changed.filter((repo) => repo === OTHER_REPO).length > barrier);
-      expect(changed.filter((repo) => repo === REPO).length).toBe(settledCount);
+      const heard = () =>
+        changed
+          .slice(mark)
+          .some((one) => one.repo === REPO && one.files?.includes("signal-inside.ts"));
+      await until(heard);
+      expect(heard()).toBe(true);
+      expect(currentChanges().length).toBe(settledCount);
+      expect(rescans).toBe(settledRescans);
+      expect(ownActivity.recent()).toEqual(settledActivity);
     } finally {
       await watching.close();
       rmSync(dataDir, { recursive: true, force: true });
