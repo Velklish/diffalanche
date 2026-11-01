@@ -416,12 +416,24 @@ it("documents the native directory watches and the platform of lifecycle measure
     "An ignored temporary name can therefore still report the target replaced by",
   );
   expect(reference).toContain(
-    "including dangling links. It never follows a link into a target directory",
+    "including dangling links. Stable links are not followed into target directories",
+  );
+  expect(reference).toContain(
+    "and target content is not read, so changing an outside target alone produces no change.",
   );
   expect(reference).toContain("The explicitly named root may itself be a link.");
   expect(reference).toContain("A false Linux or macOS result still tries native directory watches");
   expect(reference).toContain(
     "components are checked with `lstat` before watching, listing and reporting their",
+  );
+  expect(reference).toContain(
+    "When a concurrent path replacement is detected, the affected enumeration is\ndiscarded before its paths are published.",
+  );
+  expect(reference).toContain(
+    "A replacement race can still cause\ninternal directory-name enumeration between checks.",
+  );
+  expect(reference).toContain(
+    "These checks do not provide\nan atomic zero-enumeration guarantee; no native or OS layer closes that window.",
   );
 });
 
