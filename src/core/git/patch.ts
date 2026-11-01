@@ -207,6 +207,7 @@ function headerPaths(patch: string): PatchPaths {
     else if (line.startsWith("new file mode ")) status = "added";
     else if (line.startsWith("deleted file mode ")) status = "deleted";
   }
+  if (from !== undefined && to !== undefined) status = "renamed";
   if (old !== undefined || renamed !== undefined) {
     return { old: old ?? null, new: renamed ?? null, status };
   }

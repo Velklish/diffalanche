@@ -931,3 +931,13 @@ describe("the reader writes nothing", () => {
     // default five seconds is the suite's, not this one's.
   }, 60_000);
 });
+
+it("keeps oldPath when a rename also edits file content", () => {
+  const patch =
+    "diff --git a/a.ts b/b.ts\nsimilarity index 76%\nrename from a.ts\nrename to b.ts\nindex 2154724..78d0c96 100644\n--- a/a.ts\n+++ b/b.ts\n@@ -1,3 +1,4 @@\n const before = 1;\n const anchor = 42;\n const after = 3;\n+const added = 4;\n";
+  expect(parseDiff(patch).files[0]).toMatchObject({
+    path: "b.ts",
+    oldPath: "a.ts",
+    status: "renamed",
+  });
+});
