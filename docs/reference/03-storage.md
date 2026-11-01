@@ -365,6 +365,12 @@ point; `configPath(dataDir)` names the file.
 | `lsp` | `lsp`, a command per language | `{}` |
 | `grammars` | `grammars`, a language per name — `wasm` resolved **against the root**, `extensions`, `query` ([09-ml.md](09-ml.md)) | `{}` |
 
+`exclude` removes matching tracked and untracked files from initial scans and
+live refreshes. Discovery matches directory names and paths relative to the
+review root; file filtering matches names, repository-relative paths and their
+directory ancestors ([01-scanner.md](01-scanner.md#file-exclusions)). Scope and
+exclusion both use a renamed file's current path.
+
 The two kinds of path are relative to different directories on purpose:
 `--root` and `--data-dir` are typed at a shell prompt, so they follow the
 current directory, while `roots` is written into a file that travels with the

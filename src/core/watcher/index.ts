@@ -614,6 +614,7 @@ export async function rescanRepository(
   const change = filterChange(
     review.scope,
     await readRepositoryChange(config.root, repo, review.base, { hunks: true }),
+    config.exclude,
   );
 
   const patched = await withLock(sessionDir(config.dataDir, session), async (held) => {

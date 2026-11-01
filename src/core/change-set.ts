@@ -1,10 +1,10 @@
 /** One scan of the review in the shape `diff.json` stores, hunks included for anchor capture;
  * everything that reads a whole review goes through it ([02-git.md](../../docs/reference/02-git.md)). */
 import type { Config } from "./config/index.ts";
-import { pathInScope, repositoryInScope, scopeEntry } from "./domain/scope.ts";
+import { pathInScope, repositoryInScope } from "./domain/scope.ts";
 import { readRepositoryChange } from "./git/index.ts";
 import { byCodePoint } from "./order.ts";
-import { scan } from "./scanner/index.ts";
+import { globToRegExp, scan } from "./scanner/index.ts";
 import type { DiffCache, Scope } from "./storage/index.ts";
 import {
   readDiffCache,
@@ -111,16 +111,27 @@ export function sameScope(left: Scope, right: Scope): boolean {
   });
 }
 
-/** What the scope leaves of one repository's change set, names matched as written, a renamed file
- * included ([02-git.md](../../docs/reference/02-git.md); the rename: 04-domain.md, "Scope"). */
-export function filterChange(scope: Scope, change: RepositoryChange): RepositoryChange {
-  if (scope === null) return change;
-  const entry = scopeEntry(scope, change.path);
-  if (entry === null) return { ...change, files: [], warnings: [] };
-  if (entry.paths === null) return change;
+/** What scope and file exclusions leave of one repository, matching each file's current name
+ * ([02-git.md](../../docs/reference/02-git.md), "The whole review in one call"). */
+export function filterChange(
+  scope: Scope,
+  change: RepositoryChange,
+  exclude: readonly string[] = [],
+): RepositoryChange {
+  if (!repositoryInScope(scope, change.path)) return { ...change, files: [], warnings: [] };
+  const patterns = exclude.map(globToRegExp);
   return {
     ...change,
-    files: change.files.filter((file) => pathInScope(scope, change.path, file.path)),
+    files: change.files.filter((file) => {
+      if (!pathInScope(scope, change.path, file.path)) return false;
+      // A matching directory suppresses its descendants, as the watcher's directory pruning does.
+      for (let path = file.path; path !== ""; path = path.slice(0, path.lastIndexOf("/"))) {
+        const name = path.slice(path.lastIndexOf("/") + 1);
+        if (patterns.some((pattern) => pattern.test(name) || pattern.test(path))) return false;
+        if (!path.includes("/")) break;
+      }
+      return true;
+    }),
   };
 }
 
@@ -183,7 +194,11 @@ export async function scanReview(
   });
   const selected = found.repositories.filter((repo) => repositoryInScope(scope, repo.path));
   const scanned = await mapWithLimit(selected, SCAN_CONCURRENCY, async (repo) =>
-    filterChange(scope, await readRepositoryChange(config.root, repo.path, base, { hunks: true })),
+    filterChange(
+      scope,
+      await readRepositoryChange(config.root, repo.path, base, { hunks: true }),
+      config.exclude,
+    ),
   );
   const paths = found.repositories.map((repo) => repo.path);
   // A scope entry with no repository is named, not dropped: it was checked when it was written,
@@ -224,6 +239,7 @@ export async function refreshRepository(
   const change = filterChange(
     scope,
     await readRepositoryChange(config.root, repo, base, { hunks: true }),
+    config.exclude,
   );
   const full = await withLock(sessionDir(config.dataDir, session), async (held) => {
     const previous = await readDiffCache(config.dataDir, session);

@@ -65,9 +65,8 @@ paths that name the same repository would otherwise never match.
   stands for any number of whole segments, so `**/group` is `group` and
   `a/group` but never `subgroup`; `*` and `?` stay inside one path segment. A
   trailing `/`, the way `.gitignore` spells a directory, is dropped. The
-  compiler of those globs, `globToRegExp`, is exported: the watcher applies the
-  same patterns to the files inside a repository, so one `exclude` means one
-  thing in both places ([05-watcher.md](05-watcher.md)).
+  compiler of those globs, `globToRegExp`, is exported: change-set reads and the
+  watcher reuse it for files inside a repository ([File exclusions](#file-exclusions)).
 - **A directory that cannot be read**, which produces a warning instead:
 
 ```json
@@ -97,9 +96,22 @@ A warning is `{ path, message }`, where `path` is relative to the root and names
 the repository or the directory the message is about. The scanner produces the
 two above; the base modes of [02-git.md](02-git.md) produce the rest.
 
-## What it does not do yet
+## File exclusions
 
-- `exclude` is applied to directories only. The walk never looks at files, so a
-  glob such as the spec's `**/*.lock` excludes a directory named that way and
-  nothing else. Inside a repository the same glob does exclude the file: that is
-  the watcher, not the scan ([05-watcher.md](05-watcher.md)).
+File exclusions apply to initial scans and live refreshes. After Git reads a
+repository, `filterChange` removes matching files before counting totals or
+writing the change-set cache. Full, per-repository, named-review and scoped
+reads all use this policy, including tracked and untracked files. For example,
+`**/*.lock` removes both `package.lock` and `nested/package.lock`.
+
+Inside a repository, globs match each file's current name and its path relative
+to that repository, as the watcher does. Each directory ancestor is checked too:
+`generated/` removes its descendants, and `src/private/` removes
+`src/private/a.ts` while keeping `other/private/a.ts`. Discovery directories
+continue to use paths relative to the review root: `repos/legacy/` prevents that
+repository from being discovered. These coordinate systems do not change with
+the selected review or scope.
+
+Scope and exclusions both match a rename's current path; an excluded old name
+does not hide a visible new name. Exclusions can hide tracked files, while Git's
+ignore rules continue to suppress only untracked files ([02-git.md](02-git.md#asking-what-git-ignores)).

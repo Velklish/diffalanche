@@ -20,7 +20,7 @@ export type Config = {
   roots: string[];
   /** How many levels below each entry of `roots` a repository may sit. */
   depth: number;
-  /** Glob patterns of files left out of the change set. */
+  /** Globs excluding discovery directories and change-set files; coordinates: reference/01-scanner.md. */
   exclude: string[];
   /** The name the UI signs comments with. */
   user: string;

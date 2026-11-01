@@ -465,6 +465,7 @@ async function freshRepository(
   const change = filterChange(
     review.scope,
     await readRepositoryChange(config.root, repo, review.base, { hunks: false }),
+    config.exclude,
   );
   // A repository with nothing to show is not part of a change set: the route
   // turns that into the 404 the page reads as "it has left the review".
@@ -493,9 +494,11 @@ async function summarise(config: Config): Promise<ScanSummary> {
     found.repositories,
     SCAN_CONCURRENCY,
     async (repository) => {
-      const change = await readRepositoryChange(config.root, repository.path, base, {
-        hunks: false,
-      });
+      const change = filterChange(
+        null,
+        await readRepositoryChange(config.root, repository.path, base, { hunks: false }),
+        config.exclude,
+      );
       return {
         path: repository.path,
         kind: repository.kind,
@@ -517,8 +520,12 @@ async function candidatesOf(config: Config, named?: string): Promise<CandidateSe
     exclude: config.exclude,
   });
   const base = await sessionBase(config, named);
-  const read = await mapWithLimit(found.repositories, SCAN_CONCURRENCY, (repository) =>
-    readRepositoryChange(config.root, repository.path, base, { hunks: false }),
+  const read = await mapWithLimit(found.repositories, SCAN_CONCURRENCY, async (repository) =>
+    filterChange(
+      null,
+      await readRepositoryChange(config.root, repository.path, base, { hunks: false }),
+      config.exclude,
+    ),
   );
   return {
     root: config.root,

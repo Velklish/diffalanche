@@ -19,6 +19,9 @@ and later are in [docs/SPEC.md](docs/SPEC.md) section 10.
 
 ## Install
 
+Git 2.32 or newer must be on `PATH`; the reader does not check its version at
+runtime. See the [Git configuration policy](docs/reference/02-git.md#what-the-reader-trusts).
+
 From the first release on (**the package is not on npm yet**; how a release is
 made is under [Releases](#releases)), the npm channel needs no install of its
 own:
@@ -232,7 +235,7 @@ defaults below are the configuration:
 |---|---|---|
 | `roots` | `["."]` | Where to look for repositories, relative to the root. `["repos"]` for a `repos/<group>/<name>` layout |
 | `depth` | `2` | How many levels below each `roots` entry a repository may sit |
-| `exclude` | `[]` | Glob patterns of files kept out of the change set |
+| `exclude` | `[]` | Globs excluding discovery directories and change-set files, including tracked files; initial reads and live refreshes use the same rules ([matching](docs/reference/01-scanner.md#file-exclusions)) |
 | `user` | git's `user.name` in the root, else the OS user | The name the UI signs comments with |
 | `port` | `4880` | What `serve` listens on; `--port` overrides it |
 | `lsp` | `{}` | `language → server command`; unused until Phase 3 |

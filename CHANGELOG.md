@@ -1778,6 +1778,17 @@ and `bun run release` refuses a version that has no section. See
   lookup directory after success or failure; the Git check restores `PATH` first.
   The arithmetic skeleton is removed; runtime and loopback smoke checks remain.
 
+- Read-only Git processes explicitly disable system configuration. The Git
+  reference states the required Git 2.32 minimum, absence of a runtime version
+  check, and the default user ignore file boundary when global configuration
+  is isolated.
+
+- Configuration file exclusions now apply to tracked and untracked files in
+  initial, per-repository, named and scoped reads, and in live cache refreshes.
+  Named HTTP diffs, candidate files and scan counts use the same policy;
+  repositories with only excluded changes have no visible changes.
+  Directory exclusions and scope continue to match current paths on renames.
+
 ## [0.1.0] - 2026-09-05
 
 ### Changed
