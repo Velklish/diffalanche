@@ -1,9 +1,7 @@
 /** The performance harness of `docs/SPEC.md` section 6: headless Chromium over the synthetic
  * review, reporting the budget table's numbers (11-perf.md, "The measurement harness"). */
 import { execFileSync } from "node:child_process";
-import { closeSync, mkdtempSync, openSync, readFileSync, rmSync } from "node:fs";
 import { appendFile, readFile, rm, writeFile } from "node:fs/promises";
-import { tmpdir } from "node:os";
 import { join } from "node:path";
 import type { Page } from "@playwright/test";
 import { chromium } from "@playwright/test";
@@ -285,21 +283,17 @@ export function measureOnce(
   lag: Options["lag"] = null,
   timeoutMs = REPETITION_TIMEOUT_MS,
 ): Measurement {
-  const output = mkdtempSync(join(tmpdir(), "diffalanche-perf-output-"));
-  const path = join(output, "measurement.json");
-  let fd: number | undefined;
   let stdout: string;
   try {
-    fd = openSync(path, "wx");
-    // A file cannot hold the synchronous wait open when a descendant inherits stdout.
-    execFileSync("bun", repetitionArgs(fixture, variant, lag), {
+    // The environment is passed, not assigned: Bun gives a child its original environment.
+    stdout = execFileSync("bun", repetitionArgs(fixture, variant, lag), {
       cwd,
-      stdio: ["ignore", fd, "inherit"],
+      stdio: ["ignore", "pipe", "inherit"],
+      encoding: "utf8",
       env: { ...process.env, ...fixtureEnv() },
       timeout: timeoutMs,
       killSignal: "SIGKILL",
     });
-    stdout = readFileSync(path, "utf8");
   } catch (error) {
     const failure = error as { code?: unknown };
     const reason =
@@ -310,9 +304,6 @@ export function measureOnce(
       `performance repetition for variant ${variant} in ${cwd} ${reason}. No measurement was recorded.`,
       { cause: error },
     );
-  } finally {
-    if (fd !== undefined) closeSync(fd);
-    rmSync(output, { recursive: true, force: true });
   }
   const results = JSON.parse(stdout) as Measurement[];
   const measurement = results[0];

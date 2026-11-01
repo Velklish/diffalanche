@@ -1,12 +1,4 @@
-import {
-  existsSync,
-  mkdirSync,
-  mkdtempSync,
-  readdirSync,
-  readFileSync,
-  rmSync,
-  writeFileSync,
-} from "node:fs";
+import { existsSync, mkdirSync, mkdtempSync, readFileSync, rmSync, writeFileSync } from "node:fs";
 import { tmpdir } from "node:os";
 import { join } from "node:path";
 import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
@@ -25,21 +17,13 @@ function alive(pid: number): boolean {
 
 describe("one performance repetition", () => {
   let tree: string;
-  let outputs: string[];
-  const outputFiles = () =>
-    readdirSync(tmpdir())
-      .filter((name) => name.startsWith("diffalanche-perf-output-"))
-      .sort();
-
   beforeEach(() => {
-    outputs = outputFiles();
     tree = mkdtempSync(join(tmpdir(), "diffalanche-repetition-test-"));
     mkdirSync(join(tree, "perf"));
   });
 
   afterEach(() => {
     rmSync(tree, { recursive: true, force: true });
-    expect(outputFiles()).toEqual(outputs);
   });
 
   it("reads one measurement from a successful repetition", () => {

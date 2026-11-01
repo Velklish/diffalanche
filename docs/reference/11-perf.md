@@ -1407,10 +1407,8 @@ beside it. Each repetition has an outer ten-minute `execFileSync` deadline:
 120 seconds for ready, three 60-second update waits, and five minutes for
 startup, scrolling, session switches and cleanup. This is a hang deadline,
 not a performance budget; the recorded normal repetition is about 9 seconds.
-A deadline kills the direct repetition process with `SIGKILL`.
-Stdout goes through a temporary file rather than a pipe,
-so a descendant retaining that descriptor cannot extend the synchronous wait.
-The file is removed on success and failure. A failed repetition names the side,
+A deadline kills the direct repetition process with `SIGKILL`. A failed
+repetition names the side,
 its number, variant, tree and reason on stderr, exits 1 and prints no final
 table. Earlier samples remain on stderr as partial evidence. The tests shorten
 only the function's internal test bound, without a CLI or environment override,
