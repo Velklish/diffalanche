@@ -136,7 +136,7 @@ export async function startWatcher(options: WatcherOptions): Promise<Watcher> {
   // Per session, because a window open on a task hears about that task's
   // comments and not only about the current one's (DA-55.1).
   const comments = new Map<string, Map<string, CommentState> | null>();
-  const metadata = new Map<string, { value: string | null; scope: Scope }>();
+  const metadata = new Map<string, { value: string | null; scope: Scope | undefined }>();
   // Only consumed document tokens can supply a task's first-follow baseline; pending responses
   // stay separate until their own stream subscribes (05-watcher.md).
   const served = new Map<string, Served>();
@@ -147,7 +147,8 @@ export async function startWatcher(options: WatcherOptions): Promise<Watcher> {
   let scope: Scope = (await readSessionOrNull(config, session))?.scope ?? null;
   if (session !== null) {
     comments.set(session, await snapshotComments(config, session));
-    metadata.set(session, { value: await readMetadata(config, session), scope });
+    const value = await readMetadata(config, session);
+    metadata.set(session, { value, scope: value === null ? undefined : scope });
   }
   // `null` until a listing of `reviews/` succeeds: without a baseline nothing
   // is news, and the first readable listing becomes it.
@@ -315,8 +316,7 @@ export async function startWatcher(options: WatcherOptions): Promise<Watcher> {
     for (const name of options.sessions?.() ?? []) {
       if (name === session) continue;
       const known = metadata.get(name);
-      if (known === undefined || known.value === null || !repositoryInScope(known.scope, repo))
-        continue;
+      if (known?.scope === undefined || !repositoryInScope(known.scope, repo)) continue;
       const covered =
         files.length === 0 ||
         files.some(
@@ -418,7 +418,7 @@ export async function startWatcher(options: WatcherOptions): Promise<Watcher> {
     if (!metadata.has(session))
       metadata.set(session, {
         value: review === null ? null : metadataOf(review),
-        scope: review?.scope ?? null,
+        scope: review?.scope,
       });
     scope = review?.scope ?? null;
     // The pointer moved; what the session *is* has not changed, and the two are
@@ -521,7 +521,7 @@ export async function startWatcher(options: WatcherOptions): Promise<Watcher> {
       const taken = candidate?.createdAt === review?.createdAt ? candidate : undefined;
       if (taken !== undefined) metadata.set(name, { value: taken.metadata, scope: taken.scope });
       const before = metadata.get(name);
-      metadata.set(name, { value: next, scope: review?.scope ?? null });
+      metadata.set(name, { value: next, scope: review?.scope });
       if (before !== undefined && before.value === next) continue;
       const known = before !== undefined;
       // A task a window opened unserved is not a task that changed: its
@@ -544,7 +544,7 @@ export async function startWatcher(options: WatcherOptions): Promise<Watcher> {
     const baseline = before === undefined ? taken?.metadata : before.value;
     metadata.set(name, {
       value: review === null ? null : baseline === undefined ? metadataOf(review) : baseline,
-      scope: review?.scope ?? null,
+      scope: review?.scope,
     });
   }
 

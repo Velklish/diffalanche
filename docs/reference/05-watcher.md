@@ -768,6 +768,9 @@ read uses a held body and creates no data burst. It reads no Git or change set.
 An unreadable or no-longer-followed task supplies no routing permission; a late
 read cannot outlive the queue's next join and repository rescan. A served body's
 metadata comparison baseline stays separate from this fresh routing scope.
+A failed read leaves routing scope unknown, distinct from a known whole-root
+scope. A later readable join restores routing immediately while preserving the
+old comparison value for the next legitimate metadata-change event.
 
 Comment events come from reading `comments.json` and comparing it with the last
 read, so a write from the UI, from one `diffalanche reply`, or from twenty of

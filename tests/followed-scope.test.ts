@@ -229,6 +229,21 @@ describe("a newly followed held scope", () => {
     }
   });
 
+  it("routes a known whole-root scope instead of treating null as an unreadable scope", async () => {
+    const run = await fixture();
+    try {
+      await setScope(run.config.dataDir, B, null, [REPO]);
+      run.attach(run.token);
+      await run.edit("C.ts", 2);
+      expect(run.events.filter((event) => event.type === "diff-changed")).toEqual([
+        { type: "diff-changed", repo: REPO, files: ["C.ts"], session: B },
+      ]);
+      run.negatives();
+    } finally {
+      await run.close();
+    }
+  });
+
   it("keeps unreadable join metadata silent even when its document token was valid", async () => {
     const run = await fixture();
     const actual = storage.readReview;
@@ -282,6 +297,38 @@ describe("a newly followed held scope", () => {
       run.negatives();
     } finally {
       release.resolve();
+      read.mockRestore();
+      await run.close();
+    }
+  });
+
+  it("recovers routing on a fresh reconnect after an unreadable join without a data burst", async () => {
+    const run = await fixture();
+    const actual = storage.readReview;
+    const read = vi
+      .spyOn(storage, "readReview")
+      .mockImplementation((directory, name) =>
+        name === B
+          ? Promise.reject(new Error("unreadable join metadata"))
+          : actual(directory, name),
+      );
+    try {
+      const detach = run.attach(run.token);
+      await run.edit("C.ts", 2);
+      expect(run.namedFrames).toEqual([]);
+      detach();
+      read.mockRestore();
+      run.attach();
+      await run.edit("B.ts", 2);
+      expect(run.events.filter((event) => event.type === "diff-changed")).toEqual([
+        { type: "diff-changed", repo: REPO, files: ["B.ts"], session: B },
+      ]);
+      run.negatives();
+      await run.lockBurst();
+      expect(
+        run.events.filter((event) => event.type === "session-changed" && event.name === B),
+      ).toHaveLength(1);
+    } finally {
       read.mockRestore();
       await run.close();
     }
