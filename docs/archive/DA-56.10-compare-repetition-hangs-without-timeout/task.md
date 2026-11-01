@@ -1,0 +1,32 @@
+# DA-56.10 · A perf/compare.ts repetition hung for 18 minutes and nothing timed it out
+
+- **Scope:** 11-perf (see [reference](../../reference/README.md))
+- **Created:** 2026-09-29
+- **Parent:** DA-56.6
+- **Cost:** minor
+- **Previous order:** 1230
+- **Taken:** 2026-11-01
+
+
+## Execution authorization — 2026-11-01
+
+The owner approved this original item for the current local implementation run, including investigation when labelled hypothesis. Earlier registration-only and per-item-approval wording records the creation boundary; it does not add another approval gate. Preserve original Evidence, AC, Verification and scope. New minor findings are registration only; deferred functions are not included. Independent review and all mandatory checks precede acceptance. No push, release or tag is authorized.
+
+## Evidence
+
+Finding discovered while working on DA-56.6.
+
+On the 4-core cloud container, 2026-09-29 03:07 UTC, `bun perf/compare.ts --base <tip worktree> --runs 13` from a branch of `60c832d` stopped after seven samples. The eighth repetition, `bun perf/run.ts --fixture .perf/fixture --variant default --runs 1` in the base tree, had printed `fixture .perf/fixture: 21 repositories, 300 files, 30000 lines, sessions synth and perf-scratch` to stderr and nothing after it; at 03:28 the process was still alive with its `chrome-headless-shell` child, and the load average was 0.03. No Playwright timeout fired in those 18 minutes, although `page.waitForFunction` in `perf/harness.ts` is given 120 s for `ready` and 60 s for every later wait. Killing the repetition by hand made `compare.ts` exit 1 from `measureOnce`, and its seven samples were lost with it. One occurrence; the next run of the same command did not hang. That the stall is the DA-82.2 kind (a pipe closed under a browser) is an assumption, not a reading: no `strace` was taken.
+
+## Work to do
+
+- Give a repetition an outer bound in `measureOnce` — `execFileSync`'s `timeout` — so a stall costs one repetition and says so, rather than holding `/tmp/da-heavy.lock` until someone notices.
+- If it recurs, take `strace -f` of the stalled process before killing it, as DA-82.2 did.
+
+## Verification
+
+- A repetition that does not return within the bound is killed, named on stderr, and fails the comparison with a sentence rather than hanging it.
+
+## Owner workflow update — 2026-11-01
+
+The owner explicitly authorized closing implementation-complete cards after their specific AC and independent review, while shared integration/test/performance quality acceptance is retained in DA-156. This later workflow changes the earlier acceptance sequence, not product budgets, guards, assertions or the original requirements. This implementation closure does not claim a full eight-gate pass or final quality acceptance. The current session stops after ready integration and handoff; DA-156 is for the new session.

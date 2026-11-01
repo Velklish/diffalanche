@@ -1,0 +1,27 @@
+# DA-121.1 · ADR-016 says both processes crossed the 768 MiB ceiling, while its own numbers for serve are 742 and 764 MiB
+
+- **Scope:** 09-ml (see [reference](../../reference/README.md))
+- **Created:** 2026-10-03
+- **Parent:** DA-121
+- **Cost:** minor
+- **Previous order:** 1220
+- **Taken:** 2026-11-01
+
+
+## Execution authorization — 2026-11-01
+
+The owner approved this original item for the current local implementation run, including investigation when labelled hypothesis. Earlier registration-only and per-item-approval wording records the creation boundary; it does not add another approval gate. Preserve original Evidence, AC, Verification and scope. New minor findings are registration only; deferred functions are not included. Independent review and all mandatory checks precede acceptance. No push, release or tag is authorized.
+
+## Evidence
+
+Finding discovered while working on DA-121.
+
+Evidence: docs/adr/adr-016-model-in-a-process-of-its-own.md:11-14 on 75c5691: 'measured both crossing the ceiling on Bun … a query … at 803 MiB, and serve … at 742 and 764 MiB' against the 768 MiB cap of line 9; the same numbers stand in the source measurement, task.md:22-34 of DA-34.2 (npx --no-install backslop show 34.2) (reviewer of DA-121, 2026-10-03). Which reading is right — serve under the cap, or another figure — is not checked.
+
+## Execution plan
+
+Documentation currency track. Preserve this card as a separate acceptance subject and keep all original requirements. Coordinate README and CHANGELOG with the safe-content track; root merges shared prose by meaning. Use a durable narrow regression guard that rejects the pre-change normative text and a semantic mutation probe. No runtime or permission contract change is authorized by this documentation correction.
+
+## Owner workflow update — 2026-11-01
+
+The owner explicitly authorized closing implementation-complete cards after their specific AC and independent review, while shared integration/test/performance quality acceptance is retained in DA-156. This later workflow changes the earlier acceptance sequence, not product budgets, guards, assertions or the original requirements. This implementation closure does not claim a full eight-gate pass or final quality acceptance. The current session stops after ready integration and handoff; DA-156 is for the new session.

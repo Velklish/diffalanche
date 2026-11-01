@@ -1,0 +1,40 @@
+# DA-82.1 · The jump line has no reading on the development machine since DA-82 changed its window
+
+- **Scope:** 11-perf (see [reference](../../reference/README.md))
+- **Created:** 2026-09-28
+- **Parent:** DA-82
+- **Cost:** minor
+- **Previous order:** 1250
+- **Taken:** 2026-11-01
+
+
+## Execution authorization — 2026-11-01
+
+The owner approved this original item for the current local implementation run, including investigation when labelled hypothesis. Earlier registration-only and per-item-approval wording records the creation boundary; it does not add another approval gate. Preserve original Evidence, AC, Verification and scope. New minor findings are registration only; deferred functions are not included. Independent review and all mandatory checks precede acceptance. No push, release or tag is authorized.
+
+## Evidence
+
+DA-82 moved `fileJumpMs` from one `scrollIntoView` and one paint to the tree's own
+`revealFile`, ending at the frame after `revealCard`'s last round that shows the
+file's diff. The recorded sample of [11-perf.md](../../reference/11-perf.md#the-gate)
+read 7.7 ms for the old window on the development machine (Apple M1 Pro); the row
+now says "not re-measured since DA-82", because DA-82 was measured only on a 4-core
+cloud container where the untouched base is over budget on five lines:
+
+<!-- quote:before:../../reference/11-perf.md -->
+| Jumping to a file from the navigation | 50 ms | — | not re-measured since DA-82 |
+<!-- /quote -->
+
+On that container the new window read 69.8 ms against 25.6 ms for the old one, five
+`perf/run.ts` processes a side; by that ratio alone the development machine would
+read about 20–25 ms, which is an assumption, not a measurement.
+
+## What it would take
+
+One `bun run perf` on the development machine on a quiet load: the jump row's
+median goes into the sample table in place of the dash, and if it is over 50 ms the
+finding becomes a `major` — the budget line would then fail locally.
+
+## Owner workflow update — 2026-11-01
+
+The owner explicitly authorized closing implementation-complete cards after their specific AC and independent review, while shared integration/test/performance quality acceptance is retained in DA-156. This later workflow changes the earlier acceptance sequence, not product budgets, guards, assertions or the original requirements. This implementation closure does not claim a full eight-gate pass or final quality acceptance. The current session stops after ready integration and handoff; DA-156 is for the new session.
