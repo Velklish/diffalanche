@@ -716,6 +716,12 @@ and `bun run release` refuses a version that has no section. See
 
 ### Fixed
 
+- Deletion contention tests now exercise the production rename with a waiter
+  paused before `mkdir` or after `EEXIST`, preserving the missing-session
+  refusal and checking that no directory is recreated. A controlled in-place
+  removal traces the leftover `.lock` and `ENOTEMPTY`; a separate `EINVAL`
+  control checks that unrelated lock errors remain visible.
+
 - Writer contention tests now observe the intended lock's `EEXIST` before
   changing scope or restoring a cache. They also cover a delayed scope read and
   detect a writer that finishes without reaching the lock, without calibrated

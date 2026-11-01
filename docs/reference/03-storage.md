@@ -94,6 +94,13 @@ its release finds nothing at its path — the ordinary case after a takeover. A
 process killed between the rename and the removal leaves the renamed directory
 at the root of the data directory, where no listing looks.
 
+The deletion contention tests pause this rename and start a waiter either
+before its `mkdir` or after it has received `EEXIST`. Both schedules must refuse
+the writer without running its body or recreating the directory. A separate
+fixture removes entries in place, admits a waiting `mkdir`, and checks that
+the recreated `.lock` makes the final `rmdir` fail with `ENOTEMPTY`. It tests
+the unsafe fixture ordering, not a different production deletion path.
+
 **Nothing brings a deleted session's directory back, and the lock is what
 holds that.** Every writer of a session's files writes under its lock — the
 comment and metadata writes through `updateSession`, and every writer of
@@ -115,6 +122,10 @@ session gets anywhere else, where a plain `StorageError` is its 500
 gone, not that storage failed. The server's watcher does not report it as a
 failed rescan either: a rescan of the deleted current session meets it until
 `current` has moved.
+
+Only `ENOENT` from the lock's `mkdir` means the session is gone. Other errors,
+including `EINVAL`, propagate unchanged; an invalid operation is not evidence
+that a session was deleted.
 
 ## Atomic writes
 
