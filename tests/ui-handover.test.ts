@@ -1,5 +1,6 @@
 /** Windows keep their own document and history through live handovers. */
 import { afterEach, describe, expect, it, vi } from "vitest";
+import { countReview } from "../src/core/domain/counters.ts";
 import type { ReviewDocument } from "../src/core/types.ts";
 import { startLive } from "../src/ui/live.ts";
 import { useStore } from "../src/ui/store.ts";
@@ -36,17 +37,7 @@ function documentOf(name: string, comments: Comment[] = []): ReviewDocument {
     warnings: [],
     session: { name } as ReviewDocument["session"],
     comments,
-    counters: {
-      counters: {
-        total: comments.length,
-        open: comments.length,
-        resolved: 0,
-        unanswered: comments.length,
-        awaiting: 0,
-        severity: comments.length > 0 ? "warning" : null,
-      },
-      repositories: [],
-    },
+    counters: countReview(comments),
   };
 }
 
