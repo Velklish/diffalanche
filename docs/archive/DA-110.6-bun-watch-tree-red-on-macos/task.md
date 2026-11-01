@@ -149,3 +149,7 @@ The Bun/Vitest native-watch limitation is a source-backed hypothesis, supported
 by the adjacent suite's explicit Bun polling seam and its documented earlier
 measurement. It is not a newly measured root cause. This follow-up remains queued;
 it was not accepted or closed as part of the tool update.
+
+## Owner acceptance decision — 2026-11-01
+
+After receiving300ms/exit0,302ms/exit1 and RESTORE timeout/exit1(no median), the owner answered the proposal for an additional quiet series: “Закрепляем текущие результаты, они приемлемые”. The current performance result is accepted with this known deviation; the proposed extra series and further performance optimization are not run. The original numerical requirements and failed receipts remain intact. Remaining configured commands and independent documentation review are completed; no eight-of-eight success is asserted.
