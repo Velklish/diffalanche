@@ -46,7 +46,10 @@ Neither the repository it reads nor the environment it was started in
 - **A repository whose configuration cannot be read is not read.** The pins are
   built from that answer, so without it there is nothing to read safely with:
   the repository comes back with `base: null`, no files, and the warning
-  `repository configuration could not be read`.
+  `repository configuration could not be read`. Its regression recorder observes
+  the production `diff-index` command; a permitted configuration is the positive
+  control that must reach the same recorder. The refusal still asserts the base,
+  files and warning, and restores `PATH` and removes the shim in `finally`.
 
 ## Reading one repository
 
@@ -585,12 +588,28 @@ the server could otherwise be made to read:
   back exactly, so an ignored file, anything under `.git`, and a pathspec that
   would match a directory or a glob are all `null`. A tracked file deleted from
   disk is still in the index; `lstat` finds nothing and that is `null` too.
-- **A link is read, not followed.** `lstat`, then `readlink`: the text is the
-  link's target, which is what git records for a tracked one — and a link that
-  points outside the repository has nothing outside read through it.
+- **Directory links below the repository root are refused.** A linked directory
+  ancestor below the repository root makes a worktree file read return `null`.
+  The same reader supplies browse mode, comment anchors outside the diff, and
+  the symbol index; a refused file supplies neither text nor symbols.
+- **A direct link supplies its target string.** `lstat`, then `readlink`: the text
+  is the link's target, including a dangling link. The target is not opened.
+- **Regular files are read through a descriptor.** `O_NOFOLLOW` refuses a final
+  component replaced with a link. The descriptor's identity must match the file
+  checked before opening, and the root, ancestor directories and file are checked
+  again before and after reading. A detected replacement returns `null`;
+  `ENOENT`, `ENOTDIR`, `ELOOP` and `EINVAL` during this work do too.
 - **At the base, `cat-file` and not `show`.** The blob as stored, with no
   textconv and no filter; `cat-file -s` first, so a file over the size limit is
   never read into memory.
+
+The named repository root is resolved once, preserving the server's separate
+[root-link policy](07-server.md#the-task-a-request-is-about). These checks use
+portable Node/Bun filesystem APIs, which do not offer directory-relative
+`openat` traversal. They detect the replacements described above, but cannot
+prove safety against an adversary repeatedly swapping ancestors away and back
+between checks. Treat the reviewed filesystem as trusted against concurrent
+hostile mutation; this reader is not a sandbox for a malicious filesystem.
 
 A file over `DEFAULT_MAX_FILE_BYTES` (512 KiB, the diff's own limit) is
 `omitted: "too-large"`, and one with a NUL byte is `omitted: "binary"` — the

@@ -1,6 +1,7 @@
 /** Reading a repository outside its diff: every file, and one file whole at the base or on disk.
  * Plumbing only, like the rest of the module ([02-git.md](../../../docs/reference/02-git.md)). */
-import { lstat, readFile, readlink } from "node:fs/promises";
+import { constants, type Stats } from "node:fs";
+import { lstat, open, readlink, realpath } from "node:fs/promises";
 import { join } from "node:path";
 import { byCodePoint } from "../order.ts";
 import type { FileOmission, TreeEntry } from "../types.ts";
@@ -128,19 +129,64 @@ export async function readListed(
   path: string,
   maxBytes = DEFAULT_MAX_FILE_BYTES,
 ): Promise<FileRead | null> {
-  const full = join(cwd, path);
+  if (!isRepositoryPath(path)) return null;
   try {
-    // `lstat`, so a link is read as git records it — its target — and never followed.
+    // The named repository may itself be a link; only ancestors below that root are refused.
+    const root = await realpath(cwd);
+    const rootInfo = await lstat(root);
+    if (!rootInfo.isDirectory()) return null;
+    const ancestors: { path: string; info: Stats }[] = [{ path: root, info: rootInfo }];
+    let parent = root;
+    for (const part of path.split("/").slice(0, -1)) {
+      parent = join(parent, part);
+      const info = await lstat(parent);
+      if (!info.isDirectory()) return null;
+      ancestors.push({ path: parent, info });
+    }
+    const full = join(root, path);
     const info = await lstat(full);
-    if (info.isSymbolicLink()) return { text: await readlink(full), omitted: null };
+    const unchanged = async () => {
+      for (const ancestor of ancestors) {
+        const now = await lstat(ancestor.path);
+        if (!now.isDirectory() || !sameFile(ancestor.info, now)) return false;
+      }
+      return sameFile(info, await lstat(full));
+    };
+    if (info.isSymbolicLink()) {
+      const text = await readlink(full);
+      return (await unchanged()) ? { text, omitted: null } : null;
+    }
     if (!info.isFile()) return null;
-    if (info.size > maxBytes) return { text: null, omitted: "too-large" };
-    const content = await readFile(full);
-    if (content.includes(0)) return { text: null, omitted: "binary" };
-    return { text: content.toString("utf8"), omitted: null };
+    const file = await open(full, constants.O_RDONLY | constants.O_NOFOLLOW | constants.O_NONBLOCK);
+    try {
+      const opened = await file.stat();
+      if (!opened.isFile() || !sameFile(info, opened) || !(await unchanged())) return null;
+      if (opened.size > maxBytes) return { text: null, omitted: "too-large" };
+      const content = await file.readFile();
+      if (!(await unchanged())) return null;
+      if (content.length > maxBytes) return { text: null, omitted: "too-large" };
+      if (content.includes(0)) return { text: null, omitted: "binary" };
+      return { text: content.toString("utf8"), omitted: null };
+    } finally {
+      await file.close();
+    }
   } catch (error) {
     // A tracked file deleted from disk is still in the index; it is simply not here.
-    if ((error as { code?: unknown } | null)?.code === "ENOENT") return null;
+    if (
+      error instanceof Error &&
+      "code" in error &&
+      ["ENOENT", "ENOTDIR", "ELOOP", "EINVAL"].includes(String(error.code))
+    )
+      return null;
     throw error;
   }
+}
+
+function sameFile(left: Stats, right: Stats): boolean {
+  return (
+    left.dev === right.dev &&
+    left.ino === right.ino &&
+    left.mode === right.mode &&
+    left.ctimeMs === right.ctimeMs
+  );
 }

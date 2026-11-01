@@ -824,14 +824,15 @@ describe("what a failed git call is", () => {
 
 describe("a repository whose configuration cannot be read is not read", () => {
   /** A `git` first on `PATH` that refuses `config --list` and hands everything else over. */
-  function shim(): string {
+  function shim(refuseConfig = true): string {
     const dir = mkdtempSync(join(tmpdir(), "diffalanche-git-refuse-"));
     const real = execFileSync("sh", ["-c", "command -v git"], { encoding: "utf8" }).trim();
     const script = join(dir, "git");
     writeFileSync(
       script,
-      `#!/bin/sh\nfor a in "$@"; do\n  if [ "$a" = "--list" ]; then echo refused >&2; exit 7; fi\n` +
-        `  if [ "$a" = "diff" ]; then echo "$@" >> "${join(dir, "calls.log")}"; fi\ndone\nexec ${real} "$@"\n`,
+      `#!/bin/sh\nfor a in "$@"; do\n` +
+        (refuseConfig ? `  if [ "$a" = "--list" ]; then echo refused >&2; exit 7; fi\n` : "") +
+        `  if [ "$a" = "diff-index" ]; then echo "$@" >> "${join(dir, "calls.log")}"; fi\ndone\nexec "${real}" "$@"\n`,
     );
     chmodSync(script, 0o755);
     writeFileSync(join(dir, "calls.log"), "");
@@ -842,18 +843,34 @@ describe("a repository whose configuration cannot be read is not read", () => {
     const dir = shim();
     const before = process.env.PATH;
     process.env.PATH = `${dir}:${before ?? ""}`;
-    let change: RepositoryChange;
     try {
-      change = await read("repos/g/solo", { mode: "head" });
+      const change = await read("repos/g/solo", { mode: "head" });
+      expect(change.base).toBeNull();
+      expect(change.files).toEqual([]);
+      expect(change.warnings).toContain("repository configuration could not be read");
+      expect(readFileSync(join(dir, "calls.log"), "utf8")).toBe("");
     } finally {
-      if (before === undefined) process.env.PATH = "";
+      if (before === undefined) delete process.env.PATH;
       else process.env.PATH = before;
+      rmSync(dir, { recursive: true, force: true });
     }
-    expect(change.base).toBeNull();
-    expect(change.files).toEqual([]);
-    expect(change.warnings).toContain("repository configuration could not be read");
-    expect(readFileSync(join(dir, "calls.log"), "utf8")).toBe("");
-    rmSync(dir, { recursive: true, force: true });
+  });
+
+  it("records the actual inert diff-index when configuration permits the read", async () => {
+    const dir = shim(false);
+    const before = process.env.PATH;
+    process.env.PATH = `${dir}:${before ?? ""}`;
+    try {
+      const change = await read("repos/g/solo", { mode: "head" });
+      expect(change.files.map((file) => file.path)).toContain("src/app.ts");
+      const calls = readFileSync(join(dir, "calls.log"), "utf8").trim().split("\n");
+      expect(calls).toHaveLength(1);
+      expect(calls[0]?.split(" ")).toContain("diff-index");
+    } finally {
+      if (before === undefined) delete process.env.PATH;
+      else process.env.PATH = before;
+      rmSync(dir, { recursive: true, force: true });
+    }
   });
 });
 

@@ -13,6 +13,19 @@ and `bun run release` refuses a version that has no section. See
 
 ## [Unreleased]
 
+### Fixed
+
+- The configuration-refusal regression records `diff-index`, the production
+  command, and a permitted read proves the recorder sees it. Assertions and
+  positive-control failures both restore `PATH` and remove the temporary shim.
+
+- Worktree file content is refused beneath a linked directory ancestor in browse
+  mode, comment file sources and the symbol index. Regular files use a no-follow
+  descriptor and identity checks around reading; direct and dangling symlinks
+  still show their target strings, and linked worktrees and named repository
+  root links remain supported. The [Git reference](docs/reference/02-git.md#browsing-a-repository)
+  records the residual limitation under hostile concurrent ancestor swaps.
+
 ### Added
 
 - **`npm run probe`, the mutation probe**. `npm run probe -- <file> --mutate

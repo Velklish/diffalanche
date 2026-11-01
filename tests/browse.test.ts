@@ -1,15 +1,32 @@
 /** Browsing a repository outside its diff (DA-37): the tree, one file whole, and a comment
  * anchored on a line the change set does not carry. */
 import { execFileSync } from "node:child_process";
-import { mkdirSync, mkdtempSync, rmSync, symlinkSync, unlinkSync, writeFileSync } from "node:fs";
+import {
+  mkdirSync,
+  mkdtempSync,
+  readFileSync,
+  realpathSync,
+  renameSync,
+  rmSync,
+  symlinkSync,
+  unlinkSync,
+  writeFileSync,
+} from "node:fs";
+import * as filesystem from "node:fs/promises";
 import { tmpdir } from "node:os";
 import { join } from "node:path";
 import type { Hono } from "hono";
-import { afterAll, beforeAll, describe, expect, it } from "vitest";
+import { afterAll, beforeAll, describe, expect, it, vi } from "vitest";
 import type { Config } from "../src/core/config/index.ts";
 import { loadConfig } from "../src/core/config/index.ts";
 import { addComment, createSession, DomainError } from "../src/core/domain/index.ts";
-import { isRepositoryPath, listTree, readFileAt } from "../src/core/git/browse.ts";
+import {
+  fileSourceAt,
+  isRepositoryPath,
+  listTree,
+  readFileAt,
+  readListed,
+} from "../src/core/git/browse.ts";
 import { GIT_NULL } from "../src/core/git/run.ts";
 import type { Comment } from "../src/core/storage/index.ts";
 import type { FileContent, RepositoryTree } from "../src/core/types.ts";
@@ -17,6 +34,9 @@ import { createActivityLog } from "../src/core/watcher/index.ts";
 import { createApp } from "../src/server/app.ts";
 import { createEventStream } from "../src/server/events.ts";
 import { createReviewService } from "../src/server/review.ts";
+
+vi.mock("node:fs/promises", { spy: true });
+const actualFilesystem = await vi.importActual<typeof filesystem>("node:fs/promises");
 
 const REPO = "repos/g/one";
 /** A second repository whose one change is a rename, with no line of it touched. */
@@ -199,6 +219,162 @@ describe("one file whole", () => {
     expect(await status(`/api/repos/${REPO}/file`)).toBe(400);
     expect(await status(`/api/repos/${REPO}/file?path=keep.txt&rev=head`)).toBe(400);
   });
+});
+
+describe("worktree content without following directory links", () => {
+  async function fixture(body: (repo: string, outside: string) => Promise<void>) {
+    const temporary = realpathSync(mkdtempSync(join(tmpdir(), "diffalanche-safe-read-")));
+    const repo = join(temporary, "repo");
+    const outside = join(temporary, "outside");
+    mkdirSync(join(repo, "nested"), { recursive: true });
+    mkdirSync(outside);
+    writeFileSync(join(repo, "nested/file.txt"), "inside\n");
+    writeFileSync(join(outside, "file.txt"), "OUTSIDE-CONTENT\n");
+    symlinkSync("nested/file.txt", join(repo, "direct"));
+    symlinkSync("missing", join(repo, "dangling"));
+    git(repo, "init", "-q", "-b", "main");
+    git(repo, "add", "-A");
+    git(repo, "-c", "user.email=f@example.com", "-c", "user.name=f", "commit", "-qm", "base");
+    try {
+      await body(repo, outside);
+    } finally {
+      vi.restoreAllMocks();
+      rmSync(temporary, { recursive: true, force: true });
+    }
+  }
+
+  function replaceDirectory(repo: string, outside: string) {
+    renameSync(join(repo, "nested"), join(repo, "saved"));
+    symlinkSync(outside, join(repo, "nested"));
+  }
+
+  it("refuses an ancestor link through browse, listed files and the comment source", async () => {
+    await fixture(async (repo, outside) => {
+      replaceDirectory(repo, outside);
+      expect(await readFileAt(repo, "nested/file.txt", "worktree")).toBeNull();
+      expect(await readListed(repo, "nested/file.txt")).toBeNull();
+      expect(await fileSourceAt(repo)(".", "nested/file.txt", "worktree")).toBeNull();
+      const config = await loadConfig({ root: join(repo, "..") });
+      await createSession(config.dataDir, "safe", { mode: "head" }, undefined);
+      const app = createApp({
+        activity: createActivityLog(),
+        config,
+        events: createEventStream(),
+        review: createReviewService(config),
+        ui: { read: async () => null },
+      });
+      const response = await app.request("/api/repos/repo/file?path=nested/file.txt");
+      expect(response.status).toBe(404);
+      expect(await response.json()).toEqual({
+        error: "no-such-file",
+        message: "repo/nested/file.txt is not in the working tree",
+      });
+    });
+  });
+
+  it("preserves ordinary files, direct links, dangling links and the named root-link policy", async () => {
+    await fixture(async (repo) => {
+      expect(await readListed(repo, "nested/file.txt")).toEqual({
+        text: "inside\n",
+        omitted: null,
+      });
+      expect(await readListed(repo, "direct")).toEqual({ text: "nested/file.txt", omitted: null });
+      expect(await readListed(repo, "dangling")).toEqual({ text: "missing", omitted: null });
+      const alias = join(repo, "../alias");
+      symlinkSync(repo, alias);
+      expect(await readFileAt(alias, "nested/file.txt", "worktree")).toEqual({
+        text: "inside\n",
+        omitted: null,
+      });
+    });
+  });
+
+  it("reads an ordinary linked worktree", async () => {
+    await fixture(async (repo) => {
+      const linked = join(repo, "../linked");
+      git(repo, "worktree", "add", "--quiet", "--detach", linked);
+      expect(await readFileAt(linked, "nested/file.txt", "worktree")).toEqual({
+        text: "inside\n",
+        omitted: null,
+      });
+    });
+  });
+
+  it("refuses an ancestor replaced between validation and opening the file", async () => {
+    await fixture(async (repo, outside) => {
+      const open = actualFilesystem.open;
+      vi.spyOn(filesystem, "open").mockImplementationOnce(async (...args) => {
+        replaceDirectory(repo, outside);
+        return open(...args);
+      });
+      expect(await readListed(repo, "nested/file.txt")).toBeNull();
+    });
+  });
+
+  it("refuses a regular file replaced with a direct link before opening it", async () => {
+    await fixture(async (repo, outside) => {
+      const open = actualFilesystem.open;
+      vi.spyOn(filesystem, "open").mockImplementationOnce(async (...args) => {
+        unlinkSync(join(repo, "nested/file.txt"));
+        symlinkSync(join(outside, "file.txt"), join(repo, "nested/file.txt"));
+        return open(...args);
+      });
+      expect(await readListed(repo, "nested/file.txt")).toBeNull();
+    });
+  });
+
+  it("refuses an ancestor replaced after descriptor content is read", async () => {
+    await fixture(async (repo, outside) => {
+      vi.spyOn(filesystem, "open").mockImplementationOnce(async (...args) => {
+        const file = await actualFilesystem.open(...args);
+        const read = file.readFile.bind(file);
+        vi.spyOn(file, "readFile").mockImplementationOnce(async () => {
+          const content = await read();
+          replaceDirectory(repo, outside);
+          return content;
+        });
+        return file;
+      });
+      expect(await readListed(repo, "nested/file.txt")).toBeNull();
+    });
+  });
+
+  it("refuses a link replaced with a regular file while reading its target", async () => {
+    await fixture(async (repo) => {
+      vi.spyOn(filesystem, "readlink").mockImplementationOnce(async (path) => {
+        unlinkSync(join(repo, "direct"));
+        writeFileSync(join(repo, "direct"), "replacement\n");
+        return actualFilesystem.readlink(path);
+      });
+      expect(await readListed(repo, "direct")).toBeNull();
+    });
+  });
+
+  it("refuses a link replaced while its target string is read", async () => {
+    await fixture(async (repo) => {
+      const readlink = actualFilesystem.readlink;
+      vi.spyOn(filesystem, "readlink").mockImplementationOnce(async (path) => {
+        unlinkSync(join(repo, "direct"));
+        symlinkSync("replacement", join(repo, "direct"));
+        return readlink(path);
+      });
+      expect(await readListed(repo, "direct")).toBeNull();
+    });
+  });
+});
+
+it("documents refused directory links and the separate named-root exception", () => {
+  const reference = (name: string) =>
+    readFileSync(new URL(`../docs/reference/${name}`, import.meta.url), "utf8").replace(
+      /\s+/g,
+      " ",
+    );
+  expect(reference("02-git.md")).toContain(
+    "A linked directory ancestor below the repository root makes a worktree file read return `null`.",
+  );
+  expect(reference("07-server.md")).toContain(
+    "Worktree file reads refuse linked directory ancestors below the named repository root",
+  );
 });
 
 async function comment(body: Record<string, unknown>): Promise<Response> {
