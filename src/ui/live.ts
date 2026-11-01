@@ -27,21 +27,38 @@ type Anchor = { element: Element; top: number; scrollY: number } | null;
 
 export function startLive(): () => void {
   let generation = 0;
+  let target = useStore.getState().reviewName ?? useStore.getState().session?.name ?? null;
+  let switching = false;
   const currentGeneration = () => generation;
   const invalidate = () => {
     generation += 1;
   };
-  let stop = connect(false, currentGeneration, invalidate);
+  const followCurrent = (name: string) => {
+    if (useStore.getState().reviewName !== null || target === name) return;
+    target = name;
+    switching = true;
+    invalidate();
+  };
+  let stop = connect(false, currentGeneration, followCurrent);
   // A stream keeps the address it was made with: a task switch needs a new one, and so does the
   // footer's `reconnect` for a stream the browser gave up on.
   const unsubscribe = useStore.subscribe((state, before) => {
-    if (state.reviewName !== before.reviewName || state.session?.name !== before.session?.name) {
+    if (state.reviewName !== before.reviewName) {
       invalidate();
+      target = state.reviewName ?? state.session?.name ?? null;
+      switching = target !== (state.session?.name ?? null);
+    } else if (state.session?.name !== before.session?.name) {
+      if (switching) {
+        if (state.session?.name === target) switching = false;
+      } else {
+        target = state.session?.name ?? null;
+        invalidate();
+      }
     }
     const asked = state.reconnects !== before.reconnects;
     if (state.reviewName === before.reviewName && !asked) return;
     stop();
-    stop = connect(asked, currentGeneration, invalidate);
+    stop = connect(asked, currentGeneration, followCurrent);
   });
   return () => {
     unsubscribe();
@@ -51,7 +68,11 @@ export function startLive(): () => void {
 
 /** `behind`: the page missed frames while it had no stream, and a new one has no `Last-Event-ID`
  * to replay them by, so the review is read again once it is open (08-ui.md, DA-96.1). */
-function connect(behind: boolean, generation: () => number, invalidate: () => void): () => void {
+function connect(
+  behind: boolean,
+  generation: () => number,
+  followCurrent: (name: string) => void,
+): () => void {
   const store = () => useStore.getState();
   // The task this window is on, so the server knows whose comments to follow: a registry and not
   // a filter, the frames are one broadcast ([07-server.md](../../docs/reference/07-server.md)).
@@ -135,7 +156,7 @@ function connect(behind: boolean, generation: () => number, invalidate: () => vo
       return store().loadReview();
     },
     (event) => {
-      if (store().reviewName === null && store().session?.name !== event.name) invalidate();
+      followCurrent(event.name);
     },
   );
   // A task appeared, was closed or reopened: news about the history, answered with a mark in the

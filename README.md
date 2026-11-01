@@ -97,6 +97,7 @@ open and `reconnecting` while it is not.
 A thread read started for a task is discarded if the window switches tasks
 before it finishes, even if it has since returned to the same task.
 A queued thread event from the task the window left is discarded before its read.
+An event for the destination task remains queued while that task's document loads.
 
 The keyboard follows the design handoff:
 
