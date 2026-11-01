@@ -44,7 +44,9 @@ export function ExportModal() {
           {status === "loading" ? (
             <p className="picker-note">…</p>
           ) : status === "failed" ? (
-            <p className="failure">Экспорт не прочитался.</p>
+            <p className="failure" lang="ru">
+              Экспорт не прочитался.
+            </p>
           ) : view === "raw" ? (
             <Raw />
           ) : (
@@ -96,9 +98,9 @@ function Item({ comment }: { comment: Comment }) {
       <span className={`export-sev ${comment.severity}`}>{comment.severity}</span>
       <div className="export-text">
         <span className="export-anchor">{exportAnchor(comment)}</span>
-        <p>{comment.body}</p>
+        <p lang="">{comment.body}</p>
         {comment.replies.map((reply) => (
-          <blockquote key={reply.id}>
+          <blockquote key={reply.id} lang="">
             <b>{reply.author}</b> ({reply.role}) — {reply.body}
           </blockquote>
         ))}

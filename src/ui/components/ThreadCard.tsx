@@ -59,7 +59,9 @@ export const ThreadCard = memo(function ThreadCard({
         </button>
       </div>
 
-      <p className="thread-body">{thread.body}</p>
+      <p className="thread-body" lang="">
+        {thread.body}
+      </p>
 
       {thread.replies.map((reply) => (
         <ThreadReply key={reply.id} reply={reply} />
@@ -136,12 +138,16 @@ function ThreadReply({ reply }: { reply: Reply }) {
   return (
     <div className={reply.role === "agent" ? "reply agent" : "reply"}>
       <div className="reply-head">
-        <span className="reply-author">{reply.author}</span>
+        <span className="reply-author" lang="">
+          {reply.author}
+        </span>
         <span className="reply-meta">
           {reply.role} · {relativeTime(reply.createdAt)}
         </span>
       </div>
-      <p className="reply-body">{reply.body}</p>
+      <p className="reply-body" lang="">
+        {reply.body}
+      </p>
     </div>
   );
 }
@@ -166,6 +172,7 @@ function ReplyField({ id, busy }: { id: string; busy: boolean }) {
       <textarea
         ref={focusHere}
         className="reply-field"
+        lang=""
         value={text}
         aria-label="reply"
         placeholder="Ответ агенту"

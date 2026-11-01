@@ -135,13 +135,17 @@ const ACTIVITY_KEPT = 200;
 
 /** A message and the press that raised it: two identical strings are two
  * toasts, and the second gets its own lifetime ([08-ui.md]). */
-type Raised = { text: string; seq: number };
+type Raised = { text: string; seq: number; lang?: "ru"; parts?: { text: string; lang: string }[] };
 
 let raised = 0;
 
-function raise(text: string): Raised {
+function raise(text: string, lang?: "ru"): Raised {
   raised += 1;
-  return { text, seq: raised };
+  return { text, seq: raised, ...(lang === undefined ? {} : { lang }) };
+}
+
+function raiseParts(parts: { text: string; lang: string }[]): Raised {
+  return { ...raise(parts.map((part) => part.text).join("")), parts };
 }
 
 const THEME_KEY = "diffalanche.theme";
@@ -457,7 +461,7 @@ type SearchAndOverlaysSlice = {
   exportComments: Comment[];
   exportStatus: LoadStatus;
   toast: Raised | null;
-  setToast: (toast: string | null) => void;
+  setToast: (toast: string | null, parts?: { text: string; lang: string }[]) => void;
   /** `⌘K` and `⇧⇧`. Opening starts from an empty field, as the handoff's does. */
   setPalette: (open: boolean) => void;
   setPaletteQuery: (query: string) => void;
@@ -710,7 +714,13 @@ export const useStore = create<Store>()((set, get) => ({
       // The change set is computed against the base, so the whole review is
       // read again rather than patched ([03-storage.md]).
       await get().loadReview();
-      set({ switching: false, toast: raise(`База сессии: ${base}`) });
+      set({
+        switching: false,
+        toast: raiseParts([
+          { text: "База сессии: ", lang: "ru" },
+          { text: base, lang: "" },
+        ]),
+      });
     } catch (error) {
       set({ switching: false, toast: raise(reason(error)) });
     }
@@ -898,7 +908,7 @@ export const useStore = create<Store>()((set, get) => ({
     // Behind the disabled `Apply`: an empty draft is not "nothing" but `null`, the whole root, so
     // a slip here would widen the task instead of refusing.
     if (!confirmed && isEmptyDraft(scopeDraft)) {
-      set({ toast: raise("Задача ни о чём — отметьте хотя бы один репозиторий") });
+      set({ toast: raise("Задача ни о чём — отметьте хотя бы один репозиторий", "ru") });
       return;
     }
     const scope = confirmed ? scopeConfirm.scope : draftToScope(scopeDraft);
@@ -926,7 +936,13 @@ export const useStore = create<Store>()((set, get) => ({
       // The change set is computed for the scope, so the review is read again
       // rather than patched ([03-storage.md]).
       await get().loadReview();
-      set({ applying: false, toast: raise(`Состав задачи: ${scopeLabel(countScope(scope))}`) });
+      set({
+        applying: false,
+        toast: raiseParts([
+          { text: "Состав задачи: ", lang: "ru" },
+          { text: scopeLabel(countScope(scope)), lang: "en" },
+        ]),
+      });
       void loadSessions(set);
     } catch (error) {
       set({ applying: false, toast: raise(reason(error)) });
@@ -1247,7 +1263,10 @@ export const useStore = create<Store>()((set, get) => ({
         ),
         ...(same ? { composer: null, composerEnd: null, sel: null, body: "", sending: false } : {}),
         ...(same ? { focusId: comment.id } : {}),
-        toast: raise(`Комментарий сохранён в reviews/${session?.name ?? "?"}/comments.json`),
+        toast: raiseParts([
+          { text: "Комментарий сохранён в ", lang: "ru" },
+          { text: `reviews/${session?.name ?? "?"}/comments.json`, lang: "" },
+        ]),
       });
     } catch (error) {
       set({
@@ -1356,7 +1375,11 @@ export const useStore = create<Store>()((set, get) => ({
   exportComments: [],
   exportStatus: "loading",
   toast: null,
-  setToast: (toast) => set({ toast: toast === null ? null : raise(toast) }),
+  setToast: (toast, parts) =>
+    set({
+      toast:
+        toast === null ? null : parts === undefined ? raise(toast) : { ...raise(toast), parts },
+    }),
   setPalette: (paletteOpen) => set({ paletteOpen, paletteQuery: "", palIdx: 0 }),
   setPaletteQuery: (paletteQuery) => set({ paletteQuery, palIdx: 0 }),
   setPalIdx: (palIdx) => set({ palIdx }),
@@ -1423,7 +1446,10 @@ export const useStore = create<Store>()((set, get) => ({
           composer: null,
           composerEnd: null,
           sel: null,
-          toast: raise(`${path} больше нечего ревьюить — форма закрыта`),
+          toast: raiseParts([
+            { text: path, lang: "" },
+            { text: " больше нечего ревьюить — форма закрыта", lang: "ru" },
+          ]),
         });
       }
       if (get().repo === path) {
@@ -1638,7 +1664,7 @@ function revalidate(
     composer: { ...composer, side: null, line: null },
     composerEnd: null,
     sel: null,
-    toast: raise("Строка изменилась — комментарий теперь на файле"),
+    toast: raise("Строка изменилась — комментарий теперь на файле", "ru"),
   });
 }
 

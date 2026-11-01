@@ -176,7 +176,9 @@ function HistoryMark() {
   return (
     <>
       <span className="dot acc pill-mark" />
-      <span className="visually-hidden">в истории появилась задача</span>
+      <span className="visually-hidden" lang="ru">
+        в истории появилась задача
+      </span>
     </>
   );
 }

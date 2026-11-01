@@ -15,6 +15,8 @@ and `bun run release` refuses a version that has no section. See
 
 ### Fixed
 
+- Known Russian interface text exposes its language to assistive technology.
+
 - Performance repetitions have a ten-minute outer deadline, including a stalled
   child holding stdout. Comparison failures name the side and repetition, keep
   earlier samples on stderr and exit 1 without a final comparison table.

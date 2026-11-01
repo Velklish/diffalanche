@@ -94,6 +94,9 @@ file tree, collapsed by default, is the feed of what the server noticed while
 it has been running. The sidebar footer says `watching` while the stream is
 open and `reconnecting` while it is not.
 
+The interface marks Russian text for assistive technology. User-authored
+comment and reply bodies expose an unknown language rather than guessing it.
+
 A thread read started for a task is discarded if the window switches tasks
 before it finishes, even if it has since returned to the same task.
 A queued thread event from the task the window left is discarded before its read.

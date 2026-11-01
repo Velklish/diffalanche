@@ -253,7 +253,12 @@ async function thread(id: string, generation: () => number, replyId?: string): P
   store.patchThread(comment);
   const reply =
     replyId === undefined ? undefined : comment.replies.find((one) => one.id === replyId);
-  if (reply?.role === "agent") store.setToast(`${reply.author} ответил · ${where(comment)}`);
+  if (reply?.role === "agent")
+    store.setToast(`${reply.author} ответил · ${where(comment)}`, [
+      { text: reply.author, lang: "" },
+      { text: " ответил · ", lang: "ru" },
+      { text: where(comment), lang: comment.repo === null ? "ru" : "" },
+    ]);
   await settle(anchor);
 }
 

@@ -32,24 +32,33 @@ export function FirstRun() {
     <main className="first-run">
       <div className="first-run-panel">
         <Logo size={34} />
-        <h1 className="first-run-title">Ни одной сессии review</h1>
-        <p className="first-run-note">
-          diffalanche читает изменения всех репозиториев под этой папкой как одно ревью. Сессия —
-          это имя, база и комментарии; создайте первую, чтобы открыть ревью.
+        <h1 className="first-run-title" lang="ru">
+          Ни одной сессии <span lang="en">review</span>
+        </h1>
+        <p className="first-run-note" lang="ru">
+          <span lang="en">diffalanche</span> читает изменения всех репозиториев под этой папкой как
+          одно ревью. Сессия — это имя, база и комментарии; создайте первую, чтобы открыть ревью.
         </p>
 
         <div className="metrics">
-          <Metric value={count(repositories, () => true)} label="репозиториев найдено" />
-          <Metric value={count(repositories, (one) => one.hasChanges)} label="с изменениями" />
+          <Metric value={count(repositories, () => true)} label="репозиториев найдено" lang="ru" />
+          <Metric
+            value={count(repositories, (one) => one.hasChanges)}
+            label="с изменениями"
+            lang="ru"
+          />
           <Metric value={count(repositories, (one) => one.kind === "worktree")} label="worktree" />
         </div>
 
         {failure === null ? null : (
           <p className="first-run-refused" role="status">
-            <span className="tag scan">SCAN</span> не прочитан: {failure}{" "}
+            <span className="tag scan">SCAN</span>
+            <span lang="ru"> не прочитан: </span>
+            <span lang="">{failure}</span>{" "}
             <button
               type="button"
               className="ghost small"
+              lang="ru"
               disabled={retrying}
               onClick={() => {
                 setRetrying(true);
@@ -82,7 +91,9 @@ export function FirstRun() {
         </form>
 
         <p className="first-run-cli">
-          то же в POSIX shell:{" "}
+          <span lang="ru">
+            то же в <span lang="en">POSIX shell</span>:
+          </span>{" "}
           <code>
             diffalanche review new --base={shellQuote(base)} --{" "}
             {shellQuote(name.trim() || "ls-240588")}
@@ -149,11 +160,13 @@ function modeOf(base: string): BaseMode {
   return base === "branch" || base.startsWith("branch:") ? "branch" : "ref";
 }
 
-function Metric({ value, label }: { value: string; label: string }) {
+function Metric({ value, label, lang }: { value: string; label: string; lang?: string }) {
   return (
     <div className="metric">
       <span className="metric-value">{value}</span>
-      <span className="metric-label">{label}</span>
+      <span className="metric-label" lang={lang}>
+        {label}
+      </span>
     </div>
   );
 }

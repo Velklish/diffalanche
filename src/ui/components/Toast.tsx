@@ -29,8 +29,15 @@ export function Toast() {
 
   if (toast === null) return null;
   return (
-    <div className="toast" role="status">
-      {toast.text}
+    <div className="toast" role="status" lang={toast.lang}>
+      {toast.parts === undefined
+        ? toast.text
+        : toast.parts.map((part, index) => (
+            // biome-ignore lint/suspicious/noArrayIndexKey: these parts keep their order for this toast.
+            <span key={index} lang={part.lang}>
+              {part.text}
+            </span>
+          ))}
     </div>
   );
 }

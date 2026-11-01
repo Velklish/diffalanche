@@ -22,14 +22,21 @@ function Failure() {
   if (task === null) return <p className="failure">The review could not be loaded: {failure}</p>;
   return (
     <div className="no-changes">
-      <h2 className="no-changes-title">Задача «{task}» не открылась</h2>
+      <h2 className="no-changes-title" lang="ru">
+        Задача «<span lang="">{task}</span>» не открылась
+      </h2>
       <p className="failure">{failure}</p>
-      <p className="no-changes-note">
-        Адрес этого окна называет задачу <code>?review={task}</code>. Проверьте имя или откройте
-        текущую сессию.
+      <p className="no-changes-note" lang="ru">
+        Адрес этого окна называет задачу <code lang="">?review={task}</code>. Проверьте имя или
+        откройте текущую сессию.
       </p>
       <div className="no-changes-actions">
-        <button type="button" className="ghost accent" onClick={() => void showTask(null)}>
+        <button
+          type="button"
+          className="ghost accent"
+          lang="ru"
+          onClick={() => void showTask(null)}
+        >
           Текущая сессия
         </button>
       </div>
@@ -123,7 +130,7 @@ function RepoSection({ repo }: { repo: RepositoryChange }) {
       {/* Sticky inside its own section, so the next one pushes it out; the path is not a jump
           target (08-ui.md, "The page"). */}
       <div className="repo-head">
-        <span className="repo-path">{repo.path}</span>
+        <span className="repo-path" lang="">{repo.path}</span>
         <span className="repo-base">
           {repo.branch} ← {baseLine(repo.base)}
         </span>

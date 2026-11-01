@@ -131,12 +131,18 @@ function Palette() {
       <div className="palette-body">
         <ol className="palette-hits">
           {hits.length === 0 && text.status !== "error" ? (
-            <li className="palette-empty">
-              {query.trim() === ""
-                ? "Файлы, символы, текст и комментарии этого ревью."
-                : text.status === "loading"
-                  ? `Ищем «${query.trim()}» в рабочих деревьях…`
-                  : `Ничего не найдено по «${query.trim()}».`}
+            <li className="palette-empty" lang="ru">
+              {query.trim() === "" ? (
+                "Файлы, символы, текст и комментарии этого ревью."
+              ) : text.status === "loading" ? (
+                <>
+                  Ищем «<span lang="">{query.trim()}</span>» в рабочих деревьях…
+                </>
+              ) : (
+                <>
+                  Ничего не найдено по «<span lang="">{query.trim()}</span>».
+                </>
+              )}
             </li>
           ) : hits.length > 0 ? (
             hits.map((hit, at) => (
@@ -151,7 +157,7 @@ function Palette() {
           ) : null}
           {text.next === null ? null : (
             <li>
-              <button type="button" className="palette-more" onClick={text.more}>
+              <button type="button" className="palette-more" lang="ru" onClick={text.more}>
                 ещё совпадения · {text.hits.length} из {text.total}
                 {text.capped ? "+" : ""}
               </button>
@@ -159,7 +165,7 @@ function Palette() {
           )}
           {symbols.note === null ? null : <li className="palette-capped">{symbols.note}</li>}
           {text.status === "error" ? (
-            <li className="palette-capped" role="status">
+            <li className="palette-capped" role="status" lang="ru">
               Поиск текста не удался.{" "}
               <button type="button" className="palette-more" onClick={text.retry}>
                 повторить поиск текста
@@ -167,7 +173,9 @@ function Palette() {
             </li>
           ) : null}
           {text.next === null && text.capped ? (
-            <li className="palette-capped">совпадений больше, чем показано, — уточните запрос</li>
+            <li className="palette-capped" lang="ru">
+              совпадений больше, чем показано, — уточните запрос
+            </li>
           ) : null}
         </ol>
         <Preview hit={selected} />
@@ -199,7 +207,9 @@ function Row({
         onMouseEnter={select}
         onClick={choose}
       >
-        <span className="palette-name">{hit.label}</span>
+        <span className="palette-name" lang="">
+          {hit.label}
+        </span>
         <span className={`palette-tag ${hit.kind}`}>{hit.tag}</span>
       </button>
     </li>
@@ -229,7 +239,9 @@ function Preview({ hit }: { hit: SearchHit | null }) {
         </span>
       </div>
       {lines.length === 0 && hit.path !== "" ? (
-        <p className="palette-note">Этот файл показан без содержимого.</p>
+        <p className="palette-note" lang="ru">
+          Этот файл показан без содержимого.
+        </p>
       ) : lines.length > 0 ? (
         <div className="palette-code">
           {lines.map((line) => (
@@ -400,7 +412,9 @@ function TextPreview({ hit }: { hit: SearchHit }) {
   return (
     <div className="palette-preview">
       <div className="palette-where">
-        <span className="palette-path">{hit.path}</span>
+        <span className="palette-path" lang="">
+          {hit.path}
+        </span>
         <span className="palette-meta">
           {hit.repo} · L{line}
           {hit.detail === undefined ? "" : ` · ${hit.detail}`}
@@ -411,7 +425,7 @@ function TextPreview({ hit }: { hit: SearchHit }) {
           <Line key={row.at} line={row} target={line} />
         ))}
       </div>
-      <p className="palette-note">
+      <p className="palette-note" lang="ru">
         {hit.kind === "symbol" ? "определение · рабочее дерево" : "рабочее дерево"}
       </p>
     </div>
@@ -447,11 +461,17 @@ function PlainPreview({ hit }: { hit: SearchHit }) {
   return (
     <div className="palette-preview">
       <div className="palette-where">
-        <span className="palette-path">{hit.path}</span>
-        <span className="palette-meta">{hit.repo}</span>
+        <span className="palette-path" lang="">
+          {hit.path}
+        </span>
+        <span className="palette-meta" lang="">
+          {hit.repo}
+        </span>
       </div>
       {lines === null ? (
-        <p className="palette-note">Этот файл показан без содержимого.</p>
+        <p className="palette-note" lang="ru">
+          Этот файл показан без содержимого.
+        </p>
       ) : (
         <div className="palette-code">
           {lines.map((line) => (
@@ -459,7 +479,9 @@ function PlainPreview({ hit }: { hit: SearchHit }) {
           ))}
         </div>
       )}
-      <p className="palette-note">рабочее дерево · вне ревью</p>
+      <p className="palette-note" lang="ru">
+        рабочее дерево · вне ревью
+      </p>
     </div>
   );
 }

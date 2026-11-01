@@ -1,3 +1,4 @@
+import { writeFileSync } from "node:fs";
 import type { Page } from "@playwright/test";
 import { expect, test } from "@playwright/test";
 
@@ -58,6 +59,30 @@ test("a root with no session shows the first run with the scan's counts", async 
 
   const panel = page.getByRole("heading", { name: "Ни одной сессии review" });
   await expect(panel).toBeVisible();
+  await expect(panel).toHaveAttribute("lang", "ru");
+  await expect(panel.locator('[lang="en"]')).toHaveText("review");
+  await expect(page.getByRole("button", { name: "Create" })).toBeVisible();
+  const cdp = await page.context().newCDPSession(page);
+  const dom = await cdp.send("DOM.getDocument");
+  const heading = await cdp.send("DOM.querySelector", {
+    nodeId: dom.root.nodeId,
+    selector: ".first-run-title",
+  });
+  const ax = await cdp.send("Accessibility.getPartialAXTree", {
+    nodeId: heading.nodeId,
+    fetchRelatives: true,
+  });
+  expect(
+    ax.nodes.some(
+      (node) => node.role?.value === "heading" && node.name?.value === "Ни одной сессии review",
+    ),
+  ).toBe(true);
+  writeFileSync(test.info().outputPath("first-run-ax.json"), JSON.stringify(ax, null, 2));
+  await page.evaluate(() =>
+    Promise.all(document.getAnimations().map((animation) => animation.finished)),
+  );
+  await page.screenshot({ path: test.info().outputPath("first-run.png") });
+  await cdp.detach();
   const metrics = page.locator(".metric-value");
   await expect(metrics).toHaveText(["4", "2", "1"]);
   // The same thing from the terminal, as the handoff's block says.

@@ -95,6 +95,27 @@ test("a reply written from a shell reaches the rail, the counter, and the feed",
   await expect(page.locator(".feed-list")).toContainText(`bob replied in ${thread.path}`);
 });
 
+test("an agent reply's toast marks the interface text and leaves the author unknown", async ({
+  page,
+}) => {
+  await open(page);
+  const thread = lastThread();
+  cli(
+    "reply",
+    thread.id,
+    "--body",
+    "fixed in the next commit",
+    "--author",
+    "bob",
+    "--role",
+    "agent",
+  );
+  const toast = page.locator(".toast");
+  await expect(toast).toContainText("bob");
+  await expect(toast.locator('[lang="ru"]')).toHaveText(" ответил · ");
+  await expect(toast.locator('[lang=""]').first()).toHaveText("bob");
+});
+
 test("an edit patches its own card, holds the reading position, and leaves the composer open", async ({
   page,
 }) => {

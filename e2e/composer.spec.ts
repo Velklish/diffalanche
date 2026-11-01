@@ -1,4 +1,5 @@
 import { execFileSync } from "node:child_process";
+import { writeFileSync } from "node:fs";
 import { fileURLToPath } from "node:url";
 import type { Locator, Page } from "@playwright/test";
 import { expect, test } from "@playwright/test";
@@ -341,6 +342,29 @@ test("a comment sent with AUTO is stored as auto, and an agent's confirmation re
   await expect(composer.locator(".sev-chip.auto")).toHaveText("AUTO · QUESTION");
   await page.keyboard.press("ControlOrMeta+Enter");
   await expect(page.locator(".toast")).toContainText("Комментарий сохранён в reviews/");
+  await expect(page.locator('.toast [lang="ru"]')).toHaveText("Комментарий сохранён в ");
+  await expect(page.locator('.toast [lang=""]')).toContainText("reviews/");
+  await expect(page.locator(".toast")).toHaveAttribute("role", "status");
+  await expect(page.locator(".thread-body").first()).toHaveAttribute("lang", "");
+  expect(
+    await page
+      .locator(".thread-body")
+      .first()
+      .evaluate((node) => node.closest("[lang]")?.getAttribute("lang")),
+  ).toBe("");
+  const cdp = await page.context().newCDPSession(page);
+  const dom = await cdp.send("DOM.getDocument");
+  const toastNode = await cdp.send("DOM.querySelector", {
+    nodeId: dom.root.nodeId,
+    selector: ".toast",
+  });
+  const ax = await cdp.send("Accessibility.getPartialAXTree", {
+    nodeId: toastNode.nodeId,
+    fetchRelatives: true,
+  });
+  expect(ax.nodes.some((node) => node.role?.value === "status")).toBe(true);
+  writeFileSync(test.info().outputPath("toast-ax.json"), JSON.stringify(ax, null, 2));
+  await cdp.detach();
 
   const written = listComments().filter((comment) => !before.has(comment.id));
   expect(written).toMatchObject([{ severity: "question", severitySource: "auto" }]);

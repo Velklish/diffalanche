@@ -97,7 +97,9 @@ function SessionGroup({
   // popover of two groups has no use for.
   return (
     <section className="menu-group">
-      <h2 className="menu-group-label">{label}</h2>
+      <h2 className="menu-group-label" lang="ru">
+        {label}
+      </h2>
       {sessions.map((session) => (
         <SessionRow
           key={session.name}
@@ -136,8 +138,14 @@ function SessionRow({
         onClick={() => void useStore.getState().switchSession(session.name)}
       >
         <span className="session-head">
-          <span className="session-name">{session.name}</span>
-          {here ? <span className="chip here">ЭТО ОКНО</span> : null}
+          <span className="session-name" lang="">
+            {session.name}
+          </span>
+          {here ? (
+            <span className="chip here" lang="ru">
+              ЭТО ОКНО
+            </span>
+          ) : null}
           {session.current ? (
             <>
               {/* The sentence is said, not left in a `title` only a hovering pointer reaches: a
@@ -145,18 +153,25 @@ function SessionRow({
               <span className="chip" title="указатель, которым пользуется CLI без --review">
                 CLI
               </span>
-              <span className="visually-hidden">
-                — указатель, которым пользуется CLI без --review
+              <span className="visually-hidden" lang="ru">
+                — указатель, которым пользуется <span lang="en">CLI</span> без{" "}
+                <span lang="en">--review</span>
               </span>
             </>
           ) : null}
           {closed ? <span className="chip">CLOSED</span> : null}
           {/* What the task is about, counted by the function the `SCOPE` pill counts with
               (08-ui.md, "The scope on a row…"). */}
-          <span className="chip scope">{historyScopeLabel(session.scope)}</span>
+          <span className="chip scope" lang={session.scope === null ? "ru" : "en"}>
+            {historyScopeLabel(session.scope)}
+          </span>
           <span className="chip">{formatBase(session.base)}</span>
         </span>
-        {session.title === null ? null : <span className="session-title">{session.title}</span>}
+        {session.title === null ? null : (
+          <span className="session-title" lang="">
+            {session.title}
+          </span>
+        )}
         {/* `repos changed`, not `repos`: what had changes at the last scan, not what the task is
             about (ADR-010, decision 5; 08-ui.md, "The scope on a row…"). */}
         <span className="session-metrics">
@@ -212,12 +227,15 @@ function DeleteQuestion({
   return (
     <fieldset className="session-row asking" aria-label={question}>
       <p className="confirm-question">{question}</p>
-      <p className="confirm-note">Каталог задачи уходит с диска целиком, вернуть его нельзя.</p>
+      <p className="confirm-note" lang="ru">
+        Каталог задачи уходит с диска целиком, вернуть его нельзя.
+      </p>
       <div className="session-confirm">
         <span className="spacer" />
         <button
           type="button"
           className="ghost small"
+          lang="ru"
           ref={cancel}
           // Once `Удалить` is pressed the delete is under way, and cancelling is no longer true.
           disabled={switching}
@@ -231,6 +249,7 @@ function DeleteQuestion({
         <button
           type="button"
           className="primary small danger"
+          lang="ru"
           disabled={switching}
           onClick={() => void remove(session.name)}
         >

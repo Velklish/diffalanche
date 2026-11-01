@@ -1,3 +1,4 @@
+import type { ReactNode } from "react";
 import { baseArgument } from "../base.ts";
 import { useStore } from "../store.ts";
 import type { BaseMode, BranchCandidate } from "../types.ts";
@@ -5,9 +6,25 @@ import { Overlay } from "./Overlay.tsx";
 
 /** The base picker of handoff section 5: one spec per session, resolved in every repository, so
  * the candidates are counted across repositories (08-ui.md, "The header"). */
-const MODES: { mode: BaseMode; title: string; about: string }[] = [
-  { mode: "head", title: "head", about: "рабочее дерево против HEAD" },
-  { mode: "branch", title: "branch", about: "merge-base с выбранной веткой" },
+const MODES: { mode: BaseMode; title: string; about: ReactNode }[] = [
+  {
+    mode: "head",
+    title: "head",
+    about: (
+      <>
+        рабочее дерево против <span lang="en">HEAD</span>
+      </>
+    ),
+  },
+  {
+    mode: "branch",
+    title: "branch",
+    about: (
+      <>
+        <span lang="en">merge-base</span> с выбранной веткой
+      </>
+    ),
+  },
   { mode: "ref", title: "ref", about: "тег, коммит или ветка целиком" },
 ];
 
@@ -43,7 +60,9 @@ export function BasePicker() {
                 {one.mode === mode ? "✓" : ""}
               </span>
               <span className="picker-title">{one.title}</span>
-              <span className="picker-about">{one.about}</span>
+              <span className="picker-about" lang="ru">
+                {one.about}
+              </span>
             </button>
             {one.mode === mode && mode === "branch" ? <Candidates /> : null}
             {one.mode === mode && mode === "ref" ? (
@@ -61,7 +80,7 @@ export function BasePicker() {
         <div className="picker-foot">
           <span className="picker-summary">{argument ?? "—"}</span>
           <span className="spacer" />
-          <span className="hint">
+          <span className="hint" lang="ru">
             <span className="key">⏎</span>применить
           </span>
           <button type="submit" className="primary" disabled={switching || argument === null}>
@@ -81,8 +100,18 @@ function Candidates() {
   const chosen = useStore((store) => store.baseName);
 
   if (status === "loading") return <p className="picker-note">…</p>;
-  if (status === "failed") return <p className="picker-note">Ветки не прочитались.</p>;
-  if (branches.length === 0) return <p className="picker-note">Веток, кроме текущей, нет.</p>;
+  if (status === "failed")
+    return (
+      <p className="picker-note" lang="ru">
+        Ветки не прочитались.
+      </p>
+    );
+  if (branches.length === 0)
+    return (
+      <p className="picker-note" lang="ru">
+        Веток, кроме текущей, нет.
+      </p>
+    );
 
   return (
     <div className="picker-list">
@@ -94,7 +123,9 @@ function Candidates() {
       >
         <span className="picker-source">—</span>
         <span className="picker-name">default branch</span>
-        <span className="picker-note-inline">та, на которую смотрит remote</span>
+        <span className="picker-note-inline" lang="ru">
+          та, на которую смотрит <span lang="en">remote</span>
+        </span>
       </button>
       {branches.map((branch) => (
         <Branch key={branch.name} branch={branch} on={branch.name === chosen} />

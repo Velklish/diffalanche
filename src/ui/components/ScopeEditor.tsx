@@ -34,16 +34,22 @@ export function ScopeEditor() {
       >
         <div className="scope-head">
           <span className="tag">SCOPE</span>
-          <span className="scope-about">весь корень — отметьте, о чём эта задача</span>
+          <span className="scope-about" lang="ru">
+            весь корень — отметьте, о чём эта задача
+          </span>
         </div>
 
         <div className="scope-body">
           {status === "loading" ? <p className="picker-note">…</p> : null}
           {status === "failed" ? (
-            <p className="picker-note">Изменения корня не прочитались.</p>
+            <p className="picker-note" lang="ru">
+              Изменения корня не прочитались.
+            </p>
           ) : null}
           {status === "ready" && candidates.length === 0 ? (
-            <p className="picker-note">Под корнем нет изменений, из которых собирается задача.</p>
+            <p className="picker-note" lang="ru">
+              Под корнем нет изменений, из которых собирается задача.
+            </p>
           ) : null}
           {candidates.map((repository) => (
             <Candidate key={repository.path} repository={repository} />
@@ -99,7 +105,9 @@ function Candidate({ repository }: { repository: CandidateRepository }) {
             onClick={() => pickPath(repository.path, file.path, files)}
           >
             <Tick mark={picked ? "on" : "off"} />
-            <span className="file-name">{file.path}</span>
+            <span className="file-name" lang="">
+              {file.path}
+            </span>
             <span className="spacer" />
             <span className="add">+{file.additions}</span>
             <span className="del">−{file.deletions}</span>
@@ -138,17 +146,18 @@ export function ScopeConfirmation({ confirm }: { confirm: ScopeConfirm }) {
       onClose={cancel}
     >
       <p className="confirm-question">{confirm.question}</p>
-      <p className="confirm-note">
+      <p className="confirm-note" lang="ru">
         Комментарии удаляются вместе с записью состава. Отмена не пишет ничего.
       </p>
       <div className="picker-foot">
         <span className="spacer" />
-        <button type="button" className="ghost" onClick={cancel}>
+        <button type="button" className="ghost" lang="ru" onClick={cancel}>
           Отмена
         </button>
         <button
           type="button"
           className="primary danger"
+          lang="ru"
           disabled={applying}
           onClick={() => void applyScope(true)}
         >
@@ -179,7 +188,9 @@ export function NewTaskForm() {
           void useStore.getState().createSession(draftToScope(useStore.getState().selectDraft));
         }}
       >
-        <p className="confirm-note">Состав новой задачи: {scopeLabel(counted)}</p>
+        <p className="confirm-note" lang="ru">
+          Состав новой задачи: <span lang="en">{scopeLabel(counted)}</span>
+        </p>
         <div className="menu-create">
           <input
             value={name}

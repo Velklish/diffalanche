@@ -9,10 +9,20 @@ export function NoChanges() {
 
   return (
     <div className="no-changes">
-      <h2 className="no-changes-title">Изменений нет</h2>
-      <p className="no-changes-note">
+      <h2 className="no-changes-title" lang="ru">
+        Изменений нет
+      </h2>
+      <p className="no-changes-note" lang="ru">
         Ни один репозиторий под этой папкой не отличается от базы сессии
-        {session === null ? "" : ` ${session.name}`}. Смените базу или откройте другую сессию.
+        {session === null ? (
+          ""
+        ) : (
+          <>
+            {" "}
+            <span lang="">{session.name}</span>
+          </>
+        )}
+        . Смените базу или откройте другую сессию.
       </p>
       <div className="no-changes-actions">
         <button type="button" className="ghost accent" onClick={() => openBase(true)}>
