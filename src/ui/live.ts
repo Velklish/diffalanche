@@ -28,7 +28,7 @@ type Anchor = { element: Element; top: number; scrollY: number } | null;
 export function startLive(): () => void {
   let generation = 0;
   let target = useStore.getState().reviewName ?? useStore.getState().session?.name ?? null;
-  let switching = false;
+  let switching = useStore.getState().session === null;
   const currentGeneration = () => generation;
   const invalidate = () => {
     generation += 1;
