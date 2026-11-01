@@ -17,14 +17,16 @@ import { join } from "node:path";
 import { fileURLToPath } from "node:url";
 import { promisify } from "node:util";
 import { beforeAll, describe, expect, it, vi } from "vitest";
-import { repositoryIgnore } from "../src/core/watcher/index.ts";
 import type { Ignore, TreeWatcher, TreeWatcherOptions } from "../src/core/watcher/tree.ts";
 import { perDirectory, supportsRecursiveWatch, watchTree } from "../src/core/watcher/tree.ts";
+import { nativeDirectoryCases } from "./helpers/native-directory-cases.ts";
 import { needsTypeScript } from "./helpers/typescript.ts";
 
 const run = promisify(execFile);
 const unreadableTree = fileURLToPath(new URL("./helpers/unreadable-tree.ts", import.meta.url));
-const removedDirectory = fileURLToPath(new URL("./helpers/removed-directory.ts", import.meta.url));
+const nativeDirectoryChild = fileURLToPath(
+  new URL("./helpers/native-directory-child.ts", import.meta.url),
+);
 
 /** How many more non-recursive watches `fs.watch` takes before it refuses the way inotify does. */
 const refusal = vi.hoisted(() => ({ left: Number.POSITIVE_INFINITY }));
@@ -46,9 +48,6 @@ vi.mock("node:fs", async (importOriginal) => {
 });
 
 const DIRS = process.platform === "linux" || process.platform === "darwin";
-
-/** Whether every change is reported by name: Node's watch does, Bun's names one per read. */
-const NATIVE_NAMES = process.env.DIFFALANCHE_TEST_RUNTIME !== "bun";
 
 beforeAll(async () => {
   const dir = mkdtempSync(join(tmpdir(), "diffalanche-tree-capability-"));
@@ -114,195 +113,21 @@ function sh(script: string): void {
 }
 
 describe("a directory that comes, goes and comes back", () => {
-  it("is watched when it is made after the start, with what was already in it", async () => {
-    const dir = mkdtempSync(join(tmpdir(), "diffalanche-tree-new-"));
-    const tree = start(dir);
-    try {
-      await arm(tree, dir);
-      // Made and filled in one process: the file may be there before the directory's watch is.
-      const from = tree.heard.length;
-      sh(`mkdir -p "${dir}/made/deep" && printf x > "${dir}/made/deep/first.ts"`);
-      await heardAfter(tree, from, "made/deep/first.ts");
-      await write(tree, dir, "made/deep/later.ts");
-      expect(tree.fellBack()).toBe(0);
-    } finally {
-      tree.tree.close();
-      rmSync(dir, { recursive: true, force: true });
-    }
-  });
-
-  // `settle` of the watcher's suite rests on this: a name reported means all written before it was.
-  it("reports what a new directory held before a name written after it", async () => {
-    const dir = mkdtempSync(join(tmpdir(), "diffalanche-tree-order-"));
-    const tree = start(dir);
-    try {
-      await arm(tree, dir);
-      for (let round = 0; round < 5; round += 1) {
-        const from = tree.heard.length;
-        sh(`mkdir -p "${dir}/n${round}/deep" && printf x > "${dir}/n${round}/deep/f.ts"`);
-        sh(`printf x > "${dir}/marker-${round}"`);
-        await heardAfter(tree, from, `marker-${round}`);
-        const after = tree.heard.slice(from);
-        expect(after.indexOf(`n${round}/deep/f.ts`)).toBeGreaterThanOrEqual(0);
-        expect(after.indexOf(`n${round}/deep/f.ts`)).toBeLessThan(after.indexOf(`marker-${round}`));
-      }
-    } finally {
-      tree.tree.close();
-      rmSync(dir, { recursive: true, force: true });
-    }
-  });
-
-  // An event once copied every piece of work under way: 5000 names took 13 s and 1.4 GB (aefc358).
-  it("reports a burst of thousands of names in one directory in linear time and memory", async () => {
-    const dir = mkdtempSync(join(tmpdir(), "diffalanche-tree-burst-"));
-    mkdirSync(join(dir, "out"));
-    const tree = start(dir);
-    try {
-      await arm(tree, dir);
-      const count = 5_000;
-      const heapBefore = process.memoryUsage().heapUsed;
-      let heapPeak = heapBefore;
-      const sampling = setInterval(() => {
-        heapPeak = Math.max(heapPeak, process.memoryUsage().heapUsed);
-      }, 20);
-      const from = tree.heard.length;
-      // Written while this process waits, so the kernel queues every event and they come in one loop.
-      const writer = `const fs = require("fs"); for (let i = 0; i < ${count}; i++) fs.writeFileSync(${JSON.stringify(join(dir, "out"))} + "/f" + i, "");`;
-      execFileSync(process.execPath, ["-e", writer]);
-      // Reported in the order of the writes, so the marker comes after every name of the burst.
-      await write(tree, dir, "marker-after-burst");
-      clearInterval(sampling);
-      const names = new Set(tree.heard.slice(from).filter((path) => path.startsWith("out/")));
-      // Bun names one change per read of the descriptor, so only Node names every file.
-      if (NATIVE_NAMES) expect(names.size).toBe(count);
-      else expect(names.size).toBeGreaterThan(0);
-      // Linear: the names themselves are well under a megabyte; the quadratic copy was 1.4 GB.
-      expect(heapPeak - heapBefore).toBeLessThan(200 * 1024 * 1024);
-    } finally {
-      tree.tree.close();
-      rmSync(dir, { recursive: true, force: true });
-    }
-  });
-
-  // ext4 hands the freed inode to the next `mkdir` at once, so an inode alone says it is the same.
-  it("is watched again when it is removed and made again under its name", async () => {
-    const dir = mkdtempSync(join(tmpdir(), "diffalanche-tree-again-"));
-    mkdirSync(join(dir, "dist"));
-    const tree = start(dir);
-    try {
-      await arm(tree, dir);
-      for (let round = 0; round < 3; round += 1) {
-        sh(`rm -rf "${dir}/dist" && mkdir "${dir}/dist"`);
-        await write(tree, dir, `dist/y-${round}.js`);
-        await write(tree, dir, `dist/z-${round}.js`);
-      }
-      expect(tree.fellBack()).toBe(0);
-    } finally {
-      tree.tree.close();
-      rmSync(dir, { recursive: true, force: true });
-    }
-  });
-
-  // Bun names the source of the rename alone, so the replaced name may never reach an event.
-  it("is watched again when another is moved in over its name", async () => {
-    const dir = mkdtempSync(join(tmpdir(), "diffalanche-tree-moved-"));
-    mkdirSync(join(dir, "dist"));
-    const tree = start(dir);
-    try {
-      await arm(tree, dir);
-      for (let round = 0; round < 3; round += 1) {
-        sh(`mkdir "${dir}/next" && rm -rf "${dir}/dist" && mv "${dir}/next" "${dir}/dist"`);
-        await write(tree, dir, `dist/y-${round}.js`);
-        await write(tree, dir, `dist/z-${round}.js`);
-      }
-      expect(tree.fellBack()).toBe(0);
-    } finally {
-      tree.tree.close();
-      rmSync(dir, { recursive: true, force: true });
-    }
-  });
-
-  it("is watched again after a checkout removed it and made it again", async () => {
-    const dir = mkdtempSync(join(tmpdir(), "diffalanche-tree-checkout-"));
-    const identity = ["-c", "user.name=t", "-c", "user.email=t@example.invalid"];
-    const git = (...args: string[]) => execFileSync("git", ["-C", dir, ...identity, ...args]);
-    git("init", "-q", "-b", "main");
-    mkdirSync(join(dir, "src", "gen"), { recursive: true });
-    writeFileSync(join(dir, "src", "gen", "a.ts"), "a\n");
-    git("add", ".");
-    git("commit", "-q", "-m", "a");
-    git("checkout", "-q", "-b", "other");
-    git("rm", "-q", "src/gen/a.ts");
-    mkdirSync(join(dir, "src", "gen"), { recursive: true });
-    writeFileSync(join(dir, "src", "gen", "b.ts"), "b\n");
-    git("add", ".");
-    git("commit", "-q", "-m", "b");
-    git("checkout", "-q", "main");
-    const ignore = repositoryIgnore({ exclude: [], dataDir: join(dir, ".diffalanche") } as never, {
-      path: ".",
-      absolutePath: dir,
-      kind: "repo",
-    });
-    const tree = start(dir, ignore);
-    try {
-      await arm(tree, dir);
-      // Each switch removes `src/gen` with its one file and makes it again with the other.
-      for (const [branch, file] of [
-        ["other", "b.ts"],
-        ["main", "a.ts"],
-        ["other", "b.ts"],
-      ] as const) {
-        git("checkout", "-q", branch);
-        await write(tree, dir, `src/gen/${file}`);
-        git("checkout", "-q", "--", ".");
-      }
-      expect(tree.fellBack()).toBe(0);
-    } finally {
-      tree.tree.close();
-      rmSync(dir, { recursive: true, force: true });
-    }
-  });
-
-  it("is let go when it is removed, and the rest of the tree stays watched", async () => {
-    const dir = mkdtempSync(join(tmpdir(), "diffalanche-tree-gone-"));
-    mkdirSync(join(dir, "gone", "deep"), { recursive: true });
-    mkdirSync(join(dir, "kept"));
-    if (process.platform === "darwin" && process.versions.bun !== undefined) {
+  for (const [name, scenario] of Object.entries(nativeDirectoryCases)) {
+    it(name, async () => {
+      const dir = mkdtempSync(join(tmpdir(), "diffalanche-tree-native-"));
       try {
-        const { stdout } = await run(process.execPath, [removedDirectory, dir], {
-          timeout: 60_000,
-        });
-        const seen = JSON.parse(stdout) as {
-          failure: string | null;
-          removed: string[];
-          retained: string[];
-          polling: boolean;
-          fellBack: number;
-        };
-        expect(seen.failure).toBeNull();
-        expect(seen.removed).toContain("gone");
-        expect(seen.retained).toContain("kept/after.ts");
-        expect(seen.polling).toBe(false);
-        expect(seen.fellBack).toBe(0);
+        if (process.platform === "darwin" && process.versions.bun !== undefined) {
+          const { stdout } = await run(process.execPath, [nativeDirectoryChild, name, dir], {
+            timeout: 60_000,
+          });
+          expect(JSON.parse(stdout)).toEqual({ ok: true });
+        } else await scenario(dir);
       } finally {
         rmSync(dir, { recursive: true, force: true });
       }
-      return;
-    }
-    const tree = start(dir);
-    try {
-      await arm(tree, dir);
-      const from = tree.heard.length;
-      rmSync(join(dir, "gone"), { recursive: true });
-      await heardAfter(tree, from, "gone");
-      await write(tree, dir, "kept/after.ts");
-      expect(tree.tree.polling()).toBe(false);
-      expect(tree.fellBack()).toBe(0);
-    } finally {
-      tree.tree.close();
-      rmSync(dir, { recursive: true, force: true });
-    }
-  });
+    });
+  }
 });
 
 describe("a directory the watch may not read", () => {
