@@ -25,6 +25,7 @@ import { fileSourceAt } from "../src/core/git/browse.ts";
 import * as repositoryReads from "../src/core/git/index.ts";
 import * as gitCalls from "../src/core/git/run.ts";
 import { scan } from "../src/core/scanner/index.ts";
+import * as storageReads from "../src/core/storage/index.ts";
 import {
   commentsPath,
   readComments,
@@ -1652,4 +1653,119 @@ describe("bounded anchor reconciliation", () => {
       vi.restoreAllMocks();
     }
   });
+});
+
+describe("overlapping rescan inputs", () => {
+  function barrier() {
+    let release = () => {};
+    const promise = new Promise<void>((resolve) => {
+      release = resolve;
+    });
+    return { promise, release };
+  }
+
+  it("starts the previous cache read beside Git and rereads it under the writer lock", async () => {
+    const f = await fixture();
+    writeFileSync(f.file, `${prefix}${f.text}const added = 4;\n`);
+    const started = barrier();
+    const held = barrier();
+    const raw = repositoryReads.readRepositoryChange;
+    const cache = storageReads.readDiffCache;
+    let cacheReads = 0;
+    let ready = 0;
+    vi.spyOn(repositoryReads, "readRepositoryChange").mockImplementation(async (...args) => {
+      started.release();
+      await held.promise;
+      return raw(...args);
+    });
+    vi.spyOn(storageReads, "readDiffCache").mockImplementation(async (...args) => {
+      cacheReads += 1;
+      return cache(...args);
+    });
+    const pending = rescanRepository(f.config, "work", "repo", () => {
+      ready += 1;
+    });
+    try {
+      await started.promise;
+      expect(cacheReads).toBe(1);
+      expect(ready).toBe(0);
+    } finally {
+      held.release();
+      await pending;
+      vi.restoreAllMocks();
+    }
+    expect(cacheReads).toBe(2);
+    expect(ready).toBe(1);
+    expect((await get(f.config.dataDir, "work", f.comment.id)).line).toBe(7);
+  });
+
+  it.each(["repository", "cache"])(
+    "drains both inputs when %s rejects first and keeps Git error precedence",
+    async (first) => {
+      const f = await fixture();
+      const started = barrier();
+      const rawHeld = barrier();
+      const cacheHeld = barrier();
+      const rawFinished = barrier();
+      const cacheFinished = barrier();
+      const rawError = new Error("repository read failed");
+      const cacheError = new Error("previous cache read failed");
+      let cacheStarted = false;
+      let finished = false;
+      let ready = 0;
+      const commentPath = commentsPath(f.config.dataDir, "work");
+      const cachePath = join(f.config.dataDir, "reviews", "work", "diff.json");
+      const beforeComments = readFileSync(commentPath, "utf8");
+      const beforeCache = readFileSync(cachePath, "utf8");
+      vi.spyOn(repositoryReads, "readRepositoryChange").mockImplementation(async () => {
+        started.release();
+        try {
+          await rawHeld.promise;
+          throw rawError;
+        } finally {
+          rawFinished.release();
+        }
+      });
+      vi.spyOn(storageReads, "readDiffCache").mockImplementation(async () => {
+        cacheStarted = true;
+        try {
+          await cacheHeld.promise;
+          throw cacheError;
+        } finally {
+          cacheFinished.release();
+        }
+      });
+      const pending = rescanRepository(f.config, "work", "repo", () => {
+        ready += 1;
+      }).then(
+        () => {
+          finished = true;
+          return null;
+        },
+        (error: unknown) => {
+          finished = true;
+          return error;
+        },
+      );
+      try {
+        await started.promise;
+        expect(cacheStarted).toBe(true);
+        (first === "repository" ? rawHeld : cacheHeld).release();
+        await readComments(f.config.dataDir, "work");
+        expect(finished).toBe(false);
+        expect(ready).toBe(0);
+      } finally {
+        rawHeld.release();
+        cacheHeld.release();
+        await pending;
+        await rawFinished.promise;
+        if (cacheStarted) await cacheFinished.promise;
+        vi.restoreAllMocks();
+      }
+      expect(await pending).toBe(rawError);
+      expect(ready).toBe(0);
+      expect(readFileSync(commentPath, "utf8")).toBe(beforeComments);
+      expect(readFileSync(cachePath, "utf8")).toBe(beforeCache);
+    },
+  );
 });
