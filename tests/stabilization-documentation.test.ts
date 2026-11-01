@@ -5,17 +5,17 @@ const corrections = [
   [
     "first unchanged rescan invalidates broadly",
     "docs/reference/05-watcher.md",
-    "The read can take in an edit made while it runs, so that edit's rescan finds\nnothing new. When that first rescan finds an unchanged entry,\n`onRepositoryChanged` receives no path list: other tasks may still hold any part\nof the old repository. Later unchanged rescans report their paths, so held and\npending documents can compare each accepted burst with their own scope\n([07-server.md](07-server.md)).",
+    "The read can take in an edit made while it runs, so that edit's rescan finds\nnothing new. When that first rescan leaves the entry and persisted anchors unchanged,\n`onRepositoryChanged` receives no path list: other tasks may still hold any part\nof the old repository. Later unchanged rescans report their paths, so held and\npending documents can compare each accepted burst with their own scope\n([07-server.md](07-server.md)).",
   ],
   [
     "same-bytes saves retain named-scope signals",
     "docs/reference/05-watcher.md",
-    "is compared with the cached one, patch by patch. When they agree, current emits\nno unscoped `diff-changed`, rescan callback or activity line. The repository\ncallback still invalidates matching held and pending documents, and followed\nnamed tasks can receive scoped frames even for a same-bytes save. These path\nsignals do not establish that a named task's content changed.\n`session-changed` is the same kind of answer about metadata:",
+    "is compared with the cached one, patch by patch. When the entries agree and reconciliation persists no anchor changes,\ncurrent emits no unscoped `diff-changed`, rescan callback or activity line. The repository\ncallback still invalidates matching held and pending documents, and followed\nnamed tasks can receive scoped frames even for a same-bytes save. These path\nsignals do not establish that a named task's content changed.\n`session-changed` is the same kind of answer about metadata:",
   ],
   [
     "repository callback differs from a current change",
     "docs/reference/05-watcher.md",
-    "  `diff-changed` when the entry changed. An unchanged entry still reports the\n  repository callback and can notify matching named scopes, without refreshing\n  current. The first unchanged rescan after `current` moves omits the path list\n  for broad document invalidation; later unchanged rescans include the reported\n  paths. The move's read may already hold an edit that another task has not read.",
+    "  `diff-changed` when the entry or persisted anchors changed. When both are\n  unchanged, it still reports the repository callback and can notify matching named scopes, without refreshing\n  current. The first unchanged rescan after `current` moves omits the path list\n  for broad document invalidation; later unchanged rescans include the reported\n  paths. The move's read may already hold an edit that another task has not read.",
   ],
   [
     "ignore lookup cost names the outside-repository case",
@@ -25,12 +25,12 @@ const corrections = [
   [
     "same-bytes current silence does not suppress named scopes",
     "docs/reference/05-watcher.md",
-    "   announces it. A save with the same bytes emits no unscoped current\n   `diff-changed` on either runtime; named-scope notifications remain separate.",
+    "   announces it. A save that leaves both content and persisted anchors unchanged emits no\n   unscoped current\n   `diff-changed` on either runtime; named-scope notifications remain separate.",
   ],
   [
     "server separates first broad and later scoped invalidation",
     "docs/reference/07-server.md",
-    "left to drop it. The first unchanged rescan after a move therefore calls\n`onRepositoryChanged` without paths, invalidating other tasks' documents across\nthat repository ([05-watcher.md](05-watcher.md)). This broad invalidation costs\nonce per repository per move. Later unchanged rescans carry paths and invalidate\nonly documents whose scope intersects the signal. An unchanged current entry\nproduces no unscoped current frame, rescan callback or activity line; matching\nfollowed named tasks can still receive scoped frames, including for a same-bytes\nsave. An absorbed edit can arrive after the move's read ended, so notification\ntime cannot establish whether that read included it.",
+    "left to drop it. The first rescan after a move that leaves the entry and persisted anchors\nunchanged therefore calls\n`onRepositoryChanged` without paths, invalidating other tasks' documents across\nthat repository ([05-watcher.md](05-watcher.md)). This broad invalidation costs\nonce per repository per move. Later unchanged rescans carry paths and invalidate\nonly documents whose scope intersects the signal. An unchanged current entry with no persisted anchor changes\nproduces no unscoped current frame, rescan callback or activity line; matching\nfollowed named tasks can still receive scoped frames, including for a same-bytes\nsave. An absorbed edit can arrive after the move's read ended, so notification\ntime cannot establish whether that read included it.",
   ],
   [
     "held documents intersect notification paths",
@@ -45,12 +45,12 @@ const corrections = [
   [
     "cache-write callback describes changed current entries",
     "src/core/watcher/index.ts",
-    "// Current's rescan callback, event and activity precede the cache write only when its entry\n    // changed; other tasks also need the unchanged-entry path below (05-watcher.md).",
+    "// Current's rescan callback, event and activity precede the cache write when its entry or\n    // persisted anchors changed; the unchanged path still informs other tasks (05-watcher.md).",
   ],
   [
     "rescan callback does not claim global silence",
     "src/core/watcher/index.ts",
-    "// This callback reports a changed entry; the unchanged branch below still reports paths\n      // for other tasks without announcing a current change (05-watcher.md).",
+    "// This callback reports changed entry or anchor state; the unchanged branch still reports\n      // paths for other tasks without announcing a current change (05-watcher.md).",
   ],
   [
     "first rescan comment distinguishes later paths",
@@ -70,7 +70,7 @@ const corrections = [
   [
     "event table includes followed named path signals",
     "docs/reference/05-watcher.md",
-    "| `diff-changed` | `{ repo, files, session }` | current's repository entry changed, or a path signal targets a followed named task whose scope intersects it; `files` are notification paths, not the new change set's files, and are **empty** when a fallback walk or session read names no path |",
+    "| `diff-changed` | `{ repo, files, session }` | current's repository entry or persisted anchors changed, or a path signal targets a followed named task whose scope intersects it; `files` are notification paths, not the new change set's files, and are **empty** when a fallback walk or session read names no path |",
   ],
   [
     "changelog describes bounded anchor reads and retained lock",
@@ -91,6 +91,36 @@ const corrections = [
     "search status storage differs from its tag",
     "docs/reference/08-ui.md",
     "names. Schema 3 carries `orphaned` comments; search still tags them\n`comment`, without a separate status tag.",
+  ],
+  [
+    "dated perf results preserve failed qualification",
+    "docs/reference/11-perf.md",
+    "**Development-machine readings on 2026-11-01.** The current implementation\n`a87e98927cb171464d3fc4911653412f931ccab7` was measured on the 8-core Apple\nM1 Pro, Darwin 27 arm64, Bun 1.3.14, Node v25.2.1 and Chromium 1243.\nThree ordinary `bun run perf` invocations used\n`PLAYWRIGHT_BROWSERS_PATH=/Users/kim.p/.bb/thread-storage/diffalanche-execution-20261101/browsers`,\nwith the original load guard, budgets and deadlines. Each reading is the median\nof five complete measurements; an interrupted invocation has no median.\n\n| Invocation | Update median | Exit | One/five-minute load before → after | Outcome |\n|---|---|---|---|---|\n| 1 | 300 ms | 0 | 35.21/27.80 → 9.34/18.33 | waited 125 s; measurement admitted at 6.44/19.73; 7/7 budgets |\n| 2 | 302 ms | 1 | 9.34/18.33 → 8.27/16.50 | five complete measurements; 6/7 budgets |\n| 3 | not measured | 1 | 8.27/16.50 → 3.38/12.60 | three complete measurements, then RESTORE timed out at 60000 ms in sample 4 |\n\nThe third invocation retained update samples 301, 299 and 326 ms. These results\ndo not satisfy three consecutive complete invocations inside the 300 ms budget.\nThey do not establish that host load caused the timeout or compare the current\nimplementation with the historical container baseline. The 300 ms budget is\nunchanged. A separate diagnostic run completed all five restores; that does not\nrefute the ordinary timeout or establish its cause.\n\nCPU per frame over the same nine points is 8.5 to 9.1 with no trend, which says",
+  ],
+  [
+    "dated full Bun qualification preserves unknown cause",
+    "docs/reference/05-watcher.md",
+    "On 2026-11-01, `env -u FORCE_COLOR bun run test:bun` completed three\nconsecutive ordinary runs on macOS 27 arm64, Bun 1.3.14, at\n`a87e98927cb171464d3fc4911653412f931ccab7`. Each passed 1255/1255 tests in\n87 files, exit 0. This qualifies that source's full Bun suite; it does not\nidentify the cause of the earlier unheard directory events.\n\n**`tests/watch-tree.test.ts` holds native directory lifecycle behavior.**",
+  ],
+  [
+    "stream task parameter filters targeted diffs",
+    "docs/reference/07-server.md",
+    "**The parameter registers the task and selects targeted diff delivery.**\nComment and other unscoped frames remain broadcast; the page drops comment\nframes for other tasks. Session-targeted `diff-changed` frames are filtered by\nthe server for live delivery and replay. The server keeps one replay ring and\none global sequence of ids. A connection may skip ids belonging to other tasks;\n`Last-Event-ID` is compared with the global ring bounds\n([The live stream](#the-live-stream)).",
+  ],
+  [
+    "UI stream documentation retains server filtering",
+    "docs/reference/08-ui.md",
+    "Comment frames remain broadcast and are filtered by the page.\nSession-targeted `diff-changed` frames are filtered by the server for both live\ndelivery and replay; the ring and id sequence stay global.",
+  ],
+  [
+    "Phase 3 implementation differs from acceptance",
+    "docs/ROADMAP.md",
+    "4. **Phase 3 — precision.** Comments survive code edits through re-anchoring; lost anchors become `orphaned` with a model proposal; go to definition through a configured language server; Windows verified. Automatic Git/text re-anchoring and `orphaned` status are implemented. Model proposals and their UI, LSP navigation and Windows verification remain deferred; Phase 3 acceptance remains open.",
+  ],
+  [
+    "anchor-only changes publish and write the cache",
+    "docs/reference/05-watcher.md",
+    "own: no cache write or handover occurs when the recomputed entry equals the\ncached one and reconciliation persisted no anchor changes. If only anchor state\nchanged, the rescan still publishes Ready, the current diff event and activity,\nand writes the cache. The new change set is handed over before that write.",
   ],
 ] as const;
 
