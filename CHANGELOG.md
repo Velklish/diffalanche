@@ -15,6 +15,9 @@ and `bun run release` refuses a version that has no section. See
 
 ### Fixed
 
+- Directory-watch errors distinguish a removed or replaced child from a failing
+  backend, so a linked child cannot stop updates in the rest of the tree.
+
 - Delayed watch-error checks act only on the watcher still owning the path, so
   an old completion cannot close or fault a replacement directory watch.
 
