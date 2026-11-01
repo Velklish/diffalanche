@@ -315,13 +315,13 @@ export async function startWatcher(options: WatcherOptions): Promise<Watcher> {
   function notifyOtherScopes(repo: string, files: string[]): void {
     for (const name of options.sessions?.() ?? []) {
       if (name === session) continue;
-      const known = metadata.get(name);
-      if (known?.scope === undefined || !repositoryInScope(known.scope, repo)) continue;
+      const known = metadata.get(name)?.scope;
+      if (known === undefined || !repositoryInScope(known, repo)) continue;
       const covered =
         files.length === 0 ||
         files.some(
           (path) =>
-            path === ".git" || path.startsWith(".git/") || pathInScope(known.scope, repo, path),
+            path === ".git" || path.startsWith(".git/") || pathInScope(known, repo, path),
         );
       if (covered) bus.emit({ type: "diff-changed", repo, files, session: name });
     }
