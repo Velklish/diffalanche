@@ -30,3 +30,7 @@ New product features, runtime or dependency upgrades, deferred implementation, c
 - Configured Backslop lint and all applicable eight-gate workflow checks pass on the final committed candidate; report exact exits and counts. Unavailable or failed mandatory checks remain explicit blockers.
 - The original 78-ID consolidation and 63-ID execution mapping distinguish implemented candidates, accepted work, duplicate-only closure, deferred assessment, unresolved hypotheses and environment or owner blockers. No candidate is called accepted merely because it is present in the provisional branch.
 - Acceptance/archive/fold happens through the configured lifecycle only after the relevant requirements and review are satisfied.
+
+## Owner acceptance decision — 2026-11-01
+
+After receiving300ms/exit0,302ms/exit1 and RESTORE timeout/exit1(no median), the owner answered the proposal for an additional quiet series: “Закрепляем текущие результаты, они приемлемые”. The current performance result is accepted with this known deviation; the proposed extra series and further performance optimization are not run. The original numerical requirements and failed receipts remain intact. Remaining configured commands and independent documentation review are completed; no eight-of-eight success is asserted.
