@@ -18,6 +18,7 @@ import {
   resolve,
 } from "../src/core/domain/index.ts";
 import { commentWarnings, reconcileAnchors } from "../src/core/domain/reanchor.ts";
+import { reverseAnchor } from "../src/core/git/anchors.ts";
 import { fileSourceAt } from "../src/core/git/browse.ts";
 import { scan } from "../src/core/scanner/index.ts";
 import {
@@ -765,4 +766,95 @@ it("does not let stale Git provenance undo a manual orphan re-anchor after human
   expect(moved.anchor).not.toHaveProperty("revision");
   expect(moved).toMatchObject({ line: 10, status: "open" });
   expect(moved.anchor?.before.at(-1)).toBe("manual before");
+});
+
+describe("rename and legacy identity", () => {
+  it("follows a verified staged rename on the new side and keeps the original path", async () => {
+    const f = await fixture();
+    f.git("mv", "a.ts", "b.ts");
+    writeFileSync(join(f.repo, "b.ts"), `${prefix}${f.text}const added = 4;\n`);
+    expect(await refresh(f)).toMatchObject({
+      path: "b.ts",
+      line: 7,
+      status: "open",
+      originalAnchor: { path: "a.ts", line: 2 },
+    });
+  });
+
+  it("reads a renamed old-side anchor from oldPath at its pinned base", async () => {
+    const f = await fixture();
+    f.git("mv", "a.ts", "b.ts");
+    await writeDiffCache(
+      f.config.dataDir,
+      "work",
+      (await scanReview(f.config, { mode: "head" })).cache,
+    );
+    f.comment = await addComment(
+      f.config.dataDir,
+      "work",
+      {
+        repo: "repo",
+        path: "b.ts",
+        side: "old",
+        line: 2,
+        severity: "nit",
+        body: "renamed old side",
+        author: "human",
+        role: "human",
+      },
+      { source: fileSourceAt(f.root) },
+    );
+    expect(f.comment.anchor?.revision?.path).toBe("a.ts");
+    writeFileSync(join(f.repo, "b.ts"), `${prefix}${f.text}const added = 4;\n`);
+    expect(await refresh(f)).toMatchObject({ path: "b.ts", side: "old", line: 2, status: "open" });
+  });
+
+  it("uses verified unique text when the saved commit and target are non-ancestral", async () => {
+    const f = await fixture();
+    const revision = f.comment.anchor?.revision;
+    if (revision === undefined) throw new Error("fixture revision missing");
+    f.git("checkout", "--orphan", "unrelated");
+    f.git("rm", "-rf", ".");
+    writeFileSync(f.file, `${prefix}${f.text}const added = 4;\n`);
+    f.git("add", "a.ts");
+    f.git("commit", "-qm", "unrelated history");
+    expect(await reverseAnchor(f.repo, revision, f.git("rev-parse", "HEAD").trim())).toBeNull();
+    expect(await refresh(f)).toMatchObject({ line: 7, status: "open" });
+  });
+
+  it("uses conservative text fallback for a legacy custom source without revision capture", async () => {
+    const f = await fixture();
+    const source = fileSourceAt(f.root);
+    f.comment = await addComment(
+      f.config.dataDir,
+      "work",
+      {
+        repo: "repo",
+        path: "a.ts",
+        line: 2,
+        severity: "nit",
+        body: "legacy source",
+        author: "human",
+        role: "human",
+      },
+      { source: async (repo, path, rev) => source(repo, path, rev) },
+    );
+    expect(f.comment.anchor).not.toHaveProperty("revision");
+    writeFileSync(f.file, `${prefix}${f.text}const added = 4;\n`);
+    const moved = await refresh(f);
+    expect(moved).toMatchObject({ line: 7, status: "open" });
+    expect(moved.anchor).not.toHaveProperty("revision");
+  });
+
+  it("keeps the similarity threshold stable around the text-only cutoff", () => {
+    const saved = {
+      anchor: { lineContent: "abcdefghijklmnopqrst", before: [], after: [], hunk: "" },
+      endLine: null,
+    };
+    expect(locateAnchor(saved, "abcdefghijklmnopqrsX\n")).toMatchObject({
+      kind: "matched",
+      line: 1,
+    });
+    expect(locateAnchor(saved, "abcdefghijklmnopqrXY\n")).toEqual({ kind: "orphaned" });
+  });
 });
