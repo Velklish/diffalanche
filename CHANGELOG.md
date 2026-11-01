@@ -13,6 +13,11 @@ and `bun run release` refuses a version that has no section. See
 
 ## [Unreleased]
 
+### Fixed
+
+- Native watcher fault-injection tests install their stubs independently of the
+  runtime capability probe. A measured false capability keeps its polling path.
+
 ### Added
 
 - **`npm run probe`, the mutation probe**. `npm run probe -- <file> --mutate

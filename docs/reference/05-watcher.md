@@ -205,7 +205,11 @@ hold](#what-the-unit-tests-hold)). So that watcher never asks
 walks from the start: `fellBack` is set before any tree can fail and `onWalk`
 would be called, which means an `onFallback` given to it could never fire there.
 The default path — the probe, `recursive: false`, the takeover — is held by the
-watchers the other tests start themselves. A server under Bun is not
+watchers the other tests start themselves. Native fault-injection cases force
+`recursive: true` and assert registration before failing their stub: a real probe
+returning false must not bypass the injected native watch. The capability case
+accepts either boolean and checks that false selects polling while true selects
+the native adapter. A server under Bun is not
 affected — four consecutive edits against `bun src/cli/index.ts serve` on the
 synthetic review each produced their event — and every other test in the suite
 runs the same on both runtimes.
