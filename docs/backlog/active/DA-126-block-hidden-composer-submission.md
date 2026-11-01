@@ -1,6 +1,5 @@
 # DA-126 · Do not submit a hidden comment draft from an overlay
 
-- **Order:** 920
 - **Scope:** [08-ui](../../reference/08-ui.md)
 - **Created:** 2026-11-01
 - **Dependencies:** none
@@ -8,6 +7,8 @@
 - **Audit finding:** PQA-200
 - **Audit priority:** P1
 - **Evidence status:** confirmed
+- **Previous order:** 920
+- **Taken:** 2026-11-01
 
 
 ## Execution authorization — 2026-11-01
@@ -52,3 +53,7 @@ Audit finding PQA-200; evidence snapshot `087d3330128f8762ff88b0a9f7a7151dca8db0
 ## Next step
 
 The owner reviews and approves this item individually before it is queued for implementation. Creating this card does not authorize product changes.
+
+## Execution plan
+
+UI interaction track owns keyboard overlays, first-run/base selection and global search for this group. Keep each card as a separate verdict and acceptance subject. Run the installed Impeccable context loader before src/ui edits, preserve PRODUCT/DESIGN and desktop minimum, and close touched surfaces with audit/polish and browser evidence. Coordinate reference 08 by section with the completed documentation track. Add deterministic regression coverage before fixes; do not infer accessibility user impact from static markup alone. No broader redesign or deferred UI features.
