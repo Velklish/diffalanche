@@ -1,6 +1,5 @@
 # DA-139 · Align the current design handoff with renderer, review storage and Escape behavior
 
-- **Order:** 1020
 - **Scope:** [08-ui](../../reference/08-ui.md)
 - **Created:** 2026-11-01
 - **Dependencies:** none
@@ -8,6 +7,8 @@
 - **Audit finding:** PQA-004
 - **Audit priority:** P2
 - **Evidence status:** confirmed_static
+- **Previous order:** 1020
+- **Taken:** 2026-11-01
 
 
 ## Execution authorization — 2026-11-01
@@ -73,3 +74,7 @@ question.
 
 The two sentences read "one of the two red primaries" and "one of the two places
 that destroy review data", each pointing at [Deleting a task](../../reference/08-ui.md#deleting-a-task).
+
+## Execution plan
+
+Documentation currency track. Preserve this card as a separate acceptance subject and keep all original requirements. Coordinate README and CHANGELOG with the safe-content track; root merges shared prose by meaning. Use a durable narrow regression guard that rejects the pre-change normative text and a semantic mutation probe. No runtime or permission contract change is authorized by this documentation correction.

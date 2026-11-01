@@ -1,6 +1,5 @@
 # DA-140 · Update Phase 2 summaries to distinguish implemented capabilities from remaining acceptance
 
-- **Order:** 1030
 - **Scope:** [09-ml](../../reference/09-ml.md)
 - **Created:** 2026-11-01
 - **Dependencies:** none
@@ -8,6 +7,8 @@
 - **Audit finding:** PQA-300
 - **Audit priority:** P2
 - **Evidence status:** confirmed_static
+- **Previous order:** 1030
+- **Taken:** 2026-11-01
 
 
 ## Execution authorization — 2026-11-01
@@ -45,3 +46,7 @@ Audit finding PQA-300; evidence snapshot `087d3330128f8762ff88b0a9f7a7151dca8db0
 ## Next step
 
 The owner reviews and approves this item individually before it is queued for implementation. Creating this card does not authorize product changes.
+
+## Execution plan
+
+Documentation currency track. Preserve this card as a separate acceptance subject and keep all original requirements. Coordinate README and CHANGELOG with the safe-content track; root merges shared prose by meaning. Use a durable narrow regression guard that rejects the pre-change normative text and a semantic mutation probe. No runtime or permission contract change is authorized by this documentation correction.

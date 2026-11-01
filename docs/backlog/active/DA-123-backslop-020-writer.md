@@ -1,9 +1,10 @@
 # DA-123 · Writer pass over the backslop v0.20.0 run, batch close
 
-- **Order:** 775
 - **Scope:** all subsystems (see [reference](../../reference/README.md)); documentation the run touched
 - **Created:** 2026-10-03
 - **Dependencies:** DA-122
+- **Previous order:** 775
+- **Taken:** 2026-11-01
 
 
 ## Execution authorization — 2026-11-01
@@ -30,3 +31,7 @@ rewrote large parts of the documentation by hand.
 
 - The ledger lists every document of the range with its verdict.
 - Every finding has a card; `lint` and every other gate exit 0.
+
+## Execution plan
+
+The historical writer input is `8236520021d0ca765d3e0fa8fe652556d7df50d5^..c79226d4f3a27f5e603fe6042563f7eb72cacae9`, covering the DA-119 through DA-122 run. Keep one row per document and behavior-changing commit; this pass is distinct from the final currency pass for the current implementation run. Findings outside already authorized corrections are registered, not silently fixed.
