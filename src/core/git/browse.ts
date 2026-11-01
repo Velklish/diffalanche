@@ -3,8 +3,10 @@
 import { constants, type Stats } from "node:fs";
 import { lstat, open, readlink, realpath } from "node:fs/promises";
 import { join } from "node:path";
+import type { FileSource } from "../domain/comments.ts";
 import { byCodePoint } from "../order.ts";
 import type { FileOmission, TreeEntry } from "../types.ts";
+import { captureRevision } from "./anchors.ts";
 import { DEFAULT_MAX_FILE_BYTES } from "./patch.ts";
 import { git, gitOrNull, untrackedFiles } from "./run.ts";
 
@@ -65,10 +67,14 @@ type FileRead = { text: string; omitted: null } | { text: null; omitted: FileOmi
 
 /** What the domain anchors a line outside the change set from: a file's text on disk or at a
  * revision, `null` when there is none — the UI's server and the CLI read it the same way. */
-export function fileSourceAt(
-  root: string,
-): (repo: string, path: string, rev: "worktree" | { sha: string }) => Promise<string | null> {
-  return async (repo, path, rev) => (await readFileAt(join(root, repo), path, rev))?.text ?? null;
+export function fileSourceAt(root: string): FileSource {
+  const source: FileSource = async (repo, path, rev) =>
+    (await readFileAt(join(root, repo), path, rev))?.text ?? null;
+  source.revision = async ({ repo, path, line, endLine }) => {
+    if (!isRepositoryPath(repo) || !isRepositoryPath(path)) return null;
+    return captureRevision(join(root, repo), path, line, endLine);
+  };
+  return source;
 }
 
 /** A path as the tree lists one: relative, forward slashes, no step up or aside. */

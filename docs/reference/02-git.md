@@ -632,6 +632,18 @@ A file over `DEFAULT_MAX_FILE_BYTES` (512 KiB, the diff's own limit) is
 same two words, for the same reasons, as a file of the change set
 ([Files listed without content](#files-listed-without-content)).
 
+## Mapping comment anchors
+
+`anchors.ts` uses the trusted Git runner and inert configuration. Reverse blame
+walks a verified source commit to one pinned target commit; its porcelain
+coordinates are accepted only when every selected row survives at that target.
+It never names the uncommitted worktree as a revision. A separate `diff-index
+-p -M PINNED_HEAD --no-ext-diff --no-textconv -U0` maps surviving rows through
+staged and unstaged changes without refreshing the index. Creation inverse-maps worktree rows before assigning committed provenance.
+Inserted and replaced rows have none, even when their text copies an existing
+line. Target text is still verified through the safe file reader. See
+[automatic re-anchoring](04-domain.md#automatic-re-anchoring).
+
 ## Text search
 
 `grepWorktree(cwd, query, { limit, perFile, paths })` in `src/core/git/grep.ts`

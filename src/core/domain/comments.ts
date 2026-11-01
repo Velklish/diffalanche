@@ -3,6 +3,7 @@
 import type {
   Anchor,
   Comment,
+  CommentStatus,
   Reply,
   Role,
   Scope,
@@ -20,7 +21,7 @@ import {
   updateSession,
 } from "../storage/index.ts";
 import type { RepositoryChange } from "../types.ts";
-import { captureAnchor, captureFromFile } from "./anchors.ts";
+import { captureAnchor, captureFromFile, fileLines } from "./anchors.ts";
 import { isUnanswered } from "./counters.ts";
 import { DomainError } from "./errors.ts";
 import type { Actor } from "./roles.ts";
@@ -73,7 +74,7 @@ export type Verdict = Actor & {
 
 export type CommentFilter = {
   /** Default `all`; the CLI picks its own default. */
-  status?: "open" | "resolved" | "all";
+  status?: CommentStatus | "all";
   repo?: string;
   severity?: Severity;
   /** Only threads whose last message is from a human. */
@@ -155,11 +156,15 @@ async function changeSet(dataDir: string, session: string): Promise<RepositoryCh
 }
 
 /** A file read whole, on disk or at the base revision; `null` when it is not there to read. */
-export type FileSource = (
-  repo: string,
-  path: string,
-  rev: "worktree" | { sha: string },
-) => Promise<string | null>;
+export type FileSource = {
+  (repo: string, path: string, rev: "worktree" | { sha: string }): Promise<string | null>;
+  revision?: (input: {
+    repo: string;
+    path: string;
+    line: number;
+    endLine: number;
+  }) => Promise<NonNullable<Anchor["revision"]> | null>;
+};
 
 /** `source` lets a line the change set does not carry be anchored from the file; the server and the
  * CLI both give one (ADR-004, amendment of 2026-09-23), and without one such a line is refused. */
@@ -182,10 +187,73 @@ export async function addComment(
   // and never read back (04-domain.md, "Writing a comment").
   assertAnchorInScope(await readReview(dataDir, session), repo, path);
   const side: Side | null = line === null ? null : (input.side ?? "new");
-  const anchor =
+  let anchor =
     line === null || repo === null || path === null || side === null
       ? null
       : await anchorOf(await changeSet(dataDir, session), repo, path, side, line, options.source);
+
+  if (
+    anchor !== null &&
+    input.endLine !== undefined &&
+    input.endLine !== null &&
+    repo !== null &&
+    path !== null &&
+    side !== null &&
+    line !== null
+  ) {
+    const repositories = await changeSet(dataDir, session);
+    const file = repositories
+      .find((one) => one.path === repo)
+      ?.files.find((one) => one.path === path);
+    const sha = repositories.find((one) => one.path === repo)?.base?.sha;
+    const rev = side === "new" ? "worktree" : sha === undefined ? null : { sha };
+    const text =
+      options.source === undefined || rev === null
+        ? null
+        : await options.source(repo, side === "old" ? (file?.oldPath ?? path) : path, rev);
+    const onSide =
+      file?.hunks
+        .flatMap((hunk) => hunk.lines)
+        .filter((one) => (side === "new" ? one.newLine : one.oldLine) !== null) ?? [];
+    const rows = text === null ? null : fileLines(text);
+    const content: string[] = [];
+    for (let at = line; at <= input.endLine; at += 1) {
+      const value =
+        rows === null
+          ? onSide.find((one) => (side === "new" ? one.newLine : one.oldLine) === at)?.content
+          : rows[at - 1];
+      if (value === undefined)
+        throw new DomainError("invalid-anchor", `range ends past line ${at} of ${repo}/${path}`);
+      content.push(value);
+    }
+    anchor = { ...anchor, rangeContent: content };
+  }
+
+  if (
+    anchor !== null &&
+    repo !== null &&
+    path !== null &&
+    line !== null &&
+    side !== null &&
+    options.source !== undefined
+  ) {
+    const repository = (await changeSet(dataDir, session)).find((one) => one.path === repo);
+    const oldPath = repository?.files.find((file) => file.path === path)?.oldPath ?? path;
+    const baseSha = repository?.base?.sha;
+    const revision =
+      side === "new"
+        ? await options.source.revision?.({ repo, path, line, endLine: input.endLine ?? line })
+        : baseSha === undefined
+          ? null
+          : { sha: baseSha, path: oldPath, line, endLine: input.endLine ?? line };
+    if (revision !== undefined && revision !== null) {
+      const text = await options.source(repo, revision.path, { sha: revision.sha });
+      const body = anchor.rangeContent ?? [anchor.lineContent];
+      const rows = text === null ? [] : fileLines(text).slice(revision.line - 1, revision.endLine);
+      if (rows.length === body.length && rows.every((row, i) => row === body[i]))
+        anchor = { ...anchor, revision };
+    }
+  }
 
   return updateSession(dataDir, session, (draft) => {
     // The guarantee, not a repeat of the cheap refusal above, and it says so:

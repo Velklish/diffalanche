@@ -201,6 +201,15 @@ in the user cache, in the background, and no request waits for that: until they
 are there each is the 503, saying the model is being put in place, and the one
 after a preparation that failed says why ([09-ml.md](09-ml.md#delivery)).
 
+### Session anchor warnings
+
+Review documents combine scan warnings with the saved session's in-scope
+orphan counts, one `N comments lost their anchor in <repo>` warning per
+repository. Comment invalidation recomputes these warnings, so human reopen
+clears them without a repository rescan. Full change-set rebuilds reconcile
+anchors before comments are read. Filesystem/root warnings remain separate.
+See [automatic re-anchoring](04-domain.md#automatic-re-anchoring).
+
 ### The review document
 
 `ReviewDocument` is defined once, in
@@ -228,7 +237,7 @@ that file's import graph may reach a module that uses the Node API.
   ],
   "totals": { "repositories": 21, "files": 300, "lines": 30000 },
   "warnings": [{ "path": "repos/closed", "message": "directory cannot be read: EACCES" }],
-  "session": { "version": 2, "name": "ls-240372", "base": { "mode": "head" },
+  "session": { "version": 3, "name": "ls-240372", "base": { "mode": "head" },
                "scope": null, "status": "open", "…": "…" },
   "comments": [],
   "counters": { "counters": { "open": 3, "…": "…" }, "repositories": [] }

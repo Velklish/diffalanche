@@ -3,18 +3,18 @@
 import type { BaseSpec, ReviewBundle, ScanWarning } from "../types.ts";
 
 /** The version every file of the data directory is written with. */
-export const SCHEMA_VERSION = 2;
+export const SCHEMA_VERSION = 3;
 
 /** The `review.json` and `comments.json` versions this build reads; `diff.json`, a cache, is not
  * in the list ([03-storage.md](../../../docs/reference/03-storage.md), "Schema versions"). */
-export const READABLE_VERSIONS: readonly number[] = [1, SCHEMA_VERSION];
+export const READABLE_VERSIONS: readonly number[] = [1, 2, SCHEMA_VERSION];
 
 /** The `base` of `review.json`: the change-set reader's own `BaseSpec`, one name for one thing —
  * storage parses it, git resolves it. */
 export type Base = BaseSpec;
 
 export type Severity = "critical" | "warning" | "nit" | "question";
-export type CommentStatus = "open" | "resolved";
+export type CommentStatus = "open" | "resolved" | "orphaned";
 export type Role = "human" | "agent";
 export type Side = "new" | "old";
 
@@ -35,7 +35,7 @@ export type Scope = ScopeEntry[] | null;
 /** The one list the schema and the CLI both check against: two lists drift once one gains a
  * word. `SEVERITIES` is worst first (`docs/SPEC.md` section 3, decision 7). */
 export const SEVERITIES: readonly Severity[] = ["critical", "warning", "nit", "question"];
-export const COMMENT_STATUSES: readonly CommentStatus[] = ["open", "resolved"];
+export const COMMENT_STATUSES: readonly CommentStatus[] = ["open", "resolved", "orphaned"];
 export const REVIEW_STATUSES: readonly ReviewStatus[] = ["open", "closed"];
 export const ROLES: readonly Role[] = ["human", "agent"];
 export const SIDES: readonly Side[] = ["new", "old"];
@@ -68,6 +68,8 @@ export type Anchor = {
   hunk: string;
   before: string[];
   after: string[];
+  rangeContent?: string[];
+  revision?: { sha: string; path: string; line: number; endLine: number };
 };
 
 export type Reply = {
@@ -87,6 +89,7 @@ export type Comment = {
   line: number | null;
   endLine: number | null;
   anchor: Anchor | null;
+  originalAnchor?: Pick<Comment, "path" | "side" | "line" | "endLine" | "anchor">;
   severity: Severity;
   severitySource: SeveritySource;
   status: CommentStatus;

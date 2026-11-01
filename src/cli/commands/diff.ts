@@ -1,9 +1,10 @@
 /** `diff`: the change set of the session, rescanned and rewritten by every run that exits 0
  * ([06-cli.md](../../../docs/reference/06-cli.md)). */
 import { formatScope, readSession, repositoryInScope } from "../../core/domain/index.ts";
+import { commentWarnings, reconcileAnchors } from "../../core/domain/reanchor.ts";
 import { scanReview, totalsOf } from "../../core/index.ts";
 import type { DiffCache } from "../../core/storage/index.ts";
-import { sessionDir, withLock, writeDiffCache } from "../../core/storage/index.ts";
+import { readDiffCache, sessionDir, withLock, writeDiffCache } from "../../core/storage/index.ts";
 import { flag, noExtra, text } from "../args.ts";
 import type { Command } from "../command.ts";
 import { repositoryNotFound, UsageError } from "../errors.ts";
@@ -78,6 +79,13 @@ export const diff: Command = {
           `which is about ${formatScope(review.scope)}`,
       );
     }
+    const reconciled = await reconcileAnchors(
+      config,
+      session,
+      review,
+      scanned.cache.repositories,
+      await readDiffCache(config.dataDir, session),
+    );
     // Under the session's lock, like every other writer of this file: a write
     // between the watcher's read and its write is gone without a trace.
     await withLock(sessionDir(config.dataDir, session), async (held) => {
@@ -85,7 +93,13 @@ export const diff: Command = {
       await writeDiffCache(config.dataDir, session, scanned.cache);
     });
 
-    const shown = narrow(scanned.cache, repo);
+    const shown = narrow(
+      {
+        ...scanned.cache,
+        warnings: commentWarnings(scanned.cache.warnings, reconciled.comments, review.scope),
+      },
+      repo,
+    );
 
     if (asJson) {
       json(context.io, shown);

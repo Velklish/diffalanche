@@ -23,7 +23,7 @@ written yet. Of the `model` group, `model status` and `model pull --embedding` e
 | `diffalanche review reopen [<name>] --role human [--author <name>]` | opens it again |
 | `diffalanche review delete <name> --role human [--yes]` | deletes the session with its comments, and moves `current` when it named it |
 | `diffalanche diff [--repo <path>] [--json\|--patch]` | the change set of the session; rewrites `diff.json` |
-| `diffalanche list [--status <open\|resolved\|all>] [--repo <path>] [--severity <s>] [--unanswered] [--json]` | the comments of the session; default status `open` |
+| `diffalanche list [--status <open\|resolved\|orphaned\|all>] [--repo <path>] [--severity <s>] [--unanswered] [--json]` | the comments of the session; default status `open` |
 | `diffalanche show <id> [--json]` | one comment with its thread and its anchor |
 | `diffalanche reply <id> --body <text\|-> [--author] [--role] [--confirm-severity]` | a message in a thread; `-` reads standard input; `--confirm-severity` agrees with a severity the model chose |
 | `diffalanche comment [--repo <path>] [--path <p>] [--line <n>] [--end-line <n>] [--side <new\|old>] --severity <s> --body <text\|-> [--author] [--role]` | a new comment, anchor filled from the change set |
@@ -53,6 +53,19 @@ The `warnings` of `review list --json` are storage's own: a directory under
 `reviews/` with no `review.json` in it. They are printed with the sessions
 rather than dropped, because a session that has gone missing looks exactly like
 a session that was never there.
+
+## Orphaned comments
+
+`diff` reconciles automatic anchors before printing its change set. `list
+--status orphaned --json` selects lost anchors; `--status all`, `show`, and
+`export --status all` retain them. Orphaned comments are neither open nor
+resolved. The warning `N comments lost their anchor in <repo>` is derived from
+saved comments inside the task scope and is present even after a restart.
+
+To recover a lost anchor, edit its coordinates and context in `comments.json`,
+then run `reopen ID --role human`. Reopen clears resolved verdict metadata and
+changes status only; it does not choose coordinates. Model proposals and their
+UI are deferred.
 
 ## The scope of a task
 

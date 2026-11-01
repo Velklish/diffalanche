@@ -37,6 +37,13 @@ and `bun run release` refuses a version that has no section. See
 
 ### Added
 
+- Unique Git and text matches re-anchor line comments and ranges after code
+  edits. Lost or ambiguous anchors retain their saved text as `orphaned`;
+  `list --status orphaned` and session warnings expose them. Human reopen
+  follows a manual anchor edit. Schema 3 retains readable versions 1 and 2.
+  Model proposals and their UI remain deferred.
+
+
 - The unit suite checks that the reading probe, card scroll margin and both
   browser helpers declare the same coordinate, and names any unreadable or
   disagreeing declaration without fixing the value at one height.
