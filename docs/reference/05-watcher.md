@@ -1067,8 +1067,10 @@ through `settle`.
 
 **`tests/watch-tree.test.ts` holds native directory lifecycle behavior.**
 On macOS the lifecycle probe chooses recursive or per-directory native watching.
-Linux uses directory watches; Windows uses the recursive watch. The kernel-refusal
-cases select the per-directory adapter explicitly on Linux and macOS. Every case writes a file and waits for its
+Linux uses directory watches; Windows uses the recursive watch. The directory
+algorithm cases select the per-directory adapter explicitly on Linux and macOS,
+including the strict 5000-name assertion. A separate new-directory burst case
+exercises the default backend after its lifecycle probe. Every case writes a file and waits for its
 own name after an `arm` that repeats a write until one is heard.
 
 The earlier per-directory lifecycle measurements in this section were taken

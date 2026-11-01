@@ -16,7 +16,7 @@ import { tmpdir } from "node:os";
 import { join } from "node:path";
 import { fileURLToPath } from "node:url";
 import { promisify } from "node:util";
-import { beforeAll, describe, expect, it, vi } from "vitest";
+import { describe, expect, it, vi } from "vitest";
 import { repositoryIgnore } from "../src/core/watcher/index.ts";
 import type { Ignore, TreeWatcher, TreeWatcherOptions } from "../src/core/watcher/tree.ts";
 import { perDirectory, supportsRecursiveWatch, watchTree } from "../src/core/watcher/tree.ts";
@@ -52,20 +52,11 @@ const NATIVE_NAMES = process.env.DIFFALANCHE_TEST_RUNTIME !== "bun";
 
 type Tree = { tree: TreeWatcher; heard: string[]; fellBack: () => number };
 
-beforeAll(async () => {
-  const dir = mkdtempSync(join(tmpdir(), "diffalanche-tree-capability-"));
-  try {
-    await supportsRecursiveWatch(dir);
-  } finally {
-    rmSync(dir, { recursive: true, force: true });
-  }
-});
-
 function start(
   dir: string,
   ignore: Ignore = () => false,
   pollIntervalMs = 250,
-  native?: TreeWatcherOptions["native"],
+  native: TreeWatcherOptions["native"] = DIRS ? perDirectory : undefined,
 ): Tree {
   const heard: string[] = [];
   let fellBack = 0;
@@ -419,6 +410,36 @@ it("documents the native directory watches and the platform of lifecycle measure
   expect(reference).toContain(
     "including dangling links. It never follows a link into a target directory",
   );
+});
+
+it("selects a native backend that reports a new-directory burst", async () => {
+  const dir = mkdtempSync(join(tmpdir(), "diffalanche-tree-selected-"));
+  const heard: string[] = [];
+  let fellBack = 0;
+  try {
+    await supportsRecursiveWatch(dir);
+    const tree = watchTree({
+      dir,
+      ignore: () => false,
+      onChange: (path) => heard.push(path),
+      onFallback: () => {
+        fellBack += 1;
+      },
+    });
+    const observed = { tree, heard, fellBack: () => fellBack };
+    try {
+      await arm(observed, dir);
+      const from = heard.length;
+      sh(`mkdir -p "${dir}/made/deep" && printf x > "${dir}/made/deep/first.ts"`);
+      await heardAfter(observed, from, "made/deep/first.ts");
+      expect(tree.polling()).toBe(false);
+      expect(fellBack).toBe(0);
+    } finally {
+      tree.close();
+    }
+  } finally {
+    rmSync(dir, { recursive: true, force: true });
+  }
 });
 
 describe("a native save through an ignored temporary name", () => {
