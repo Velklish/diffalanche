@@ -1,10 +1,11 @@
 # DA-153 · Measure browse tree and first-render costs
 
-- **Order:** 890
 - **Scope:** linked source scopes; [reference](../../reference/README.md)
 - **Created:** 2026-11-01
 - **Dependencies:** retain each source condition below
 - **Cost:** minor
+- **Previous order:** 890
+- **Taken:** 2026-11-01
 
 ## Context
 

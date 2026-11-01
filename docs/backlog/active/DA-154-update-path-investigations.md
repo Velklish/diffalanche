@@ -1,10 +1,11 @@
 # DA-154 · Validate update-path cost hypotheses
 
-- **Order:** 900
 - **Scope:** linked source scopes; [reference](../../reference/README.md)
 - **Created:** 2026-11-01
 - **Dependencies:** retain each source condition below
 - **Cost:** minor
+- **Previous order:** 900
+- **Taken:** 2026-11-01
 
 ## Context
 
