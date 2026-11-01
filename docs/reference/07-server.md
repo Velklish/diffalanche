@@ -398,6 +398,9 @@ After the scope is known, the pending build uses the same path check as a held
 document. An unrelated path in the same repository therefore costs neither a
 cache eviction nor a second build. A repository control path remains a signal
 for the whole repository.
+A directory-only signal also affects explicit scoped files below that directory,
+so held and pending documents covering those files are not retained. A sibling
+whose name merely shares the directory prefix remains unrelated.
 
 A held document's change set ages, because only the followed session's is
 refreshed by a rescan, and what it carries of its task's own files ages when a

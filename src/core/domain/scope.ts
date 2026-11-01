@@ -29,6 +29,30 @@ export function pathInScope(scope: Scope, repo: string, path: string): boolean {
   return entry.paths === null || entry.paths.includes(path);
 }
 
+/** Project a repository change onto paths a task may name. A directory-only watch signal can
+ * stand for an explicit file below it; the parent itself is not a file in that task's scope. */
+export function changedPathsInScope(
+  scope: Scope,
+  repo: string,
+  files: readonly string[],
+): string[] | null {
+  if (scope === null) return [...files];
+  const entry = scopeEntry(scope, repo);
+  if (entry === null) return null;
+  if (entry.paths === null || files.length === 0) return [...files];
+  const paths = new Set<string>();
+  for (const file of files) {
+    if (file === ".git" || file.startsWith(".git/")) {
+      paths.add(file);
+      continue;
+    }
+    for (const allowed of entry.paths) {
+      if (allowed === file || allowed.startsWith(`${file}/`)) paths.add(allowed);
+    }
+  }
+  return paths.size === 0 ? null : [...paths];
+}
+
 /** A whole-review comment is always in; one on a repository is in whichever files its entry lists,
  * since the entry is the repository ([04-domain.md](../../../docs/reference/04-domain.md), "Scope"). */
 export function commentInScope(scope: Scope, comment: Comment): boolean {

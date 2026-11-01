@@ -619,6 +619,9 @@ notification scope. Current's cache, rescan callback and activity stay unchanged
 A repository control path under `.git/`, or a notification without paths,
 applies to the whole repository. Normal path notifications still pass the same
 exclude and scope predicates as other live updates.
+When a watch reports only a removed directory, an explicit scoped file below it
+is affected. The targeted frame names that allowed file, not the parent directory
+outside the task's path list; a sibling with the same prefix is unrelated.
 
 A file touched without its content changing — a build output written again, a
 save with the same bytes — is not a change of the review: the recomputed entry
@@ -701,7 +704,8 @@ know the repository moved ([07-server.md](07-server.md)).
 - **Inside the repository but outside the current task's path scope**, even
   when the current filtered entry stays the same. Held documents compare the
   reported paths with their own scope; followed named tasks receive targeted
-  frames from their metadata scope. Current receives no scoped frame, activity
+  frames from their metadata scope, including allowed files below a directory-only
+  signal. Current receives no scoped frame, activity
   or rescan callback for that notification.
 - **Outside it**, from the burst itself, right after the ignore check. Nothing
   reads that repository, so nothing can say whether its content changed; the

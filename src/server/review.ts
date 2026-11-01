@@ -17,7 +17,7 @@ import {
   repositoryInScope,
   resolveSessionName,
 } from "../core/domain/index.ts";
-import { pathInScope } from "../core/domain/scope.ts";
+import { changedPathsInScope } from "../core/domain/scope.ts";
 import { readRepositoryChange, scan } from "../core/index.ts";
 import type { Base, DiffCache, Review, Scope } from "../core/storage/index.ts";
 import {
@@ -372,14 +372,9 @@ export function createReviewService(
 
 /** A pending and a built document judge the same signal once their scope is known. */
 function coversChange(scope: Scope, repo: string, files?: readonly string[]): boolean {
-  return (
-    repositoryInScope(scope, repo) &&
-    (files === undefined ||
-      files.length === 0 ||
-      files.some(
-        (path) => path === ".git" || path.startsWith(".git/") || pathInScope(scope, repo, path),
-      ))
-  );
+  return files === undefined
+    ? repositoryInScope(scope, repo)
+    : changedPathsInScope(scope, repo, files) !== null;
 }
 
 /** Drops the least recently asked-for sessions until the map is inside the limit;

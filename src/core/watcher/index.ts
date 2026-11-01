@@ -5,7 +5,7 @@ import { stat } from "node:fs/promises";
 import { join, relative } from "node:path";
 import { filterChange, patchable, replaceRepository, scanReview } from "../change-set.ts";
 import type { Config } from "../config/index.ts";
-import { commentInScope, pathInScope, repositoryInScope } from "../domain/scope.ts";
+import { changedPathsInScope, commentInScope, repositoryInScope } from "../domain/scope.ts";
 import { checkIgnore, readRepositoryChange } from "../git/index.ts";
 import { byCodePoint } from "../order.ts";
 import { globToRegExp } from "../scanner/index.ts";
@@ -326,13 +326,10 @@ export async function startWatcher(options: WatcherOptions): Promise<Watcher> {
       for (const name of targets) {
         if (name === session || !followed.includes(name)) continue;
         const known = metadata.get(name)?.scope;
-        if (known === undefined || !repositoryInScope(known, repo)) continue;
-        const covered =
-          paths.length === 0 ||
-          paths.some(
-            (path) => path === ".git" || path.startsWith(".git/") || pathInScope(known, repo, path),
-          );
-        if (covered) bus.emit({ type: "diff-changed", repo, files: paths, session: name });
+        if (known === undefined) continue;
+        const covered = changedPathsInScope(known, repo, paths);
+        if (covered !== null)
+          bus.emit({ type: "diff-changed", repo, files: covered, session: name });
       }
     };
     notify();

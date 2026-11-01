@@ -1,7 +1,7 @@
 /** Public watcher/service contracts with injected tree notifications and real isolated storage/git. */
-import { mkdtempSync, readFileSync, rmSync, writeFileSync } from "node:fs";
+import { mkdirSync, mkdtempSync, readFileSync, rmSync, writeFileSync } from "node:fs";
 import { tmpdir } from "node:os";
-import { join } from "node:path";
+import { dirname, join } from "node:path";
 import { describe, expect, it, vi } from "vitest";
 import { generate, PROFILES } from "../scripts/synth.ts";
 import { loadConfig } from "../src/core/config/index.ts";
@@ -19,18 +19,22 @@ const CURRENT = "only-a";
 const NAMED = "only-b";
 type TreeOptions = Parameters<NonNullable<WatcherOptions["native"]>>[0];
 
-async function fixture(exclude: string[] = []) {
+async function fixture(exclude: string[] = [], namedPath = "B.ts") {
   const root = mkdtempSync(join(tmpdir(), "diffalanche-document-handover-"));
   generate({ out: root, seed: 17, profile: PROFILES.small });
   const loaded = await loadConfig({ root });
   const config = { ...loaded, exclude: [...loaded.exclude, ...exclude] };
   writeFileSync(join(root, REPO, "A.ts"), "export const a = 1;\n");
   writeFileSync(join(root, REPO, "B.ts"), "export const b = 1;\n");
+  if (namedPath !== "B.ts") {
+    mkdirSync(join(root, REPO, dirname(namedPath)));
+    writeFileSync(join(root, REPO, namedPath), "export const gone = 1;\n");
+  }
   await createSession(config.dataDir, CURRENT, { mode: "head" }, undefined, {
     scope: [{ repo: REPO, paths: ["A.ts"] }],
   });
   await createSession(config.dataDir, NAMED, { mode: "head" }, undefined, {
-    scope: [{ repo: REPO, paths: ["B.ts"] }],
+    scope: [{ repo: REPO, paths: [namedPath] }],
     use: false,
   });
   let watcher: Watcher | null = null;
@@ -137,6 +141,94 @@ async function fixture(exclude: string[] = []) {
 }
 
 describe("review document and stream handover", () => {
+  it("does not confuse a removed directory with a sibling whose name has that prefix", async () => {
+    const run = await fixture([], "gone-other/file.ts");
+    try {
+      await run.service.payload(NAMED);
+      await run.drain();
+      const held = await run.service.document(NAMED);
+      run.events.length = 0;
+      mkdirSync(join(run.root, REPO, "gone"));
+      writeFileSync(join(run.root, REPO, "gone/other.ts"), "other\n");
+      rmSync(join(run.root, REPO, "gone"), { recursive: true });
+      run.signal("gone");
+      await run.drain();
+      expect(await run.service.document(NAMED)).toBe(held);
+      expect(run.events.filter((event) => event.type === "diff-changed")).toEqual([]);
+    } finally {
+      await run.close();
+    }
+  });
+
+  it("routes a directory-only removal to its named file and drops its held document", async () => {
+    const run = await fixture([], "gone/file.ts");
+    try {
+      const current = await run.service.document(CURRENT);
+      await run.service.payload(NAMED);
+      await run.drain();
+      const held = await run.service.document(NAMED);
+      expect(held.repositories[0]?.files[0]?.path).toBe("gone/file.ts");
+      const cache = readFileSync(diffCachePath(run.config.dataDir, CURRENT));
+      run.events.length = 0;
+      for (const frames of run.delivered.values()) frames.length = 0;
+
+      mkdirSync(join(run.root, REPO, "gone-other"));
+      writeFileSync(join(run.root, REPO, "gone-other/other.ts"), "other\n");
+      run.signal("gone-other");
+      await run.drain();
+      expect(await run.service.document(NAMED)).toBe(held);
+      expect(run.events.filter((event) => event.type === "diff-changed")).toEqual([]);
+
+      rmSync(join(run.root, REPO, "gone"), { recursive: true });
+      run.signal("gone");
+      await run.drain();
+      const after = await run.service.document(NAMED);
+      expect(after).not.toBe(held);
+      expect(after.repositories).toEqual([]);
+      expect(run.events).toContainEqual({
+        type: "diff-changed",
+        repo: REPO,
+        files: ["gone/file.ts"],
+        session: NAMED,
+      });
+      expect(await run.service.document(CURRENT)).toBe(current);
+      expect(readFileSync(diffCachePath(run.config.dataDir, CURRENT))).toEqual(cache);
+      expect(run.rescans).toEqual([]);
+      expect(run.activity).toEqual([]);
+      expect(run.delivered.get("current")).toEqual([]);
+      expect(run.delivered.get(CURRENT)).toEqual([]);
+      expect(
+        run.delivered.get(NAMED)?.some((frame) => frame.includes('"files":["gone/file.ts"]')),
+      ).toBe(true);
+    } finally {
+      await run.close();
+    }
+  });
+
+  it("does not retain a pending named document after its scoped directory disappears", async () => {
+    const run = await fixture([], "gone/file.ts");
+    try {
+      let signalled = false;
+      let service: ReturnType<typeof createReviewService>;
+      const config = new Proxy(run.config, {
+        get: (target, key, receiver) => {
+          if (key === "exclude" && !signalled) {
+            signalled = true;
+            rmSync(join(run.root, REPO, "gone"), { recursive: true });
+            service.repositoryChanged(REPO, ["gone"]);
+          }
+          return Reflect.get(target, key, receiver);
+        },
+      });
+      service = createReviewService(config, { watched: () => CURRENT });
+      const built = await service.document(NAMED);
+      expect(signalled).toBe(true);
+      expect(await service.document(NAMED)).not.toBe(built);
+    } finally {
+      await run.close();
+    }
+  });
+
   it("notifies a held named scope when only its B path changed outside current A", async () => {
     const run = await fixture();
     try {
