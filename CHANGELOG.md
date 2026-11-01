@@ -32,6 +32,10 @@ and `bun run release` refuses a version that has no section. See
 
 ### Added
 
+- The unit suite checks that the reading probe, card scroll margin and both
+  browser helpers declare the same coordinate, and names any unreadable or
+  disagreeing declaration without fixing the value at one height.
+
 - **`npm run probe`, the mutation probe**. `npm run probe -- <file> --mutate
   's|<regexp>|<replacement>|[flags]' [--run <command>]` applies one
   substitution to one file, runs the command that should turn red, puts the file
