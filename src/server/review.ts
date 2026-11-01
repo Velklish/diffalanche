@@ -82,7 +82,7 @@ export type ReviewService = {
   document: (session?: string) => Promise<ReviewDocument>;
   /** The same document serialised: one per session, serialised once per change
    * ([07-server.md](../../docs/reference/07-server.md)). */
-  payload: (session?: string) => Promise<string>;
+  payload: (session?: string, served?: (token: string) => void) => Promise<string>;
   /** One repository of that task's change set, `null` without changes; a named task is read from
    * git unless it is the session the watcher rescans (`watched()`) (07-server.md, DA-56.6). */
   repository: (repo: string, session?: string) => Promise<RepositoryChange | null>;
@@ -140,7 +140,7 @@ type ReviewServiceOptions = {
   watched?: () => string | null;
   /** A window is served this document, before it is serialised: the watcher's baseline of a
    * task it starts following for that window ([07-server.md](../../docs/reference/07-server.md)). */
-  served?: (session: string, document: ReviewDocument) => void;
+  served?: (session: string, document: ReviewDocument) => string | undefined;
 };
 
 export function createReviewService(
@@ -260,11 +260,12 @@ export function createReviewService(
       const asked = writes;
       return documentOf(await resolveSessionName(config.dataDir, session), asked);
     },
-    payload: async (session) => {
+    payload: async (session, served) => {
       const asked = writes;
       const name = await resolveSessionName(config.dataDir, session);
       const document = await documentOf(name, asked);
-      options.served?.(name, document);
+      const token = options.served?.(name, document);
+      if (typeof token === "string") served?.(token);
       const entry = sessions.get(name);
       // A document an invalidation kept out of the cache is serialised for the
       // request that asked and not kept.

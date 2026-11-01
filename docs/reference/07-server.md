@@ -638,22 +638,25 @@ A change to a task's own `review.json` now reaches its window too: the metadata
 of every followed session is compared each burst, and `session-changed` names the
 session it is about.
 
-**What a window was served is what the watcher's first read of its task compares
-with.** The page asks for `GET /api/review?review=<name>` and opens its stream
-together on a first load, and opens the stream first on a switch of task; the
-watcher follows the task only from the first burst once the stream is open, and a
-comment or a scope written right then used to be that burst's baseline and
-reached no frame (`tests/server.test.ts`, "a window that has just
-opened on it"). So `ReviewService` takes a `served` option, called with the
-session name and the document each time `payload` answers, before serialising
-it, and `serve.ts` hands it to `watcher.served` — the session and the comments in
-the document. Only `payload` calls it: `document()` is what the server reads for
-itself — the symbol index's warm-up right after the payload, `GET /api/warnings`
-— and a re-read there can be newer than what the window got. The other end is the
-live stream's: `createEventStream` takes a `left` callback, called when the last
-connection on a task ends, and `serve.ts` hands it to `watcher.left`, so what a
-window was served goes with the window even when no burst ever followed its task.
-The rules the watcher keeps it by are in [05-watcher.md](05-watcher.md).
+**A stream names the document its window was served.** `ReviewService.payload`
+passes the document it is about to return to its `served` callback and returns
+the callback's token through a second optional callback. The route puts it in
+`X-Diffalanche-Document`; the review JSON and its cached serialization stay the
+same. A token for a cached payload describes that exact cached body, including
+its comments, rather than a newer storage read.
+
+The page sends the header token as `?served=<token>` when opening its stream.
+The stream subscribes before anything is awaited and hands the token with its
+resolved task name to `watcher.follow`. The watcher consumes only a valid token
+for that name. A stream without a usable token keeps its silent baseline, and
+the page reads the review after confirmed stream open to cover the gap. Later
+document reads alone do not reconnect the stream.
+
+The token registry is bounded to 32 unconsumed documents, each for 60 s, and has
+no persistence or replay machinery. Consumption, expiration, eviction, task
+identity removal and shutdown clean it up. An old connection ending cannot
+erase a different pending document token. The first-follow comparison and its
+scope rules are in [05-watcher.md](05-watcher.md).
 
 ### The candidates
 
@@ -922,7 +925,7 @@ browser fetches what an event names rather than being sent it.
 | `comment-status` | `{ type, session, id }` |
 | `session-changed` | `{ type, name }` — the base, title, name, scope or status of a followed session changed |
 | `current-changed` | `{ type, name }` — the `current` pointer moved to this session |
-| `sessions-changed` | `{ type, name, status }` — a review task appeared, or a task's status changed |
+| `sessions-changed` | `{ type, name, status }` — a task appeared, changed status, or disappeared (`status: null`) |
 | `warnings` | `{ type, list }` |
 | `activity` | `{ id, verb, author, repo, path, at }` — one line of the feed |
 | `reload` | `{ type, reason }` — read the review again; see below |

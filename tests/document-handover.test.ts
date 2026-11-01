@@ -2,11 +2,12 @@
 import { mkdtempSync, readFileSync, rmSync, writeFileSync } from "node:fs";
 import { tmpdir } from "node:os";
 import { join } from "node:path";
-import { describe, expect, it } from "vitest";
+import { describe, expect, it, vi } from "vitest";
 import { generate, PROFILES } from "../scripts/synth.ts";
 import { loadConfig } from "../src/core/config/index.ts";
-import { createSession } from "../src/core/domain/index.ts";
+import { addComment, createSession, deleteSession } from "../src/core/domain/index.ts";
 import { scan } from "../src/core/index.ts";
+import type { Comment } from "../src/core/storage/index.ts";
 import { diffCachePath } from "../src/core/storage/index.ts";
 import type { Watcher, WatcherEvent, WatcherOptions } from "../src/core/watcher/index.ts";
 import { createActivityLog, createEventBus, startWatcher } from "../src/core/watcher/index.ts";
@@ -44,7 +45,14 @@ async function fixture(exclude: string[] = []) {
   const rescans: string[] = [];
   const activity: unknown[] = [];
   const windows = [NAMED];
-  const stream = createEventStream(undefined, undefined, () => watcher?.session() ?? null);
+  const stream = createEventStream(
+    undefined,
+    (name) => watcher?.left(name),
+    () => watcher?.session() ?? null,
+    (name, token) => {
+      watcher?.follow(name, token);
+    },
+  );
   const delivered = new Map<string, string[]>();
   for (const session of [null, CURRENT, NAMED]) {
     const frames: string[] = [];
@@ -104,6 +112,17 @@ async function fixture(exclude: string[] = []) {
     windows,
     drain,
     signal: (path: string) => trees.get(join(root, REPO))?.onChange(path),
+    servedDocument: async (name: string) => {
+      let token = "";
+      const body = await service.payload(name, (served) => {
+        token = served;
+      });
+      return { token, body };
+    },
+    follow: (name: string, token: string) => watcher?.follow(name, token) ?? false,
+    left: (name: string) => watcher?.left(name),
+    attach: (name: string, token: string) =>
+      stream.subscribe({ session: name, served: token, send: () => {}, end: () => {} }),
     edit: (path: string, content: string) => {
       writeFileSync(join(root, REPO, path), content);
       const tree = trees.get(join(root, REPO));
@@ -247,6 +266,156 @@ describe("review document and stream handover", () => {
       expect(run.delivered.get("current")).toEqual([]);
       expect(run.rescans).toEqual([]);
       expect(run.activity).toEqual([]);
+    } finally {
+      await run.close();
+    }
+  });
+  it("does not turn an abandoned document into the next unserved window's baseline", async () => {
+    const run = await fixture();
+    try {
+      run.windows.length = 0;
+      await run.service.payload(NAMED);
+      const history = await addComment(run.config.dataDir, NAMED, {
+        severity: "nit",
+        body: "written while its window never opened",
+        role: "human",
+        author: "human",
+      });
+      await run.drain();
+      run.events.length = 0;
+      run.windows.push(NAMED);
+      await run.drain();
+      expect(
+        run.events.filter((event) => event.type === "comment-added" && event.id === history.id),
+      ).toEqual([]);
+    } finally {
+      await run.close();
+    }
+  });
+
+  it("keeps the next document token when an older stream ends late", async () => {
+    const run = await fixture();
+    try {
+      run.windows.length = 0;
+      const old = await run.servedDocument(NAMED);
+      expect(run.follow(NAMED, old.token)).toBe(true);
+      const next = await run.servedDocument(NAMED);
+      run.left(NAMED);
+      const written = await addComment(run.config.dataDir, NAMED, {
+        severity: "nit",
+        body: "after next document",
+        role: "human",
+        author: "human",
+      });
+      expect(run.follow(NAMED, next.token)).toBe(true);
+      run.windows.push(NAMED);
+      await run.drain();
+      expect(run.events).toContainEqual({ type: "comment-added", session: NAMED, id: written.id });
+    } finally {
+      await run.close();
+    }
+  });
+
+  it("consumes two exact documents by their served order rather than their subscription order", async () => {
+    const run = await fixture();
+    try {
+      run.windows.length = 0;
+      const earlier = await run.servedDocument(NAMED);
+      const between = await addComment(run.config.dataDir, NAMED, {
+        severity: "nit",
+        body: "between documents",
+        role: "human",
+        author: "human",
+      });
+      await run.drain();
+      const later = await run.servedDocument(NAMED);
+      expect(JSON.parse(earlier.body).comments).toEqual([]);
+      expect(JSON.parse(later.body).comments.map((one: Comment) => one.id)).toContain(between.id);
+      expect(run.follow(NAMED, later.token)).toBe(true);
+      expect(run.follow(NAMED, earlier.token)).toBe(true);
+      run.windows.push(NAMED);
+      await run.drain();
+      expect(
+        run.events.filter((event) => event.type === "comment-added" && event.id === between.id),
+      ).toHaveLength(1);
+    } finally {
+      await run.close();
+    }
+  });
+
+  it("matches the cached response body instead of a newer storage snapshot", async () => {
+    const run = await fixture();
+    try {
+      run.windows.length = 0;
+      const before = await run.servedDocument(NAMED);
+      const written = await addComment(run.config.dataDir, NAMED, {
+        severity: "nit",
+        body: "after cached body",
+        role: "human",
+        author: "human",
+      });
+      const cached = await run.servedDocument(NAMED);
+      expect(cached.body).toBe(before.body);
+      expect(JSON.parse(cached.body).comments).toEqual([]);
+      const detach = run.attach(NAMED, cached.token);
+      run.windows.push(NAMED);
+      await run.drain();
+      expect(run.events).toContainEqual({ type: "comment-added", session: NAMED, id: written.id });
+      detach();
+    } finally {
+      await run.close();
+    }
+  });
+
+  it("refuses mismatched, duplicate, expired and evicted tokens without adopting their history", async () => {
+    const run = await fixture();
+    try {
+      run.windows.length = 0;
+      const own = await run.servedDocument(NAMED);
+      expect(run.follow(CURRENT, own.token)).toBe(false);
+      expect(run.follow(NAMED, own.token)).toBe(true);
+      expect(run.follow(NAMED, own.token)).toBe(false);
+      run.left(NAMED);
+      const expired = await run.servedDocument(NAMED);
+      const clock = vi.spyOn(Date, "now").mockReturnValue(Date.now() + 60_001);
+      try {
+        expect(run.follow(NAMED, expired.token)).toBe(false);
+      } finally {
+        clock.mockRestore();
+      }
+      const tokens: string[] = [];
+      for (let index = 0; index < 33; index += 1)
+        tokens.push((await run.servedDocument(NAMED)).token);
+      expect(run.follow(NAMED, tokens[0] ?? "")).toBe(false);
+      expect(run.follow(NAMED, tokens[32] ?? "")).toBe(true);
+      run.left(NAMED);
+      const history = await addComment(run.config.dataDir, NAMED, {
+        severity: "nit",
+        body: "after discarded documents",
+        role: "human",
+        author: "human",
+      });
+      await run.drain();
+      run.windows.push(NAMED);
+      await run.drain();
+      expect(
+        run.events.filter((event) => event.type === "comment-added" && event.id === history.id),
+      ).toEqual([]);
+    } finally {
+      await run.close();
+    }
+  });
+
+  it("names a disappeared task so another window can remove its open history row", async () => {
+    const run = await fixture();
+    try {
+      await run.service.payload(NAMED);
+      await run.drain();
+      run.events.length = 0;
+      await deleteSession(run.config.dataDir, NAMED, { role: "human" });
+      await run.drain();
+      expect(run.events).toContainEqual({ type: "sessions-changed", name: NAMED, status: null });
+      expect(run.events).toContainEqual({ type: "session-changed", name: NAMED });
     } finally {
       await run.close();
     }

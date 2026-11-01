@@ -1947,7 +1947,8 @@ describe("the sessions a watcher follows", () => {
           if (key === "dataDir" && arm) {
             arm = false;
             served = true;
-            watching?.served("followed", review, document);
+            const token = watching?.served("followed", review, document);
+            if (token !== undefined) watching?.follow("followed", token);
           }
           return Reflect.get(target, key, receiver);
         },

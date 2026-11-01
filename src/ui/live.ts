@@ -177,7 +177,7 @@ function connect(
   // A task appeared, was closed or reopened: news about the history, answered with a mark in the
   // header and nothing else (08-ui.md, "Closing a task, and what the mark in the header is").
   on<Extract<WatcherEvent, { type: "sessions-changed" }>>("sessions-changed", (event) => {
-    store().noteHistory(event.name);
+    store().noteHistory(event.name, event.status === null);
   });
   on<Extract<WatcherEvent, { type: "warnings" }>>("warnings", (event) => {
     store().setWarnings(event.list);

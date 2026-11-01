@@ -1,5 +1,6 @@
 /** The watcher ([ADR-005](../../../docs/adr/adr-005-live-update.md)): it reads repositories and
  * writes only the data directory's change-set cache ([05-watcher.md](../../../docs/reference/05-watcher.md)). */
+import { randomUUID } from "node:crypto";
 import { stat } from "node:fs/promises";
 import { join, relative } from "node:path";
 import { filterChange, patchable, replaceRepository, scanReview } from "../change-set.ts";
@@ -54,6 +55,9 @@ const MAX_DEBOUNCE_MS = 1_000;
  * paths cannot grow the cache for as long as the server runs (05-watcher.md). */
 export const IGNORE_CACHE_LIMIT = 4_096;
 
+const DOCUMENT_TOKEN_LIMIT = 32;
+const DOCUMENT_TOKEN_TTL_MS = 60_000;
+
 export type WatcherOptions = {
   config: Config;
   /** The repositories to watch, as the scan found them; its warnings are the cache's to keep. */
@@ -99,7 +103,9 @@ export type Watcher = {
   refresh: () => Promise<void>;
   /** A window was served that task: its comments and `review.json` are what the burst that
    * starts following it compares with ([05-watcher.md](../../../docs/reference/05-watcher.md)). */
-  served: (name: string, review: Review, comments: readonly Comment[]) => void;
+  served: (name: string, review: Review, comments: readonly Comment[]) => string;
+  /** Consumes the baseline of exactly the document this stream names. */
+  follow: (name: string, token: string) => boolean;
   /** The last window on that task went away: what it was served goes with it, whether or not a
    * burst ever followed the task meanwhile (05-watcher.md). */
   left: (name: string) => void;
@@ -131,9 +137,11 @@ export async function startWatcher(options: WatcherOptions): Promise<Watcher> {
   // comments and not only about the current one's (DA-55.1).
   const comments = new Map<string, Map<string, CommentState> | null>();
   const metadata = new Map<string, { value: string | null; scope: Scope }>();
-  // The oldest document served of each task not yet followed: kept through the bursts that drop what
-  // nobody follows, until one follows the task, it leaves the followed set, or it is gone (05-watcher.md).
+  // Only consumed document tokens can supply a task's first-follow baseline; pending responses
+  // stay separate until their own stream subscribes (05-watcher.md).
   const served = new Map<string, Served>();
+  const documents = new Map<string, { name: string; expires: number; baseline: Served }>();
+  let documentOrder = 0;
   // What the current session is about, so a repository the task is not about
   // costs it no git process when its files change.
   let scope: Scope = (await readSessionOrNull(config, session))?.scope ?? null;
@@ -341,6 +349,14 @@ export async function startWatcher(options: WatcherOptions): Promise<Watcher> {
     for (const name of followed) served.delete(name);
     if (listed === null) return;
     for (const name of [...served.keys()]) if (!listed.has(name)) served.delete(name);
+    for (const [token, document] of documents) {
+      const review = listed.get(document.name);
+      if (
+        review === undefined ||
+        (review !== null && review.createdAt !== document.baseline.createdAt)
+      )
+        documents.delete(token);
+    }
     reloadSessions(listed);
     options.onSessions?.(listed);
   }
@@ -413,8 +429,7 @@ export async function startWatcher(options: WatcherOptions): Promise<Watcher> {
     announce(moved);
   }
 
-  /** Every session's status, news for any open window; a session that disappears says nothing, the
-   * frame having no status for it ([05-watcher.md](../../../docs/reference/05-watcher.md)). */
+  /** Every session's status, news for any open window; null removes a task that disappeared. */
   function reloadSessions(reviews: Map<string, Review | null>): void {
     // A failed listing never reaches here: what was known stays known, or every session is news
     // again on the next readable burst (05-watcher.md, "Events").
@@ -425,6 +440,9 @@ export async function startWatcher(options: WatcherOptions): Promise<Watcher> {
     }
     for (const [name, status] of next) {
       if (sessions.get(name) !== status) bus.emit({ type: "sessions-changed", name, status });
+    }
+    for (const name of sessions.keys()) {
+      if (!next.has(name)) bus.emit({ type: "sessions-changed", name, status: null });
     }
     sessions = next;
   }
@@ -455,7 +473,12 @@ export async function startWatcher(options: WatcherOptions): Promise<Watcher> {
     }
     // Asked after the read, so a write after a document served meanwhile is not lost; that document
     // can be newer than the read, which costs a frame seen twice or one found gone (05-watcher.md).
-    const taken = before === undefined ? served.get(name) : undefined;
+    const candidate = before === undefined ? served.get(name) : undefined;
+    const identity = candidate === undefined ? undefined : await readSessionOrNull(config, name);
+    const taken =
+      candidate !== undefined && identity?.createdAt === candidate.createdAt
+        ? candidate
+        : undefined;
     const baseline = before ?? taken?.comments;
     // Nothing read last time — a file caught mid-write, one repaired by hand, a task opened unserved:
     // what is in it now is the baseline, not two hundred comments that were all just added.
@@ -494,7 +517,8 @@ export async function startWatcher(options: WatcherOptions): Promise<Watcher> {
     for (const name of followed) {
       const review = reviews.get(name) ?? null;
       const next = review === null ? null : metadataOf(review);
-      const taken = metadata.has(name) ? undefined : served.get(name);
+      const candidate = metadata.has(name) ? undefined : served.get(name);
+      const taken = candidate?.createdAt === review?.createdAt ? candidate : undefined;
       if (taken !== undefined) metadata.set(name, { value: taken.metadata, scope: taken.scope });
       const before = metadata.get(name);
       metadata.set(name, { value: next, scope: review?.scope ?? null });
@@ -583,13 +607,42 @@ export async function startWatcher(options: WatcherOptions): Promise<Watcher> {
       served.delete(name);
     },
     served: (name, review, list) => {
-      // The oldest one: a later window's is newer, and what landed between the two would be lost.
-      if (served.has(name)) return;
-      served.set(name, {
-        comments: snapshotOf(list),
-        metadata: metadataOf(review),
-        scope: review.scope,
+      const now = Date.now();
+      for (const [token, document] of documents)
+        if (document.expires <= now) documents.delete(token);
+      const token = randomUUID();
+      documentOrder += 1;
+      documents.set(token, {
+        name,
+        expires: now + DOCUMENT_TOKEN_TTL_MS,
+        baseline: {
+          comments: snapshotOf(list),
+          metadata: metadataOf(review),
+          scope: review.scope,
+          createdAt: review.createdAt,
+          order: documentOrder,
+        },
       });
+      while (documents.size > DOCUMENT_TOKEN_LIMIT) {
+        const oldest = documents.keys().next().value;
+        if (oldest !== undefined) documents.delete(oldest);
+      }
+      return token;
+    },
+    follow: (name, token) => {
+      const document = documents.get(token);
+      if (document === undefined) return false;
+      if (document.expires <= Date.now()) {
+        documents.delete(token);
+        return false;
+      }
+      if (document.name !== name) return false;
+      documents.delete(token);
+      // Another stream may already have registered the earlier of two exact documents.
+      const before = served.get(name);
+      if (before === undefined || before.order > document.baseline.order)
+        served.set(name, document.baseline);
+      return true;
     },
     refresh: () => {
       // Nothing is announced: no window can be listening before the first document.
@@ -603,6 +656,8 @@ export async function startWatcher(options: WatcherOptions): Promise<Watcher> {
       for (const timer of timers.values()) clearTimeout(timer);
       timers.clear();
       for (const watcher of watchers) watcher.close();
+      documents.clear();
+      served.clear();
       // The rescan inside `work()` still holds the session lock and is about to
       // write; a close that resolved first would let a teardown remove the tree.
       await queue;
@@ -724,7 +779,13 @@ type CommentState = { status: CommentStatus; replies: number };
 
 /** What a window was served of a task, as the watcher compares it; `scope` is what the document
  * showed, the comments outside it having never been in it. */
-type Served = { comments: Map<string, CommentState>; metadata: string; scope: Scope };
+type Served = {
+  comments: Map<string, CommentState>;
+  metadata: string;
+  scope: Scope;
+  createdAt: string;
+  order: number;
+};
 
 function snapshotOf(comments: readonly Comment[]): Map<string, CommentState> {
   return new Map(

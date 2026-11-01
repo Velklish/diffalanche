@@ -29,6 +29,7 @@ type Client = {
   /** The task this window is on, `null` for the current session. A **registry**
    * and not a filter: every client still gets every frame (07-server.md). */
   session: string | null;
+  served?: string;
 };
 
 /** What a reconnecting client is owed: the frames it missed, or the one frame that says to read
@@ -56,6 +57,7 @@ export function createEventStream(
   capacity: number = REPLAY_CAPACITY,
   left?: (session: string) => void,
   current: () => string | null = () => null,
+  served?: (name: string, token: string) => void,
 ): EventStream {
   const ring: EventFrame[] = [];
   const clients = new Set<Client>();
@@ -111,6 +113,8 @@ export function createEventStream(
       };
     },
     subscribe(client) {
+      const name = client.session ?? current();
+      if (name !== null && client.served !== undefined) served?.(name, client.served);
       clients.add(client);
       return () => {
         // Asked twice, by the abort and by the loop's end; only the first is the window going.
@@ -170,8 +174,10 @@ export function streamEvents(events: EventStream, heartbeatMs: number = HEARTBEA
         return queue;
       };
 
+      const token = c.req.query("served");
       const client: Client = {
         session: c.req.query("review") || null,
+        ...(token === undefined ? {} : { served: token }),
         send: (frame) => {
           void write(() =>
             stream.writeSSE({ id: String(frame.id), event: frame.event, data: frame.data }),

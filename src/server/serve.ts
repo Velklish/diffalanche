@@ -67,6 +67,9 @@ export async function startReviewServer(options: ReviewServerOptions): Promise<R
     undefined,
     (name) => watcher?.left(name),
     () => watcher?.session() ?? null,
+    (name, token) => {
+      watcher?.follow(name, token);
+    },
   );
   const activity = createActivityLog({ onRecord: forwardActivity(events) });
   forwardEvents(bus, events);

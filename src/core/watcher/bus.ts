@@ -20,7 +20,7 @@ export type WatcherEvent =
   | { type: "current-changed"; name: string }
   /** A review task appeared, or a task's status changed, current or not: a window hears of a task
    * without becoming it ([ADR-010](../../../docs/adr/adr-010-review-task-scope.md)). */
-  | { type: "sessions-changed"; name: string; status: ReviewStatus }
+  | { type: "sessions-changed"; name: string; status: ReviewStatus | null }
   | { type: "warnings"; list: ScanWarning[] };
 
 type Listener = (event: WatcherEvent) => void;

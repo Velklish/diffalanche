@@ -244,7 +244,7 @@ type SessionsSlice = {
    * elsewhere: a mark and nothing else, cleared by opening the menu (DA-56). */
   historyMark: boolean;
   /** A `sessions-changed` frame that is not this window's own doing. */
-  noteHistory: (name: string) => void;
+  noteHistory: (name: string, removed?: boolean) => void;
   /** The create form of handoff section 7. */
   newName: string;
   newBase: string;
@@ -733,10 +733,19 @@ export const useStore = create<Store>()((set, get) => ({
   sessions: [],
   sessionMenuOpen: false,
   historyMark: false,
-  noteHistory: (name) => {
+  noteHistory: (name, removed = false) => {
     // A task this window made, closed or reopened is not news to it: the list was read again on
     // the spot, and the mark would be about the reader's own press.
-    if (get().claimSelf("history", name)) return;
+    const mine = get().claimSelf("history", name);
+    if (removed) {
+      const state = get();
+      set({
+        sessions: state.sessions.filter((one) => one.name !== name),
+        historyMark: state.historyMark || (!mine && !state.sessionMenuOpen),
+      });
+      return;
+    }
+    if (mine) return;
     // The mark and nothing else, and the list is not read again under an open menu: the mark is
     // what says it is stale (DA-56).
     set({ historyMark: true });

@@ -386,6 +386,13 @@ has them. What they promise and how they are shipped is in
 
 ## Development
 
+Each stream can name its served document with an ephemeral token. Abandoned
+responses and late old disconnects cannot become or erase another window's
+first-follow baseline.
+
+An open task history removes rows deleted in another window or terminal without
+needing to close and reopen the menu.
+
 Named tasks receive edits inside their own path scope even when current covers
 other files in the same repository. That notification leaves current's unchanged
 review and activity alone.
