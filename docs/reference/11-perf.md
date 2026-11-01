@@ -1645,24 +1645,22 @@ is a red that no longer means anything, so each number has one owner:
 
 **The header mark's ceiling.** `MARK_CEILING_MS` is how long a task made
 outside the window may take to raise the quiet mark in the header, and it is
-the only ceiling the mark has. This suite deadline follows the 300 ms
-`docs/SPEC.md` section 6 gives a live update, times `RUNNER_ALLOWANCE` imported
-from `perf/budgets.ts`: 630 ms at 2.1. The allowance keeps a single sample on
-a loaded runner from being held to the strict development budget. The deadline
-moves with that constant rather than retaining its former 750 ms product:
+the only ceiling the mark has. The browser regression deadline is 300 ms times
+`RUNNER_ALLOWANCE` imported from `perf/budgets.ts`: 630 ms at 2.1. The
+allowance accommodates a single sample on a loaded runner; it does not imply a
+stricter product budget for the mark. The deadline follows that constant:
 
 <!-- quote:../../e2e/history.spec.ts -->
 const MARK_CEILING_MS = 300 * RUNNER_ALLOWANCE;
 <!-- /quote -->
 
-This is a suite deadline, not a new performance budget. The perf gate does not measure
-the mark: `BUDGETS` has no line for it, and the nearest one, `updateMs`, times
-an edit in a repository reaching the card of that file — the `diff-changed`
-path, which shares nothing with this one but the stream itself. A line for it
-would mean a metric in `perf/harness.ts` and a row in section 6 of the
-specification, which is a change to the contract. So the spec prints the
-measurement on every run, `task created to header mark: <n> ms`, and a
-regression is at least visible: 246 ms and 234 ms when the ceiling was written.
+History-mark appearance on `sessions-changed` is deliberately excluded from
+separate product performance budgets and perf-gate lines, as specified in
+[section 6](../SPEC.md#6-performance-budgets). `BUDGETS` has no line for it. The
+nearest line, `updateMs`, times an edit in a repository reaching that file's
+card through `diff-changed`; it does not measure the mark. The browser spec
+prints `task created to header mark: <n> ms` for its creation case. The retained
+historical samples are 246 ms and 234 ms; they are not new measurements.
 
 A number printed and not held — `edit to diff-changed`, `reply written to
 reply-added`, `check-ignore over 50 paths`, `file jump, one frame` — is there to

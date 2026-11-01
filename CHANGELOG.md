@@ -15,6 +15,10 @@ and `bun run release` refuses a version that has no section. See
 
 ### Fixed
 
+- The specification and references explicitly exclude `sessions-changed` history-mark
+  appearance from separate product performance budgets and perf-gate lines. The
+  existing browser deadline remains `300 * RUNNER_ALLOWANCE`, 630 ms at 2.1.
+
 - Suggestion rows identify model-chosen severities, and taking one keeps its
   severity unconfirmed until a severity chip or confirmation changes it.
 - The sidebar footer remains visible above the status bar when warnings move

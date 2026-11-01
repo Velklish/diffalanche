@@ -444,6 +444,10 @@ specification is over budget. It takes about 45 seconds. On a busy machine it
 first waits up to five minutes for the load averages to settle, and says
 `unable to measure` rather than a verdict when they do not
 ([11-perf.md](docs/reference/11-perf.md#the-gate)).
+History-mark appearance on `sessions-changed` is deliberately excluded from
+separate product performance budgets and perf-gate lines. Its browser regression
+deadline remains `300 * RUNNER_ALLOWANCE`, 630 ms at 2.1
+([coverage](docs/SPEC.md#6-performance-budgets)).
 The recorded file-jump median is 29.7 ms against 50 ms on an eight-core M1 Pro
 (2026-11-01, source `8604e919`); it is a dated sample, not a guarantee for another machine.
 The first CI reading after the unpaced harness change was 16.2 ms CPU/frame,
