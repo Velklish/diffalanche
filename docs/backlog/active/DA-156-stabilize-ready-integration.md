@@ -1,10 +1,11 @@
 # DA-156 · Stabilize the integrated ready implementations
 
-- **Order:** 420
 - **Scope:** 03-storage, 04-domain, 05-watcher, 07-server, 08-ui, 11-perf (see [reference](../../reference/README.md))
 - **Created:** 2026-11-01
 - **Cost:** major
 - **Dependencies:** the ready implementation branch and handoff are frozen before this task starts
+- **Previous order:** 420
+- **Taken:** 2026-11-01
 
 ## Owner authorization and workflow
 
