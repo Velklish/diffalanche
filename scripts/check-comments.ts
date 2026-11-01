@@ -88,7 +88,8 @@ function cssComments(text: string): Comment[] {
     const char = text[index];
     const url =
       /^url\(/i.test(text.slice(index, index + 4)) &&
-      (index === 0 || !/[\w-]/.test(text[index - 1] as string));
+      (index === 0 || !/[\w-]/.test(text[index - 1] as string)) &&
+      !/^[ \t\r\n\f]*["']/.test(text.slice(index + 4));
     if (char === '"' || char === "'" || url) {
       let quote = url ? "" : char;
       let end = index + (url ? 4 : 1);
@@ -125,6 +126,7 @@ function yamlComments(text: string): Comment[] {
   let quote = "";
   let offset = 0;
   let flow = 0;
+  let flowPlain = false;
   let plainParent: number | null = null;
   let scalar: { parent: number; indent: number | null } | null = null;
   for (const [index, row] of text.split("\n").entries()) {
@@ -138,9 +140,9 @@ function yamlComments(text: string): Comment[] {
       if (scalar.indent === null || indent < scalar.indent) scalar = null;
     }
     if (scalar === null) {
-      let end = row.length;
-      let plain = plainParent !== null && indent > plainParent && flow === 0;
+      let plain: boolean = flow > 0 ? flowPlain : plainParent !== null && indent > plainParent;
       let tokenStart = !plain;
+      let scalarParent = indent;
       if (!plain) plainParent = null;
       for (let column = 0; column < row.length; column += 1) {
         const char = row[column];
@@ -151,11 +153,11 @@ function yamlComments(text: string): Comment[] {
             else quote = "";
           }
         } else if ((char === '"' || char === "'") && tokenStart) {
+          scalarParent = column;
           quote = char;
           tokenStart = false;
           plain = false;
         } else if (char === "#" && (column === 0 || /\s/.test(row[column - 1] as string))) {
-          end = column;
           comments.push({
             start: offset + column,
             end: offset + row.replace(/\r$/, "").length,
@@ -164,6 +166,20 @@ function yamlComments(text: string): Comment[] {
             single: true,
           });
           break;
+        } else if ((char === "|" || char === ">") && tokenStart && flow === 0) {
+          const header = /^[|>]([+-]?[1-9]?|[1-9][+-]?)(?:[ \t\r]+(?:#.*)?)?$/.exec(
+            row.slice(column),
+          );
+          if (header !== null) {
+            const explicit = /[1-9]/.exec(header[1] ?? "");
+            scalar = {
+              parent: scalarParent,
+              indent: explicit === null ? null : scalarParent + Number(explicit[0]),
+            };
+            column += (header[1] ?? "").length;
+          }
+          tokenStart = false;
+          plain = true;
         } else if ((char === "[" || char === "{") && (tokenStart || flow > 0)) {
           flow += 1;
           tokenStart = true;
@@ -183,6 +199,7 @@ function yamlComments(text: string): Comment[] {
           (char === "-" || char === "?") &&
           /\s/.test(row[column + 1] ?? " ")
         ) {
+          scalarParent = column;
           tokenStart = true;
         } else if (column === 0 && /^(?:---|\.\.\.)(?:\s|$)/.test(row)) {
           column = 2;
@@ -190,23 +207,13 @@ function yamlComments(text: string): Comment[] {
         } else if (tokenStart && (char === "&" || char === "!")) {
           while (column + 1 < row.length && !/\s/.test(row[column + 1] as string)) column += 1;
         } else if (char !== undefined && !/\s/.test(char)) {
+          if (tokenStart) scalarParent = column;
           tokenStart = false;
           plain = true;
         }
       }
-      const header =
-        quote === ""
-          ? /(?:^|:[ \t]+|-[ \t]+)(?:[!&]\S+[ \t]+)*[|>]([+-]?[1-9]?|[1-9][+-]?)[ \t\r]*$/.exec(
-              row.slice(0, end),
-            )
-          : null;
-      if (header !== null) {
-        const parent = Math.max(
-          indent,
-          row.slice(0, header.index).match(/^(?: *- +)*/)?.[0].length ?? 0,
-        );
-        const explicit = /[1-9]/.exec(header[1] ?? "");
-        scalar = { parent, indent: explicit === null ? null : parent + Number(explicit[0]) };
+      flowPlain = flow > 0 && plain && quote === "";
+      if (scalar !== null) {
         plainParent = null;
       } else if (plain && quote === "" && flow === 0) {
         plainParent ??= indent;

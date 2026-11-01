@@ -85,6 +85,36 @@ describe("the comment gate of ADR-011", () => {
     expect(blocks('a { content: "start\\\n/* data\\\nmore\\\nend */"; }', "css")).toEqual([]);
   });
 
+  it("counts CSS comments after quoted URL arguments while preserving URL data", () => {
+    expect(blocks('a { background: url("image.png" /* first\nsecond\nthird */); }', "css")).toEqual(
+      [{ line: 1, lines: 3 }],
+    );
+    expect(
+      blocks("a { background: url(  'image.png' /* first\nsecond\nthird */); }", "css"),
+    ).toEqual([{ line: 1, lines: 3 }]);
+    expect(blocks("a { background: url(image/*data\nmore\nend*/.png); }", "css")).toEqual([]);
+    expect(blocks('a { background: url("image/*data*/.png"); }', "css")).toEqual([]);
+  });
+
+  it("keeps embedded YAML block scalar indicators inside plain scalar data", () => {
+    expect(blocks("value: something - |\n  # first\n  # second\n  # third\n", "yaml")).toEqual([
+      { line: 2, lines: 3 },
+    ]);
+  });
+
+  it("recognizes indented standalone YAML block scalar headers", () => {
+    expect(blocks("value:\n  |\n    # data a\n    # data b\n    # data c\n", "yaml")).toEqual([]);
+    expect(blocks("value:\n  >2-\n    # data a\n    # data b\n    # data c\n", "yaml")).toEqual([]);
+  });
+
+  it("preserves YAML plain scalar continuation inside flow collections", () => {
+    expect(
+      blocks('list: [plain\n  "still plain # first\n  # second\n  # third\n]\n', "yaml"),
+    ).toEqual([{ line: 2, lines: 3 }]);
+    expect(blocks('list: [plain,\n  "data\n  # data\n  # data\n  # data"]\n', "yaml")).toEqual([]);
+    expect(blocks('list: [\n  "data\n  # data\n  # data\n  # data"]\n', "yaml")).toEqual([]);
+  });
+
   it("keeps YAML quoted scalars, block scalars and unseparated hashes out of comments", () => {
     const source = [
       'double: "start',
@@ -209,6 +239,10 @@ describe("the comment gate of ADR-011", () => {
     const section = reference.split("## The comment gate\n")[1]?.split("\n## ")[0];
     expect(section).toContain("Comments after code follow the same two-line limit.");
     expect(section).toContain("Strings and scalar data do not count as comments.");
+    expect(section).toContain("a quoted URL argument still count.");
+    expect(section).toContain(
+      "a value start, including an indented line; plain flow scalars continue across",
+    );
     expect(section).not.toContain("A trailing comment after code on the same line is not a block");
   });
 

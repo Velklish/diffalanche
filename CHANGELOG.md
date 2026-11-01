@@ -720,7 +720,8 @@ and `bun run release` refuses a version that has no section. See
   strings, templates, regular expressions and JSX text, CSS strings and URLs,
   YAML scalars and shell quotes and heredoc bodies no longer count as comments.
   Actual comments after code and inside expressions follow the same two-line
-  limit ([11-perf.md](docs/reference/11-perf.md#the-comment-gate)).
+  limit, including comments after quoted URL arguments and inside YAML flow
+  collections ([11-perf.md](docs/reference/11-perf.md#the-comment-gate)).
 
 - **A file replaced by rename is heard every time on Linux**. Node
   22 emulates `recursive: true` on Linux with one watch per path, each on the

@@ -1644,9 +1644,12 @@ template text and JSX text, and shell quotes, expansions
 and heredoc bodies. Comments inside template expressions, JSX expressions and
 shell command substitutions still count. The gate uses the grammar package's
 own runtime, separate from the symbol index's runtime. CSS scanning preserves
-quoted strings, escaped line continuations and URL data. YAML scanning preserves
+quoted strings, escaped line continuations and unquoted URL data. Comments after
+a quoted URL argument still count. YAML scanning preserves
 quoted scalars and indented literal or folded block scalars, including explicit
-indentation and chomping indicators; a `#` in a plain scalar needs preceding
+indentation and chomping indicators. A block indicator starts a scalar only at
+a value start, including an indented line; plain flow scalars continue across
+newlines. A `#` in a plain scalar needs preceding
 whitespace to begin a comment. `.css` counts `/* … */`, not `//`.
 
 The ADR's own `awk` counted 720 blocks on 2026-09-11 and
