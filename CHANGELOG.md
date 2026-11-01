@@ -30,7 +30,8 @@ and `bun run release` refuses a version that has no section. See
   switched review tasks, including a switch away and back; queued events from
   the task left behind are discarded before they can start a read, while events
   for the destination task survive its document arriving, including when the
-  window returns to `current` before its destination is known.
+  window returns to `current` before its destination is known or opens its
+  first review document.
 
 - CLI standard output and error treat `ENOTCONN`, like `EPIPE`, as an absent
   reader and stop writing silently. Other stream faults still set exit code 2.
