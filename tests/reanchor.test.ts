@@ -1323,6 +1323,13 @@ describe("staged rename with a recreated source path", () => {
     expect(f.comment.anchor?.revision?.path).toBe("a.ts");
     f.git("mv", "a.ts", "b.ts");
     writeFileSync(f.file, f.text);
+    const captured = await scanReview(f.config, { mode: "head" });
+    expect(
+      captured.changes[0]?.files.map(({ path, oldPath, status }) => ({ path, oldPath, status })),
+    ).toEqual([
+      { path: "a.ts", oldPath: null, status: "added" },
+      { path: "b.ts", oldPath: "a.ts", status: "renamed" },
+    ]);
     expect(await refresh(f)).toMatchObject({
       path: "b.ts",
       line: 2,
@@ -1335,11 +1342,14 @@ describe("staged rename with a recreated source path", () => {
     const f = await fixture();
     f.git("mv", "a.ts", "b.ts");
     writeFileSync(f.file, f.text);
-    await writeDiffCache(
-      f.config.dataDir,
-      "work",
-      (await scanReview(f.config, { mode: "head" })).cache,
-    );
+    const captured = await scanReview(f.config, { mode: "head" });
+    expect(
+      captured.changes[0]?.files.map(({ path, oldPath, status }) => ({ path, oldPath, status })),
+    ).toEqual([
+      { path: "a.ts", oldPath: null, status: "added" },
+      { path: "b.ts", oldPath: "a.ts", status: "renamed" },
+    ]);
+    await writeDiffCache(f.config.dataDir, "work", captured.cache);
     f.comment = await addComment(
       f.config.dataDir,
       "work",
@@ -1354,8 +1364,10 @@ describe("staged rename with a recreated source path", () => {
       },
       { source: fileSourceAt(f.root, f.config.dataDir) },
     );
-    expect(f.comment.anchor).not.toHaveProperty("revision");
+    f.git("commit", "-qm", "commit staged rename without the copy");
+    expect(f.git("ls-files", "--others", "--exclude-standard").trim()).toBe("a.ts");
     expect(await refresh(f)).toMatchObject({ path: "a.ts", line: 2, status: "open" });
+    expect(f.comment.anchor).not.toHaveProperty("revision");
   });
 
   it.each(["scope", "exclude"])(
