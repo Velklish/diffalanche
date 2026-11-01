@@ -463,18 +463,29 @@ after an empty diff is also skipped when the captured base still has that file.
 Captured deletions, omitted files and old paths proved removed by a hidden
 rename still become orphaned. That removal evidence comes from the same raw
 scan before filtering; it does not expose excluded targets or bypass safe reads.
+CLI diff, watcher refresh and server rebuild all pass the internal captured
+records, including empty ones, so reconciliation never substitutes a later scan
+for a repository missing from the public cache.
 
 The file source captures committed provenance at creation only for rows that
 inverse-map through the pinned HEAD/captured-target patch and match the committed
 blob exactly. Inserted or replaced rows have no committed identity, including
-copies of existing text. Custom file sources can omit this optional capability;
-legacy new-side comments use the conservative unique text fallback.
+copies of existing text. The optional revision callback receives `base.path: null`
+for a captured addition. When that base is the pinned HEAD, equal bytes at a
+recreated old path cannot give the new copy the historical file's identity.
+Custom file sources can omit this capability; legacy new-side comments use the
+conservative unique text fallback.
 
 The Git matcher uses a verified committed span and pinned target commit,
 then maps surviving HEAD rows through a diff of the pinned HEAD blob and
 immutable captured target bytes for `new`. The porcelain filename carries
 committed rename identity, even when HEAD has no changes. A recreated old path
-cannot replace that target. Both scanning and proposed path changes share the
+cannot replace that target. For a staged rename, a verified historical span
+follows the entry whose old path carries that identity, ahead of a new addition
+at the recreated name. A filtered rename leaves the historical comment orphaned
+at its saved path, even if a new copy exists there. A new comment on that copy
+keeps its own path and does not follow the historical rename.
+Both scanning and proposed path changes share the
 scope/exclusion predicate; a refused target leaves the saved path available.
 The `old` side reads the resolved base and the rename's old path, never the
 working tree. Captured ranges map every selected row; insertions between

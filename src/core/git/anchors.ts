@@ -136,13 +136,14 @@ export async function captureRevision(
     text: string;
     line: number;
     endLine: number;
-    base?: { sha: string; path: string };
+    base?: { sha: string; path: string | null };
   },
   read: (path: string, sha: string) => Promise<string | null>,
 ): Promise<Revision | null> {
   const sha = await revParse(cwd, "HEAD");
   if (sha === null) return null;
   const path = input.base?.sha === sha ? input.base.path : input.path;
+  if (path === null) return null;
   const headText = await read(path, sha);
   if (headText === null) return null;
   const drivers = await repositoryDrivers(cwd);

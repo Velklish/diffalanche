@@ -203,12 +203,16 @@ export async function reconcileAnchors(
       }
       const identityPath = mapping?.path ?? path;
       if (!isRepositoryPath(identityPath)) continue;
-      const file = change.files.find(
-        (one) => one.path === identityPath || one.oldPath === identityPath,
-      );
+      const renamed =
+        mapping === null ? undefined : change.files.find((one) => one.oldPath === identityPath);
+      const file =
+        renamed ??
+        change.files.find((one) => one.path === identityPath || one.oldPath === identityPath);
       const newPath = file?.path ?? identityPath;
       const targetPath = side === "old" ? (file?.oldPath ?? identityPath) : newPath;
-      const allowed = fileIncluded(review.scope, repo, newPath, excluded);
+      const departedIdentity =
+        mapping !== null && departed.has(identityPath) && renamed === undefined;
+      const allowed = !departedIdentity && fileIncluded(review.scope, repo, newPath, excluded);
       const target = side === "new" ? "worktree" : targetSha === null ? null : { sha: targetSha };
       const text = !allowed || target === null ? null : await read(targetPath, target);
       if (side === "new" && allowed) {

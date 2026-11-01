@@ -164,7 +164,7 @@ export type FileSource = {
     line: number;
     endLine: number;
     text: string;
-    base?: { sha: string; path: string };
+    base?: { sha: string; path: string | null };
   }) => Promise<NonNullable<Anchor["revision"]> | null>;
 };
 
@@ -240,7 +240,8 @@ export async function addComment(
     options.source !== undefined
   ) {
     const repository = (await changeSet(dataDir, session)).find((one) => one.path === repo);
-    const oldPath = repository?.files.find((file) => file.path === path)?.oldPath ?? path;
+    const file = repository?.files.find((one) => one.path === path);
+    const oldPath = file?.oldPath ?? path;
     const baseSha = repository?.base?.sha;
     let revision: Anchor["revision"] | null | undefined;
     if (side === "new" && options.source.revision !== undefined) {
@@ -252,7 +253,9 @@ export async function addComment(
           line,
           endLine: input.endLine ?? line,
           text,
-          ...(baseSha === undefined ? {} : { base: { sha: baseSha, path: oldPath } }),
+          ...(baseSha === undefined
+            ? {}
+            : { base: { sha: baseSha, path: file?.status === "added" ? null : oldPath } }),
         });
     } else if (side === "old" && baseSha !== undefined)
       revision = { sha: baseSha, path: oldPath, line, endLine: input.endLine ?? line };

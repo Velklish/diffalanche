@@ -83,8 +83,9 @@ export const diff: Command = {
       config,
       session,
       review,
-      scanned.cache.repositories,
+      scanned.changes,
       await readDiffCache(config.dataDir, session),
+      { removed: scanned.removed },
     );
     // Under the session's lock, like every other writer of this file: a write
     // between the watcher's read and its write is gone without a trace.

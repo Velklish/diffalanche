@@ -634,8 +634,9 @@ same two words, for the same reasons, as a file of the change set
 
 Full scans also retain an internal filtered record for each repository,
 including empty ones, and old-path removals captured before filtering. These
-values feed reconciliation from the same scan; the public change-set cache
-still lists only repositories with visible changes.
+values feed reconciliation from the same scan in CLI diff, watcher refresh and
+server rebuild; the public change-set cache still lists only repositories with
+visible changes.
 
 ## Mapping comment anchors
 
@@ -655,6 +656,10 @@ A live T1→T2→T1 worktree transition cannot change these captured diff inputs
 
 Creation inverse-maps the same captured bytes before assigning committed
 provenance; inserted and replaced rows have none, including copied text.
+A captured addition has no base path. When its captured base equals pinned HEAD,
+it cannot inherit the committed identity of a recreated old name merely because
+the bytes match. Verified historical spans follow a staged rename's old path;
+new comments on the recreated copy remain on that copy.
 The provider receives the configured data directory for scratch storage;
 a source without this optional capability keeps conservative text matching.
 See [automatic re-anchoring](04-domain.md#automatic-re-anchoring).
