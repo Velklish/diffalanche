@@ -87,14 +87,15 @@ function connect(behind: boolean, generation: () => number, invalidate: () => vo
 
   const on = <T>(
     name: string,
-    handle: (data: T) => Promise<void> | void,
+    handle: (data: T, origin: number) => Promise<void> | void,
     received?: (data: T) => void,
   ) => {
     source.addEventListener(name, (event) => {
       const data = JSON.parse((event as MessageEvent<string>).data) as T;
+      const origin = generation();
       received?.(data);
       run(async () => {
-        await handle(data);
+        await handle(data, origin);
       });
     });
   };
@@ -104,14 +105,16 @@ function connect(behind: boolean, generation: () => number, invalidate: () => vo
   );
   // A comment frame names its thread's task and a window drops the others: reading one would answer
   // `no-such-comment` and raise a toast for somebody else's write.
-  on<Extract<WatcherEvent, { type: "comment-added" }>>("comment-added", (event) =>
-    onScreen(event.session) ? thread(event.id, generation) : undefined,
+  on<Extract<WatcherEvent, { type: "comment-added" }>>("comment-added", (event, origin) =>
+    origin === generation() && onScreen(event.session) ? thread(event.id, generation) : undefined,
   );
-  on<Extract<WatcherEvent, { type: "reply-added" }>>("reply-added", (event) =>
-    onScreen(event.session) ? thread(event.commentId, generation, event.id) : undefined,
+  on<Extract<WatcherEvent, { type: "reply-added" }>>("reply-added", (event, origin) =>
+    origin === generation() && onScreen(event.session)
+      ? thread(event.commentId, generation, event.id)
+      : undefined,
   );
-  on<Extract<WatcherEvent, { type: "comment-status" }>>("comment-status", (event) =>
-    onScreen(event.session) ? thread(event.id, generation) : undefined,
+  on<Extract<WatcherEvent, { type: "comment-status" }>>("comment-status", (event, origin) =>
+    origin === generation() && onScreen(event.session) ? thread(event.id, generation) : undefined,
   );
   // A task's metadata changed; only the window showing it re-reads, as megabytes for another task
   // would take the reader's own review away and put it back (ADR-010).
