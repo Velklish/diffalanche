@@ -94,6 +94,13 @@ its release finds nothing at its path — the ordinary case after a takeover. A
 process killed between the rename and the removal leaves the renamed directory
 at the root of the data directory, where no listing looks.
 
+The deletion contention tests pause this rename and start a waiter either
+before its `mkdir` or after it has received `EEXIST`. Both schedules must refuse
+the writer without running its body or recreating the directory. A separate
+fixture removes entries in place, admits a waiting `mkdir`, and checks that
+the recreated `.lock` makes the final `rmdir` fail with `ENOTEMPTY`. It tests
+the unsafe fixture ordering, not a different production deletion path.
+
 **Nothing brings a deleted session's directory back, and the lock is what
 holds that.** Every writer of a session's files writes under its lock — the
 comment and metadata writes through `updateSession`, and every writer of
@@ -115,6 +122,10 @@ session gets anywhere else, where a plain `StorageError` is its 500
 gone, not that storage failed. The server's watcher does not report it as a
 failed rescan either: a rescan of the deleted current session meets it until
 `current` has moved.
+
+Only `ENOENT` from the lock's `mkdir` means the session is gone. Other errors,
+including `EINVAL`, propagate unchanged; an invalid operation is not evidence
+that a session was deleted.
 
 ## Atomic writes
 
@@ -164,18 +175,16 @@ never a torn one, but a power cut can still bring back the old one after
 `comment` exited 0. That the cause is the read-only handle comes from the
 Win32 documentation of `FlushFileBuffers`, not from a run on a Windows machine.
 
-Elsewhere, a platform that refuses to open a directory at all does not turn a
-successful write into an error: the flush is skipped and the write stands,
-because the rename has already published it. **A flush that was attempted and
-failed is a different event**, and only `EINVAL` and `ENOTSUP` are read as the
-platform declining it. Everything else, `EIO` above all, comes back to the
-caller as a `StorageError` naming the directory —
+Elsewhere, only `EINVAL` and `ENOTSUP` from opening or syncing the directory
+skip the flush. Every other open or sync error, including `EMFILE`, `EACCES`
+and `EIO`, comes back to the caller as a `StorageError` naming the directory —
 `/root/.diffalanche/reviews/one: durability flush failed: EIO` — so it reads
 like every other refusal of this module and the CLI answers 1 with that line
 rather than 2 with a stack. A write whose durability was asked for and did not
 happen is what the caller wanted to hear about, and swallowing it would leave
 `comment` exiting 0 on the one outcome this section promises against on those
-platforms.
+platforms. The rename has already published the replacement, so a durability
+error does not roll it back or remove it.
 
 ## The lock
 
@@ -286,6 +295,13 @@ lock was taken over while this write was in progress" — while nothing took it
 over and the lock comes straight back. The refusal is on the safe side, which is
 the side a check before a write belongs on, but the reason it names is not the
 reason it fired.
+
+The writer contention tests wait for the intended writer's `mkdir` of `.lock`
+to return `EEXIST` while the holder still owns the lock. A delay before the
+scope read or the scan is not evidence of contention. The tests race that
+observation against completion, so a writer that bypasses the lock fails the
+ordering assertion; a writer delayed before its scope read proceeds through
+the same barrier. Every started writer is awaited before fixture cleanup.
 
 ## Read-modify-write
 

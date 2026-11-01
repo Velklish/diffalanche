@@ -729,6 +729,22 @@ and `bun run release` refuses a version that has no section. See
 
 ### Fixed
 
+- Deletion contention tests now exercise the production rename with a waiter
+  paused before `mkdir` or after `EEXIST`, preserving the missing-session
+  refusal and checking that no directory is recreated. A controlled in-place
+  removal traces the leftover `.lock` and `ENOTEMPTY`; a separate `EINVAL`
+  control checks that unrelated lock errors remain visible.
+
+- Writer contention tests now observe the intended lock's `EEXIST` before
+  changing scope or restoring a cache. They also cover a delayed scope read and
+  detect a writer that finishes without reaching the lock, without calibrated
+  sleeps or production hooks.
+
+- Directory-open failures such as `EMFILE`, `EACCES` and `EIO` now report the
+  durability failure as a `StorageError` after an atomic write. Only `EINVAL`
+  and `ENOTSUP` skip the directory flush; the already published replacement
+  remains in place. Windows and non-durable writes still omit that flush.
+
 - **The comment gate distinguishes comments from source data**. TS/TSX
   strings, templates, regular expressions and JSX text, CSS strings and URLs,
   YAML scalars and shell quotes and heredoc bodies no longer count as comments.

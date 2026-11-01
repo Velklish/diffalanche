@@ -1,8 +1,16 @@
-import { existsSync, mkdtempSync, readFileSync, rmSync, writeFileSync } from "node:fs";
+import {
+  existsSync,
+  mkdtempSync,
+  readdirSync,
+  readFileSync,
+  rmdirSync,
+  rmSync,
+  writeFileSync,
+} from "node:fs";
 import { tmpdir } from "node:os";
 import { join } from "node:path";
 import { setTimeout as sleep } from "node:timers/promises";
-import { afterEach, beforeEach, describe, expect, it } from "vitest";
+import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
 import {
   createSession,
   DomainError,
@@ -32,6 +40,54 @@ import {
 } from "../src/core/storage/index.ts";
 import { comment } from "./helpers/session.ts";
 
+const deletionProbe = vi.hoisted(() => ({
+  lockDir: "",
+  beforeMkdir: async () => {},
+  afterMkdir: async () => {},
+  contended: () => {},
+  renameFrom: "",
+  beforeRename: async () => {},
+  invalidMkdir: false,
+}));
+
+vi.mock("node:fs/promises", async (importOriginal) => {
+  const original = await importOriginal<typeof import("node:fs/promises")>();
+  return {
+    ...original,
+    mkdir: async (...args: Parameters<typeof original.mkdir>) => {
+      const observed = args[0] === deletionProbe.lockDir;
+      if (observed) {
+        await deletionProbe.beforeMkdir();
+        if (deletionProbe.invalidMkdir) {
+          throw Object.assign(new Error("EINVAL: invalid argument, mkdir"), { code: "EINVAL" });
+        }
+      }
+      try {
+        const result = await original.mkdir(...args);
+        if (observed) await deletionProbe.afterMkdir();
+        return result;
+      } catch (error) {
+        if (observed && error instanceof Error && "code" in error && error.code === "EEXIST") {
+          deletionProbe.contended();
+        }
+        throw error;
+      }
+    },
+    rename: async (...args: Parameters<typeof original.rename>) => {
+      if (args[0] === deletionProbe.renameFrom) await deletionProbe.beforeRename();
+      return original.rename(...args);
+    },
+  };
+});
+
+function signal() {
+  let resolve = () => {};
+  const promise = new Promise<void>((done) => {
+    resolve = done;
+  });
+  return { promise, resolve };
+}
+
 let root: string;
 let dataDir: string;
 
@@ -45,6 +101,11 @@ beforeEach(async () => {
 });
 
 afterEach(() => {
+  deletionProbe.lockDir = "";
+  deletionProbe.renameFrom = "";
+  deletionProbe.invalidMkdir = false;
+  deletionProbe.beforeMkdir = async () => {};
+  deletionProbe.afterMkdir = async () => {};
   rmSync(root, { recursive: true, force: true });
 });
 
@@ -298,32 +359,136 @@ describe("deleteSession", () => {
     expect(existsSync(sessionDir(dataDir, "broken"))).toBe(false);
   });
 
-  it("refuses a writer that waited on the lock of a session deleted meanwhile, and makes no directory", async () => {
-    await createSession(dataDir, "gone", { mode: "head" });
-    const dir = sessionDir(dataDir, "gone");
+  it("traces the .lock left when an in-place removal admits a waiter's mkdir", async () => {
+    await createSession(dataDir, "in-place", { mode: "head" });
+    const dir = sessionDir(dataDir, "in-place");
+    const mkdirStarted = signal();
+    const allowMkdir = signal();
+    const mkdirFinished = signal();
+    const allowClaim = signal();
     let waiter: Promise<unknown> = Promise.resolve();
-    await withLock(dir, async () => {
-      // Queued behind the lock this body holds, then left with no directory to lock.
-      waiter = withLock(dir, async () => undefined).catch((caught: unknown) => caught);
-      rmSync(dir, { recursive: true, force: true });
-    });
-    expect(await waiter).toBeInstanceOf(NoSuchSessionError);
-    // Nor does a scan that ends after the deletion put the directory back: every writer of
-    // `diff.json` writes under the lock, and the lock is what refuses it.
-    const late = withLock(dir, () =>
-      writeDiffCache(dataDir, "gone", {
-        version: SCHEMA_VERSION,
-        base: { mode: "head" },
-        scope: null,
-        rootWarnings: [],
-        root,
-        repositories: [],
-        totals: { repositories: 0, files: 0, lines: 0 },
-        warnings: [],
-      }),
-    );
-    await expect(late).rejects.toBeInstanceOf(NoSuchSessionError);
-    expect(existsSync(dir)).toBe(false);
+    try {
+      await withLock(dir, async () => {
+        deletionProbe.lockDir = join(dir, ".lock");
+        deletionProbe.beforeMkdir = async () => {
+          mkdirStarted.resolve();
+          await allowMkdir.promise;
+        };
+        deletionProbe.afterMkdir = async () => {
+          mkdirFinished.resolve();
+          await allowClaim.promise;
+        };
+        waiter = withLock(dir, async () => undefined).catch((caught: unknown) => caught);
+        expect(
+          await Promise.race([
+            mkdirStarted.promise.then(() => "started"),
+            waiter.then(() => "finished"),
+          ]),
+        ).toBe("started");
+        for (const entry of readdirSync(dir)) {
+          rmSync(join(dir, entry), { recursive: true, force: true });
+        }
+        allowMkdir.resolve();
+        expect(
+          await Promise.race([
+            mkdirFinished.promise.then(() => "created"),
+            waiter.then(() => "finished"),
+          ]),
+        ).toBe("created");
+        expect(readdirSync(dir)).toEqual([".lock"]);
+        let removal: unknown;
+        try {
+          rmdirSync(dir);
+        } catch (error) {
+          removal = error;
+        }
+        expect(removal).toMatchObject({ code: "ENOTEMPTY" });
+        allowClaim.resolve();
+        expect(await waiter).toBeUndefined();
+      });
+    } finally {
+      allowMkdir.resolve();
+      allowClaim.resolve();
+      await waiter;
+    }
+  });
+
+  it.each(["before mkdir", "after contention"])(
+    "refuses a writer paused %s when the production deletion renames its session",
+    async (phase) => {
+      await createSession(dataDir, "gone", { mode: "head" });
+      const dir = sessionDir(dataDir, "gone");
+      const renameStarted = signal();
+      const allowRename = signal();
+      const mkdirStarted = signal();
+      const allowMkdir = signal();
+      const contended = signal();
+      deletionProbe.renameFrom = dir;
+      deletionProbe.beforeRename = async () => {
+        renameStarted.resolve();
+        await allowRename.promise;
+      };
+      let bodyRan = false;
+      const deleting = deleteSession(dataDir, "gone", HUMAN).catch((caught: unknown) => caught);
+      let waiter: Promise<unknown> = Promise.resolve();
+      try {
+        expect(
+          await Promise.race([
+            renameStarted.promise.then(() => "renaming"),
+            deleting.then(() => "finished"),
+          ]),
+        ).toBe("renaming");
+        deletionProbe.lockDir = join(dir, ".lock");
+        deletionProbe.beforeMkdir = async () => {
+          mkdirStarted.resolve();
+          if (phase === "before mkdir") await allowMkdir.promise;
+        };
+        deletionProbe.contended = contended.resolve;
+        waiter = withLock(dir, async () => {
+          bodyRan = true;
+        }).catch((caught: unknown) => caught);
+        const reached = phase === "before mkdir" ? mkdirStarted.promise : contended.promise;
+        expect(
+          await Promise.race([reached.then(() => "waiting"), waiter.then(() => "finished")]),
+        ).toBe("waiting");
+        allowRename.resolve();
+        expect(await deleting).toMatchObject({ moved: true });
+      } finally {
+        allowRename.resolve();
+        allowMkdir.resolve();
+        await deleting;
+        await waiter;
+      }
+      expect(await waiter).toBeInstanceOf(NoSuchSessionError);
+      expect(bodyRan).toBe(false);
+      // Nor does a scan that ends after the deletion put the directory back: every writer of
+      // `diff.json` writes under the lock, and the lock is what refuses it.
+      const late = withLock(dir, () =>
+        writeDiffCache(dataDir, "gone", {
+          version: SCHEMA_VERSION,
+          base: { mode: "head" },
+          scope: null,
+          rootWarnings: [],
+          root,
+          repositories: [],
+          totals: { repositories: 0, files: 0, lines: 0 },
+          warnings: [],
+        }),
+      );
+      await expect(late).rejects.toBeInstanceOf(NoSuchSessionError);
+      expect(existsSync(dir)).toBe(false);
+    },
+  );
+
+  it("does not disguise a genuine mkdir EINVAL as a deleted session", async () => {
+    await createSession(dataDir, "invalid-mkdir", { mode: "head" });
+    const dir = sessionDir(dataDir, "invalid-mkdir");
+    deletionProbe.lockDir = join(dir, ".lock");
+    deletionProbe.invalidMkdir = true;
+    const error = await withLock(dir, async () => undefined).catch((caught: unknown) => caught);
+    expect(error).toMatchObject({ code: "EINVAL" });
+    expect(error).not.toBeInstanceOf(NoSuchSessionError);
+    expect(existsSync(dir)).toBe(true);
   });
 });
 
