@@ -479,7 +479,12 @@ await refreshRepository(config, session, review.base, "repos/group/service-api",
   Reading one is five git processes, and a task over two repositories of
   twenty-one must not pay for the other nineteen;
   `tests/scope-scan.test.ts` counts the processes rather than the seconds.
-- `filterChange(scope, change)` is what the scope leaves of one repository: a
+- `filterChange(scope, change, exclude?)` applies scope and configuration file
+  exclusions to one repository. Exclusions use the scanner's glob compiler,
+  matching the current file path and its directory ancestors relative to the
+  repository, plus each basename ([01-scanner.md](01-scanner.md#file-exclusions)).
+  The same policy runs on full scans, CLI refreshes and watcher rescans, before
+  the cache and totals are built. With no exclusion, a
   repository the task is not about comes back with no files and no warnings — a
   warning about a repository outside the task is not this task's news — one
   the scope holds as a whole keeps every file, and one that names paths keeps

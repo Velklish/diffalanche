@@ -232,7 +232,7 @@ defaults below are the configuration:
 |---|---|---|
 | `roots` | `["."]` | Where to look for repositories, relative to the root. `["repos"]` for a `repos/<group>/<name>` layout |
 | `depth` | `2` | How many levels below each `roots` entry a repository may sit |
-| `exclude` | `[]` | Glob patterns of files kept out of the change set |
+| `exclude` | `[]` | Globs excluding discovery directories and change-set files, including tracked files; initial reads and live refreshes use the same rules ([matching](docs/reference/01-scanner.md#file-exclusions)) |
 | `user` | git's `user.name` in the root, else the OS user | The name the UI signs comments with |
 | `port` | `4880` | What `serve` listens on; `--port` overrides it |
 | `lsp` | `{}` | `language → server command`; unused until Phase 3 |

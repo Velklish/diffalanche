@@ -15,6 +15,10 @@ and `bun run release` refuses a version that has no section. See
 
 ### Fixed
 
+- Configuration file exclusions now apply to tracked and untracked files in
+  initial, per-repository, named and scoped reads, and in live cache refreshes.
+  Directory exclusions and scope continue to match current paths on renames.
+
 - The configuration-refusal regression records `diff-index`, the production
   command, and a permitted read proves the recorder sees it. Assertions and
   positive-control failures both restore `PATH` and remove the temporary shim.
