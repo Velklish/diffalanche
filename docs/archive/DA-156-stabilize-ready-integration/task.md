@@ -48,3 +48,7 @@ The current session stops after ready integration and handoff; stabilization beg
 - Existing specific verification cards close only with their own required evidence; no unknown result is called refuted.
 - Implementation-closed cards retain the owner-authorized shared-quality transfer and are not described as full-gate acceptance.
 - The final writer pass, original-ID mapping, archive/fold history and clean-tree readback are preserved; all remaining problems and unrun checks are explicit.
+
+## Owner acceptance decision — 2026-11-01
+
+After receiving300ms/exit0,302ms/exit1 and RESTORE timeout/exit1(no median), the owner answered the proposal for an additional quiet series: “Закрепляем текущие результаты, они приемлемые”. The current performance result is accepted with this known deviation; the proposed extra series and further performance optimization are not run. The original numerical requirements and failed receipts remain intact. Remaining configured commands and independent documentation review are completed; no eight-of-eight success is asserted.
