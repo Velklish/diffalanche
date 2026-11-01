@@ -176,12 +176,14 @@ export async function reconcileAnchors(
       }
       const targetSha = side === "old" ? (change.base?.sha ?? null) : head;
       let mapping: Awaited<ReturnType<typeof reverseAnchor>> = null;
+      let sourceContent: string[] | null = null;
       if (revision !== undefined && targetSha !== null) {
         const committed = await read(revision.path, { sha: revision.sha });
-        if (
-          committed !== null &&
-          sameRows(committed, revision, saved.rangeContent ?? [saved.lineContent])
-        ) {
+        const content = (revision.content ?? saved.rangeContent ?? [saved.lineContent]).map(
+          normalizeLine,
+        );
+        if (committed !== null && sameRows(committed, revision, content)) {
+          sourceContent = content;
           const key = JSON.stringify([revision, targetSha]);
           let pending = mappings.get(key);
           if (pending === undefined) {
@@ -204,11 +206,14 @@ export async function reconcileAnchors(
       if (side === "new" && allowed) {
         if (
           text === null &&
-          file !== undefined &&
-          file.status !== "deleted" &&
-          file.omitted === null
-        )
-          continue;
+          file?.status !== "deleted" &&
+          (file === undefined || file.omitted === null)
+        ) {
+          if (file !== undefined) continue;
+          const base =
+            change.base === null ? null : await read(identityPath, { sha: change.base.sha });
+          if (base !== null) continue;
+        }
         if (text !== null) {
           const base =
             change.base === null
@@ -217,9 +222,9 @@ export async function reconcileAnchors(
           if (!agreesWithScan(file, base, text)) continue;
         }
       }
-      let mapped: number[] | undefined;
+      let mappedRows: number[] | undefined;
       if (allowed && mapping !== null && text !== null) {
-        if (side === "old") mapped = mapping.lines;
+        if (side === "old") mappedRows = mapping.lines;
         else if (head !== null) {
           const committed = await read(mapping.path, { sha: head });
           if (committed !== null) {
@@ -240,14 +245,20 @@ export async function reconcileAnchors(
               );
               patches.set(key, pending);
             }
-            mapped = mapWorktreeAnchor(await pending, mapping.path, mapping.lines) ?? undefined;
+            mappedRows = mapWorktreeAnchor(await pending, mapping.path, mapping.lines) ?? undefined;
           }
         }
       }
       const found =
         text === null
           ? ({ kind: "orphaned" } as const)
-          : locateAnchor({ anchor: saved, endLine }, text, mapped);
+          : locateAnchor(
+              { anchor: saved, endLine },
+              text,
+              mappedRows === undefined || sourceContent === null
+                ? undefined
+                : { lines: mappedRows, content: sourceContent },
+            );
       const next: Proposal["next"] =
         found.kind === "orphaned"
           ? {
@@ -268,8 +279,17 @@ export async function reconcileAnchors(
                 ? {}
                 : { originalAnchor: comment.originalAnchor }),
             };
-      if (found.kind === "matched" && revision !== undefined)
+      if (found.kind === "matched" && revision !== undefined) {
         next.anchor = { ...found.anchor, revision };
+        if (
+          sourceContent !== null &&
+          found.endLine !== null &&
+          JSON.stringify(found.anchor.rangeContent) !== JSON.stringify(sourceContent)
+        ) {
+          next.anchor.revision = { ...revision, content: sourceContent };
+        }
+      }
+
       if (
         found.kind === "matched" &&
         (newPath !== path ||

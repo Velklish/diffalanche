@@ -208,13 +208,12 @@ function similarity(left: string, right: string): number {
 export function locateAnchor(
   saved: { anchor: Anchor; endLine: number | null },
   text: string,
-  mapped?: number[],
+  mapped?: { lines: number[]; content: string[] },
 ): AnchorMatch {
   const lines = fileLines(text);
   const body =
     saved.anchor.rangeContent?.map(normalizeLine) ??
     (saved.endLine === null ? [normalizeLine(saved.anchor.lineContent)] : null);
-  if (body === null || body.length === 0) return { kind: "orphaned" };
   const finish = (start: number, end: number): AnchorMatch => ({
     kind: "matched",
     line: start,
@@ -226,15 +225,20 @@ export function locateAnchor(
   });
   if (
     mapped !== undefined &&
-    mapped.length === body.length &&
-    mapped.every(
-      (at, i) => at > 0 && (i === 0 || at > (mapped[i - 1] ?? 0)) && lines[at - 1] === body[i],
+    mapped.lines.length > 0 &&
+    mapped.lines.length === mapped.content.length &&
+    mapped.lines.every(
+      (at, i) =>
+        at > 0 &&
+        (i === 0 || at > (mapped.lines[i - 1] ?? 0)) &&
+        lines[at - 1] === normalizeLine(mapped.content[i] ?? ""),
     )
   ) {
-    const first = mapped[0];
-    const last = mapped.at(-1);
+    const first = mapped.lines[0];
+    const last = mapped.lines.at(-1);
     if (first !== undefined && last !== undefined) return finish(first, last);
   }
+  if (body === null || body.length === 0) return { kind: "orphaned" };
   let candidate: number | null = null;
   for (let start = 0; start + body.length <= lines.length; start += 1) {
     const core =

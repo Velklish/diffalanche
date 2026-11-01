@@ -458,7 +458,9 @@ and persists proposals through `updateSession`. Under that lock it checks the
 session identity, base, scope and each comment's anchor/status fingerprint.
 Concurrent replies survive; a concurrent status or anchor edit rejects that
 proposal. A pass with no changes writes nothing. A target inconsistent with the
-captured diff is skipped so the next queued read can retry it.
+captured diff is skipped so the next queued read can retry it. A null safe read
+after an empty diff is also skipped when the captured base still has that file.
+Captured deletions and omitted files still become orphaned.
 
 The file source captures committed provenance at creation only for rows that
 inverse-map through the pinned HEAD/captured-target patch and match the committed
@@ -474,7 +476,11 @@ cannot replace that target. Both scanning and proposed path changes share the
 scope/exclusion predicate; a refused target leaves the saved path available.
 The `old` side reads the resolved base and the rename's old path, never the
 working tree. Captured ranges map every selected row; insertions between
-surviving rows expand the range. Legacy old-side source identity requires a
+surviving rows expand the range. When the current body differs from the source
+span, `revision.content` retains its verified original selected rows. Later
+refreshes check these rows against the pinned blob and mapped target, while
+`rangeContent` remains the complete current range; unique text fallback is not
+weakened. Legacy old-side source identity requires a
 trusted previous cache, never the
 new target commit as a substitute for the past. A body-less legacy range with no
 previous snapshot is orphaned conservatively rather than filled from a copy.

@@ -517,3 +517,24 @@ describe("orphaned schema and legacy reads", () => {
     });
   });
 });
+
+it("round-trips optional committed source rows and refuses a mismatched source span", async () => {
+  const saved = comment("c_source", {
+    anchor: {
+      lineContent: "A",
+      hunk: "",
+      before: [],
+      after: [],
+      rangeContent: ["A", "X", "B"],
+      revision: { sha: "a".repeat(40), path: "src/a.ts", line: 1, endLine: 2, content: ["A", "B"] },
+    },
+  });
+  await makeSession(dataDir, "source", [saved]);
+  expect(await readComments(dataDir, "source")).toEqual([saved]);
+  const raw = JSON.parse(readFileSync(commentsPath(dataDir, "source"), "utf8"));
+  raw.comments[0].anchor.revision.content = ["A"];
+  writeFileSync(commentsPath(dataDir, "source"), JSON.stringify(raw));
+  await expect(readComments(dataDir, "source")).rejects.toThrow(
+    "expected one saved row per source line",
+  );
+});

@@ -138,7 +138,17 @@ function parseRevision(
   const sha = asString(file, `${field}.sha`, raw.sha);
   if (!/^[a-f0-9]{40,64}$/.test(sha))
     return fail(file, `${field}.sha`, "expected a full commit id");
-  return { sha, path: asString(file, `${field}.path`, raw.path), line, endLine };
+  const content =
+    raw.content === undefined ? undefined : asStrings(file, `${field}.content`, raw.content);
+  if (content !== undefined && content.length !== endLine - line + 1)
+    return fail(file, `${field}.content`, "expected one saved row per source line");
+  return {
+    sha,
+    path: asString(file, `${field}.path`, raw.path),
+    line,
+    endLine,
+    ...(content === undefined ? {} : { content }),
+  };
 }
 
 function parseOriginal(

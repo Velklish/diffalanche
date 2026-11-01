@@ -69,7 +69,7 @@ export type Anchor = {
   before: string[];
   after: string[];
   rangeContent?: string[];
-  revision?: { sha: string; path: string; line: number; endLine: number };
+  revision?: { sha: string; path: string; line: number; endLine: number; content?: string[] };
 };
 
 export type Reply = {

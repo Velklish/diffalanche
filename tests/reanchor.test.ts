@@ -327,7 +327,9 @@ describe("unique matching", () => {
     ).toMatchObject({ kind: "matched", line: 2 });
   });
   it("does not trust a git candidate whose target text no longer matches", () => {
-    expect(locateAnchor(saved, "unrelated();\n", [1])).toEqual({ kind: "orphaned" });
+    expect(
+      locateAnchor(saved, "unrelated();\n", { lines: [1], content: [saved.anchor.lineContent] }),
+    ).toEqual({ kind: "orphaned" });
   });
 });
 
@@ -1164,6 +1166,8 @@ describe("second review regressions", () => {
     const second = await refresh(f);
     expect(second).toMatchObject({ status: "open", line: 1, endLine: 4 });
     expect(second.originalAnchor).toEqual(first.originalAnchor);
+    expect(second.anchor?.revision?.content).toEqual(["A", "TARGET", "B"]);
+    expect(second.anchor?.rangeContent).toEqual(["A", "X", "TARGET", "B"]);
   });
 
   it("skips a null safe read after a captured empty diff while preserving Ready and cache", async () => {

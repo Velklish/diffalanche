@@ -196,7 +196,7 @@ A review session is the directory `reviews/<name>/` with three files. `review.js
 }
 ```
 
-`anchor.rangeContent` optionally stores every selected range line. `anchor.revision` optionally records a verified committed span as `{sha,path,line,endLine}`; worktree-only spans have no fabricated revision. `originalAnchor` optionally preserves the earliest stored `{path,side,line,endLine,anchor}` before automatic mutation. Absent optional fields remain absent when legacy comments are read.
+`anchor.rangeContent` optionally stores every selected range line. `anchor.revision` optionally records a verified committed span as `{sha,path,line,endLine}` with optional `content` containing the verified source rows when the current range differs; worktree-only spans have no fabricated revision. `originalAnchor` optionally preserves the earliest stored `{path,side,line,endLine,anchor}` before automatic mutation. Absent optional fields remain absent when legacy comments are read.
 
 Anchor levels: `repo: null` — the whole review; `path: null` — a repository; `line: null` — a file; `endLine` is optional. `base.mode` is `head`, `branch` with an optional `branch` field, or `ref` with a `ref` field.
 

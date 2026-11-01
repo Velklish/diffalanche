@@ -44,7 +44,9 @@ and `bun run release` refuses a version that has no section. See
   Committed renames retain file identity even after the old path is recreated;
   moves respect scope and exclusions. Mapping uses captured bytes so concurrent
   edits cannot supply coordinates from another snapshot. Legacy source identity
-  is conservative, and committed CRLF anchors retain provenance.
+  is conservative, and committed CRLF anchors retain provenance. Expanded
+  ranges keep their verified source rows across repeated refreshes. A transient
+  null read after an empty diff does not create a sticky lost anchor.
   Renames that also edit content retain the old path for anchoring. Model
   proposals and their UI remain deferred.
 
