@@ -10,10 +10,10 @@
 the model and embeds 200 comments" at 768 MiB peak resident size. Until this
 decision the model loaded in the process that asked for a vector: a command, or
 the server on a worker thread. Measurements on the development machine (Apple M1
-Pro, Bun 1.3.14) found both crossing the ceiling on Bun, the binary channel: a
-query over 50 000 comments at 803 MiB on 2026-09-23, and `serve` after its first
-suggestion on the synthetic review of 240 comments at 742 and 764 MiB on
-2026-09-24. Two weights sit in one process there. The model's is 697–714 MiB
+Pro, Bun 1.3.14) found a query over 50 000 comments crossing the ceiling at
+803 MiB on 2026-09-23. `serve` after its first suggestion on the synthetic review
+of 240 comments stayed below it at 742 and 764 MiB on 2026-09-24, leaving only
+4 MiB of headroom in the higher run. Two weights sit in one process there. The model's is 697–714 MiB
 alone, measured beside the query on 2026-09-23; the index's is about 1.5 KB of
 vectors a comment plus its entry, and the server's own is the review it holds.
 

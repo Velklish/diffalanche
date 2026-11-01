@@ -8,7 +8,9 @@
 
 `docs/SPEC.md` section 3, decision 10, asks for a multilingual embedding model
 of about 118M parameters and 120 MB in int8 that ships with the tool, works
-offline with nothing to install, and runs in the server process. Open question 1
+offline with nothing to install. Server and command callers run the model in
+a child process, as decided in [ADR-016](adr-016-model-in-a-process-of-its-own.md);
+this record decides the model, runtime and delivery. Open question 1
 of section 12, removed when this was accepted, asked how the npm channel gets
 it: a download on first run, or a separate `@diffalanche/model` package. What
 this record had to settle is the model and a runtime that works under Node and
@@ -239,18 +241,17 @@ budget would then have to be restated for it.
   Whether four to six quiet cores bring that under a second is unmeasured. The
   owner accepted this without it: a later measurement on a quiet machine settles
   it, and a miss returns the budget to the owner.
-- The model's delivery, a task of its own, builds 4A and 5B: the published
-  assets and their checksums, the download with progress and a clear message
-  when offline, `model pull --embedding`, the binding redirected at build time
-  for the npm bundle and for the binaries, and the binary writing its embedded
-  files into the cache. Until then `dist/cli.js` contains no runtime and embeds
-  nothing — no command reaches `src/core/ml/embed/embedder.ts` — and
-  `onnxruntime-node` and `@huggingface/tokenizers` are development dependencies
-  like every other.
-- The embedding index and the `suggest` command and API embed in the server
-  process and must not hold its event loop for long: one text per run keeps a
-  stall to one text, and a rebuild of many comments either yields between texts
-  or moves to a worker.
+- The model's delivery implements 4A and 5B: published assets and checksums,
+  download with progress and a clear message when offline,
+  `model pull --embedding`, the binding redirected at build time for the npm
+  bundle and the binaries, and the binary writing its embedded files into the
+  cache ([09-ml.md](../reference/09-ml.md#delivery)). `onnxruntime-node` and
+  `@huggingface/tokenizers` remain development dependencies; the npm package
+  loads the runtime binding from the user cache.
+- Server and command callers embed in a child process that holds only the model.
+  The index, its update and its search stay in the parent. Process placement,
+  lifetime and the event-loop isolation are decided in
+  [ADR-016](adr-016-model-in-a-process-of-its-own.md).
 - A vector belongs to the model, its revision, the runtime's version and the
   platform together: 1.23.2 and 1.30.0 differ by up to 0.0032 cosine,
   onnxruntime-web by up to 0.0042, and the four texts of

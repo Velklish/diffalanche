@@ -2,7 +2,7 @@
 
 How diffalanche works today — from the code, not intention. Intent and rationale are in [ADRs](../README.md); this reference describes only the behaviour of the running version. It is organised by subsystem so each file can be edited independently. The “Scope” field of tasks links here.
 
-The table names the subsystems the task cut expects; each section file is written by the task that creates the subsystem. Every section is written: `09-ml.md` describes a subsystem of which only the embedding model exists yet and says so, because a gap in the middle of a reference reads as a page someone forgot.
+The table names the subsystems the task cut expects; each section file is written by the task that creates the subsystem. Every section is written. [09-ml.md](09-ml.md) describes the implemented embedding model, index, suggestions, delivery and symbol index. Phase 2 acceptance remains open, including the quiet-machine embedding performance evidence in [ADR-014](../adr/adr-014-embedding-model-and-npm-delivery.md); the generative model and insights belong to Phase 4.
 
 | Section | About | Planned path |
 |---|---|---|
