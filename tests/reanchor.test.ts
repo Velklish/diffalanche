@@ -1403,3 +1403,64 @@ describe("staged rename with a recreated source path", () => {
     },
   );
 });
+
+it.each(["recreated source", "ordinary addition"])(
+  "reanchors edits in a new added file before committing: %s",
+  async (kind) => {
+    const f = await fixture();
+    const head = f.git("rev-parse", "HEAD").trim();
+    if (kind === "recreated source") f.git("mv", "a.ts", "b.ts");
+    const path = kind === "recreated source" ? "a.ts" : "fresh.ts";
+    const file = join(f.repo, path);
+    writeFileSync(file, f.text);
+    const captured = await scanReview(f.config, { mode: "head" });
+    if (kind === "recreated source") {
+      expect(
+        captured.cache.repositories[0]?.files.map(({ path, oldPath, status }) => ({
+          path,
+          oldPath,
+          status,
+        })),
+      ).toEqual([
+        { path: "a.ts", oldPath: null, status: "added" },
+        { path: "b.ts", oldPath: "a.ts", status: "renamed" },
+      ]);
+    } else {
+      expect(captured.cache.repositories[0]?.files.find((one) => one.path === path)).toMatchObject({
+        path: "fresh.ts",
+        oldPath: null,
+        status: "added",
+      });
+    }
+    await writeDiffCache(f.config.dataDir, "work", captured.cache);
+    const comment = await addComment(
+      f.config.dataDir,
+      "work",
+      {
+        repo: "repo",
+        path,
+        line: 2,
+        severity: "nit",
+        body: "new added file anchor",
+        author: "human",
+        role: "human",
+      },
+      { source: fileSourceAt(f.root, f.config.dataDir) },
+    );
+    expect(comment.anchor).not.toHaveProperty("revision");
+    writeFileSync(file, `${prefix}${f.text}`);
+    await rescanRepository(f.config, "work", "repo");
+    const stored = await get(f.config.dataDir, "work", comment.id);
+    const current = (await readDiffCache(f.config.dataDir, "work"))?.repositories[0]?.files.find(
+      (one) => one.path === path,
+    );
+    expect(current?.status).toBe("added");
+    expect(
+      current?.hunks.flatMap((hunk) => hunk.lines).find((line) => line.newLine === 7)?.content,
+    ).toBe("const anchor = 42;");
+    expect(f.git("rev-parse", "HEAD").trim()).toBe(head);
+    expect(stored).toMatchObject({ path, line: 7, status: "open" });
+    expect(stored.anchor).not.toHaveProperty("revision");
+    expect(stored.originalAnchor).toMatchObject({ path, line: 2, anchor: comment.anchor });
+  },
+);
