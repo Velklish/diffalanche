@@ -58,3 +58,7 @@ The owner reviews and approves this item individually before it is queued for im
 ## Execution plan
 
 UI interaction track owns keyboard overlays, first-run/base selection and global search for this group. Keep each card as a separate verdict and acceptance subject. Run the installed Impeccable context loader before src/ui edits, preserve PRODUCT/DESIGN and desktop minimum, and close touched surfaces with audit/polish and browser evidence. Coordinate reference 08 by section with the completed documentation track. Add deterministic regression coverage before fixes; do not infer accessibility user impact from static markup alone. No broader redesign or deferred UI features.
+
+## Owner decision — 2026-11-01 (interactive execution)
+
+The owner answered “Не нужно нам voice over, убери” to the manual reader-check question. Remove the actual VoiceOver/manual-reader requirement from this task. Preserve the selected-base ARIA implementation and verify it through automated DOM/accessibility-tree and keyboard checks. No successful reader run or pronunciation result is claimed. This explicitly supersedes the earlier manual-reader acceptance requirement; other UI contracts remain unchanged.

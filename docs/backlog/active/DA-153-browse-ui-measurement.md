@@ -99,3 +99,7 @@ scan behind `expandable` and the new-side line set of every card that carries th
 
 What settles it: first render on a quiet machine, `a572e79`'s `FileCard` against the same with the
 two memos stubbed, three runs a side.
+
+## Owner-approved retained-subject update — 2026-11-01
+
+DA-37.5 current-subject replacement: The owner selected matched current-code comparisons because exact a572e79 cannot be recovered locally or through GitHub. Before new data, freeze one current implementation SHA and compare its FileCard with the same source and harness except for the two identified memos stubbed. Keep three fresh processes per side, quiet-load qualification, declared alternation and all raw data. Record the actual memo regions and output/measurement boundaries before running. Historical +8.2ms and missing-tree attribution remain unknown; a current comparison is not a refutation of that historical result.
