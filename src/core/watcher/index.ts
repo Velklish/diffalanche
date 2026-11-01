@@ -154,6 +154,7 @@ export async function startWatcher(options: WatcherOptions): Promise<Watcher> {
   // is news, and the first readable listing becomes it.
   let sessions: Map<string, ReviewStatus> | null = await snapshotSessions(config, null);
   let queue: Promise<void> = Promise.resolve();
+  let joining = 0;
   let closed = false;
   let fellBack = false;
   // The repositories rescanned since `current` last moved; until then a rescan that finds
@@ -313,17 +314,28 @@ export async function startWatcher(options: WatcherOptions): Promise<Watcher> {
 
   /** A named task can cover paths outside current's scope, even after its document was evicted. */
   function notifyOtherScopes(repo: string, files: string[]): void {
-    for (const name of options.sessions?.() ?? []) {
-      if (name === session) continue;
-      const known = metadata.get(name)?.scope;
-      if (known === undefined || !repositoryInScope(known, repo)) continue;
-      const covered =
-        files.length === 0 ||
-        files.some(
-          (path) => path === ".git" || path.startsWith(".git/") || pathInScope(known, repo, path),
-        );
-      if (covered) bus.emit({ type: "diff-changed", repo, files, session: name });
-    }
+    const targets = [...(options.sessions?.() ?? [])];
+    const paths = [...files];
+    const notify = (): void => {
+      // A join can land while this rescan awaits Git, or behind an already deferred notice.
+      if (joining > 0) {
+        enqueue(async () => notify());
+        return;
+      }
+      const followed = options.sessions?.() ?? [];
+      for (const name of targets) {
+        if (name === session || !followed.includes(name)) continue;
+        const known = metadata.get(name)?.scope;
+        if (known === undefined || !repositoryInScope(known, repo)) continue;
+        const covered =
+          paths.length === 0 ||
+          paths.some(
+            (path) => path === ".git" || path.startsWith(".git/") || pathInScope(known, repo, path),
+          );
+        if (covered) bus.emit({ type: "diff-changed", repo, files: paths, session: name });
+      }
+    };
+    notify();
   }
 
   /** The tasks followed: the current one, and the ones windows are open on. */
@@ -645,7 +657,14 @@ export async function startWatcher(options: WatcherOptions): Promise<Watcher> {
       return token;
     },
     follow: (name, token) => {
-      enqueue(() => readJoinedScope(name));
+      joining += 1;
+      enqueue(async () => {
+        try {
+          await readJoinedScope(name);
+        } finally {
+          joining -= 1;
+        }
+      });
       if (token === undefined) return false;
       const document = documents.get(token);
       if (document === undefined) return false;

@@ -403,6 +403,8 @@ Named tasks receive edits inside their own path scope even when current covers
 other files in the same repository. That notification leaves current's unchanged
 review and activity alone. Each new subscription reads its actual metadata scope
 before later repository rescans, including a reconnect without a usable document token.
+When a subscription overlaps a running rescan, its targeted notice waits for
+those metadata reads and rechecks the task's current scope before delivery.
 
 The CLI stream test captures its cursor before writing and matches the exact reply
 and thread, including delivery before the CLI exits. See [suite waits](docs/reference/11-perf.md#waits-in-the-suites).

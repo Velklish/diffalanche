@@ -772,6 +772,23 @@ A failed read leaves routing scope unknown, distinct from a known whole-root
 scope. A later readable join restores routing immediately while preserving the
 old comparison value for the next legitimate metadata-change event.
 
+A subscription can arrive while a repository rescan is already awaiting Git.
+Its targeted notice keeps a copy of the paths and the tasks present at that
+point. If join reads are still pending, the notice moves to the existing queue's
+tail rather than awaiting work behind itself. A later join behind that notice
+defers it again; once the reads finish, delivery rechecks the current task,
+followed names and actual scope. An established scope keeps its synchronous
+notification path. This adds no Git read, current rescan or replay registry.
+
+<!-- quote:../../src/core/watcher/index.ts -->
+```ts
+      if (joining > 0) {
+        enqueue(async () => notify());
+        return;
+      }
+```
+<!-- /quote -->
+
 Comment events come from reading `comments.json` and comparing it with the last
 read, so a write from the UI, from one `diffalanche reply`, or from twenty of
 them at once produces one event each and never two for the same write. The

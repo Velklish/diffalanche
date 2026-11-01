@@ -13,6 +13,8 @@ and `bun run release` refuses a version that has no section. See
 
 ## [Unreleased]
 
+- Named-task notifications also survive a subscription arriving during an already running repository rescan, without leaking paths outside its fresh scope.
+
 - A named stream reads its actual path scope on joining, so its first edit is delivered even when its held document creates no data-directory burst.
 
 - Path-scoped repository signals retain their paths through a pending document build, so an unrelated file does not evict that document.

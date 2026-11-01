@@ -2,10 +2,10 @@
 import { existsSync, mkdtempSync, readFileSync, rmSync, writeFileSync } from "node:fs";
 import { tmpdir } from "node:os";
 import { join } from "node:path";
-import { describe, expect, it, vi } from "vitest";
+import { afterEach, describe, expect, it, onTestFailed, onTestFinished, vi } from "vitest";
 import { generate, PROFILES } from "../scripts/synth.ts";
 import { loadConfig } from "../src/core/config/index.ts";
-import { createSession, setScope } from "../src/core/domain/index.ts";
+import { createSession, setScope, useSession as activateSession } from "../src/core/domain/index.ts";
 import { scan } from "../src/core/index.ts";
 import * as storage from "../src/core/storage/index.ts";
 import { diffCachePath } from "../src/core/storage/index.ts";
@@ -27,8 +27,57 @@ function barrier() {
   return { promise, resolve };
 }
 
+async function bounded<T>(pending: Promise<T>, label: string): Promise<T> {
+  let timer: ReturnType<typeof setTimeout> | undefined;
+  try {
+    return await Promise.race([
+      pending,
+      new Promise<never>((_, reject) => {
+        timer = setTimeout(() => reject(new Error(`test barrier ${label} timed out`)), 2_000);
+      }),
+    ]);
+  } finally {
+    clearTimeout(timer);
+  }
+}
+
+afterEach(() => vi.restoreAllMocks());
+
+function holdRescanAndJoin() {
+  const rescan = { entered: barrier(), release: barrier(), held: false };
+  const join = { entered: barrier(), release: barrier(), held: false, armed: false };
+  const actual = storage.readReview;
+  const read = vi.spyOn(storage, "readReview").mockImplementation(async (directory, name) => {
+    const review = await actual(directory, name);
+    const hold = name === A ? rescan : name === B && join.armed ? join : null;
+    if (hold !== null && !hold.held) {
+      hold.held = true;
+      hold.entered.resolve();
+      await bounded(hold.release.promise, name === A ? "rescan release" : "join release");
+    }
+    return review;
+  });
+  const restore = () => {
+    rescan.release.resolve();
+    join.release.resolve();
+    read.mockRestore();
+  };
+  onTestFinished(restore);
+  return {
+    rescan,
+    join,
+    restore,
+    armJoin: () => {
+      join.armed = true;
+    },
+  };
+}
+
 async function fixture() {
   const root = mkdtempSync(join(tmpdir(), "diffalanche-followed-scope-"));
+  onTestFailed(() => {
+    process.stderr.write(`followed-scope fixture: ${root}\n`);
+  });
   generate({ out: root, seed: 17, profile: PROFILES.small });
   const config = await loadConfig({ root });
   for (const path of ["A.ts", "B.ts", "C.ts"])
@@ -111,11 +160,20 @@ async function fixture() {
   await lockBurst();
   const held = await service.document(B);
   const currentCache = readFileSync(diffCachePath(config.dataDir, A));
+  const close = async () => {
+    stream.close();
+    await watcher?.close();
+    rmSync(root, { recursive: true, force: true });
+    expect(existsSync(root)).toBe(false);
+  };
+  onTestFinished(close);
   return {
     config,
     service,
     token,
     events,
+    currentFrames,
+    rescans,
     namedFrames,
     lockBurst,
     attach: (served?: string, name = B) =>
@@ -142,16 +200,277 @@ async function fixture() {
       expect(errors).toEqual([]);
       expect(readFileSync(diffCachePath(config.dataDir, A))).toEqual(currentCache);
     },
-    close: async () => {
-      stream.close();
-      await watcher?.close();
-      rmSync(root, { recursive: true, force: true });
-      expect(existsSync(root)).toBe(false);
-    },
+    close,
   };
 }
 
 describe("a newly followed held scope", () => {
+  it("releases an in-flight notice without routing it to an unknown joined task", async () => {
+    const run = await fixture();
+    const held = holdRescanAndJoin();
+    try {
+      const edited = run.edit("B.ts", 2);
+      await bounded(held.rescan.entered.promise, "rescan entered");
+      run.attach(undefined, "unknown-task");
+      held.rescan.release.resolve();
+      await bounded(edited, "repository drain");
+      await run.edit("C.ts", 2);
+      expect(run.events.filter((event) => event.type === "diff-changed")).toEqual([]);
+      expect(run.namedFrames).toEqual([]);
+      run.negatives();
+    } finally {
+      held.restore();
+      await run.close();
+    }
+  });
+
+  it("releases an in-flight notice without routing through unreadable joined metadata", async () => {
+    const run = await fixture();
+    const held = holdRescanAndJoin();
+    const path = join(run.config.dataDir, "reviews", B, "review.json");
+    const before = readFileSync(path);
+    try {
+      const edited = run.edit("B.ts", 2);
+      await bounded(held.rescan.entered.promise, "rescan entered");
+      run.attach(run.token);
+      await bounded(run.onopenRead(), "post-open payload");
+      writeFileSync(path, "{");
+      held.rescan.release.resolve();
+      await bounded(edited, "repository drain");
+      await run.edit("C.ts", 2);
+      expect(run.events.filter((event) => event.type === "diff-changed")).toEqual([]);
+      expect(run.namedFrames).toEqual([]);
+      run.negatives();
+    } finally {
+      writeFileSync(path, before);
+      expect(readFileSync(path)).toEqual(before);
+      held.restore();
+      await run.close();
+    }
+  });
+
+  for (const mode of ["no token", "expired token"] as const) {
+    it(`delivers an in-flight notice after a ${mode} join without a data burst`, async () => {
+      const run = await fixture();
+      const held = holdRescanAndJoin();
+      held.join.release.resolve();
+      try {
+        const edited = run.edit("B.ts", 2);
+        await bounded(held.rescan.entered.promise, "rescan entered");
+        const clock =
+          mode === "expired token"
+            ? vi.spyOn(Date, "now").mockReturnValue(Date.now() + 60_001)
+            : null;
+        run.attach(mode === "no token" ? undefined : run.token);
+        clock?.mockRestore();
+        await bounded(run.onopenRead(), "post-open payload");
+        held.armJoin();
+      held.rescan.release.resolve();
+        await bounded(edited, "repository drain");
+        await vi.waitFor(
+          () =>
+            expect(run.events.filter((event) => event.type === "diff-changed")).toEqual([
+              { type: "diff-changed", repo: REPO, files: ["B.ts"], session: B },
+            ]),
+          { timeout: 100 },
+        );
+        run.negatives();
+      } finally {
+        held.restore();
+        vi.restoreAllMocks();
+        await run.close();
+      }
+    });
+  }
+
+  it("uses actual C scope for a stale B token joined during an in-flight B rescan", async () => {
+    const run = await fixture();
+    const held = holdRescanAndJoin();
+    held.join.release.resolve();
+    try {
+      const edited = run.edit("B.ts", 2);
+      await bounded(held.rescan.entered.promise, "rescan entered");
+      await setScope(run.config.dataDir, B, [{ repo: REPO, paths: ["C.ts"] }], [REPO]);
+      run.attach(run.token);
+      held.armJoin();
+      held.rescan.release.resolve();
+      await bounded(edited, "repository drain");
+      await run.edit("C.ts", 2);
+      await vi.waitFor(
+        () =>
+          expect(run.events.filter((event) => event.type === "diff-changed")).toEqual([
+            { type: "diff-changed", repo: REPO, files: ["C.ts"], session: B },
+          ]),
+        { timeout: 100 },
+      );
+      run.negatives();
+    } finally {
+      held.restore();
+      await run.close();
+    }
+  });
+
+  it("requeues a captured B notice behind a later left-refollow C initializer", async () => {
+    const run = await fixture();
+    const held = holdRescanAndJoin();
+    try {
+      const edited = run.edit("B.ts", 2);
+      await bounded(held.rescan.entered.promise, "rescan entered");
+      const detach = run.attach(run.token);
+      await bounded(run.onopenRead(), "post-open payload");
+      held.armJoin();
+      held.rescan.release.resolve();
+      await bounded(edited, "repository drain");
+      await bounded(held.join.entered.promise, "join entered");
+      detach();
+      await setScope(run.config.dataDir, B, [{ repo: REPO, paths: ["C.ts"] }], [REPO]);
+      run.attach();
+      held.join.release.resolve();
+      await run.edit("C.ts", 2);
+      await vi.waitFor(
+        () =>
+          expect(run.events.filter((event) => event.type === "diff-changed")).toEqual([
+            { type: "diff-changed", repo: REPO, files: ["C.ts"], session: B },
+          ]),
+        { timeout: 100 },
+      );
+      run.negatives();
+    } finally {
+      held.restore();
+      await run.close();
+    }
+  });
+
+  it("drops a captured notice when its named task leaves before join initialization finishes", async () => {
+    const run = await fixture();
+    const held = holdRescanAndJoin();
+    try {
+      const edited = run.edit("B.ts", 2);
+      await bounded(held.rescan.entered.promise, "rescan entered");
+      const detach = run.attach(run.token);
+      held.armJoin();
+      held.rescan.release.resolve();
+      await bounded(edited, "repository drain");
+      await bounded(held.join.entered.promise, "join entered");
+      detach();
+      held.join.release.resolve();
+      await run.edit("C.ts", 2);
+      expect(run.events.filter((event) => event.type === "diff-changed")).toEqual([]);
+      expect(run.namedFrames).toEqual([]);
+      run.negatives();
+    } finally {
+      held.restore();
+      await run.close();
+    }
+  });
+
+  it("does not send a captured notice to a different task that joins only after capture", async () => {
+    const run = await fixture();
+    const held = holdRescanAndJoin();
+    try {
+      const edited = run.edit("B.ts", 2);
+      await bounded(held.rescan.entered.promise, "rescan entered");
+      run.attach(run.token);
+      held.armJoin();
+      held.rescan.release.resolve();
+      await bounded(edited, "repository drain");
+      await bounded(held.join.entered.promise, "join entered");
+      await createSession(run.config.dataDir, "late-task", { mode: "head" }, undefined, {
+        scope: [{ repo: REPO, paths: ["B.ts"] }],
+        use: false,
+      });
+      run.attach(undefined, "late-task");
+      held.join.release.resolve();
+      await vi.waitFor(
+        () =>
+          expect(run.events.filter((event) => event.type === "diff-changed")).toEqual([
+            { type: "diff-changed", repo: REPO, files: ["B.ts"], session: B },
+          ]),
+        { timeout: 100 },
+      );
+      run.negatives();
+    } finally {
+      held.restore();
+      await run.close();
+    }
+  });
+
+  it("rechecks current after a captured notice waits behind joins and a pointer move", async () => {
+    const run = await fixture();
+    const held = holdRescanAndJoin();
+    try {
+      const edited = run.edit("B.ts", 2);
+      await bounded(held.rescan.entered.promise, "rescan entered");
+      run.attach(run.token);
+      held.armJoin();
+      held.rescan.release.resolve();
+      await bounded(edited, "repository drain");
+      await bounded(held.join.entered.promise, "join entered");
+      await activateSession(run.config.dataDir, B);
+      const moved = run.lockBurst();
+      // Let the configured 1 ms data debounce enqueue behind the held initializer.
+      await new Promise((done) => setTimeout(done, 2));
+      run.attach();
+      held.join.release.resolve();
+      await bounded(moved, "current data drain");
+      await run.edit("C.ts", 2);
+      expect(run.events).toContainEqual({ type: "current-changed", name: B });
+      expect(
+        run.events.filter((event) => event.type === "diff-changed" && event.session === B),
+      ).toEqual([]);
+      expect(run.rescans).not.toContain(A);
+    } finally {
+      held.restore();
+      await run.close();
+    }
+  });
+
+  it("notifies B joined during an already running rescan after its held post-open read", async () => {
+    const run = await fixture();
+    const actual = storage.readReview;
+    const entered = barrier();
+    const release = barrier();
+    let held = false;
+    const read = vi.spyOn(storage, "readReview").mockImplementation(async (directory, name) => {
+      const review = await actual(directory, name);
+      if (name === A && !held) {
+        held = true;
+        entered.resolve();
+        await release.promise;
+      }
+      return review;
+    });
+    try {
+      const edited = run.edit("B.ts", 2);
+      await entered.promise;
+      run.attach(run.token);
+      await run.onopenRead();
+      release.resolve();
+      await edited;
+      await vi.waitFor(
+        () =>
+          expect(
+            run.events.filter((event) => event.type === "diff-changed" && event.session === B),
+          ).toHaveLength(1),
+        { timeout: 100 },
+      );
+      run.negatives();
+      await run.edit("B.ts", 3);
+      await vi.waitFor(
+        () =>
+          expect(
+            run.events.filter((event) => event.type === "diff-changed" && event.session === B),
+          ).toHaveLength(2),
+        { timeout: 100 },
+      );
+      run.negatives();
+    } finally {
+      release.resolve();
+      read.mockRestore();
+      await run.close();
+    }
+  });
+
   for (const mode of ["valid token", "no token", "expired token"] as const) {
     it(`notifies the first B edit after ${mode} join without a later data burst`, async () => {
       const run = await fixture();

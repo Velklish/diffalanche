@@ -662,6 +662,12 @@ for that name. A stream without a usable token keeps its silent baseline, and
 the page reads the review after confirmed stream open to cover the gap. Later
 document reads alone do not reconnect the stream.
 
+If a stream joins during an already running repository rescan, that rescan's
+targeted notice waits behind pending metadata reads in the watcher's existing
+queue. Its captured paths and target names survive the wait; current, followed
+names and fresh scope are checked again before emission. No new stream replay
+mechanism is involved.
+
 The token registry is bounded to 32 unconsumed documents, each for 60 s, and has
 no persistence or replay machinery. Consumption, expiration, eviction, task
 identity removal and shutdown clean it up. An old connection ending cannot
