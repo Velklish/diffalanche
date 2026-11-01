@@ -191,6 +191,9 @@ embedding model that runs on your machine and needs nothing online once it is
 there: `multilingual-e5-small` in int8, pinned to one revision, with the ONNX
 Runtime that runs it. Both live in the user cache, shared by every root:
 
+Suggestion rows mark unconfirmed model severities `(auto)`. Taking one keeps
+that severity unconfirmed until it is explicitly confirmed.
+
 ```
 $XDG_CACHE_HOME/diffalanche/models/multilingual-e5-small-761b726dd34f/   # ~/.cache without the variable
   model_quantized.onnx     118.3 MB

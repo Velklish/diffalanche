@@ -176,6 +176,75 @@ describe("suggestions while typing", () => {
 });
 
 describe("AUTO at send time", () => {
+  it("keeps an auto suggestion's chosen severity and source when taken", async () => {
+    const calls = serve(() => json(vote("nit")));
+    const auto = {
+      ...row("c_auto", "critical", "the cache key misses the region"),
+      severitySource: "auto" as const,
+    };
+    useStore.setState({
+      suggest: {
+        text: "cache key",
+        answer: { severity: null, suggestions: [auto] },
+        asking: false,
+        failure: null,
+      },
+    });
+
+    useStore.getState().acceptSuggestion(0);
+    useStore.getState().setBody(`${auto.body} again`);
+    await useStore.getState().submitComment();
+
+    expect(posted(calls)[0]?.body).toMatchObject({ severity: "critical", severitySource: "auto" });
+  });
+
+  it("treats an explicit severity press after taking an auto row as manual", async () => {
+    const calls = serve(() => json(vote("nit")));
+    const auto = {
+      ...row("c_auto", "critical", "the cache key misses the region"),
+      severitySource: "auto" as const,
+    };
+    useStore.setState({
+      suggest: {
+        text: "cache key",
+        answer: { severity: null, suggestions: [auto] },
+        asking: false,
+        failure: null,
+      },
+    });
+    useStore.getState().acceptSuggestion(0);
+    useStore.getState().setSeverity("critical");
+    await useStore.getState().submitComment();
+    expect(posted(calls)[0]?.body).toMatchObject({
+      severity: "critical",
+      severitySource: "manual",
+    });
+  });
+
+  it("a manual row and a newly opened draft do not keep a previously taken auto source", async () => {
+    const calls = serve(() => json(vote("nit")));
+    const auto = {
+      ...row("c_auto", "critical", "the cache key misses the region"),
+      severitySource: "auto" as const,
+    };
+    useStore.setState({
+      suggest: {
+        text: "cache key",
+        answer: { severity: null, suggestions: [auto, ROWS[1] as Suggestion] },
+        asking: false,
+        failure: null,
+      },
+    });
+    useStore.getState().acceptSuggestion(0);
+    useStore.getState().acceptSuggestion(1);
+    await useStore.getState().submitComment();
+    expect(posted(calls)[0]?.body).toMatchObject({ severity: "nit", severitySource: "manual" });
+    useStore.getState().openComposer(REVIEW);
+    expect(useStore.getState().takenAuto).toBe(false);
+    useStore.getState().closeComposer();
+    expect(useStore.getState().takenAuto).toBe(false);
+  });
+
   it("stores the neighbours' vote as auto, and warning when they have none", async () => {
     for (const [vote_, stored] of [
       ["question", "question"],

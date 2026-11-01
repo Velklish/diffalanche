@@ -257,12 +257,13 @@ test("C opens the form on a collapsed card, which stops being collapsed", async 
 
 /** What `GET /api/suggest` answers in the tests below: the fixture's own first comments, voting for
  * `vote`. Stubbed, so the suite needs no model — the model's half is tests/embedding-model.test.ts. */
-function history(vote: string): { answer: unknown; rows: Comment[] } {
+function history(vote: string, auto = false): { answer: unknown; rows: Comment[] } {
   const rows = listComments().slice(0, 5);
   const suggestions = rows.map((one, index) => ({
     session: "synth",
     id: one.id,
     severity: one.severity,
+    severitySource: auto && index === 0 ? "auto" : one.severitySource,
     repo: one.repo,
     path: one.path,
     line: one.line,
@@ -271,6 +272,37 @@ function history(vote: string): { answer: unknown; rows: Comment[] } {
   }));
   return { answer: { severity: { severity: vote, confidence: 0.8 }, suggestions }, rows };
 }
+
+test("an auto history row keeps its severity source when taken", async ({ page }) => {
+  const { answer, rows } = history("question", true);
+  const asked = await suggestFrom(page, answer);
+  await open(page);
+  const card = page.locator(".file-card").first();
+  await gutter(card, await firstAddedLine(card)).click();
+  const composer = card.locator('[data-testid="composer"]');
+  const field = composer.locator(".composer-field");
+  await field.fill("cache key region");
+  const first = composer.locator("button.suggestion").first();
+  await expect.soft(first.locator(".suggestion-sev")).toContainText("(auto)");
+  const severityBox = await first.locator(".suggestion-sev").boundingBox();
+  const bodyBox = await first.locator(".suggestion-body").boundingBox();
+  expect((severityBox?.x ?? 0) + (severityBox?.width ?? 0)).toBeLessThanOrEqual(bodyBox?.x ?? 0);
+  await page.screenshot({ path: test.info().outputPath("suggestion-dark.png") });
+  await page.getByRole("button", { name: "light theme" }).click();
+  await page.screenshot({ path: test.info().outputPath("suggestion-light.png") });
+  await field.press("ArrowDown");
+  await field.press("Tab");
+  await expect(field).toHaveValue(rows[0]?.body ?? "");
+  const request = page.waitForRequest(
+    (one) => one.method() === "POST" && one.url().includes("/api/comments"),
+  );
+  await page.keyboard.press("ControlOrMeta+Enter");
+  expect((await request).postDataJSON()).toMatchObject({
+    severity: rows[0]?.severity,
+    severitySource: "auto",
+  });
+  expect(asked).toEqual(["cache key region"]);
+});
 
 /** Serves `answer` for every suggestion, and keeps the texts it was asked about. */
 async function suggestFrom(page: Page, answer: unknown, status = 200): Promise<string[]> {

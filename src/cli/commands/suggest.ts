@@ -57,7 +57,7 @@ export const suggest: Command = {
         : `${severity.severity}, confidence ${severity.confidence.toFixed(2)}`;
     const rows = suggestions.map((one) => [
       one.similarity.toFixed(2),
-      one.severity,
+      `${one.severity}${one.severitySource === "auto" ? " (auto)" : ""}`,
       source(one),
       firstLine(one.body),
     ]);

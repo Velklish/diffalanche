@@ -1698,7 +1698,7 @@ button:disabled {
 }
 
 .suggestion-sev {
-  flex: 0 0 62px;
+  flex: 0 0 100px;
   font: 9.5px / 1.4 var(--mono);
   letter-spacing: 0.04em;
 }

@@ -378,6 +378,7 @@ type CommentingSlice = {
   composer: ComposerTarget | null;
   composerEnd: number | null;
   sev: ComposerSeverity;
+  takenAuto: boolean;
   body: string;
   /** The suggestions from history under the composer (DA-36). */
   suggest: SuggestPanel;
@@ -1108,6 +1109,7 @@ export const useStore = create<Store>()((set, get) => ({
   composer: null,
   composerEnd: null,
   sev: "auto",
+  takenAuto: false,
   body: "",
   suggest: NO_SUGGESTIONS,
   sugIdx: -1,
@@ -1191,10 +1193,11 @@ export const useStore = create<Store>()((set, get) => ({
       sel: null,
       dragging: false,
       body: "",
+      takenAuto: false,
       sending: false,
     });
   },
-  setSeverity: (sev) => set({ sev }),
+  setSeverity: (sev) => set({ sev, takenAuto: false }),
   setBody: (body) => {
     // The field is read-only while its send waits: what is sent is what is on the screen.
     if (get().sending) return;
@@ -1217,12 +1220,11 @@ export const useStore = create<Store>()((set, get) => ({
   acceptSuggestion: (index) => {
     const row = get().suggest.answer?.suggestions[index];
     if (row === undefined) return;
-    // The row's severity is one the reader has just read and taken: theirs, not the model's.
-    set({ sev: row.severity, sugIdx: index });
+    set({ sev: row.severity, takenAuto: row.severitySource === "auto", sugIdx: index });
     get().setBody(row.body);
   },
   submitComment: async () => {
-    const { composer, composerEnd, sev, body, session, sending } = get();
+    const { composer, composerEnd, sev, takenAuto, body, session, sending } = get();
     if (composer === null || sending) return;
     const text = body.trim();
     if (text === "") return;
@@ -1246,7 +1248,7 @@ export const useStore = create<Store>()((set, get) => ({
               ? composerEnd
               : null,
           severity,
-          severitySource: sev === "auto" ? "auto" : "manual",
+          severitySource: sev === "auto" || takenAuto ? "auto" : "manual",
           body: text,
         }),
       });
@@ -1743,6 +1745,7 @@ function freshDraft(get: () => Store): Partial<Store> {
   forgetSuggestions();
   return {
     sev: get().modelAway === null ? "auto" : "warning",
+    takenAuto: false,
     body: "",
     suggest: NO_SUGGESTIONS,
     sugIdx: -1,

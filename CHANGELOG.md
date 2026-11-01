@@ -15,6 +15,9 @@ and `bun run release` refuses a version that has no section. See
 
 ### Fixed
 
+- Suggestion rows identify model-chosen severities, and taking one keeps its
+  severity unconfirmed until a severity chip or confirmation changes it.
+
 - Known Russian interface text exposes its language to assistive technology.
 
 - Performance repetitions have a ten-minute outer deadline, including a stalled

@@ -13,6 +13,7 @@ export function Composer() {
   const target = useStore((store) => store.composer);
   const endLine = useStore((store) => store.composerEnd);
   const sev = useStore((store) => store.sev);
+  const takenAuto = useStore((store) => store.takenAuto);
   const body = useStore((store) => store.body);
   const sending = useStore((store) => store.sending);
   const modelAway = useStore((store) => store.modelAway);
@@ -76,16 +77,22 @@ export function Composer() {
               {one.toUpperCase()}
             </button>
           ))}
-          <span className="composer-note">
-            {sev === "auto"
-              ? "модель разметит при отправке, агент подтвердит"
-              : "severity задан вручную"}
+          <span className="composer-note" lang="ru">
+            {sev === "auto" ? (
+              "модель разметит при отправке, агент подтвердит"
+            ) : (
+              <>
+                <span lang="en">severity</span>{" "}
+                {takenAuto ? "модели, агент подтвердит" : "задан вручную"}
+              </>
+            )}
           </span>
         </div>
 
         <textarea
           ref={field}
           className="composer-field"
+          lang=""
           value={body}
           placeholder="Что не так с этими строками?"
           aria-label="comment"
@@ -102,7 +109,9 @@ export function Composer() {
             Cancel
           </button>
           <span className="spacer" />
-          <span className="composer-note">потяните по строкам — диапазон · ⌘⏎ отправить</span>
+          <span className="composer-note" lang="ru">
+            потяните по строкам — диапазон · ⌘⏎ отправить
+          </span>
         </div>
 
         <Suggestions suggest={suggest} away={modelAway} />
@@ -150,6 +159,8 @@ function Suggestions({ suggest, away }: { suggest: SuggestPanel; away: string | 
         ? (away ?? "похожие прошлые комментарии появятся, пока вы пишете")
         : null);
   const silhouettes = suggest.answer === null && suggest.failure === null && suggest.asking;
+  const noteLang =
+    suggest.failure === null && (suggest.answer !== null || away === null) ? "ru" : undefined;
   // What a test waits out before it watches the card: the panel's own answer changes its DOM.
   const state = suggest.failure !== null ? "failed" : suggest.answer !== null ? "ready" : "idle";
 
@@ -165,7 +176,9 @@ function Suggestions({ suggest, away }: { suggest: SuggestPanel; away: string | 
           {rows.length === 0 ? "" : `${sugIdx < 0 ? "–" : sugIdx + 1} / ${rows.length}`}
         </span>
         <span className="spacer" />
-        <span className="suggest-hint">↑↓ выбрать · TAB принять</span>
+        <span className="suggest-hint" lang="ru">
+          ↑↓ выбрать · <span lang="en">TAB</span> принять
+        </span>
       </div>
       <div className="suggest-rows">
         {Array.from({ length: SUGGESTION_SLOTS }, (_, index) => (
@@ -175,6 +188,7 @@ function Suggestions({ suggest, away }: { suggest: SuggestPanel; away: string | 
             row={rows[index]}
             on={index === sugIdx}
             note={index === 0 ? note : null}
+            noteLang={noteLang}
             silhouette={silhouettes}
             onAccept={() => accept(index)}
           />
@@ -189,17 +203,24 @@ function Slot({
   row,
   on,
   note,
+  noteLang,
   silhouette,
   onAccept,
 }: {
   row: Suggestion | undefined;
   on: boolean;
   note: string | null;
+  noteLang: string | undefined;
   silhouette: boolean;
   onAccept: () => void;
 }) {
   if (row !== undefined) return <SuggestionRow row={row} on={on} onAccept={onAccept} />;
-  if (note !== null) return <p className="suggestion note">{note}</p>;
+  if (note !== null)
+    return (
+      <p className="suggestion note" lang={noteLang}>
+        {note}
+      </p>
+    );
   return (
     <span
       className={silhouette ? "suggestion silhouette" : "suggestion blank"}
@@ -227,8 +248,13 @@ function SuggestionRow({
       onMouseDown={(event) => event.preventDefault()}
       onClick={onAccept}
     >
-      <span className={`suggestion-sev ${row.severity}`}>{row.severity.toUpperCase()}</span>
-      <span className="suggestion-body">{row.body.split("\n")[0]}</span>
+      <span className={`suggestion-sev ${row.severity}`}>
+        {row.severity.toUpperCase()}
+        {row.severitySource === "auto" ? " (auto)" : ""}
+      </span>
+      <span className="suggestion-body" lang="">
+        {row.body.split("\n")[0]}
+      </span>
       <span className="suggestion-meta">
         {row.session} · {row.similarity.toFixed(2)}
       </span>
