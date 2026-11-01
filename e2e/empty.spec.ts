@@ -116,6 +116,46 @@ test("creating a session there opens the review", async ({ page }) => {
   await expect(page.locator(".pill-name").first()).toHaveText("ls-1");
 });
 
+test("the first-run command matches each submitted base and quotes shell input", async ({
+  page,
+}) => {
+  await page.route("**/api/review", (route) =>
+    route.fulfill({
+      status: 404,
+      json: { error: "no-current-session", message: "no current review session" },
+    }),
+  );
+  await page.route("**/api/scan", (route) => route.fulfill({ json: SCAN }));
+  const submitted: { name: string; base: string }[] = [];
+  await page.route("**/api/sessions", (route) => {
+    submitted.push(route.request().postDataJSON());
+    return route.fulfill({ status: 400, json: { message: "test refusal" } });
+  });
+  await page.goto("/");
+  const name = page.getByRole("textbox", { name: "session name" });
+  const example = page.locator(".first-run-cli code");
+  await expect(example).toContainText("ls-240588");
+  await name.fill("topic'$(touch bad)");
+  await expect(example).toContainText("'topic'\\''$(touch bad)'");
+  await name.fill("-topic");
+  const cases: [string, string, string][] = [
+    ["head", "", "head"],
+    ["branch", "", "branch"],
+    ["branch", "release/x", "branch:release/x"],
+    ["ref", "tag'$(touch bad)", "tag'$(touch bad)"],
+  ];
+  for (const [mode, value, base] of cases) {
+    await page.getByRole("button", { name: mode, exact: true }).click();
+    if (mode !== "head") await page.getByRole("textbox", { name: mode }).fill(value);
+    await expect(example).toHaveText(
+      `diffalanche review new --base='${base.replaceAll("'", "'\\''")}' -- '-topic'`,
+    );
+    await page.getByRole("button", { name: "Create" }).click();
+    await expect.poll(() => submitted.length).toBeGreaterThan(0);
+    expect(submitted.pop()).toMatchObject({ name: "-topic", base });
+  }
+});
+
 test("a session with an empty change set shows the no-changes screen", async ({ page }) => {
   await page.route("**/api/review", (route) => route.fulfill({ json: NO_CHANGES }));
   await ready(page);

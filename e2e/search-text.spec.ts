@@ -78,6 +78,58 @@ test("a next page that failed can be asked for again", async ({ page }) => {
   await expect(page.locator(".palette-hit:has(.palette-tag.text)")).toHaveCount(total);
 });
 
+for (const failure of ["http", "network"]) {
+  test(`a ${failure} failure on the first page can be retried without losing other hits`, async ({
+    page,
+  }) => {
+    let calls = 0;
+    await page.route("**/api/search/text?*", async (route) => {
+      calls++;
+      if (calls === 1) {
+        if (failure === "http") await route.fulfill({ status: 500, body: "{}" });
+        else await route.abort("failed");
+        return;
+      }
+      await route.continue();
+    });
+    await open(page);
+    await page.keyboard.press("ControlOrMeta+k");
+    await page.getByRole("textbox", { name: "search" }).fill("ts");
+    await expect(page.locator(".palette-hit").first()).toBeVisible();
+    await expect(page.getByText("Поиск текста не удался.")).toBeVisible();
+    await page.getByRole("button", { name: "повторить поиск текста" }).click();
+    await expect.poll(() => calls).toBe(2);
+    await expect(page.getByText("Поиск текста не удался.")).toBeHidden();
+  });
+}
+
+test("an obsolete text failure does not replace the new query", async ({ page }) => {
+  let release = () => {};
+  const held = new Promise<void>((resolve) => {
+    release = resolve;
+  });
+  let finished = false;
+  let firstStarted = false;
+  await page.route("**/api/search/text?*", async (route) => {
+    if (new URL(route.request().url()).searchParams.get("q") === "old-query") {
+      firstStarted = true;
+      await held;
+      await route.abort("failed").catch(() => {});
+      finished = true;
+    } else await route.fulfill({ json: { hits: [], next: null, total: 0, capped: false } });
+  });
+  await open(page);
+  await page.keyboard.press("ControlOrMeta+k");
+  const field = page.getByRole("textbox", { name: "search" });
+  await field.fill("old-query");
+  await expect.poll(() => firstStarted).toBe(true);
+  await field.fill("new-query");
+  await expect(page.locator(".palette-empty")).toContainText("new-query");
+  release();
+  await expect.poll(() => finished).toBe(true);
+  await expect(page.getByText("Поиск текста не удался.")).toHaveCount(0);
+});
+
 test("the hit the keyboard is on keeps the focus when the text hits land after it", async ({
   page,
 }) => {

@@ -13,6 +13,23 @@ and `bun run release` refuses a version that has no section. See
 
 ## [Unreleased]
 
+### Fixed
+
+- **The base picker exposes its selection.** Mode and branch buttons report
+  their pressed state in the accessibility tree.
+
+- **Search finds comments at every anchor level.** Review and repository
+  comments show their scope and body, and choosing a comment reveals its thread.
+
+- **The first-run terminal example follows the form.** Its POSIX shell arguments
+  represent the selected base and session name, including shell-sensitive input.
+
+- **Text search reports a failed first page.** The retry keeps results from
+  other sources visible and obsolete requests cannot replace the current query.
+
+- **An overlay no longer sends the draft behind it.** `⌘⏎` and `Ctrl+Enter`
+  leave the composer intact until the overlay is closed.
+
 ### Added
 
 - **`npm run probe`, the mutation probe**. `npm run probe -- <file> --mutate

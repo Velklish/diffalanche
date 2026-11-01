@@ -33,8 +33,15 @@ export function BasePicker() {
       >
         {MODES.map((one) => (
           <div key={one.mode} className={one.mode === mode ? "picker-mode on" : "picker-mode"}>
-            <button type="button" className="picker-head" onClick={() => setBaseMode(one.mode)}>
-              <span className="picker-check">{one.mode === mode ? "✓" : ""}</span>
+            <button
+              type="button"
+              className="picker-head"
+              aria-pressed={one.mode === mode}
+              onClick={() => setBaseMode(one.mode)}
+            >
+              <span className="picker-check" aria-hidden="true">
+                {one.mode === mode ? "✓" : ""}
+              </span>
               <span className="picker-title">{one.title}</span>
               <span className="picker-about">{one.about}</span>
             </button>
@@ -82,6 +89,7 @@ function Candidates() {
       <button
         type="button"
         className={chosen === "" ? "picker-branch on" : "picker-branch"}
+        aria-pressed={chosen === ""}
         onClick={() => useStore.getState().setBaseName("")}
       >
         <span className="picker-source">—</span>
@@ -100,6 +108,7 @@ function Branch({ branch, on }: { branch: BranchCandidate; on: boolean }) {
     <button
       type="button"
       className={on ? "picker-branch on" : "picker-branch"}
+      aria-pressed={on}
       onClick={() => useStore.getState().setBaseName(branch.name)}
     >
       <span className="picker-source">{branch.remote ?? "local"}</span>

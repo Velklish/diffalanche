@@ -110,9 +110,19 @@ describe("the ranking", () => {
     expect(search("   ", files, [comment()])).toEqual([]);
   });
 
-  it("leaves out a comment that is anchored to no file", () => {
-    const onReview = comment({ id: "c_two", repo: null, path: null, line: null });
-    expect(search("allocates", [], [onReview])).toEqual([]);
+  it("finds comments at review, repository, file and line anchors", () => {
+    const anchors = [
+      comment({ id: "c_review", repo: null, path: null, line: null }),
+      comment({ id: "c_repo", repo: "repos/a", path: null, line: null }),
+      comment({ id: "c_file", repo: "repos/a", path: "src/store.ts", line: null }),
+      comment({ id: "c_line", repo: "repos/a", path: "src/store.ts", line: 41 }),
+    ];
+    expect(search("allocates", [], anchors).map((hit) => hit.id)).toEqual([
+      "c_file",
+      "c_line",
+      "c_repo",
+      "c_review",
+    ]);
   });
 });
 

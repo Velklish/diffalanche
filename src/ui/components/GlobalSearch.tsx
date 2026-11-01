@@ -62,6 +62,11 @@ function Palette() {
     (hit: SearchHit) => {
       close(false);
       if (hit.kind === "comment") {
+        const store = useStore.getState();
+        store.setRailScope("all");
+        if (store.unansweredOnly) store.toggleUnanswered();
+        if (store.awaitingOnly) store.toggleAwaiting();
+        if (!store.railOn) store.toggleRail();
         void revealThread(hit.id);
         return;
       }
@@ -87,7 +92,7 @@ function Palette() {
       setIndex((index - 1 + hits.length) % hits.length);
       return;
     }
-    if (event.key === "Enter" && selected !== null) {
+    if (event.key === "Enter" && !event.metaKey && !event.ctrlKey && selected !== null) {
       event.preventDefault();
       choose(selected);
     }
@@ -119,7 +124,7 @@ function Palette() {
       </div>
       <div className="palette-body">
         <ol className="palette-hits">
-          {hits.length === 0 ? (
+          {hits.length === 0 && text.status !== "error" ? (
             <li className="palette-empty">
               {query.trim() === ""
                 ? "Файлы, символы, текст и комментарии этого ревью."
@@ -127,7 +132,7 @@ function Palette() {
                   ? `Ищем «${query.trim()}» в рабочих деревьях…`
                   : `Ничего не найдено по «${query.trim()}».`}
             </li>
-          ) : (
+          ) : hits.length > 0 ? (
             hits.map((hit, at) => (
               <Row
                 key={`${hit.kind}:${hit.id}`}
@@ -137,7 +142,7 @@ function Palette() {
                 choose={() => choose(hit)}
               />
             ))
-          )}
+          ) : null}
           {text.next === null ? null : (
             <li>
               <button type="button" className="palette-more" onClick={text.more}>
@@ -147,6 +152,14 @@ function Palette() {
             </li>
           )}
           {symbols.note === null ? null : <li className="palette-capped">{symbols.note}</li>}
+          {text.status === "error" ? (
+            <li className="palette-capped" role="status">
+              Поиск текста не удался.{" "}
+              <button type="button" className="palette-more" onClick={text.retry}>
+                повторить поиск текста
+              </button>
+            </li>
+          ) : null}
           {text.next === null && text.capped ? (
             <li className="palette-capped">совпадений больше, чем показано, — уточните запрос</li>
           ) : null}
@@ -203,21 +216,21 @@ function Preview({ hit }: { hit: SearchHit | null }) {
   return (
     <div className="palette-preview">
       <div className="palette-where">
-        <span className="palette-path">{hit.path}</span>
+        <span className="palette-path">{hit.path || (hit.repo ? "repository" : "review")}</span>
         <span className="palette-meta">
           {hit.repo}
           {hit.line === null ? "" : ` · L${hit.line}`}
         </span>
       </div>
-      {lines.length === 0 ? (
+      {lines.length === 0 && hit.path !== "" ? (
         <p className="palette-note">Этот файл показан без содержимого.</p>
-      ) : (
+      ) : lines.length > 0 ? (
         <div className="palette-code">
           {lines.map((line) => (
             <Line key={line.at} line={line} target={hit.line} />
           ))}
         </div>
-      )}
+      ) : null}
       {comment === undefined ? null : <p className="palette-body-text">{comment.body}</p>}
     </div>
   );
@@ -228,7 +241,7 @@ const TEXT_DEBOUNCE_MS = 150;
 
 type TextState = {
   query: string;
-  status: "idle" | "loading" | "ready";
+  status: "idle" | "loading" | "ready" | "error";
   hits: TextHit[];
   next: number | null;
   total: number;
@@ -246,14 +259,17 @@ const NO_TEXT: TextState = {
 
 /** The server's text search for the query, a page at a time; an answer for an older query is
  * dropped ([07-server.md](../../../docs/reference/07-server.md), "Text search"). */
-function useTextSearch(query: string): TextState & { more: () => void } {
+function useTextSearch(query: string): TextState & { more: () => void; retry: () => void } {
   const [state, setState] = useState<TextState>(NO_TEXT);
+  const [attempt, setAttempt] = useState(0);
   const wanted = query.trim();
+  const request = useMemo(() => ({ wanted, attempt }), [wanted, attempt]);
   // The page asked for: a second press before it arrives asks for nothing, and an answer for a
   // page the list has already moved past is dropped rather than appended twice.
   const asked = useRef<number | null>(null);
 
   useEffect(() => {
+    const { wanted } = request;
     asked.current = null;
     if (wanted.length < 2) {
       setState(NO_TEXT);
@@ -263,7 +279,11 @@ function useTextSearch(query: string): TextState & { more: () => void } {
     const controller = new AbortController();
     const timer = setTimeout(() => {
       void readText(wanted, 0, controller.signal).then((result) => {
-        if (result === null) return;
+        if (controller.signal.aborted) return;
+        if (result === null) {
+          setState({ ...NO_TEXT, query: wanted, status: "error" });
+          return;
+        }
         setState({ query: wanted, status: "ready", ...result });
       });
     }, TEXT_DEBOUNCE_MS);
@@ -271,7 +291,7 @@ function useTextSearch(query: string): TextState & { more: () => void } {
       clearTimeout(timer);
       controller.abort();
     };
-  }, [wanted]);
+  }, [request]);
 
   const more = () => {
     const page = state.next;
@@ -290,7 +310,11 @@ function useTextSearch(query: string): TextState & { more: () => void } {
       );
     });
   };
-  return { ...(state.query === wanted ? state : NO_TEXT), more };
+  return {
+    ...(state.query === wanted ? state : NO_TEXT),
+    more,
+    retry: () => setAttempt((n) => n + 1),
+  };
 }
 
 async function readText(
@@ -305,7 +329,7 @@ async function readText(
     const { hits, next, total, capped } = (await response.json()) as TextSearch;
     return { hits, next, total, capped };
   } catch {
-    // An aborted read is an older query; a failed one leaves the ranked rows to speak.
+    // The caller distinguishes an aborted query from a failed read.
     return null;
   }
 }

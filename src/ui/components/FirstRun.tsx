@@ -9,6 +9,7 @@ import { Logo } from "./Logo.tsx";
 export function FirstRun() {
   const scan = useStore((store) => store.scan);
   const name = useStore((store) => store.newName);
+  const base = useStore((store) => store.newBase);
   const switching = useStore((store) => store.switching);
   const setNewName = useStore((store) => store.setNewName);
   const create = useStore((store) => store.createSession);
@@ -81,12 +82,19 @@ export function FirstRun() {
         </form>
 
         <p className="first-run-cli">
-          то же из терминала:{" "}
-          <code>diffalanche review new {name.trim() || "ls-240588"} --base branch</code>
+          то же в POSIX shell:{" "}
+          <code>
+            diffalanche review new --base={shellQuote(base)} --{" "}
+            {shellQuote(name.trim() || "ls-240588")}
+          </code>
         </p>
       </div>
     </main>
   );
+}
+
+function shellQuote(value: string): string {
+  return `'${value.replaceAll("'", "'\\''")}'`;
 }
 
 /** The base of the session about to be made, into `newBase`: the picker applies a base to a

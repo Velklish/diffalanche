@@ -108,6 +108,27 @@ test("switching sessions swaps the whole set of threads", async ({ page }) => {
   await restore(page);
 });
 
+test("the base picker exposes its selected mode and branch", async ({ page }) => {
+  await open(page);
+  await page.getByRole("button", { name: /BASE/ }).click();
+  const picker = page.getByRole("dialog", { name: "base" });
+  const head = picker.locator(".picker-head").nth(0);
+  const branch = picker.locator(".picker-head").nth(1);
+  await expect(head).toHaveAttribute("aria-pressed", "true");
+  await branch.click();
+  await expect(head).toHaveAttribute("aria-pressed", "false");
+  await expect(branch).toHaveAttribute("aria-pressed", "true");
+  const defaultBranch = picker.locator(".picker-branch").first();
+  const candidate = picker.locator(".picker-branch").nth(1);
+  await expect(defaultBranch).toHaveAttribute("aria-pressed", "true");
+  await candidate.focus();
+  await page.keyboard.press("Enter");
+  await expect(candidate).toHaveAttribute("aria-pressed", "true");
+  await expect(defaultBranch).toHaveAttribute("aria-pressed", "false");
+  await page.keyboard.press("Escape");
+  await expect(picker).toBeHidden();
+});
+
 test("the base picker applies a branch and the repository header says so", async ({ page }) => {
   await open(page);
   const line = page.locator(".repo-base").first();

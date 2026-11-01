@@ -58,7 +58,12 @@ export function useKeys(): void {
           if (open === null || open === "palette") store.setPalette(!store.paletteOpen);
           return;
         }
-        if (event.key === "Enter" && store.composer !== null) {
+        const fromOverlay = event
+          .composedPath()
+          .some(
+            (element) => element instanceof HTMLElement && element.classList.contains("overlay"),
+          );
+        if (event.key === "Enter" && store.composer !== null && open === null && !fromOverlay) {
           event.preventDefault();
           void store.submitComment();
         }

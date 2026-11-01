@@ -91,15 +91,15 @@ export function search(
     });
   }
   for (const comment of comments) {
-    if (comment.repo === null || comment.path === null) continue;
-    const haystack = `${comment.body} ${comment.author} ${comment.path}`.toLowerCase();
+    const haystack =
+      `${comment.body} ${comment.author} ${comment.path ?? comment.repo ?? ""}`.toLowerCase();
     const score = rank(haystack, needle, words);
     if (score === 0) continue;
     hits.push({
       kind: "comment",
       id: comment.id,
-      repo: comment.repo,
-      path: comment.path,
+      repo: comment.repo ?? "",
+      path: comment.path ?? "",
       line: comment.line,
       label: firstLine(comment.body),
       tag: "comment",

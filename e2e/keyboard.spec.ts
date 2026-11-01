@@ -16,6 +16,7 @@ type Comment = {
   line: number | null;
   status: string;
   body: string;
+  severity: string;
 };
 
 function cli(...args: string[]): string {
@@ -140,6 +141,43 @@ test("a word of a comment lists the thread with its line in the preview", async 
   await expect(page.locator(`.rail-list [data-thread="${thread.id}"]`)).toHaveClass(/on/);
 });
 
+test("search opens comment threads at every anchor level", async ({ page, request }) => {
+  const bundle = await (await request.get("/api/review")).json();
+  const source = bundle.comments.find((one: Comment) => one.repo && one.path && one.line);
+  if (!source) throw new Error("the fixture has no line comment");
+  const anchors = [
+    { id: "search_review", repo: null, path: null, line: null },
+    { id: "search_repo", repo: source.repo, path: null, line: null },
+    { id: "search_file", repo: source.repo, path: source.path, line: null },
+    { id: "search_line", repo: source.repo, path: source.path, line: source.line },
+  ];
+  bundle.comments = anchors.map((anchor) => ({
+    ...source,
+    ...anchor,
+    endLine: null,
+    body: `unique ${anchor.id}`,
+    status: "open",
+  }));
+  await page.route("**/api/review*", (route) => route.fulfill({ json: bundle }));
+  await open(page);
+  await page.getByRole("button", { name: "unanswered", exact: true }).click();
+  await page.keyboard.press("]");
+  for (const anchor of anchors) {
+    await page.keyboard.press("ControlOrMeta+k");
+    await page.getByRole("textbox", { name: "search" }).fill(anchor.id);
+    const hit = palette(page).locator(".palette-hit").filter({ hasText: anchor.id });
+    await expect(hit).toBeVisible();
+    await hit.hover();
+    await expect(palette(page).locator(".palette-body-text")).toContainText(anchor.id);
+    await hit.click();
+    await expect(page.getByRole("button", { name: "unanswered", exact: true })).toHaveAttribute(
+      "aria-pressed",
+      "false",
+    );
+    await expect(page.locator(`.rail-list [data-thread="${anchor.id}"]`)).toHaveClass(/on/);
+  }
+});
+
 test("J walks the open threads and wraps at the end", async ({ page }) => {
   await open(page);
   // Every open thread, review-level ones included: `J` walks those too, and a count without them
@@ -213,6 +251,48 @@ test("esc over an overlay closes it and leaves the draft being written", async (
   // And the next press is the composer's own.
   await page.keyboard.press("Escape");
   await expect(page.locator(".composer")).toBeHidden();
+});
+
+test("an overlay blocks both comment shortcuts until it closes", async ({ page }) => {
+  await open(page);
+  await page.keyboard.press("c");
+  const field = page.locator(".composer-field");
+  const body = `overlay draft ${Date.now()}`;
+  await field.fill(body);
+  await page.getByRole("button", { name: "WARNING", exact: true }).click();
+  const anchor = await page.locator(".composer-anchor").textContent();
+  const card = page.locator(".file-card").filter({ has: field });
+  const repo = await card.getAttribute("data-repo");
+  const path = await card.getAttribute("data-path");
+  const line = Number(/L(\d+)/.exec(anchor ?? "")?.[1]);
+  expect(line).toBeGreaterThan(0);
+  let writes = 0;
+  page.on("request", (request) => {
+    if (request.method() === "POST" && new URL(request.url()).pathname === "/api/comments")
+      writes++;
+  });
+  await page.keyboard.press("ControlOrMeta+k");
+  await expect(palette(page)).toBeVisible();
+  await page.getByRole("textbox", { name: "search" }).fill("ts");
+  await expect(palette(page).locator(".palette-hit").first()).toBeVisible();
+  await page.keyboard.press("Meta+Enter");
+  await expect(palette(page)).toBeVisible();
+  await page.keyboard.press("Control+Enter");
+  await expect(palette(page)).toBeVisible();
+  await expect(field).toHaveValue(body);
+  expect(writes).toBe(0);
+  expect(comments().filter((comment) => comment.body === body)).toHaveLength(0);
+  await page.keyboard.press("Escape");
+  await expect(page.locator(".composer-anchor")).toHaveText(anchor ?? "");
+  await page.keyboard.press("Control+Enter");
+  await expect.poll(() => comments().filter((comment) => comment.body === body).length).toBe(1);
+  expect(writes).toBe(1);
+  expect(comments().find((comment) => comment.body === body)).toMatchObject({
+    repo,
+    path,
+    line,
+    severity: "warning",
+  });
 });
 
 test("⌘K and ⇧⇧ over an open overlay are refused, not stacked", async ({ page }) => {
