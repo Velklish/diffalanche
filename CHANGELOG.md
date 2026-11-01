@@ -15,6 +15,10 @@ and `bun run release` refuses a version that has no section. See
 
 ### Fixed
 
+- Unit fixtures remove their temporary comment roots, bare remote and empty Git
+  lookup directory after success or failure; the Git check restores `PATH` first.
+  The arithmetic skeleton is removed; runtime and loopback smoke checks remain.
+
 - The configuration-refusal regression records `diff-index`, the production
   command, and a permitted read proves the recorder sees it. Assertions and
   positive-control failures both restore `PATH` and remove the temporary shim.

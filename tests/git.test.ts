@@ -787,7 +787,8 @@ describe("what a failed git call is", () => {
     const before = process.env.PATH;
     // A directory with no git in it, not an empty `PATH`: Bun falls back to a
     // default path when `PATH` is empty and finds git anyway (ADR-009).
-    process.env.PATH = mkdtempSync(join(tmpdir(), "diffalanche-no-git-"));
+    const noGit = mkdtempSync(join(tmpdir(), "diffalanche-no-git-"));
+    process.env.PATH = noGit;
     try {
       await expect(read("repos/g/solo", { mode: "head" })).rejects.toMatchObject({
         name: "GitError",
@@ -796,6 +797,7 @@ describe("what a failed git call is", () => {
     } finally {
       if (before === undefined) process.env.PATH = "";
       else process.env.PATH = before;
+      rmSync(noGit, { recursive: true, force: true });
     }
   });
 
