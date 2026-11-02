@@ -174,4 +174,25 @@ describe("current documentation contracts", () => {
       "`bun run check:comments` enforces the two-line limit across `src/`, `tests/`, `e2e/`, `perf/`, `scripts/` and `.github/` as a project gate and a CI check",
     );
   });
+
+  it("describes shipped npm delivery in the Unreleased embedding-index entry", () => {
+    const unreleased = readFileSync("CHANGELOG.md", "utf8")
+      .split("\n## [Unreleased]\n")[1]
+      ?.split(/^## /m)[0];
+    const entry =
+      unreleased
+        ?.split(/^- /m)
+        .find((bullet) =>
+          bullet.startsWith("**The embedding index, and `index rebuild` and `index status`**."),
+        )
+        ?.replace(/\s+/g, " ") ?? "";
+    expect(entry).not.toContain(
+      "The npm bundle leaves the embedder out until the runtime reaches the npm channel with the model.",
+    );
+    expect(entry).toContain("The npm package ships `dist/cli.js` and `dist/embed-child.js`");
+    expect(entry).toContain("runtime's JavaScript in the embedding child bundle");
+    expect(entry).toContain(
+      "The model and runtime's native files are downloaded into the user cache on first use.",
+    );
+  });
 });

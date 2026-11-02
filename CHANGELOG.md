@@ -64,6 +64,9 @@ and `bun run release` refuses a version that has no section. See
 - ADR-008 and ADR-011 describe the measured performance budgets and completed
   comment sweep, with the comment gate covering every declared source root.
 
+- The Unreleased embedding-index entry describes npm runtime delivery separately
+  from the model and native files downloaded on first use.
+
 - Directory-watch errors distinguish a removed or replaced child from a failing
   backend, so a linked child cannot stop updates in the rest of the tree.
 
@@ -277,8 +280,10 @@ and `bun run release` refuses a version that has no section. See
   ([09-ml.md](docs/reference/09-ml.md#how-far-brute-force-goes)). An index built by
   another model, runtime or platform is embedded again, and a data directory with
   no session gets no `index/`. `index status [--json]` says what it holds and what
-  it is missing without loading the model. The npm bundle leaves the embedder out
-  until the runtime reaches the npm channel with the model.
+  it is missing without loading the model. The npm package ships `dist/cli.js`
+  and `dist/embed-child.js`, with the runtime's JavaScript in the embedding child
+  bundle. The model and runtime's native files are downloaded into the user cache
+  on first use.
 
 - **The reference's frame tables are checked against `WatcherEvent`**.
   The events of [05-watcher.md](docs/reference/05-watcher.md), the stream of
