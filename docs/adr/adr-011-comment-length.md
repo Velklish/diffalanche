@@ -66,10 +66,11 @@ have had no such rule, so a comment and its code diverge silently.
 
 ## Consequences
 
-- 720 blocks are out of compliance the day this is accepted. Bringing them in is
-  a sweep of its own — every block compressed, moved to the reference, or
-  deleted — which also turns the count above into a gate; until then the rule
-  binds new and edited code only.
+- The comment-length sweep is complete: long blocks were compressed,
+  relocated to the reference, or removed when they restated the code.
+  `bun run check:comments` enforces the two-line limit across `src/`, `tests/`,
+  `e2e/`, `perf/`, `scripts/` and `.github/` as a project gate and a CI check
+  ([11-perf.md](../reference/11-perf.md#the-comment-gate)).
 - `docs/reference/` grows. That is the point: the sections become the place the
   subsystem's gotchas live, rather than a summary of code whose details are
   elsewhere.

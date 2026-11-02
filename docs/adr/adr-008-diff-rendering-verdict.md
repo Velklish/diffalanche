@@ -127,9 +127,9 @@ which is what the budget line asks about, and what the person sees.
 - Highlighting costs about a second of first render without virtualisation and
   2 ms of CPU per frame with it. It stays on: the spec makes it the library's
   job, and the budget holds with it.
-- Two budget lines are still unmeasured: switching review sessions and the
-  update after an edit. Building review sessions and live update makes them
-  measurable and turns the pending lines of the gate on.
+- Switching review sessions and the update after an edit are measured by the
+  performance gate and enforced against their 100 ms and 350 ms budgets
+  ([11-perf.md](../reference/11-perf.md#the-gate)).
 
 ## Delivery channels
 

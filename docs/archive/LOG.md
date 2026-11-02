@@ -261,3 +261,4 @@ An `—` outcome means that `result.md` did not name one. An `—` commit means 
 - <a id="da-142.1"></a>`DA-142.1-current-glossary-named-windows` · 2026-11-02 · completed · — · The glossary treats current as the selection of named windows
 - <a id="da-152.1"></a>`DA-152.1-stream-client-target-comment` · 2026-11-02 · completed · — · Document session-targeted delivery in the stream client contract
 - <a id="da-115.5"></a>`DA-115.5-duplicate-unpaced-changelog` · 2026-11-02 · completed · — · The integrated changelog repeats the retired unpaced-runner note
+- <a id="da-123.1"></a>`DA-123.1-adr-spike-forecasts-still-normative` · 2026-11-02 · completed · — · ADR-008 and ADR-011 retain completed implementation work as future consequences

@@ -61,6 +61,9 @@ and `bun run release` refuses a version that has no section. See
 - The historical unpaced-harness changelog note appears once, with its first
   runner reading and the limit on using it for calibration.
 
+- ADR-008 and ADR-011 describe the measured performance budgets and completed
+  comment sweep, with the comment gate covering every declared source root.
+
 - Directory-watch errors distinguish a removed or replaced child from a failing
   backend, so a linked child cannot stop updates in the rest of the tree.
 

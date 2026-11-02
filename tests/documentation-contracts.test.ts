@@ -149,4 +149,29 @@ describe("current documentation contracts", () => {
     );
     expect(prose("CHANGELOG.md")).not.toContain("No runner has read the unpaced harness");
   });
+
+  it("describes measured and enforced session switching and live update", () => {
+    const adr = prose("docs/adr/adr-008-diff-rendering-verdict.md");
+    const consequences = adr.slice(
+      adr.indexOf("## Consequences"),
+      adr.indexOf("## Delivery channels"),
+    );
+    expect(consequences).not.toContain("Two budget lines are still unmeasured");
+    expect(consequences).not.toContain("turns the pending lines of the gate on");
+    expect(consequences).toContain(
+      "Switching review sessions and the update after an edit are measured by the performance gate",
+    );
+    expect(consequences).toContain("enforced against their 100 ms and 350 ms budgets");
+  });
+
+  it("describes the completed comment sweep and the whole-source gate", () => {
+    const adr = prose("docs/adr/adr-011-comment-length.md");
+    const consequences = adr.slice(adr.indexOf("## Consequences"));
+    expect(consequences).not.toContain("Bringing them in is a sweep of its own");
+    expect(consequences).not.toContain("until then the rule binds new and edited code only");
+    expect(consequences).toContain("The comment-length sweep is complete");
+    expect(consequences).toContain(
+      "`bun run check:comments` enforces the two-line limit across `src/`, `tests/`, `e2e/`, `perf/`, `scripts/` and `.github/` as a project gate and a CI check",
+    );
+  });
 });
