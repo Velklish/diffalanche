@@ -255,3 +255,4 @@ An `—` outcome means that `result.md` did not name one. An `—` commit means 
 - <a id="da-157"></a>`DA-157-update-latency-budget-350` · 2026-11-02 · completed · — · Raise the end-to-end update budget to 350 ms
 - <a id="da-141.1"></a>`DA-141.1-adr-014-single-npm-bundle-residue` · 2026-11-02 · completed · — · ADR-014 describes one npm bundle although embedding runs from a second child bundle
 - <a id="da-134.1"></a>`DA-134.1-live-reply-counter-fixture` · 2026-11-02 · completed · — · live-reply-counter-fixture
+- <a id="da-127.1"></a>`DA-127.1-queued-destination-wording` · 2026-11-02 · rejected · — · Qualify when a queued destination thread survives document loading
