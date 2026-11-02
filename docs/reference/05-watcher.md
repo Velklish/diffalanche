@@ -645,6 +645,10 @@ When a watch reports only a removed directory, an explicit scoped file below it
 is affected. The targeted frame names that allowed file, not the parent directory
 outside the task's path list; a sibling with the same prefix is unrelated.
 
+An excluded scoped descendant receives no targeted frame from an admitted
+directory-only signal. Projection uses the same file-exclusion predicate as
+the change set, including matches on the file name and its directory ancestors.
+
 A file touched without its content changing — a build output written again, a
 save with the same bytes — is not a change of the review: the recomputed entry
 is compared with the cached one, patch by patch. When the entries agree and reconciliation persists no anchor changes,

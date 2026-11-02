@@ -257,3 +257,4 @@ An `—` outcome means that `result.md` did not name one. An `—` commit means 
 - <a id="da-134.1"></a>`DA-134.1-live-reply-counter-fixture` · 2026-11-02 · completed · — · live-reply-counter-fixture
 - <a id="da-127.1"></a>`DA-127.1-queued-destination-wording` · 2026-11-02 · rejected · — · Qualify when a queued destination thread survives document loading
 - <a id="da-42.1"></a>`DA-42.1-revision-commit-id-length` · 2026-11-02 · completed · — · revision-commit-id-length
+- <a id="da-56.14"></a>`DA-56.14-ancestor-signal-excluded-descendant` · 2026-11-02 · completed · — · Ancestor change projection sends a needless frame for an excluded descendant

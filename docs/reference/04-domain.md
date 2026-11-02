@@ -133,6 +133,7 @@ decision means.
 ```ts
 repositoryInScope(scope, repo): boolean
 pathInScope(scope, repo, path): boolean
+changedPathsInScope(scope, repo, files, include?): string[] | null
 commentInScope(scope, comment): boolean
 assertScope(scope, found): void
 assertAnchorInScope(review, repo, path): void
@@ -148,6 +149,11 @@ repository, so every file of it is in. A comment on the whole review is always
 in — it is about the task itself and hangs under no entry — and one on a
 repository the task names is in whichever files that entry lists, because the
 entry *is* the repository and a finding about it sits on it.
+
+Directory-only signals project onto explicit files only when the existing
+file-exclusion predicate includes them. `changedPathsInScope` applies the
+caller's `include` predicate to those files, while repository control paths and
+signals without file names retain their repository-wide meaning.
 
 **What a scope may say.** `assertScope` checks it against the repositories the
 scan found and refuses everything by name: a repository the root has not, a

@@ -141,6 +141,75 @@ async function fixture(exclude: string[] = [], namedPath = "B.ts") {
 }
 
 describe("review document and stream handover", () => {
+  for (const exclude of ["**/file.ts", "file.ts", "gone/file.ts"]) {
+    it(`sends no frame for an excluded descendant of an admitted ancestor: ${exclude}`, async () => {
+      const run = await fixture([exclude], "gone/file.ts");
+      try {
+        const current = await run.service.document(CURRENT);
+        const named = await run.service.document(NAMED);
+        expect(named.repositories).toEqual([]);
+        await run.drain();
+        const cache = readFileSync(diffCachePath(run.config.dataDir, CURRENT));
+        run.events.length = 0;
+        for (const frames of run.delivered.values()) frames.length = 0;
+        rmSync(join(run.root, REPO, "gone"), { recursive: true });
+        run.signal("gone");
+        await run.drain();
+        expect(run.notified).toContain(REPO);
+        expect(run.events.filter((event) => event.type === "diff-changed")).toEqual([]);
+        for (const frames of run.delivered.values()) expect(frames).toEqual([]);
+        expect(await run.service.document(CURRENT)).toBe(current);
+        expect(readFileSync(diffCachePath(run.config.dataDir, CURRENT))).toEqual(cache);
+        expect(run.rescans).toEqual([]);
+        expect(run.activity).toEqual([]);
+      } finally {
+        await run.close();
+      }
+    });
+
+    it(`keeps a held document for an excluded descendant of an admitted ancestor: ${exclude}`, async () => {
+      const run = await fixture([exclude], "gone/file.ts");
+      try {
+        await run.service.payload(NAMED);
+        await run.drain();
+        const held = await run.service.document(NAMED);
+        expect(held.repositories).toEqual([]);
+        rmSync(join(run.root, REPO, "gone"), { recursive: true });
+        run.signal("gone");
+        await run.drain();
+        expect(run.notified).toContain(REPO);
+        expect(await run.service.document(NAMED)).toBe(held);
+      } finally {
+        await run.close();
+      }
+    });
+
+    it(`retains a pending document for an excluded descendant of an admitted ancestor: ${exclude}`, async () => {
+      const run = await fixture([exclude], "gone/file.ts");
+      try {
+        let signalled = false;
+        let service: ReturnType<typeof createReviewService>;
+        const config = new Proxy(run.config, {
+          get: (target, key, receiver) => {
+            if (key === "exclude" && !signalled) {
+              signalled = true;
+              rmSync(join(run.root, REPO, "gone"), { recursive: true });
+              service.repositoryChanged(REPO, ["gone"]);
+            }
+            return Reflect.get(target, key, receiver);
+          },
+        });
+        service = createReviewService(config, { watched: () => CURRENT });
+        const built = await service.document(NAMED);
+        expect(signalled).toBe(true);
+        expect(built.repositories).toEqual([]);
+        expect(await service.document(NAMED)).toBe(built);
+      } finally {
+        await run.close();
+      }
+    });
+  }
+
   it("does not confuse a removed directory with a sibling whose name has that prefix", async () => {
     const run = await fixture([], "gone-other/file.ts");
     try {
@@ -549,6 +618,24 @@ describe("review document and stream handover", () => {
       await run.close();
     }
   });
+});
+
+it.each([
+  [
+    "04-domain.md",
+    "Directory-only signals project onto explicit files only when the existing file-exclusion predicate includes them.",
+  ],
+  [
+    "05-watcher.md",
+    "An excluded scoped descendant receives no targeted frame from an admitted directory-only signal.",
+  ],
+  [
+    "07-server.md",
+    "An excluded scoped descendant leaves held and pending documents intact when only its admitted ancestor is reported.",
+  ],
+])("documents excluded descendant handling in %s", (file, statement) => {
+  const text = readFileSync(new URL(`../docs/reference/${file}`, import.meta.url), "utf8");
+  expect(text.replace(/\s+/g, " ")).toContain(statement);
 });
 
 describe("scoped repository frames", () => {

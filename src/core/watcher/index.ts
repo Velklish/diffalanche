@@ -5,6 +5,7 @@ import { stat } from "node:fs/promises";
 import { join, relative } from "node:path";
 import {
   capturedRemovals,
+  fileIncluded,
   filterChange,
   patchable,
   replaceRepository,
@@ -325,6 +326,7 @@ export async function startWatcher(options: WatcherOptions): Promise<Watcher> {
   function notifyOtherScopes(repo: string, files: string[]): void {
     const targets = [...(options.sessions?.() ?? [])];
     const paths = [...files];
+    const excluded = config.exclude.map(globToRegExp);
     const notify = (): void => {
       // A join can land while this rescan awaits Git, or behind an already deferred notice.
       if (joining > 0) {
@@ -336,7 +338,9 @@ export async function startWatcher(options: WatcherOptions): Promise<Watcher> {
         if (name === session || !followed.includes(name)) continue;
         const known = metadata.get(name)?.scope;
         if (known === undefined) continue;
-        const covered = changedPathsInScope(known, repo, paths);
+        const covered = changedPathsInScope(known, repo, paths, (path) =>
+          fileIncluded(known, repo, path, excluded),
+        );
         if (covered !== null)
           bus.emit({ type: "diff-changed", repo, files: covered, session: name });
       }

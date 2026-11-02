@@ -2,6 +2,7 @@
  * ([07-server.md](../../docs/reference/07-server.md), `docs/SPEC.md` section 6). */
 import { isAbsolute, relative, resolve, sep } from "node:path";
 import {
+  fileIncluded,
   filterChange,
   mapWithLimit,
   SCAN_CONCURRENCY,
@@ -20,6 +21,7 @@ import {
 import { commentWarnings, reconcileAnchors } from "../core/domain/reanchor.ts";
 import { changedPathsInScope } from "../core/domain/scope.ts";
 import { readRepositoryChange, scan } from "../core/index.ts";
+import { globToRegExp } from "../core/scanner/index.ts";
 import type { Base, DiffCache, Review, Scope } from "../core/storage/index.ts";
 import {
   readDiffCache,
@@ -250,7 +252,7 @@ export function createReviewService(
           const touched = entry.signalled;
           entry.signalled = [];
           const stale = touched.some(({ repo, files }) =>
-            coversChange(settled.session.scope, repo, files),
+            coversChange(settled.session.scope, repo, files, config.exclude),
           );
           if (entry.version === started && !stale) {
             entry.document = settled;
@@ -358,7 +360,7 @@ export function createReviewService(
             entry.signalled.push({ repo, files: files === undefined ? undefined : [...files] });
           continue;
         }
-        if (!coversChange(document.session.scope, repo, files)) continue;
+        if (!coversChange(document.session.scope, repo, files, config.exclude)) continue;
         entry.version += 1;
         entry.document = null;
         entry.payload = null;
@@ -384,10 +386,18 @@ export function createReviewService(
 }
 
 /** A pending and a built document judge the same signal once their scope is known. */
-function coversChange(scope: Scope, repo: string, files?: readonly string[]): boolean {
-  return files === undefined
-    ? repositoryInScope(scope, repo)
-    : changedPathsInScope(scope, repo, files) !== null;
+function coversChange(
+  scope: Scope,
+  repo: string,
+  files: readonly string[] | undefined,
+  exclude: readonly string[],
+): boolean {
+  if (files === undefined) return repositoryInScope(scope, repo);
+  const excluded = exclude.map(globToRegExp);
+  return (
+    changedPathsInScope(scope, repo, files, (path) => fileIncluded(scope, repo, path, excluded)) !==
+    null
+  );
 }
 
 /** Drops the least recently asked-for sessions until the map is inside the limit;

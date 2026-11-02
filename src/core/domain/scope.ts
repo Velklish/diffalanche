@@ -35,6 +35,7 @@ export function changedPathsInScope(
   scope: Scope,
   repo: string,
   files: readonly string[],
+  include?: (path: string) => boolean,
 ): string[] | null {
   if (scope === null) return [...files];
   const entry = scopeEntry(scope, repo);
@@ -47,7 +48,8 @@ export function changedPathsInScope(
       continue;
     }
     for (const allowed of entry.paths) {
-      if (allowed === file || allowed.startsWith(`${file}/`)) paths.add(allowed);
+      if ((allowed === file || allowed.startsWith(`${file}/`)) && (include?.(allowed) ?? true))
+        paths.add(allowed);
     }
   }
   return paths.size === 0 ? null : [...paths];

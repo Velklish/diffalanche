@@ -411,6 +411,10 @@ A directory-only signal also affects explicit scoped files below that directory,
 so held and pending documents covering those files are not retained. A sibling
 whose name merely shares the directory prefix remains unrelated.
 
+An excluded scoped descendant leaves held and pending documents intact when
+only its admitted ancestor is reported. Both paths use the same file-exclusion
+predicate as the change set before treating a projected file as affected.
+
 A held document's change set ages, because only the followed session's is
 refreshed by a rescan, and what it carries of its task's own files ages when a
 terminal writes them. Each has its signal.

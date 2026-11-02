@@ -49,6 +49,9 @@ and `bun run release` refuses a version that has no section. See
 - Saved anchor revisions accept only full commit ids of 40 or 64 lowercase
   hexadecimal characters. Hand-edited ids of 41–63 characters are refused.
 
+- Directory-only watch signals leave excluded scoped descendants out of targeted
+  notifications and preserve their held and pending review documents.
+
 - Directory-watch errors distinguish a removed or replaced child from a failing
   backend, so a linked child cannot stop updates in the rest of the tree.
 
