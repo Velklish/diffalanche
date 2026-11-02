@@ -1644,7 +1644,7 @@ came.** A deadline "only a hang reaches" cannot tell the two apart by itself, an
 only the first is a question for the deadline. So `settle` in
 `tests/watcher.test.ts`, and `next` and `waitFor` of `tests/events.test.ts` at
 their 20 s, keep what they waited for when they give up, and the file reports
-each at its end: the first `diff-changed` naming the settle's own file, or the
+each at its end: the first repository signal naming the settle's own file, or the
 first frame of that name, and how long after the wait began it came — or that
 none did. The verdict fails at the same moment it always did; the
 report is the diagnosis the red lacked.

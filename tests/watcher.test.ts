@@ -62,6 +62,7 @@ import {
   watchTree,
 } from "../src/core/watcher/index.ts";
 import { needsTypeScript } from "./helpers/typescript.ts";
+import { makeSettle } from "./helpers/watch-settle.ts";
 
 const run = promisify(execFile);
 const appendReply = fileURLToPath(new URL("./helpers/append-reply.ts", import.meta.url));
@@ -94,6 +95,7 @@ let bus: EventBus;
 const activity: ActivityEvent[] = [];
 const failures: unknown[] = [];
 const seen: { event: WatcherEvent; at: number }[] = [];
+const settleSignals: { files: readonly string[]; at: number }[] = [];
 
 function since(mark: number, type: WatcherEvent["type"]): { event: WatcherEvent; at: number }[] {
   return seen.filter((one) => one.at >= mark && one.event.type === type);
@@ -129,8 +131,6 @@ function spiedTree(options: TreeOptions): TreeSource {
  * marker is in no change set and wakes no rescan that has anything to say. */
 const MARKER_RULE = "/marker-*\n";
 
-let settled = 0;
-
 /** Proves one repository's watch is delivering before anything is measured against it; why by a
  * repeated write and an awaited removal: 05-watcher.md, "What the unit tests hold". */
 async function arm(repo: string): Promise<void> {
@@ -159,44 +159,17 @@ async function arm(repo: string): Promise<void> {
 /** The settles that ran out of their deadline, told apart once the file is done (11-perf.md). */
 const overdue: { settle: number; written: number }[] = [];
 
-/** Waits out every write made before it, to REPO, the data directory or anywhere else: what a
- * test expecting *no* event needs instead of a sleep. Why each step: 05-watcher.md. */
-async function settle(): Promise<void> {
-  // The deadline of `waitFor`: a queue behind a loaded machine is late, not stuck.
-  const deadline = performance.now() + 20_000;
-  settled += 1;
-  const marker = `marker-${settled}`;
-  const trees = [repoDir(REPO), config.dataDir];
-  for (const dir of trees) await writeFile(join(dir, marker), "");
-  // A tree that reports a file new at its root has walked everything else after it.
-  while (!trees.every((dir) => reported.some((one) => one.dir === dir && one.path === marker))) {
-    if (performance.now() > deadline) throw new Error(`no tree reported ${marker}`);
-    await new Promise((done) => setTimeout(done, 5));
-  }
-  // A burst of the other repository alone, so its debounce started after every burst above.
-  for (;;) {
-    settled += 1;
-    const file = `settle-${settled}.ts`;
-    const mark = performance.now();
-    await writeFile(join(root, OTHER_REPO, file), `export const s = ${settled};\n`);
-    // Another event first is a burst already under way, whose git may have read the file too.
-    while (changesOf(mark, OTHER_REPO).length === 0) {
-      if (performance.now() > deadline) {
-        overdue.push({ settle: settled, written: mark });
-        throw new Error("the watcher never caught up");
-      }
-      await new Promise((done) => setTimeout(done, 5));
-    }
-    const first = changesOf(mark, OTHER_REPO)[0] as { event: WatcherEvent };
-    if ((first.event as { files: string[] }).files.join("\n") !== file) continue;
-    // The event goes out before `diff.json` is written, and the next test may remove that file.
-    while (!(await cachedIn(OTHER_REPO, file))) {
-      if (performance.now() > deadline) throw new Error(`diff.json never had ${file}`);
-      await new Promise((done) => setTimeout(done, 5));
-    }
-    return;
-  }
-}
+/** Waits for the fixture's trees, a later burst, and its cache write (05-watcher.md). */
+const settle = makeSettle({
+  trees: () => [repoDir(REPO), config.dataDir],
+  other: () => join(root, OTHER_REPO),
+  write: writeFile,
+  reported: (dir, path) => reported.some((one) => one.dir === dir && one.path === path),
+  signals: (mark) => settleSignals.filter((one) => one.at >= mark).map((one) => one.files),
+  locked: () => existsSync(join(config.dataDir, "reviews", watcher.session() ?? SESSION, ".lock")),
+  cached: (file) => cachedIn(OTHER_REPO, file),
+  overdue: (settle, written) => overdue.push({ settle, written }),
+});
 
 /** A repository's directory as its tree was started on, which is how `reported` names it. */
 function repoDir(repo: string): string {
@@ -220,19 +193,16 @@ function named(
   return events.filter((one) => (one.event as { files: string[] }).files.some(matches));
 }
 
-/** Whether an overdue settle's own file ever reached a `diff-changed`: late, or never at all. */
+/** Whether an overdue settle's own file reached a repository signal: late, or never at all. */
 function reportOverdue(): void {
   for (const { settle: n, written } of overdue) {
     const file = `settle-${n}.ts`;
-    const came = seen.find(
-      (one) =>
-        one.at >= written && one.event.type === "diff-changed" && one.event.files.includes(file),
-    );
+    const came = settleSignals.find((one) => one.at >= written && one.files.includes(file));
     const at = Math.round((came?.at ?? performance.now()) - written);
     process.stderr.write(
       came === undefined
-        ? `settle ${n}: no diff-changed named ${file} in the ${at} ms to the end of the file — never came\n`
-        : `settle ${n}: the diff-changed naming ${file} came ${at} ms after the write — late\n`,
+        ? `settle ${n}: no repository signal named ${file} in the ${at} ms to the end of the file — never came\n`
+        : `settle ${n}: the repository signal naming ${file} came ${at} ms after the write — late\n`,
     );
   }
 }
@@ -333,6 +303,10 @@ beforeAll(async () => {
     // `recursive: true` hands every tree to `spiedTree`, which picks the watch or the walk itself.
     recursive: true,
     native: spiedTree,
+    onRepositoryChanged: (repo, files) => {
+      if (repo === OTHER_REPO && files !== undefined)
+        settleSignals.push({ files, at: performance.now() });
+    },
     ...(NATIVE_WATCH ? {} : { pollIntervalMs: 40 }),
     bus,
     activity: {

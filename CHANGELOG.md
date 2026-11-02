@@ -43,6 +43,9 @@ and `bun run release` refuses a version that has no section. See
 - A directory replaced between its identity read and native watch registration
   is watched again before startup or reconciliation finishes.
 
+- Watcher test cleanup waits for its own repository signal and committed cache,
+  so late names and unchanged rescans cannot make the barrier chase its probes.
+
 - The end-to-end update budget is 350 ms. Other budgets, suite deadlines, the
   runner allowance and historical measurements retain their existing values.
 

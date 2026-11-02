@@ -1032,19 +1032,27 @@ now goes in three steps.
    runs at `ff0dc4b`. Past that report, the tree has nothing left to say about
    anything written earlier.
 2. **A burst queued behind theirs.** `settle` writes `settle-N.ts` into the other
-   repository and waits for that repository's first `diff-changed` since the
-   write, which has to name that file and nothing else. A burst that starts after
-   every pending one ends its debounce after theirs, so its rescan is queued
-   behind them and its event proves they were decided, rescanned or dropped. An
-   event that names anything else is a burst of that repository already under
-   way, whose git may have read the new file too and left its own burst nothing
-   to announce; `settle` then writes another.
-3. **The write behind that event.** The event goes out before `diff.json` is
-   written ([The change-set cache](#the-change-set-cache)), so `settle` waits
-   until the file has `settle-N.ts`. "reads the whole change set again when
-   diff.json is gone" removes that file first thing, and while `settle` returned
-   on the event, the write behind it put `diff.json` back a moment after the
-   removal: the edit under test was patched into it, and the whole read the test
+   repository and waits for the repository signal that names its probe, even
+   when the rescan leaves current's change set unchanged and emits no public
+   `diff-changed`. That receipt must name the probe and nothing else. A burst
+   that starts after every pending one ends its debounce after theirs, so its
+   rescan is queued behind them and proves they were decided, rescanned or
+   dropped. A receipt with other paths means the probe joined an earlier burst;
+   only after that receipt does `settle` write another probe. An unrelated first
+   event cannot start another attempt: an earlier rescan may already have read
+   the probe, and writing again before its own signal is consumed can keep the
+   helper one write ahead of the delivered names indefinitely.
+3. **The write behind that signal.** The cache must contain the probe and the session's `.lock` must be absent
+   before `settle` returns. A changed-entry signal goes out while holding that
+   lock, before `diff.json` is written ([The change-set cache](#the-change-set-cache)).
+   The probe may already be in an older cache read by another burst, so its
+   presence alone does not prove this write finished. An unchanged-entry signal
+   follows the cache comparison and lock release. The helper uses the same
+   twenty-second deadline for tree delivery, the own receipt and the completed
+   cache write; its deterministic tests replace only the clock.
+   The case "reads the whole change set again when diff.json is gone" removes
+   that file first thing. In the earlier barrier that returned on the public
+   event, the write behind it put `diff.json` back a moment after the removal: the edit under test was patched into it, and the whole read the test
    is about did not run on Bun — or ran for the burst of the case before it, when
    that burst came late. The `diff-changed` naming `watched-2.ts` that the
    same-bytes case seemed to announce on Bun was that burst: the rewrite was
