@@ -55,6 +55,9 @@ and `bun run release` refuses a version that has no section. See
 - The glossary distinguishes the `current` default for CLI commands and bare
   windows from the task selected by a named window's URL.
 
+- The stream client contract distinguishes broadcast frames from session-targeted
+  diff delivery, including how a window follows `current`.
+
 - Directory-watch errors distinguish a removed or replaced child from a failing
   backend, so a linked child cannot stop updates in the rest of the tree.
 

@@ -966,6 +966,15 @@ existing replay ring applies the same filter. A window on `current` resolves its
 pointer at delivery or replay time, so a pointer move keeps the stream following
 its current task. Frames without `session` retain their broadcast behavior.
 
+`Client.session` records the task used for live delivery and replay:
+
+<!-- quote:../../src/server/events.ts -->
+```ts
+  /** The task for session-targeted diff frames; broadcast frames still reach every client.
+   * `null` follows the current session for live delivery and replay (07-server.md). */
+```
+<!-- /quote -->
+
 Every frame carries the name, an id that counts up from one, and the whole event
 as its JSON, `type` included, so a client can listen by name or read them all
 off one handler. A frame is kept in a ring of the last two hundred: a client

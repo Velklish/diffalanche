@@ -259,3 +259,4 @@ An `—` outcome means that `result.md` did not name one. An `—` commit means 
 - <a id="da-42.1"></a>`DA-42.1-revision-commit-id-length` · 2026-11-02 · completed · — · revision-commit-id-length
 - <a id="da-56.14"></a>`DA-56.14-ancestor-signal-excluded-descendant` · 2026-11-02 · completed · — · Ancestor change projection sends a needless frame for an excluded descendant
 - <a id="da-142.1"></a>`DA-142.1-current-glossary-named-windows` · 2026-11-02 · completed · — · The glossary treats current as the selection of named windows
+- <a id="da-152.1"></a>`DA-152.1-stream-client-target-comment` · 2026-11-02 · completed · — · Document session-targeted delivery in the stream client contract

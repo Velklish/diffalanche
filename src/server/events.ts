@@ -26,8 +26,8 @@ const HELLO = ": connected\n\n";
 type Client = {
   send: (frame: EventFrame) => void;
   end: () => void;
-  /** The task this window is on, `null` for the current session. A **registry**
-   * and not a filter: every client still gets every frame (07-server.md). */
+  /** The task for session-targeted diff frames; broadcast frames still reach every client.
+   * `null` follows the current session for live delivery and replay (07-server.md). */
   session: string | null;
   served?: string;
 };
