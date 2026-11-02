@@ -52,6 +52,9 @@ and `bun run release` refuses a version that has no section. See
 - Directory-only watch signals leave excluded scoped descendants out of targeted
   notifications and preserve their held and pending review documents.
 
+- The glossary distinguishes the `current` default for CLI commands and bare
+  windows from the task selected by a named window's URL.
+
 - Directory-watch errors distinguish a removed or replaced child from a failing
   backend, so a linked child cannot stop updates in the rest of the tree.
 

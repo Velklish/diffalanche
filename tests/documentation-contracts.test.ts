@@ -128,4 +128,13 @@ describe("current documentation contracts", () => {
     expect(adr).toContain("**Date:** 2026-09-23");
     expect(adr).toContain("1.86 s on Node and 1.94 s on Bun");
   });
+
+  it("defines the current pointer separately from named-window selection", () => {
+    const current = readFileSync("docs/GLOSSARY.md", "utf8")
+      .split("\n")
+      .find((row) => row.startsWith("| current session |"));
+    expect(current).toContain("CLI commands without `--review`");
+    expect(current).toContain("a bare window without `?review=`");
+    expect(current).toContain("A named `?review=<name>` window selects its task from the URL");
+  });
 });
