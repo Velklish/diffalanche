@@ -18,7 +18,7 @@ export type SearchHit = {
   /** What the row shows: the path, or the first line of the comment. */
   label: string;
   /** The tag beside it: the handoff's `file`, `file · unchanged`, `symbol` and `comment`, and
-   * `text`; `comment · orphaned` waits for the status Phase 3 adds. */
+   * `text`; `orphaned` exists in storage and keeps the `comment` tag here. */
   tag: "file" | "file · unchanged" | "comment" | "text" | "symbol";
   score: number;
   /** A `text` or `symbol` hit's line and its neighbours, which is its preview. */

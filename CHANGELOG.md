@@ -67,6 +67,9 @@ and `bun run release` refuses a version that has no section. See
 - The Unreleased embedding-index entry describes npm runtime delivery separately
   from the model and native files downloaded on first use.
 
+- The search tag comment states that orphaned storage comments keep the
+  `comment` tag, with a synchronized reference quote.
+
 - Directory-watch errors distinguish a removed or replaced child from a failing
   backend, so a linked child cannot stop updates in the rest of the tree.
 
