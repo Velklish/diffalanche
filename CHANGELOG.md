@@ -58,6 +58,9 @@ and `bun run release` refuses a version that has no section. See
 - The stream client contract distinguishes broadcast frames from session-targeted
   diff delivery, including how a window follows `current`.
 
+- The historical unpaced-harness changelog note appears once, with its first
+  runner reading and the limit on using it for calibration.
+
 - Directory-watch errors distinguish a removed or replaced child from a failing
   backend, so a linked child cannot stop updates in the rest of the tree.
 
@@ -549,23 +552,6 @@ and `bun run release` refuses a version that has no section. See
   The first runner reading after this change still took about ten seconds for
   the scroll, so whether 2.1 fits an unpaced runner remains unmeasured
   ([11-perf.md](docs/reference/11-perf.md#the-gate)).
-
-- **The perf gate takes about 45 s instead of about 66, and CPU per frame is
-  taken with the frames unpaced**. The harness launches Chromium with
-  `--disable-frame-rate-limit`: the same 600 frames of the same step, each
-  started when the one before it is done instead of on a 60 Hz tick, so the
-  scroll takes about 5 s instead of 10 and a repetition about 9 s instead of 13;
-  `tests/perf.test.ts` holds the flag. Against the 60 Hz harness, nine a side
-  twice on the final page, the other six lines came out `no difference`, though
-  the session switch swings with the machine unpaced — 79–111 ms over the day,
-  at its 100 ms budget, so a red switch line is expected until that swing is
-  explained; CPU per frame reads 0.5–0.9 ms lower on the same code, so a reading
-  from before is not comparable with one from after. The owner kept its ceiling
-  at 9.5 ms and the runner allowance at 2.1: unpaced, 9.5 is about 13 % over the
-  day's worst reading instead of 4 %, so a regression of up to about 1 ms now
-  passes the local gate, and 8.3 ms stays the goal of `docs/SPEC.md` section 6.
-  No runner has read the unpaced harness, so whether 2.1 still fits a runner is
-  unmeasured ([11-perf.md](docs/reference/11-perf.md#where-a-runs-time-goes)).
 
 - **The live dots no longer pulse**. The footer's `watching` and
   `reconnecting` dots and the activity panel's live ones stand still in their

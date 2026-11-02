@@ -137,4 +137,16 @@ describe("current documentation contracts", () => {
     expect(current).toContain("a bare window without `?review=`");
     expect(current).toContain("A named `?review=<name>` window selects its task from the URL");
   });
+
+  it("keeps one historical unpaced-runner note with its first reading and limit", () => {
+    const changelog = readFileSync("CHANGELOG.md", "utf8");
+    const notes = changelog
+      .split(/(?=^- )/m)
+      .filter((note) => note.startsWith("- **The perf gate takes about 45 s instead of about 66"));
+    expect(notes).toHaveLength(1);
+    expect(notes[0]?.replace(/\s+/g, " ")).toContain(
+      "The first runner reading after this change still took about ten seconds for the scroll, so whether 2.1 fits an unpaced runner remains unmeasured",
+    );
+    expect(prose("CHANGELOG.md")).not.toContain("No runner has read the unpaced harness");
+  });
 });
