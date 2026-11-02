@@ -31,8 +31,16 @@ const nativeDirectoryChild = fileURLToPath(
 /** How many more non-recursive watches `fs.watch` takes before it refuses the way inotify does. */
 const refusal = vi.hoisted(() => ({ left: Number.POSITIVE_INFINITY }));
 
+type Registration = { dir: string; closed: boolean; fire: (name: string | null) => void };
+const replacement = vi.hoisted(() => ({
+  enabled: false,
+  beforeTake: null as ((dir: string) => void) | null,
+  registrations: [] as Registration[],
+}));
+
 vi.mock("node:fs", async (importOriginal) => {
   const real = await importOriginal<typeof import("node:fs")>();
+  const { EventEmitter } = await import("node:events");
   const watch = ((...args: Parameters<typeof real.watch>) => {
     if (Number.isFinite(refusal.left)) {
       if (refusal.left <= 0) {
@@ -41,6 +49,24 @@ vi.mock("node:fs", async (importOriginal) => {
         });
       }
       refusal.left -= 1;
+    }
+    if (replacement.enabled) {
+      const dir = String(args[0]);
+      replacement.beforeTake?.(dir);
+      const callback = (args as unknown[])[2] as (event: string, name: string | null) => void;
+      class Registration extends EventEmitter {
+        dir = dir;
+        closed = false;
+        close(): void {
+          this.closed = true;
+        }
+        fire(name: string | null): void {
+          if (!this.closed) callback("change", name);
+        }
+      }
+      const registration = new Registration();
+      replacement.registrations.push(registration);
+      return registration;
     }
     return real.watch(...args);
   }) as typeof real.watch;
@@ -129,6 +155,81 @@ describe("a directory that comes, goes and comes back", () => {
     });
   }
 });
+
+for (const phase of ["startup", "recreation"] as const) {
+  it(`keeps a directory watched when identity changes during ${phase} registration`, async () => {
+    const fixture = mkdtempSync(join(tmpdir(), "diffalanche-tree-register-replacement-"));
+    const dir = join(fixture, "root");
+    const child = join(dir, "dist");
+    mkdirSync(child, { recursive: true });
+    replacement.enabled = true;
+    const replaceOnTake = (path: string): void => {
+      if (path !== child) return;
+      replacement.beforeTake = null;
+      // Keep the old inode alive: the new directory must have a different identity.
+      renameSync(child, join(fixture, "previous"));
+      mkdirSync(child);
+      writeFileSync(join(child, "y.js"), "before registration\n");
+    };
+    if (phase === "startup") replacement.beforeTake = replaceOnTake;
+    const heard: string[] = [];
+    let delivered: () => void = () => undefined;
+    const changed = new Promise<void>((resolve) => {
+      delivered = resolve;
+    });
+    let listed: () => void = () => undefined;
+    const reconciled = new Promise<void>((resolve) => {
+      listed = resolve;
+    });
+    let fallbacks = 0;
+    const tree = perDirectory(
+      {
+        dir,
+        ignore: () => false,
+        onChange: (path) => {
+          heard.push(path);
+          if (path === "dist/z.js") delivered();
+          if (path === "marker") listed();
+        },
+      },
+      () => {
+        fallbacks += 1;
+      },
+    );
+    try {
+      expect(tree).not.toBeNull();
+      await tree?.ready;
+      if (phase === "recreation") {
+        renameSync(child, join(fixture, "initial"));
+        mkdirSync(child);
+        replacement.beforeTake = replaceOnTake;
+        writeFileSync(join(dir, "marker"), "parent wake\n");
+        const root = replacement.registrations.find((one) => one.dir === dir && !one.closed);
+        expect(root).toBeDefined();
+        // A coalesced parent wake carries no child name; reconciliation must renew its watch.
+        root?.fire(null);
+        await reconciled;
+      }
+      const active = replacement.registrations.filter((one) => one.dir === child && !one.closed);
+      expect(active, "reconciliation must leave the replacement directory watched").toHaveLength(1);
+      if (phase === "startup") expect(heard).toEqual([]);
+      else expect(heard).toContain("dist/y.js");
+      writeFileSync(join(child, "z.js"), "after ready\n");
+      active[0]?.fire("z.js");
+      await changed;
+      expect(heard).toContain("dist/z.js");
+      expect(tree?.polling).toBe(false);
+      expect(fallbacks).toBe(0);
+    } finally {
+      tree?.close();
+      replacement.enabled = false;
+      replacement.beforeTake = null;
+      const registrations = replacement.registrations.splice(0);
+      rmSync(fixture, { recursive: true, force: true });
+      expect(registrations.every((one) => one.closed)).toBe(true);
+    }
+  }, 5_000);
+}
 
 describe("a directory the watch may not read", () => {
   // Root reads a mode-000 directory anyway, so as root the tree runs with every capability dropped.
@@ -282,6 +383,9 @@ it("documents the native directory watches and the platform of lifecycle measure
   );
   expect(reference).toContain(
     "These checks do not provide\nan atomic zero-enumeration guarantee; no native or OS layer closes that window.",
+  );
+  expect(reference).toContain(
+    "A directory replaced between its identity read and watch registration is armed again",
   );
 });
 

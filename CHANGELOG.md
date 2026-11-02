@@ -40,6 +40,9 @@ and `bun run release` refuses a version that has no section. See
 - Directory watches retain child names in the parent's baseline, so a removed
   directory is reported even when its watch closes before an unnamed parent event.
 
+- A directory replaced between its identity read and native watch registration
+  is watched again before startup or reconciliation finishes.
+
 - The end-to-end update budget is 350 ms. Other budgets, suite deadlines, the
   runner allowance and historical measurements retain their existing values.
 

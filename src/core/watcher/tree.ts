@@ -299,7 +299,10 @@ export function perDirectory(
     const current = await identity(options.dir, relative);
     if (closed || watches.get(relative) !== watching) return;
     if (current === null || !same(id, current)) {
-      if (taken === "taken" && identities.get(relative) === id) forget(relative);
+      if (taken === "taken" && identities.get(relative) === id) {
+        forget(relative);
+        if (current !== null) await arm(relative, fresh);
+      }
       return;
     }
     const baseline = await entrySnapshot(options.dir, relative, entries, options.ignore);

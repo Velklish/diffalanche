@@ -152,6 +152,9 @@ discarded before its paths are published. A replacement race can still cause
 internal directory-name enumeration between checks. These checks do not provide
 an atomic zero-enumeration guarantee; no native or OS layer closes that window.
 A listing keeps the watch it started on: stale work cannot close its replacement.
+A directory replaced between its identity read and watch registration is armed again
+before that reconciliation finishes. A startup replacement keeps its silent baseline;
+a replacement found after startup reports the files already inside it.
 An entry removed and restored between checks is not detected by that check. A watch that **dies after it started** says so once,
 through `onFallback`. A session that **walks from the start** says so once too,
 through `onWalk`: the probe below found no supported native path, or
