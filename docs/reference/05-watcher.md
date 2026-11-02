@@ -72,7 +72,7 @@ each of those repositories again on its `diff-changed` — a second request for
 what it already has, paid once per move. A session with no `diff.json` is not
 read, since there is nothing to trust. The read is a task of the queue, so a rescan an edit starts meanwhile
 waits for it: an edit right after `review use` is announced after the read, not
-inside the 300 ms of `docs/SPEC.md` section 6 ([07-server.md](07-server.md)).
+inside the 350 ms of `docs/SPEC.md` section 6 ([07-server.md](07-server.md)).
 The read can take in an edit made while it runs, so that edit's rescan finds
 nothing new. When that first rescan leaves the entry and persisted anchors unchanged,
 `onRepositoryChanged` receives no path list: other tasks may still hold any part
@@ -538,7 +538,7 @@ What it costs:
 The ways not taken:
 
 - **The walk on Linux** would hear every replacement. It would also add the
-  walk's interval to every update, which the 300 ms of `docs/SPEC.md` section 6
+  walk's interval to every update, which the 350 ms of `docs/SPEC.md` section 6
   cannot afford.
 - **Watching `.git` and `.git/info` beside the recursive watch** would fix git's
   three files. The data directory would still be heard once, and so would any
@@ -910,10 +910,10 @@ the next two minutes; past that the diff change is a plain `changed` again.
 
 ## Budget
 
-`docs/SPEC.md` section 6 gives 300 ms from an edit in one repository to the
+`docs/SPEC.md` section 6 gives 350 ms from an edit in one repository to the
 update. The performance gate measures and enforces that path — an edit of one
 file to the page holding that repository's new diff; an over-budget update
-fails the gate. The render of the patched diff belongs in the same 300 ms
+fails the gate. The render of the patched diff belongs in the same 350 ms
 budget and in the UI live-update path ([11-perf.md](11-perf.md)). What
 `tests/watcher.test.ts` measures is the part that belongs here — the file
 write, the debounce, the rescan, and the

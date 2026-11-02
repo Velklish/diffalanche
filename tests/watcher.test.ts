@@ -405,7 +405,7 @@ describe("watcher", () => {
       new Set(since(first, "diff-changed").map((one) => (one.event as { repo: string }).repo)),
     ).toEqual(new Set([REPO]));
     // The budget on top of one rescan — five git processes and a cache rewrite — timed in the same
-    // conditions: the watcher's own share; the flat 300 ms is `bun run perf`'s (05-watcher.md).
+    // conditions: the watcher's own share; the flat 350 ms is `bun run perf`'s (05-watcher.md).
     const own = elapsed.map((ms, at) => ms - (rescans[at] as number));
     process.stderr.write(
       `update after an edit: ${median(elapsed).toFixed(1)} ms, one rescan beside it ${median(rescans).toFixed(1)} ms\n`,

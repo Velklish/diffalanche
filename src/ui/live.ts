@@ -255,7 +255,7 @@ async function diffChanged(repo: string): Promise<void> {
   const anchor = capture();
   useStore.getState().applyRepositoryDiff(repo, next, asked);
   await settle(anchor);
-  // The frame that showed the new diff, on the harness's wall clock: the far end of the 300 ms
+  // The frame that showed the new diff, on the harness's wall clock: the far end of the 350 ms
   // budget of `docs/SPEC.md` section 6.
   perf.liveUpdate = { repo, at: Date.now() };
 }

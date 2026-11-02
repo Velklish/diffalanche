@@ -366,7 +366,7 @@ documents being held and the patched one serialised again.
 an edit or a reply made while it runs is announced after it. An edit made
 150 ms after `review use`, on the same review and machine and at a load average
 of 11–15, reached its frame after a median of 433 and 520 ms, against 209 and
-204 ms before — over the 300 ms of "Update after an edit" in `docs/SPEC.md`
+204 ms before — over the then-current 300 ms of "Update after an edit" in `docs/SPEC.md`
 section 6, for as long as the read lasts. Neither number is the gate's: the
 harness moves no pointer, and its session switch is a window's own by
 `?review=`, which pays none of this.
@@ -566,7 +566,8 @@ not the whole scope's — and filters it by the task's scope and `Config.exclude
 using the same current-path policy as full reads ([01-scanner.md](01-scanner.md#file-exclusions)). Measured end to end
 on the synthetic review, from the edit to the frame that showed it: 295 ms for a
 window on a named task against 235 ms for one on the current session, inside the
-300 ms budget of `docs/SPEC.md` section 6 and close to it.
+then-current 300 ms budget and close to it. The current budget of
+`docs/SPEC.md` section 6 is 350 ms.
 
 **Unless the name is the session the watcher rescans (`watched()`).** A window lands on
 `?review=<current>` whenever the reader picks the current task in the sessions

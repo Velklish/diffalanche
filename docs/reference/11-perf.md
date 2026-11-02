@@ -389,7 +389,7 @@ every repetition, as it is in the gate's.
 | `updateMs` | From an edit of one file to the frame that showed it in that file's card |
 | `frames`, `scrollDistancePx` | How many frames the scroll took and how far it went |
 
-`updateMs` is the live-update path of `docs/SPEC.md` section 6, measured the way
+`updateMs` is the 350 ms live-update path of `docs/SPEC.md` section 6, measured the way
 it happens: the shipped page listens on `/api/events` because that is what it
 does, the harness appends a line to a file of one repository, and the page
 stamps the frame that showed the patched card. That is the watcher, the
@@ -801,7 +801,7 @@ from that on 2026-09-21: the gate is set on a number this machine reaches while
 ceiling** below.
 
 The update line is the opposite case, and the same window attributes it. `1193ab3`
-measured 244 ms and 267 ms — inside the 300 ms budget, twice; `ed81928`, after
+measured 244 ms and 267 ms — inside the then-current 300 ms budget, twice; `ed81928`, after
 the package, measured 352 ms and 392 ms, over it, twice. The runs alternated
 between the trees under one lock, so the machine state is the same on both
 sides. The earlier 260-to-341 ms comparison (about 31%) used different machine
@@ -909,6 +909,10 @@ CPU per frame over the same nine points is 8.5 to 9.1 with no trend, which says
 there is no scroll regression in this range — the line is simply above 8.3
 everywhere, which is the CPU-per-frame budget decision.
 
+The development-machine readings above used the 300 ms update budget in force
+on 2026-11-01. The current 350 ms budget does not change their recorded verdicts
+or establish three complete qualifying readings under the new policy.
+
 **And what the gate guarantees about the thing it measured.** A green table used
 to mean two weaker things than it looked like, and both are closed.
 
@@ -936,6 +940,9 @@ goal of that line and is trusted. The feed that could produce such a zero is
 fixed at its source as well: `TaskDuration` missing from Chromium's metrics
 throws where it can be named instead of standing in as `0`. The two reds are
 different and the gate says which — `over budget: …` and `not measured: …`.
+
+The recorded table retains the then-current 300 ms update budget; the current
+budget is 350 ms.
 
 ```
 | Metric | Budget | Recorded median | |
@@ -1020,8 +1027,8 @@ than warmed away silently; no budget line covers it, and it is paid once per
 session per server lifetime.
 **Update after an edit** covers the whole path — the watcher, the debounce, the
 rescan, the stream, the fetch, the patch, and the paint — and fails the build
-like any other line; on the machine this was written on it lands around 221 ms
-of the 300, of which 100 ms is the watcher's own debounce. Taking the probe line
+like any other line; a recorded measurement on this machine was around 221 ms
+against the then-current 300 ms budget, including 100 ms of watcher debounce. Taking the probe line
 back out is an update down the same path, so a repetition ends once the card has
 painted the restore, not after a fixed pause: a pause shorter than the restore
 left the next repetition measuring an edit behind a rescan still in flight.
@@ -1416,7 +1423,7 @@ the browse-mode first-render investigation suspects, still far inside the
 500 ms budget.
 
 **Five repetitions, and no warm-up rule.** Over the pool, the median of three
-update samples on this commit comes out over the 300 ms budget in 7 % of draws,
+update samples on this commit comes out over the then-current 300 ms budget in 7 % of draws,
 the median of five in 3 %, of seven in 1 % — and the first three repetitions of
 one of the eight gate runs above did cross it, at 303 ms, where its five did
 not. So the gate takes five: it halves how often the one line that sits near

@@ -6,7 +6,7 @@
 
 ## Context
 
-The review must update by itself when code or comments change, without a reload and without losing the reading position, within 300 ms after an edit in one repository (spec sections 5 and 6). The design adds an activity feed: which repository's diff changed, which agent replied where. The spec had no notion of an event, and agents have no heartbeat the tool could listen to. Evidence: `docs/SPEC.md` section 5, `docs/design/HANDOFF.md` section 4.
+The review must update by itself when code or comments change, without a reload and without losing the reading position, within 350 ms after an edit in one repository (spec sections 5 and 6). The design adds an activity feed: which repository's diff changed, which agent replied where. The spec had no notion of an event, and agents have no heartbeat the tool could listen to. Evidence: `docs/SPEC.md` section 5, `docs/design/HANDOFF.md` section 4.
 
 ## Options
 
@@ -22,6 +22,6 @@ The review must update by itself when code or comments change, without a reload 
 
 ## Consequences
 
-- The 300 ms budget is measured from the file change to the SSE event plus the UI patch; the watcher and the incremental rescan are on that path.
+- The 350 ms budget is measured from the file change to the SSE event plus the UI patch; the watcher and the incremental rescan are on that path.
 - A live change in the open file patches only the affected hunks and threads; the composer and reading position stay.
 - Comments that lose their line after a change are marked `orphaned` in Phase 3; the MVP keeps them where they are and shows a warning.

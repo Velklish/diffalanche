@@ -192,6 +192,24 @@ describe("perf gate", () => {
     expect(formatTable(rows, 2)).toContain("| 900 ms | FAIL |");
   });
 
+  it("passes a live update at the inclusive 350 ms default boundary", () => {
+    expect(evaluate([measurement({ updateMs: 350 })]).filter(fails)).toEqual([]);
+  });
+
+  it("fails a live update at 351 ms with the default budgets", () => {
+    const failed = evaluate([measurement({ updateMs: 351 })]).filter(fails);
+    expect(failed.map((row) => row.budget.field)).toEqual(["updateMs"]);
+  });
+
+  it("keeps both specification update rows on the default live-update budget", () => {
+    const spec = readFileSync(join(REPO_ROOT, "docs/SPEC.md"), "utf8");
+    const budget = BUDGETS.find((row) => row.field === "updateMs")?.budget;
+    expect(spec).toContain(`| Update after an edit in one repository | ${budget} ms |`);
+    expect(spec).toContain(
+      `| Repository edit reaching its file diff (\`diff-changed\`) | ${budget} ms, the update row in this table |`,
+    );
+  });
+
   it("widens every ms ceiling by the runner allowance, and never the long-task one", () => {
     // What ubuntu-latest measured on the same commit the development machine
     // held (DA-5.1): a little over twice as slow, zero long tasks.

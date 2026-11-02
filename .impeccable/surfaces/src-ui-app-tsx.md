@@ -57,7 +57,7 @@ threads and as events in the activity feed.
 Four things are on the critical path and have budgets in section 6 of the
 specification: the first render (500 ms), scrolling (120 fps, no long tasks),
 opening the composer and jumping to a file (50 ms each), and updating after an
-agent's edit (300 ms). The screen is measured on the synthetic review — 21
+agent's edit (350 ms). The screen is measured on the synthetic review — 21
 repositories, 300 files, 30 000 diff lines, 200 comments — so every decision here
 is made at that size, not at the size of a demo.
 

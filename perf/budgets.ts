@@ -37,7 +37,7 @@ export const BUDGETS: Budget[] = [
     budget: 100,
     unit: "ms",
   },
-  { label: "Update after an edit in one repository", field: "updateMs", budget: 300, unit: "ms" },
+  { label: "Update after an edit in one repository", field: "updateMs", budget: 350, unit: "ms" },
 ];
 
 /** The page as it ships, no query string: the gate measures what ADR-008 chose, not a variant kept
