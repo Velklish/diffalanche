@@ -264,3 +264,4 @@ An `—` outcome means that `result.md` did not name one. An `—` commit means 
 - <a id="da-123.1"></a>`DA-123.1-adr-spike-forecasts-still-normative` · 2026-11-02 · completed · — · ADR-008 and ADR-011 retain completed implementation work as future consequences
 - <a id="da-123.2"></a>`DA-123.2-changelog-runtime-delivery-forecast` · 2026-11-02 · completed · — · Unreleased embedding-index entry still defers npm runtime delivery
 - <a id="da-155.1"></a>`DA-155.1-search-orphan-status-comment` · 2026-11-02 · completed · — · Search tag comment still describes orphaned status as future work
+- <a id="da-158"></a>`DA-158-session-switch-budget-150` · 2026-11-02 · completed · — · Raise the warm session-switch budget to 150 ms

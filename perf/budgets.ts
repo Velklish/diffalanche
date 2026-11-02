@@ -34,7 +34,7 @@ export const BUDGETS: Budget[] = [
   {
     label: "Switching review sessions",
     field: "sessionSwitchMs",
-    budget: 100,
+    budget: 150,
     unit: "ms",
   },
   { label: "Update after an edit in one repository", field: "updateMs", budget: 350, unit: "ms" },

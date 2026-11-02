@@ -82,7 +82,7 @@ and the threads update live, without losing the reading position.
   channels: npm (Node >= 22) and prebuilt binaries.
 - Performance budgets are a gate, not an aspiration: first render 500 ms,
   scrolling at 120 fps with no long tasks, opening the form and jumping to a
-  file 50 ms, switching a session 100 ms, updating after an edit 350 ms —
+  file 50 ms, switching a session 150 ms, updating after an edit 350 ms —
   measured on the synthetic review of 21 repositories, 300 files, 30 000 diff
   lines, and 200 comments.
 - The tool works offline. Fonts and the embedding model ship with it, and the

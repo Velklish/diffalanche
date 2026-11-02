@@ -49,6 +49,10 @@ and `bun run release` refuses a version that has no section. See
 - The end-to-end update budget is 350 ms. Other budgets, suite deadlines, the
   runner allowance and historical measurements retain their existing values.
 
+- The warm session-switch budget is 150 ms. Its press-to-painted measurement,
+  the 350 ms live-update budget, all other budgets and historical measurements
+  retain their existing meanings and values.
+
 - ADR-014 names both npm bundles and places the runtime's JavaScript in the
   embedding child process.
 

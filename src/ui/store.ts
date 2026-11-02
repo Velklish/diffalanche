@@ -906,7 +906,7 @@ export const useStore = create<Store>()((set, get) => ({
     // a reload, a copied link and `Back` all land on the same task.
     writeTaskInUrl(name);
     // The status stays: `loading` would put the skeleton up between the two reviews, 40 ms of
-    // unmount and mount against 100 (08-ui.md, "The task this window is on"); `switching` says it.
+    // unmount and mount against 150 (08-ui.md, "The task this window is on"); `switching` says it.
     set({ reviewName: name });
     await get().loadReview();
   },

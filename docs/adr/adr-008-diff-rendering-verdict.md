@@ -128,7 +128,7 @@ which is what the budget line asks about, and what the person sees.
   2 ms of CPU per frame with it. It stays on: the spec makes it the library's
   job, and the budget holds with it.
 - Switching review sessions and the update after an edit are measured by the
-  performance gate and enforced against their 100 ms and 350 ms budgets
+  performance gate and enforced against their 150 ms and 350 ms budgets
   ([11-perf.md](../reference/11-perf.md#the-gate)).
 
 ## Delivery channels

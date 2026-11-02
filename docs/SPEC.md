@@ -123,7 +123,7 @@ Synthetic review used for measurement: 21 repositories, 300 files, 30,000 diff l
 | First render of the review after the server responds | 500 ms |
 | Scrolling the diff | 120 fps, zero long tasks |
 | Opening the comment form, jumping to a file from the navigation | 50 ms |
-| Switching review sessions | 100 ms |
+| Switching review sessions | 150 ms |
 | Update after an edit in one repository | 350 ms |
 
 The live-update routes have the following budget coverage:
@@ -132,7 +132,7 @@ The live-update routes have the following budget coverage:
 |---|---|
 | Repository edit reaching its file diff (`diff-changed`) | 350 ms, the update row in this table |
 | Comment or reply update (`comment-added`, `comment-status`, `reply-added`) | No separate product budget or perf-gate line |
-| Review reread (`session-changed`, `current-changed`, `reload`) | No separate live-event budget; the 100 ms session-switch row measures a user switching sessions |
+| Review reread (`session-changed`, `current-changed`, `reload`) | No separate live-event budget; the 150 ms session-switch row measures a user switching sessions |
 | History-mark appearance (`sessions-changed`) | Deliberately excluded: no separate product budget or perf-gate line |
 | Warning or activity update (`warnings`, `activity`) | No separate product budget or perf-gate line |
 

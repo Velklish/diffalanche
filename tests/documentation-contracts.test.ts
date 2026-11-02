@@ -161,7 +161,7 @@ describe("current documentation contracts", () => {
     expect(consequences).toContain(
       "Switching review sessions and the update after an edit are measured by the performance gate",
     );
-    expect(consequences).toContain("enforced against their 100 ms and 350 ms budgets");
+    expect(consequences).toContain("enforced against their 150 ms and 350 ms budgets");
   });
 
   it("describes the completed comment sweep and the whole-source gate", () => {

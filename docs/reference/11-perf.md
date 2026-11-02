@@ -941,8 +941,8 @@ fixed at its source as well: `TaskDuration` missing from Chromium's metrics
 throws where it can be named instead of standing in as `0`. The two reds are
 different and the gate says which — `over budget: …` and `not measured: …`.
 
-The recorded table retains the then-current 300 ms update budget; the current
-budget is 350 ms.
+The recorded table retains the then-current 100 ms session-switch and 300 ms
+update budgets; the current budgets are 150 ms and 350 ms respectively.
 
 ```
 | Metric | Budget | Recorded median | |

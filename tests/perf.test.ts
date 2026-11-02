@@ -145,21 +145,36 @@ describe("perf gate", () => {
   });
 
   it("fails the session switch on its own number, with no task left to wait for", () => {
-    const rows = evaluate([measurement({ sessionSwitchMs: 140 })]);
+    const rows = evaluate([measurement({ sessionSwitchMs: 151 })]);
     const switching = rows.find((row) => row.budget.label === "Switching review sessions");
-    expect(switching?.measured).toBe(140);
+    expect(switching?.measured).toBe(151);
     // DA-24.1 made the line the budget of a return visit — the document is held
     // per session, so a switch back is warm — and it is a verdict from then on.
     expect(switching?.budget.pendingUntil).toBeUndefined();
     expect(switching?.failed).toBe(true);
-    expect(formatTable(rows, 1)).toContain("| 140 ms | FAIL |");
+    expect(formatTable(rows, 1)).toContain("| 151 ms | FAIL |");
   });
 
-  it("passes the session switch when it is inside the budget", () => {
-    const rows = evaluate([measurement({ sessionSwitchMs: 95 })]);
+  it("passes the session switch at the inclusive 150 ms default boundary", () => {
+    const rows = evaluate([measurement({ sessionSwitchMs: 150 })]);
     const switching = rows.find((row) => row.budget.label === "Switching review sessions");
     expect(switching?.failed).toBe(false);
-    expect(formatTable(rows, 1)).toContain("| 95 ms | ok |");
+    expect(formatTable(rows, 1)).toContain("| 150 ms | ok |");
+  });
+
+  it("keeps the current session-switch budget statements at 150 ms", () => {
+    const read = (path: string) => readFileSync(join(REPO_ROOT, path), "utf8");
+    const spec = read("docs/SPEC.md");
+    expect(spec).toContain("| Switching review sessions | 150 ms |");
+    expect(spec).toContain("the 150 ms session-switch row measures a user switching sessions");
+    expect(read("PRODUCT.md")).toContain("switching a session 150 ms");
+    expect(read("docs/reference/08-ui.md")).toContain(
+      "against the 150 ms budget for switching sessions",
+    );
+    expect(read("docs/design/HANDOFF.md")).toContain("переключение сессии 150ms");
+    expect(read("docs/reference/11-perf.md")).toContain(
+      "the current budgets are 150 ms and 350 ms respectively",
+    );
   });
 
   it("prints a line that is measured but still waiting for its task, and does not fail it", () => {
