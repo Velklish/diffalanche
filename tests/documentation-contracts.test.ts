@@ -87,6 +87,31 @@ describe("current documentation contracts", () => {
     expect(apply).toContain("Do not change selection without an explicit request");
   });
 
+  it("describes both npm bundles in the delivery constraints", () => {
+    const adr = prose("docs/adr/adr-014-embedding-model-and-npm-delivery.md");
+    const constraints = adr.slice(
+      adr.indexOf("Three constraints"),
+      adr.indexOf("### How the numbers were taken"),
+    );
+    expect(constraints).not.toContain("package is one bundle");
+    expect(constraints).toContain(
+      "The npm package ships two bundles, `dist/cli.js` and `dist/embed-child.js`",
+    );
+    expect(constraints).toContain("with no runtime dependencies at all");
+  });
+
+  it("places the npm runtime JavaScript in the embedding child bundle", () => {
+    const adr = prose("docs/adr/adr-014-embedding-model-and-npm-delivery.md");
+    const runtime = adr.slice(
+      adr.indexOf("**The runtime to the npm channel"),
+      adr.indexOf("**Batching"),
+    );
+    expect(runtime).not.toContain("runtime's JavaScript into `dist/cli.js`");
+    expect(runtime).toContain("5B bundles the runtime's JavaScript into `dist/embed-child.js`");
+    expect(runtime).toContain("runs it in the embedding child process");
+    expect(runtime).toContain("points its binding at the cache directory");
+  });
+
   it("places embedding in a child for both callers without deferring delivery", () => {
     expect(prose("docs/SPEC.md")).toContain(
       "Server and CLI callers run embedding in a child process; the parent keeps the index, its update and its search",

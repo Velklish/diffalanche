@@ -21,9 +21,10 @@ model loads and embeds with the network off.
 Three constraints come from what is already decided. Runtime-specific code lives
 in `src/server/runtime.ts` alone ([ADR-008](adr-008-diff-rendering-verdict.md)),
 so a runtime that needs `Bun.*` or a Node-only module is a new decision. The npm
-package is one bundle, `dist/cli.js`, with no runtime dependencies at all — every
-package in `package.json` is a development dependency because the bundler
-inlines it. And there are six binaries, built by `bun build --compile` into
+package ships two bundles, `dist/cli.js` and `dist/embed-child.js`, with no runtime
+dependencies at all — every package in `package.json` is a development dependency
+because the bundler inlines it. And there are six binaries, built by
+`bun build --compile` into
 single files of 62–99 MiB (as the release pipeline built them on 2026-09-05).
 
 ### How the numbers were taken
@@ -194,9 +195,10 @@ or not suggestions are ever used, and a new package release for every new pin.
 / 5B its native files downloaded with the model.** 5A is one line in
 `package.json` and 113.5 MB — plus 236 MB of CUDA on linux-x64 through npm —
 for every install, and it leaves the binary channel's missing library unsolved.
-5B bundles the runtime's JavaScript into `dist/cli.js`, points its binding at the
-cache directory, and fetches the native files of the running platform next to
-the model. Nothing native is installed by npm, and the binary can use the same
+5B bundles the runtime's JavaScript into `dist/embed-child.js`, runs it in the
+embedding child process, points its binding at the cache directory, and fetches
+the native files of the running platform next to the model. Nothing native is
+installed by npm, and the binary can use the same
 directory: it embeds the same files and writes them there on first use, which
 is exactly the library `--compile` fails to carry. It costs build work —
 redirecting a `require` the addon makes itself — and loads a native library

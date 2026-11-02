@@ -43,6 +43,9 @@ and `bun run release` refuses a version that has no section. See
 - The end-to-end update budget is 350 ms. Other budgets, suite deadlines, the
   runner allowance and historical measurements retain their existing values.
 
+- ADR-014 names both npm bundles and places the runtime's JavaScript in the
+  embedding child process.
+
 - Directory-watch errors distinguish a removed or replaced child from a failing
   backend, so a linked child cannot stop updates in the rest of the tree.
 
