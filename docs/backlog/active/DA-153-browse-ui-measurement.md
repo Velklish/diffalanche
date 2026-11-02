@@ -26,6 +26,10 @@ All original deferred implementation and unrelated product work. No push, releas
 
 Every original source requirement and Verification below remains mandatory. Run configured gates and meaningful mutation probes for changed tests; keep exact command, cwd, base/head, exit and raw logs. Independently review the final SHA. Archive source minors into this batch only at actual batch acceptance.
 
+## Current budget amendment — 2026-11-02
+
+The owner raised the end-to-end update budget to 350 ms. Future SPEC-budget-backed qualification uses 350 ms. The original 300-ms requirements and readings retained as context describe the earlier policy; measurements, exit codes and verdicts are unchanged. Independent deadlines, load guards, counts and timeouts are unchanged.
+
 ## Retained source requirements
 
 ### Retained original DA-37.4

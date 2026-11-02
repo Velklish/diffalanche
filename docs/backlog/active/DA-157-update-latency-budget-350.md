@@ -16,7 +16,7 @@ On 2026-11-02 the owner explicitly requested raising the update budget to 350 ms
 - Set only the default `updateMs` budget to 350 ms and synchronize the SPEC update/diff-changed timing rows, ADR-005 current constraint, current reference guidance and directly affected comment/tests.
 - Classify every related 300-ms reference as current end-to-end policy, dated measurement, independent deadline, or open-card criterion. Update current policy only; annotate historical context where needed without changing measured numbers.
 - Add meaningful inclusive-boundary coverage: 350 ms passes, 351 ms fails with the actual default budgets. Keep other metric budgets and runner allowance 2.1 unchanged.
-- Add one concise Unreleased entry. Root owns backlog criteria; the separate owner question about DA-56.9/56.11 is pending and does not block the authorized gate/SPEC change.
+- Add one concise Unreleased entry. Root applies the owner's explicit 350-ms instruction to current SPEC-budget-backed card criteria. The optional question received no answer and establishes no separate 300-ms target. Historical readings retain their original budgets and verdicts.
 
 ## Out of scope
 
