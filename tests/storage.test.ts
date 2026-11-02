@@ -467,6 +467,75 @@ describe("withLock", () => {
 });
 
 describe("orphaned schema and legacy reads", () => {
+  it.each([40, 64])("reads a full revision commit id of %i hex characters", async (length) => {
+    const saved = comment("c_revision", {
+      anchor: {
+        lineContent: "first",
+        hunk: "",
+        before: [],
+        after: [],
+        revision: {
+          sha: "0123456789abcdef".repeat(4).slice(0, length),
+          path: "src/a.ts",
+          line: 1,
+          endLine: 1,
+        },
+      },
+    });
+    await makeSession(dataDir, "revision", [saved]);
+    expect(await readComments(dataDir, "revision")).toEqual([saved]);
+  });
+
+  it.each([39, ...Array.from({ length: 23 }, (_, index) => index + 41), 65])(
+    "refuses a full revision commit id of %i hex characters",
+    async (length) => {
+      await makeSession(dataDir, "revision", [
+        comment("c_revision", {
+          anchor: {
+            lineContent: "first",
+            hunk: "",
+            before: [],
+            after: [],
+            revision: { sha: "a".repeat(length), path: "src/a.ts", line: 1, endLine: 1 },
+          },
+        }),
+      ]);
+      await expect(readComments(dataDir, "revision")).rejects.toThrow(
+        "comments[0].anchor.revision.sha: expected a full commit id",
+      );
+    },
+  );
+
+  it.each([40, 64])(
+    "refuses a full revision commit id of %i non-hex characters",
+    async (length) => {
+      await makeSession(dataDir, "revision", [
+        comment("c_revision", {
+          anchor: {
+            lineContent: "first",
+            hunk: "",
+            before: [],
+            after: [],
+            revision: { sha: "g".repeat(length), path: "src/a.ts", line: 1, endLine: 1 },
+          },
+        }),
+      ]);
+      await expect(readComments(dataDir, "revision")).rejects.toThrow(
+        "comments[0].anchor.revision.sha: expected a full commit id",
+      );
+    },
+  );
+
+  it("documents the full revision commit id lengths", () => {
+    const reference = readFileSync(
+      new URL("../docs/reference/03-storage.md", import.meta.url),
+      "utf8",
+    );
+    expect(reference).toContain(
+      "A revision names a full commit id of exactly 40 or 64 lowercase hexadecimal\ncharacters and a positive inclusive range.",
+    );
+  });
+
   it.each([1, 2])(
     "reads version %i comments without inventing optional anchor metadata",
     async (version) => {

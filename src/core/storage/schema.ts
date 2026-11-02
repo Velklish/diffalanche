@@ -136,7 +136,7 @@ function parseRevision(
     return fail(file, field, "expected a positive line range");
   }
   const sha = asString(file, `${field}.sha`, raw.sha);
-  if (!/^[a-f0-9]{40,64}$/.test(sha))
+  if (!/^(?:[a-f0-9]{40}|[a-f0-9]{64})$/.test(sha))
     return fail(file, `${field}.sha`, "expected a full commit id");
   const content =
     raw.content === undefined ? undefined : asStrings(file, `${field}.content`, raw.content);

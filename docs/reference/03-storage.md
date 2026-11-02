@@ -546,9 +546,11 @@ no.
 Version 2 metadata and comments also remain readable. Version 3 adds the
 `orphaned` comment status and optional `anchor.rangeContent`, `anchor.revision`
 and `originalAnchor`. The parser retains these fields and leaves absent legacy
-fields absent. A revision names a full commit id and a positive inclusive range. Optional
-`revision.content` stores one verified row per source line when the current
-range has expanded; legacy revisions without it remain readable.
+fields absent.
+A revision names a full commit id of exactly 40 or 64 lowercase hexadecimal
+characters and a positive inclusive range. Optional `revision.content` stores
+one verified row per source line when the current range has expanded; legacy
+revisions without it remain readable.
 Source provenance is assigned only from a verified committed span; a missing
 legacy source is not replaced by the current target revision.
 The original snapshot is set before the first automatic mutation and is retained
